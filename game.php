@@ -34,9 +34,7 @@ include __DIR__ . "/includes/header.php";
               </div>
             </div>
           </div>
-          <div class="rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-xs text-cyan-200">
-            URL: /tienda/<?php echo htmlspecialchars($slug, ENT_QUOTES, "UTF-8"); ?>
-          </div>
+
         </div>
       </section>
 
