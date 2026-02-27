@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>EnlineaCoins | Tienda de monedas digitales</title>
+  <title>TVirtualGaming | Tienda de monedas digitales</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -50,25 +50,42 @@
     <div class="pointer-events-none absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-cyan-500/15 blur-3xl"></div>
     <div class="pointer-events-none absolute bottom-0 right-0 h-64 w-64 rounded-full bg-emerald-500/10 blur-3xl"></div>
 
-    <div class="relative mx-auto w-full max-w-6xl px-4 pb-10 pt-5" data-tenant="enlineacoins">
+    <div class="relative mx-auto w-full max-w-6xl px-4 pb-10 pt-5" data-tenant="tvirtualgaming">
       <header class="flex items-center justify-between">
-        <button class="rounded-full border border-slate-800 bg-slate-900/60 p-2 text-slate-200 transition hover:border-cyan-400/70 hover:text-cyan-200">
+        <button id="menu-toggle" class="rounded-full border border-slate-800 bg-slate-900/60 p-2 text-slate-200 transition hover:border-cyan-400/70 hover:text-cyan-200" aria-label="Abrir menu">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6">
             <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
         <div class="text-center">
           <p class="text-[11px] uppercase tracking-[0.3em] text-cyan-300/70">tienda</p>
-          <h1 class="font-oxanium text-lg font-semibold text-white">EnlineaCoins</h1>
+          <h1 class="font-oxanium text-lg font-semibold text-white">TVirtualGaming</h1>
         </div>
         <a href="/login" class="rounded-full border border-cyan-400/30 bg-slate-900/80 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-cyan-200 transition hover:border-cyan-300 hover:text-white">Iniciar sesion</a>
       </header>
+
+      <div id="menu-overlay" class="fixed inset-0 z-40 hidden bg-slate-950/70 backdrop-blur-sm"></div>
+      <nav id="menu-panel" class="fixed left-1/2 top-20 z-50 hidden w-[min(92vw,420px)] -translate-x-1/2 rounded-2xl border border-slate-800 bg-slate-900/95 p-4 shadow-2xl">
+        <div class="flex items-center justify-between">
+          <p class="text-xs uppercase tracking-[0.35em] text-slate-400">Menu</p>
+          <button id="menu-close" class="rounded-full border border-slate-800 bg-slate-950/70 p-2 text-slate-200 transition hover:border-cyan-400/70 hover:text-cyan-200" aria-label="Cerrar menu">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="mt-4 space-y-2">
+          <a href="/" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-cyan-400/70">Inicio</a>
+          <a href="/populares" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-cyan-400/70">Juegos populares</a>
+          <a href="/juegos" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-cyan-400/70">Juegos</a>
+        </div>
+      </nav>
 
       <section class="mt-6 space-y-4" style="animation: fadeUp 650ms ease-out both;">
         <div class="relative">
           <div id="promo-slider" class="flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth rounded-2xl border border-slate-800 bg-slate-900/60 p-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             <article class="relative h-32 min-w-[80%] snap-start overflow-hidden rounded-2xl border border-slate-800">
-              <img src="assets/img/banner-1.jpg" alt="Recarga rapida" class="h-full w-full object-cover opacity-85" />
+              <img src="/assets/img/banner-1.jpg" alt="Recarga rapida" class="h-full w-full object-cover opacity-85" />
               <div class="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/30 to-transparent"></div>
               <div class="absolute inset-0 flex flex-col justify-center px-4">
                 <p class="text-[10px] uppercase tracking-[0.35em] text-cyan-300/70">promo activa</p>
@@ -77,7 +94,7 @@
               </div>
             </article>
             <article class="relative h-32 min-w-[80%] snap-start overflow-hidden rounded-2xl border border-slate-800">
-              <img src="assets/img/banner-2.jpg" alt="Bono de bienvenida" class="h-full w-full object-cover opacity-85" />
+              <img src="/assets/img/banner-2.jpg" alt="Bono de bienvenida" class="h-full w-full object-cover opacity-85" />
               <div class="absolute inset-0 bg-gradient-to-r from-slate-950/85 via-transparent to-slate-950/80"></div>
               <div class="absolute inset-0 flex flex-col justify-center px-4">
                 <p class="text-[10px] uppercase tracking-[0.35em] text-emerald-300/70">bienvenida</p>
@@ -86,7 +103,7 @@
               </div>
             </article>
             <article class="relative h-32 min-w-[80%] snap-start overflow-hidden rounded-2xl border border-slate-800">
-              <img src="assets/img/banner-3.jpg" alt="Bonos semanales" class="h-full w-full object-cover opacity-85" />
+              <img src="/assets/img/banner-3.jpg" alt="Bonos semanales" class="h-full w-full object-cover opacity-85" />
               <div class="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/20 to-transparent"></div>
               <div class="absolute inset-0 flex flex-col justify-center px-4">
                 <p class="text-[10px] uppercase tracking-[0.35em] text-cyan-300/70">bonos</p>
@@ -119,12 +136,12 @@
       <section class="mt-8">
         <div class="flex items-center justify-between">
           <h2 class="font-oxanium text-base font-semibold">Juegos populares</h2>
-          <a href="/tienda" class="text-xs font-semibold uppercase tracking-wide text-cyan-300">Ver todo</a>
+          <a href="/populares" class="text-xs font-semibold uppercase tracking-wide text-cyan-300">Ver todo</a>
         </div>
         <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           <a href="/tienda/roblox" class="group rounded-2xl border border-slate-800 bg-slate-900/60 p-2 transition hover:border-cyan-400/60">
             <div class="overflow-hidden rounded-xl">
-              <img src="assets/img/game-roblox.jpg" alt="Roblox" class="aspect-square w-full object-cover" />
+              <img src="/assets/img/game-roblox.jpg" alt="Roblox" class="aspect-square w-full object-cover" />
             </div>
             <div class="mt-2 space-y-1">
               <p class="text-sm font-semibold">Roblox Coins</p>
@@ -133,7 +150,7 @@
           </a>
           <a href="/tienda/free-fire" class="group rounded-2xl border border-slate-800 bg-slate-900/60 p-2 transition hover:border-cyan-400/60">
             <div class="overflow-hidden rounded-xl">
-              <img src="assets/img/game-freefire.jpg" alt="Free Fire" class="aspect-square w-full object-cover" />
+              <img src="/assets/img/game-freefire.jpg" alt="Free Fire" class="aspect-square w-full object-cover" />
             </div>
             <div class="mt-2 space-y-1">
               <p class="text-sm font-semibold">Free Fire</p>
@@ -142,7 +159,7 @@
           </a>
           <a href="/tienda/pubg" class="group rounded-2xl border border-slate-800 bg-slate-900/60 p-2 transition hover:border-cyan-400/60">
             <div class="overflow-hidden rounded-xl">
-              <img src="assets/img/game-pubg.jpg" alt="PUBG" class="aspect-square w-full object-cover" />
+              <img src="/assets/img/game-pubg.jpg" alt="PUBG" class="aspect-square w-full object-cover" />
             </div>
             <div class="mt-2 space-y-1">
               <p class="text-sm font-semibold">PUBG UC</p>
@@ -151,7 +168,7 @@
           </a>
           <a href="/tienda/gift-cards" class="group rounded-2xl border border-slate-800 bg-slate-900/60 p-2 transition hover:border-cyan-400/60">
             <div class="overflow-hidden rounded-xl">
-              <img src="assets/img/game-gift.jpg" alt="Gift cards" class="aspect-square w-full object-cover" />
+              <img src="/assets/img/game-gift.jpg" alt="Gift cards" class="aspect-square w-full object-cover" />
             </div>
             <div class="mt-2 space-y-1">
               <p class="text-sm font-semibold">Gift Cards</p>
@@ -163,7 +180,7 @@
 
       <section class="mt-8">
         <div class="relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/70">
-          <img src="assets/img/featured-1.jpg" alt="Imagen destacada" class="h-36 w-full object-cover opacity-85" />
+          <img src="/assets/img/featured-1.jpg" alt="Imagen destacada" class="h-36 w-full object-cover opacity-85" />
           <div class="absolute inset-0 bg-gradient-to-r from-slate-950/85 via-slate-950/40 to-transparent"></div>
           <div class="absolute inset-0 flex flex-col justify-center px-4">
             <p class="text-xs uppercase tracking-[0.35em] text-cyan-300/70">destacado</p>
@@ -176,12 +193,12 @@
       <section class="mt-8">
         <div class="flex items-center justify-between">
           <h2 class="font-oxanium text-base font-semibold">Mas juegos</h2>
-          <a href="/tienda" class="text-xs font-semibold uppercase tracking-wide text-cyan-300">Explorar</a>
+          <a href="/juegos" class="text-xs font-semibold uppercase tracking-wide text-cyan-300">Explorar</a>
         </div>
         <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           <a href="/tienda/call-of-duty" class="group rounded-2xl border border-slate-800 bg-slate-900/60 p-2 transition hover:border-cyan-400/60">
             <div class="overflow-hidden rounded-xl">
-              <img src="assets/img/game-cod.jpg" alt="Call of Duty" class="aspect-square w-full object-cover" />
+              <img src="/assets/img/game-cod.jpg" alt="Call of Duty" class="aspect-square w-full object-cover" />
             </div>
             <div class="mt-2 space-y-1">
               <p class="text-sm font-semibold">Call of Duty</p>
@@ -190,7 +207,7 @@
           </a>
           <a href="/tienda/fortnite" class="group rounded-2xl border border-slate-800 bg-slate-900/60 p-2 transition hover:border-cyan-400/60">
             <div class="overflow-hidden rounded-xl">
-              <img src="assets/img/game-fortnite.jpg" alt="Fortnite" class="aspect-square w-full object-cover" />
+              <img src="/assets/img/game-fortnite.jpg" alt="Fortnite" class="aspect-square w-full object-cover" />
             </div>
             <div class="mt-2 space-y-1">
               <p class="text-sm font-semibold">Fortnite</p>
@@ -199,7 +216,7 @@
           </a>
           <a href="/tienda/valorant" class="group rounded-2xl border border-slate-800 bg-slate-900/60 p-2 transition hover:border-cyan-400/60">
             <div class="overflow-hidden rounded-xl">
-              <img src="assets/img/game-valorant.jpg" alt="Valorant" class="aspect-square w-full object-cover" />
+              <img src="/assets/img/game-valorant.jpg" alt="Valorant" class="aspect-square w-full object-cover" />
             </div>
             <div class="mt-2 space-y-1">
               <p class="text-sm font-semibold">Valorant</p>
@@ -208,7 +225,7 @@
           </a>
           <a href="/tienda/garena" class="group rounded-2xl border border-slate-800 bg-slate-900/60 p-2 transition hover:border-cyan-400/60">
             <div class="overflow-hidden rounded-xl">
-              <img src="assets/img/game-garena.jpg" alt="Garena" class="aspect-square w-full object-cover" />
+              <img src="/assets/img/game-garena.jpg" alt="Garena" class="aspect-square w-full object-cover" />
             </div>
             <div class="mt-2 space-y-1">
               <p class="text-sm font-semibold">Garena Shells</p>
@@ -220,9 +237,26 @@
 
     </div>
   </div>
-</body>
-</html>
-<script>
+  <script>
+  const menuToggle = document.getElementById("menu-toggle");
+  const menuOverlay = document.getElementById("menu-overlay");
+  const menuPanel = document.getElementById("menu-panel");
+  const menuClose = document.getElementById("menu-close");
+
+  const openMenu = () => {
+    menuOverlay.classList.remove("hidden");
+    menuPanel.classList.remove("hidden");
+  };
+
+  const closeMenu = () => {
+    menuOverlay.classList.add("hidden");
+    menuPanel.classList.add("hidden");
+  };
+
+  menuToggle.addEventListener("click", openMenu);
+  menuClose.addEventListener("click", closeMenu);
+  menuOverlay.addEventListener("click", closeMenu);
+
   const slider = document.getElementById("promo-slider");
   const dots = Array.from(document.querySelectorAll("#promo-dots [data-index]"));
   const slides = Array.from(slider.querySelectorAll("article"));
@@ -332,4 +366,6 @@
 
   setActiveDot(0);
   startAutoplay();
-</script>
+  </script>
+</body>
+</html>
