@@ -1,5 +1,27 @@
 <?php
-$tenantSlug = isset($_GET["tenant"]) ? preg_replace("/[^a-zA-Z0-9-_]/", "", $_GET["tenant"]) : "default";
+$tenantSlug = null;
+if (isset($_GET["tenant"])) {
+  $tenantSlug = preg_replace("/[^a-zA-Z0-9-_]/", "", $_GET["tenant"]);
+}
+
+$host = isset($_SERVER["HTTP_HOST"]) ? strtolower($_SERVER["HTTP_HOST"]) : "";
+$host = preg_replace("/:[0-9]+$/", "", $host);
+$hostMap = [
+  "tvirtualgaming.tvirtualshop.com" => "tvirtualgaming",
+  "localhost" => "localhost",
+  "127.0.0.1" => "localhost"
+];
+
+if ($tenantSlug === null || $tenantSlug === "") {
+  if (isset($hostMap[$host])) {
+    $tenantSlug = $hostMap[$host];
+  }
+}
+
+if ($tenantSlug === null || $tenantSlug === "") {
+  $tenantSlug = "default";
+}
+
 $tenantPath = __DIR__ . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR . "tenants" . DIRECTORY_SEPARATOR . $tenantSlug . DIRECTORY_SEPARATOR . "data.json";
 
 if (!file_exists($tenantPath)) {
