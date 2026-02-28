@@ -1,12 +1,17 @@
 <?php
-require_once __DIR__ . "/includes/data.php";
-$pageTitle = $brandName . " | Tienda de monedas digitales";
+require_once __DIR__ . "/includes/db_connect.php";
+$pageTitle = "TVirtualGaming | Tienda de monedas digitales";
 include __DIR__ . "/includes/header.php";
 
+// Puedes mantener banners y featured desde JSON si lo deseas
+require_once __DIR__ . "/includes/data.php";
 $banners = $tenantData["banners"] ?? [];
 $featured = $tenantData["featured"] ?? [];
-$popularGames = $tenantData["popularGames"] ?? [];
-$moreGames = $tenantData["moreGames"] ?? [];
+
+$resPop = $mysqli->query("SELECT * FROM juegos WHERE popular=1 ORDER BY id DESC");
+$popularGames = $resPop ? $resPop->fetch_all(MYSQLI_ASSOC) : [];
+$resMore = $mysqli->query("SELECT * FROM juegos WHERE popular=0 ORDER BY id DESC");
+$moreGames = $resMore ? $resMore->fetch_all(MYSQLI_ASSOC) : [];
 $accentMap = [
   "cyan" => [
     "label" => "text-cyan-300/70",
@@ -74,13 +79,43 @@ $accentMap = [
         </div>
         <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           <?php foreach ($popularGames as $game): ?>
-            <a href="/tienda/<?php echo htmlspecialchars($game["slug"], ENT_QUOTES, "UTF-8"); ?>" class="group rounded-2xl border border-slate-800 bg-slate-900/60 p-2 transition hover:border-cyan-400/60">
-              <div class="overflow-hidden rounded-xl">
-                <img src="<?php echo htmlspecialchars($game["image"], ENT_QUOTES, "UTF-8"); ?>" alt="<?php echo htmlspecialchars($game["title"], ENT_QUOTES, "UTF-8"); ?>" class="aspect-square w-full object-cover" />
+            <?php
+              $resPaqCount = $mysqli->query("SELECT COUNT(*) as total FROM juego_paquetes WHERE juego_id=" . intval($game['id']));
+              $paqCount = $resPaqCount ? $resPaqCount->fetch_assoc()['total'] : 0;
+              if ($paqCount == 0) continue;
+            ?>
+            <?php
+              // Obtener precio mínimo en Bs solo si tiene moneda fija
+              $min_precio_bs = null;
+              if (!empty($game['moneda_fija_id'])) {
+                $resPaq = $mysqli->query("SELECT precio FROM juego_paquetes WHERE juego_id=" . intval($game['id']) . " ORDER BY precio ASC LIMIT 1");
+                $paq = $resPaq ? $resPaq->fetch_assoc() : null;
+                if ($paq) {
+                  $resMon = $mysqli->query("SELECT tasa, clave FROM monedas WHERE id=" . intval($game['moneda_fija_id']) . " LIMIT 1");
+                  $mon = $resMon ? $resMon->fetch_assoc() : null;
+                  if ($mon) {
+                    $min_precio_bs = $paq['precio'] * floatval($mon['tasa']);
+                  }
+                }
+              }
+            ?>
+            <a href="/juego/<?= urlencode($game['id']) ?>" class="group rounded-2xl border border-slate-800 bg-slate-900/60 p-2 transition hover:border-cyan-400/60">
+              <div class="overflow-hidden rounded-xl relative">
+                <img src="/<?= htmlspecialchars($game['imagen'] ?? '', ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="aspect-square w-full object-cover" />
+                <span title="Popular" class="absolute top-2 right-2 text-emerald-400 text-xl drop-shadow">★</span>
               </div>
               <div class="mt-2 space-y-1">
-                <p class="text-sm font-semibold"><?php echo htmlspecialchars($game["title"], ENT_QUOTES, "UTF-8"); ?></p>
-                <p class="text-xs text-slate-400">Desde <span class="text-cyan-300">Bs. <?php echo htmlspecialchars($game["price"], ENT_QUOTES, "UTF-8"); ?></span></p>
+                <p class="text-sm font-semibold flex items-center">
+                  <?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>
+                </p>
+                <p class="text-xs text-slate-400">
+                  <?php if (!empty($game['imagen_paquete'])): ?>
+                    <img src="/<?= htmlspecialchars($game['imagen_paquete'], ENT_QUOTES, 'UTF-8') ?>" alt="Paquete" class="inline-block h-5 w-5 rounded mr-1 align-middle" />
+                  <?php endif; ?>
+                  <?php if ($min_precio_bs !== null && isset($mon['clave'])): ?>
+                    Desde <span class="text-cyan-300"><?= htmlspecialchars(strtoupper($mon['clave'])) ?> <?= number_format($min_precio_bs, 2, '.', ',') ?></span>
+                  <?php endif; ?>
+                </p>
               </div>
             </a>
           <?php endforeach; ?>
@@ -108,13 +143,44 @@ $accentMap = [
         </div>
         <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           <?php foreach ($moreGames as $game): ?>
-            <a href="/tienda/<?php echo htmlspecialchars($game["slug"], ENT_QUOTES, "UTF-8"); ?>" class="group rounded-2xl border border-slate-800 bg-slate-900/60 p-2 transition hover:border-cyan-400/60">
-              <div class="overflow-hidden rounded-xl">
-                <img src="<?php echo htmlspecialchars($game["image"], ENT_QUOTES, "UTF-8"); ?>" alt="<?php echo htmlspecialchars($game["title"], ENT_QUOTES, "UTF-8"); ?>" class="aspect-square w-full object-cover" />
+            <?php
+              $resPaqCount = $mysqli->query("SELECT COUNT(*) as total FROM juego_paquetes WHERE juego_id=" . intval($game['id']));
+              $paqCount = $resPaqCount ? $resPaqCount->fetch_assoc()['total'] : 0;
+              if ($paqCount == 0) continue;
+            ?>
+            <?php
+              $min_precio_bs = null;
+              if (!empty($game['moneda_fija_id'])) {
+                $resPaq = $mysqli->query("SELECT precio FROM juego_paquetes WHERE juego_id=" . intval($game['id']) . " ORDER BY precio ASC LIMIT 1");
+                $paq = $resPaq ? $resPaq->fetch_assoc() : null;
+                if ($paq) {
+                  $resMon = $mysqli->query("SELECT tasa, clave FROM monedas WHERE id=" . intval($game['moneda_fija_id']) . " LIMIT 1");
+                  $mon = $resMon ? $resMon->fetch_assoc() : null;
+                  if ($mon) {
+                    $min_precio_bs = $paq['precio'] * floatval($mon['tasa']);
+                  }
+                }
+              }
+            ?>
+            <a href="/juego/<?= urlencode($game['id']) ?>" class="group rounded-2xl border border-slate-800 bg-slate-900/60 p-2 transition hover:border-cyan-400/60">
+              <div class="overflow-hidden rounded-xl relative">
+                <img src="/<?= htmlspecialchars($game['imagen'] ?? '', ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="aspect-square w-full object-cover" />
+                <?php if (!empty($game['popular'])): ?>
+                  <span title="Popular" class="absolute top-2 right-2 text-emerald-400 text-xl drop-shadow">★</span>
+                <?php endif; ?>
               </div>
               <div class="mt-2 space-y-1">
-                <p class="text-sm font-semibold"><?php echo htmlspecialchars($game["title"], ENT_QUOTES, "UTF-8"); ?></p>
-                <p class="text-xs text-slate-400">Desde <span class="text-cyan-300">Bs. <?php echo htmlspecialchars($game["price"], ENT_QUOTES, "UTF-8"); ?></span></p>
+                <p class="text-sm font-semibold flex items-center">
+                  <?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>
+                </p>
+                <p class="text-xs text-slate-400">
+                  <?php if (!empty($game['imagen_paquete'])): ?>
+                    <img src="/<?= htmlspecialchars($game['imagen_paquete'], ENT_QUOTES, 'UTF-8') ?>" alt="Paquete" class="inline-block h-5 w-5 rounded mr-1 align-middle" />
+                  <?php endif; ?>
+                  <?php if ($min_precio_bs !== null && isset($mon['clave'])): ?>
+                    Desde <span class="text-cyan-300"><?= htmlspecialchars(strtoupper($mon['clave'])) ?> <?= number_format($min_precio_bs, 2, '.', ',') ?></span>
+                  <?php endif; ?>
+                </p>
               </div>
             </a>
           <?php endforeach; ?>

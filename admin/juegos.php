@@ -48,6 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_juego_submit'], 
     $edit_nombre = trim($_POST['edit_nombre']);
     $edit_descripcion = trim($_POST['edit_descripcion']);
     $edit_popular = isset($_POST['edit_popular']) ? 1 : 0;
+    $edit_moneda_fija_id = isset($_POST['edit_moneda_fija_id']) && $_POST['edit_moneda_fija_id'] !== '' ? intval($_POST['edit_moneda_fija_id']) : null;
     $edit_imagen = null;
     $edit_imagen_paquete = null;
     if (isset($_FILES['edit_imagen']) && $_FILES['edit_imagen']['error'] === UPLOAD_ERR_OK) {
@@ -77,17 +78,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_juego_submit'], 
         }
     }
     if ($edit_imagen && $edit_imagen_paquete) {
-        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, imagen=?, imagen_paquete=?, popular=? WHERE id=?");
-        $stmt->bind_param('ssssii', $edit_nombre, $edit_descripcion, $edit_imagen, $edit_imagen_paquete, $edit_popular, $edit_id);
+        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, imagen=?, imagen_paquete=?, popular=?, moneda_fija_id=? WHERE id=?");
+        $stmt->bind_param('ssssiii', $edit_nombre, $edit_descripcion, $edit_imagen, $edit_imagen_paquete, $edit_popular, $edit_moneda_fija_id, $edit_id);
     } elseif ($edit_imagen) {
-        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, imagen=?, popular=? WHERE id=?");
-        $stmt->bind_param('sssii', $edit_nombre, $edit_descripcion, $edit_imagen, $edit_popular, $edit_id);
+        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, imagen=?, popular=?, moneda_fija_id=? WHERE id=?");
+        $stmt->bind_param('sssiii', $edit_nombre, $edit_descripcion, $edit_imagen, $edit_popular, $edit_moneda_fija_id, $edit_id);
     } elseif ($edit_imagen_paquete) {
-        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, imagen_paquete=?, popular=? WHERE id=?");
-        $stmt->bind_param('sssii', $edit_nombre, $edit_descripcion, $edit_imagen_paquete, $edit_popular, $edit_id);
+        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, imagen_paquete=?, popular=?, moneda_fija_id=? WHERE id=?");
+        $stmt->bind_param('sssiii', $edit_nombre, $edit_descripcion, $edit_imagen_paquete, $edit_popular, $edit_moneda_fija_id, $edit_id);
     } else {
-        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, popular=? WHERE id=?");
-        $stmt->bind_param('ssii', $edit_nombre, $edit_descripcion, $edit_popular, $edit_id);
+        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, popular=?, moneda_fija_id=? WHERE id=?");
+        $stmt->bind_param('ssiii', $edit_nombre, $edit_descripcion, $edit_popular, $edit_moneda_fija_id, $edit_id);
     }
     $stmt->execute();
     header('Location: /admin/juegos');
@@ -350,6 +351,13 @@ $juegos = $resj->fetch_all(MYSQLI_ASSOC);
             <input type="hidden" name="edit_juego_id" value="<?= $juego_edit['id'] ?>">
             <input type="text" name="edit_nombre" value="<?= htmlspecialchars($juego_edit['nombre']) ?>" required class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white mb-2">
             <textarea name="edit_descripcion" required class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white mb-2"><?= htmlspecialchars($juego_edit['descripcion']) ?></textarea>
+            <label class="block text-slate-300 font-medium mb-1">Moneda fija o variable:</label>
+            <select name="edit_moneda_fija_id" class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white mb-2">
+                <option value="" <?= empty($juego_edit['moneda_fija_id']) ? 'selected' : '' ?>>Moneda variable (usuario elige)</option>
+                <?php foreach ($monedas as $m): ?>
+                <option value="<?= $m['id'] ?>" <?= (!empty($juego_edit['moneda_fija_id']) && $juego_edit['moneda_fija_id'] == $m['id']) ? 'selected' : '' ?>>Solo <?= htmlspecialchars($m['nombre']) ?></option>
+                <?php endforeach; ?>
+            </select>
             <label class="inline-flex items-center mb-2">
                 <input type="checkbox" name="edit_popular" class="form-checkbox h-5 w-5 text-emerald-500" <?= !empty($juego_edit['popular']) ? 'checked' : '' ?>>
                 <span class="ml-2 text-slate-300">Marcar como popular</span>
