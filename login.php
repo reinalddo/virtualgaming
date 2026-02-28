@@ -22,6 +22,7 @@ if ($user === null || empty($user["password_hash"]) || !password_verify($passwor
   auth_redirect_back("/");
 }
 
+
 if (session_status() !== PHP_SESSION_ACTIVE) {
   session_start();
 }
@@ -31,9 +32,17 @@ $_SESSION["auth_user"] = [
   "email" => $user["email"] ?? $email,
   "full_name" => $user["full_name"] ?? "",
   "phone" => $user["phone"] ?? "",
-  "tenant" => $tenantSlug
+  "tenant" => $tenantSlug,
+  "rol" => $user["rol"] ?? "usuario"
 ];
 
 auth_set_flash("success", "Inicio de sesión exitoso.");
+
+// Si es admin, redirigir al panel admin
+if (($_SESSION["auth_user"]["rol"] ?? "") === "admin") {
+  header("Location: /admin.php");
+  exit;
+}
+
 // Redirect back to the page where the modal was opened.
 auth_redirect_back("/");

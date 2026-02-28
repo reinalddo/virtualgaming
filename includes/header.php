@@ -143,7 +143,15 @@ $tenantSlugAttr = isset($tenantData["tenant"]["slug"]) ? $tenantData["tenant"]["
                 <label class="block text-xs text-slate-400">Correo electrónico</label>
                 <input type="email" name="email" autocomplete="email" class="w-full rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400/70" placeholder="nombre@correo.com" />
                 <label class="block text-xs text-slate-400">Contraseña</label>
-                <input type="password" name="password" autocomplete="current-password" class="w-full rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400/70" placeholder="Ingresa tu contraseña" />
+                <div class="relative">
+                  <input type="password" name="password" autocomplete="current-password" class="w-full rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400/70 pr-10" placeholder="Ingresa tu contraseña" id="login-password" />
+                  <button type="button" tabindex="-1" class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-cyan-400" onclick="togglePassword('login-password', this)">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12.001C3.226 16.273 7.322 19.5 12 19.5c1.658 0 3.237-.336 4.677-.947M6.228 6.228A9.956 9.956 0 0112 4.5c4.677 0 8.773 3.227 10.065 7.499a10.523 10.523 0 01-4.293 5.774M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18" />
+                    </svg>
+                  </button>
+                </div>
               </div>
               <button type="submit" class="w-full rounded-xl border border-sky-400/30 bg-sky-500/80 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-sky-400">Iniciar sesión</button>
               <a href="/reset.php" class="block w-full text-center text-xs font-semibold text-sky-300">¿Has olvidado la contraseña?</a>
@@ -167,7 +175,28 @@ $tenantSlugAttr = isset($tenantData["tenant"]["slug"]) ? $tenantData["tenant"]["
                 <label class="block text-xs text-slate-400">Número de teléfono</label>
                 <input type="tel" name="phone" autocomplete="tel" class="w-full rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400/70" placeholder="+58 412 0000000" />
                 <label class="block text-xs text-slate-400">Contraseña</label>
-                <input type="password" name="password" autocomplete="new-password" class="w-full rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400/70" placeholder="Crea una contraseña segura" />
+                <div class="relative">
+                  <input type="password" name="password" autocomplete="new-password" class="w-full rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400/70 pr-10" placeholder="Crea una contraseña segura" id="register-password" />
+                  <button type="button" tabindex="-1" class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-cyan-400" onclick="togglePassword('register-password', this)">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12.001C3.226 16.273 7.322 19.5 12 19.5c1.658 0 3.237-.336 4.677-.947M6.228 6.228A9.956 9.956 0 0112 4.5c4.677 0 8.773 3.227 10.065 7.499a10.523 10.523 0 01-4.293 5.774M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18" />
+                    </svg>
+                  </button>
+                </div>
+                <script>
+                  function togglePassword(inputId, btn) {
+                    const input = document.getElementById(inputId);
+                    if (!input) return;
+                    if (input.type === 'password') {
+                      input.type = 'text';
+                      btn.querySelector('svg').classList.add('text-cyan-400');
+                    } else {
+                      input.type = 'password';
+                      btn.querySelector('svg').classList.remove('text-cyan-400');
+                    }
+                  }
+                </script>
               </div>
               <button type="submit" class="w-full rounded-xl border border-sky-400/30 bg-sky-500/80 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-sky-400">Registrarse ahora</button>
             </form>
