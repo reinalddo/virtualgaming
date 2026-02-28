@@ -125,13 +125,13 @@ $tenantSlugAttr = isset($tenantData["tenant"]["slug"]) ? $tenantData["tenant"]["
           <?php if (isset($_SESSION['auth_user'])): ?>
             <?php if (($_SESSION['auth_user']['rol'] ?? '') === 'admin'): ?>
               <hr class="my-2 border-slate-700">
-              <a href="/admin.php?seccion=dashboard" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-cyan-300 transition hover:border-cyan-400/70">Dashboard</a>
-              <a href="/admin.php?seccion=juegos" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-cyan-300 transition hover:border-cyan-400/70">Juegos</a>
-              <a href="/admin.php?seccion=pedidos" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-cyan-300 transition hover:border-cyan-400/70">Pedidos</a>
-              <a href="/admin.php?seccion=usuarios" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-cyan-300 transition hover:border-cyan-400/70">Usuarios</a>
-              <a href="/admin.php?seccion=dashboard" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-cyan-300 transition hover:border-cyan-400/70">Ir al Admin</a>
+              <a href="/admin/dashboard" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-cyan-300 transition hover:border-cyan-400/70">Dashboard</a>
+              <a href="/admin/juegos" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-cyan-300 transition hover:border-cyan-400/70">Juegos</a>
+              <a href="/admin/pedidos" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-cyan-300 transition hover:border-cyan-400/70">Pedidos</a>
+              <a href="/admin/usuarios" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-cyan-300 transition hover:border-cyan-400/70">Usuarios</a>
+              <a href="/admin/dashboard" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-cyan-300 transition hover:border-cyan-400/70">Ir al Admin</a>
             <?php endif; ?>
-            <a href="/logout.php" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-rose-300 transition hover:border-rose-400/70">Cerrar sesión</a>
+            <a href="/logout" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-rose-300 transition hover:border-rose-400/70">Cerrar sesión</a>
           <?php endif; ?>
         </div>
       </nav>

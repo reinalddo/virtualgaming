@@ -38,9 +38,9 @@ $_SESSION["auth_user"] = [
 
 auth_set_flash("success", "Inicio de sesión exitoso.");
 
-// Si es admin, redirigir al panel admin
+// Si es admin, redirigir al panel admin con URL amigable
 if (($_SESSION["auth_user"]["rol"] ?? "") === "admin") {
-  header("Location: /admin.php");
+  header("Location: /admin/dashboard");
   exit;
 }
 

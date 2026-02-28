@@ -18,7 +18,8 @@ if (isset($_SERVER['REQUEST_URI'])) {
 
 function nav_link($nombre, $seccion_actual) {
     $active = $nombre === $seccion_actual ? 'style="font-weight:bold;"' : '';
-    echo "<a href='admin.php?seccion=$nombre' $active>".ucfirst($nombre)."</a> | ";
+    // Usar URL amigable
+    echo "<a href='/admin/$nombre' $active>".ucfirst($nombre)."</a> | ";
 }
 ?>
 <?php

@@ -16,3 +16,6 @@ RewriteRule ^tienda/([a-zA-Z0-9-]+)/?$ game.php?slug=$1 [L,QSA]
 # Friendly list URLs
 RewriteRule ^populares/?$ populares.php [L,QSA]
 RewriteRule ^juegos/?$ juegos.php [L,QSA]
+
+# Logout amigable
+RewriteRule ^logout/?$ logout.php [L,QSA]
