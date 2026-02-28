@@ -102,8 +102,8 @@ $res->bind_param('i', $juego_id);
 $res->execute();
 $paquetes = $res->get_result()->fetch_all(MYSQLI_ASSOC);
 
-// Obtener nombre del juego
-$resj = $mysqli->prepare("SELECT nombre FROM juegos WHERE id=?");
+// Obtener nombre e imagen_paquete del juego
+$resj = $mysqli->prepare("SELECT nombre, imagen_paquete FROM juegos WHERE id=?");
 $resj->bind_param('i', $juego_id);
 $resj->execute();
 $juego = $resj->get_result()->fetch_assoc();
@@ -142,6 +142,8 @@ $juego = $resj->get_result()->fetch_assoc();
                         <td class="px-3 py-2">
                             <?php if (!empty($p['imagen_icono'])): ?>
                                 <img src="/<?= htmlspecialchars($p['imagen_icono']) ?>" alt="icono" class="rounded-lg max-h-12 max-w-12">
+                            <?php elseif (!empty($juego['imagen_paquete'])): ?>
+                                <img src="/<?= htmlspecialchars($juego['imagen_paquete']) ?>" alt="icono" class="rounded-lg max-h-12 max-w-12">
                             <?php else: ?>
                                 <span class="italic text-slate-400">Sin imagen</span>
                             <?php endif; ?>
@@ -166,6 +168,8 @@ $juego = $resj->get_result()->fetch_assoc();
                     <div class="flex items-center gap-4">
                         <?php if (!empty($p['imagen_icono'])): ?>
                             <img src="/<?= htmlspecialchars($p['imagen_icono']) ?>" alt="icono" class="rounded-lg max-h-12 max-w-12">
+                        <?php elseif (!empty($juego['imagen_paquete'])): ?>
+                            <img src="/<?= htmlspecialchars($juego['imagen_paquete']) ?>" alt="icono" class="rounded-lg max-h-12 max-w-12">
                         <?php else: ?>
                             <span class="italic text-slate-400">Sin imagen</span>
                         <?php endif; ?>

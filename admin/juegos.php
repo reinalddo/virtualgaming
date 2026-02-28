@@ -47,7 +47,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_juego_submit'], 
     $edit_id = intval($_POST['edit_juego_id']);
     $edit_nombre = trim($_POST['edit_nombre']);
     $edit_descripcion = trim($_POST['edit_descripcion']);
+    $edit_popular = isset($_POST['edit_popular']) ? 1 : 0;
     $edit_imagen = null;
+    $edit_imagen_paquete = null;
     if (isset($_FILES['edit_imagen']) && $_FILES['edit_imagen']['error'] === UPLOAD_ERR_OK) {
         $ext = strtolower(pathinfo($_FILES['edit_imagen']['name'], PATHINFO_EXTENSION));
         $permitidas = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
@@ -61,12 +63,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_juego_submit'], 
             }
         }
     }
-    if ($edit_imagen) {
-        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, imagen=? WHERE id=?");
-        $stmt->bind_param('sssi', $edit_nombre, $edit_descripcion, $edit_imagen, $edit_id);
+    if (isset($_FILES['edit_imagen_paquete']) && $_FILES['edit_imagen_paquete']['error'] === UPLOAD_ERR_OK) {
+        $ext = strtolower(pathinfo($_FILES['edit_imagen_paquete']['name'], PATHINFO_EXTENSION));
+        $permitidas = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+        if (in_array($ext, $permitidas)) {
+            $dir = '../assets/img/juegos/';
+            if (!is_dir($dir)) mkdir($dir, 0777, true);
+            $nombre_archivo = uniqid('juegopaq_') . '.' . $ext;
+            $destino = $dir . $nombre_archivo;
+            if (move_uploaded_file($_FILES['edit_imagen_paquete']['tmp_name'], $destino)) {
+                $edit_imagen_paquete = 'assets/img/juegos/' . $nombre_archivo;
+            }
+        }
+    }
+    if ($edit_imagen && $edit_imagen_paquete) {
+        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, imagen=?, imagen_paquete=?, popular=? WHERE id=?");
+        $stmt->bind_param('ssssii', $edit_nombre, $edit_descripcion, $edit_imagen, $edit_imagen_paquete, $edit_popular, $edit_id);
+    } elseif ($edit_imagen) {
+        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, imagen=?, popular=? WHERE id=?");
+        $stmt->bind_param('sssii', $edit_nombre, $edit_descripcion, $edit_imagen, $edit_popular, $edit_id);
+    } elseif ($edit_imagen_paquete) {
+        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, imagen_paquete=?, popular=? WHERE id=?");
+        $stmt->bind_param('sssii', $edit_nombre, $edit_descripcion, $edit_imagen_paquete, $edit_popular, $edit_id);
     } else {
-        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=? WHERE id=?");
-        $stmt->bind_param('ssi', $edit_nombre, $edit_descripcion, $edit_id);
+        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, popular=? WHERE id=?");
+        $stmt->bind_param('ssii', $edit_nombre, $edit_descripcion, $edit_popular, $edit_id);
     }
     $stmt->execute();
     header('Location: /admin/juegos');
@@ -78,7 +99,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['des
     $nombre = trim($_POST['nombre']);
     $descripcion = trim($_POST['descripcion']);
     $moneda_fija_id = !empty($_POST['moneda_fija_id']) ? intval($_POST['moneda_fija_id']) : null;
+    $popular = isset($_POST['popular']) ? 1 : 0;
     $imagen = null;
+    $imagen_paquete = null;
     if (isset($_FILES['imagen']) && $_FILES['imagen']['error'] === UPLOAD_ERR_OK) {
         $ext = strtolower(pathinfo($_FILES['imagen']['name'], PATHINFO_EXTENSION));
         $permitidas = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
@@ -92,8 +115,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['des
             }
         }
     }
-    $stmt = $mysqli->prepare("INSERT INTO juegos (nombre, imagen, descripcion, moneda_fija_id) VALUES (?, ?, ?, ?)");
-    $stmt->bind_param('sssi', $nombre, $imagen, $descripcion, $moneda_fija_id);
+    if (isset($_FILES['imagen_paquete']) && $_FILES['imagen_paquete']['error'] === UPLOAD_ERR_OK) {
+        $ext = strtolower(pathinfo($_FILES['imagen_paquete']['name'], PATHINFO_EXTENSION));
+        $permitidas = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+        if (in_array($ext, $permitidas)) {
+            $dir = '../assets/img/juegos/';
+            if (!is_dir($dir)) mkdir($dir, 0777, true);
+            $nombre_archivo = uniqid('juegopaq_') . '.' . $ext;
+            $destino = $dir . $nombre_archivo;
+            if (move_uploaded_file($_FILES['imagen_paquete']['tmp_name'], $destino)) {
+                $imagen_paquete = 'assets/img/juegos/' . $nombre_archivo;
+            }
+        }
+    }
+    $stmt = $mysqli->prepare("INSERT INTO juegos (nombre, imagen, imagen_paquete, descripcion, moneda_fija_id, popular) VALUES (?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param('ssssii', $nombre, $imagen, $imagen_paquete, $descripcion, $moneda_fija_id, $popular);
     $stmt->execute();
     $juego_id = $mysqli->insert_id;
     // Características seleccionadas del select múltiple
@@ -139,11 +175,20 @@ $juegos = $resj->fetch_all(MYSQLI_ASSOC);
 <main class="max-w-5xl mx-auto mt-10 bg-slate-900/80 rounded-xl p-8 shadow-lg">
     <h2 class="text-2xl font-bold mb-6 text-cyan-300">Gestión de Juegos</h2>
     <form method="post" enctype="multipart/form-data" class="space-y-4">
+                <label class="inline-flex items-center mt-2">
+                    <input type="checkbox" name="popular" class="form-checkbox h-5 w-5 text-emerald-500">
+                    <span class="ml-2 text-slate-300">Marcar como popular</span>
+                </label>
         <input type="text" name="nombre" placeholder="Nombre del juego" required class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white placeholder-slate-400">
         <textarea name="descripcion" placeholder="Descripción" required class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white placeholder-slate-400"></textarea>
         <input type="file" name="imagen" accept="image/*" class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white placeholder-slate-400" onchange="previewImagenJuego(event)">
         <div class="flex justify-center my-2">
             <img id="preview-juego-img" src="#" alt="Previsualización" style="display:none;max-width:180px;max-height:180px;border-radius:0.75rem;box-shadow:0 0 0.5rem #22d3ee55;" />
+        </div>
+        <label class="block text-slate-300 font-medium mt-2">Imagen común para paquetes:</label>
+        <input type="file" name="imagen_paquete" accept="image/*" class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white placeholder-slate-400" onchange="previewImagenPaqueteJuego(event)">
+        <div class="flex justify-center my-2">
+            <img id="preview-juego-img-paquete" src="#" alt="Previsualización Paquete" style="display:none;max-width:120px;max-height:120px;border-radius:0.75rem;box-shadow:0 0 0.5rem #22d3ee55;" />
         </div>
         <select name="moneda_fija_id" class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white">
             <option value="">Moneda variable (usuario elige)</option>
@@ -171,6 +216,8 @@ $juegos = $resj->fetch_all(MYSQLI_ASSOC);
                     <tr>
                         <th class="px-3 py-2">Imagen</th>
                         <th class="px-3 py-2">Nombre</th>
+                        <th class="px-3 py-2">Popular</th>
+                        <th class="px-3 py-2">Imagen Paquete</th>
                         <th class="px-3 py-2">Descripción</th>
                         <th class="px-3 py-2">Moneda</th>
                         <th class="px-3 py-2">Características</th>
@@ -188,6 +235,20 @@ $juegos = $resj->fetch_all(MYSQLI_ASSOC);
                             <?php endif; ?>
                         </td>
                         <td class="px-3 py-2 font-semibold"><?= htmlspecialchars($j['nombre']) ?></td>
+                        <td class="px-3 py-2 text-center">
+                            <?php if (!empty($j['popular'])): ?>
+                                <span title="Popular" class="text-emerald-400 text-xl">★</span>
+                            <?php else: ?>
+                                <span class="text-slate-500">—</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="px-3 py-2">
+                            <?php if (!empty($j['imagen_paquete'])): ?>
+                                <img src="/<?= htmlspecialchars($j['imagen_paquete']) ?>" alt="imgpaq" class="rounded-lg max-h-12 max-w-12">
+                            <?php else: ?>
+                                <span class="italic text-slate-400">Sin imagen</span>
+                            <?php endif; ?>
+                        </td>
                         <td class="px-3 py-2" style="max-width:220px;overflow-x:auto;white-space:pre-line;"><?= nl2br(htmlspecialchars($j['descripcion'])) ?></td>
                         <td class="px-3 py-2">
                             <?php 
@@ -229,7 +290,12 @@ $juegos = $resj->fetch_all(MYSQLI_ASSOC);
                             <span class="italic text-slate-400">Sin imagen</span>
                         <?php endif; ?>
                         <div>
-                            <div class="font-bold text-lg text-cyan-200"><?= htmlspecialchars($j['nombre']) ?></div>
+                            <div class="font-bold text-lg text-cyan-200 flex items-center">
+                                <?= htmlspecialchars($j['nombre']) ?>
+                                <?php if (!empty($j['popular'])): ?>
+                                    <span title="Popular" class="ml-2 text-emerald-400 text-xl">★</span>
+                                <?php endif; ?>
+                            </div>
                             <div class="text-xs text-slate-400">ID: <?= $j['id'] ?></div>
                         </div>
                     </div>
@@ -284,6 +350,10 @@ $juegos = $resj->fetch_all(MYSQLI_ASSOC);
             <input type="hidden" name="edit_juego_id" value="<?= $juego_edit['id'] ?>">
             <input type="text" name="edit_nombre" value="<?= htmlspecialchars($juego_edit['nombre']) ?>" required class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white mb-2">
             <textarea name="edit_descripcion" required class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white mb-2"><?= htmlspecialchars($juego_edit['descripcion']) ?></textarea>
+            <label class="inline-flex items-center mb-2">
+                <input type="checkbox" name="edit_popular" class="form-checkbox h-5 w-5 text-emerald-500" <?= !empty($juego_edit['popular']) ? 'checked' : '' ?>>
+                <span class="ml-2 text-slate-300">Marcar como popular</span>
+            </label>
             <label class="block text-slate-300 mb-1">Imagen actual:</label>
             <?php if ($juego_edit['imagen']): ?>
                 <img src="/<?= htmlspecialchars($juego_edit['imagen']) ?>" alt="Imagen actual" class="mb-2 rounded-lg max-h-32">
@@ -292,7 +362,47 @@ $juegos = $resj->fetch_all(MYSQLI_ASSOC);
             <div class="flex justify-center my-2">
                 <img id="preview-edit-juego-img" src="#" alt="Previsualización" style="display:none;max-width:180px;max-height:180px;border-radius:0.75rem;box-shadow:0 0 0.5rem #22d3ee55;" />
             </div>
+            <label class="block text-slate-300 mb-1">Imagen común para paquetes:</label>
+            <input type="file" name="edit_imagen_paquete" accept="image/*" class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white mb-2" onchange="previewEditImagenPaqueteJuego(event)">
+            <?php if ($juego_edit['imagen_paquete']): ?>
+                <img src="/<?= htmlspecialchars($juego_edit['imagen_paquete']) ?>" alt="Imagen Paquete" class="mb-2 rounded-lg max-h-24">
+            <?php endif; ?>
+            <div class="flex justify-center my-2">
+                <img id="preview-edit-juego-img-paquete" src="#" alt="Previsualización Paquete" style="display:none;max-width:120px;max-height:120px;border-radius:0.75rem;box-shadow:0 0 0.5rem #22d3ee55;" />
+            </div>
             <button type="submit" name="edit_juego_submit" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg w-full">Guardar cambios</button>
+            <script>
+            function previewImagenPaqueteJuego(event) {
+                const input = event.target;
+                const img = document.getElementById('preview-juego-img-paquete');
+                if (input.files && input.files[0]) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        img.src = e.target.result;
+                        img.style.display = 'block';
+                    };
+                    reader.readAsDataURL(input.files[0]);
+                } else {
+                    img.src = '#';
+                    img.style.display = 'none';
+                }
+            }
+            function previewEditImagenPaqueteJuego(event) {
+                const input = event.target;
+                const img = document.getElementById('preview-edit-juego-img-paquete');
+                if (input.files && input.files[0]) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        img.src = e.target.result;
+                        img.style.display = 'block';
+                    };
+                    reader.readAsDataURL(input.files[0]);
+                } else {
+                    img.src = '#';
+                    img.style.display = 'none';
+                }
+            }
+            </script>
             <a href="/admin/juegos" class="absolute top-2 right-4 text-cyan-300 hover:underline text-lg">&times;</a>
         </form>
     </div>
