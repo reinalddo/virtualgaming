@@ -36,8 +36,103 @@ require_once __DIR__ . '/includes/header.php';
         <?php
         switch ($seccion) {
             case 'usuarios':
+                require_once __DIR__ . '/includes/db.php';
                 echo '<h2 class="text-2xl font-semibold mb-4 text-cyan-300">Gestión de Usuarios</h2>';
-                echo '<p class="text-gray-400">Aquí se listarán y gestionarán los usuarios.</p>';
+                // Borrar usuario
+                if (isset($_GET['borrar_usuario'])) {
+                    $id = intval($_GET['borrar_usuario']);
+                    if ($id !== 1) { // No permitir borrar admin principal
+                        $pdo->prepare('DELETE FROM usuarios WHERE id = ?')->execute([$id]);
+                        echo '<div class="text-green-400 mb-2">Usuario eliminado.</div>';
+                    }
+                }
+                // Edición de usuario (solo nombre y rol)
+                if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['editar_usuario'])) {
+                    $id = intval($_POST['id']);
+                    $nombre = trim($_POST['nombre'] ?? '');
+                    $rol = $_POST['rol'] ?? 'usuario';
+                    if ($id && $nombre && in_array($rol, ['usuario','admin'])) {
+                        $pdo->prepare('UPDATE usuarios SET nombre = ?, rol = ? WHERE id = ?')->execute([$nombre, $rol, $id]);
+                        echo '<div class="text-green-400 mb-2">Usuario actualizado.</div>';
+                    }
+                }
+                // Listado de usuarios
+                $usuarios = $pdo->query('SELECT * FROM usuarios ORDER BY creado_en DESC')->fetchAll(PDO::FETCH_ASSOC);
+                if (count($usuarios) === 0) {
+                    echo '<div class="text-gray-400">No hay usuarios registrados.</div>';
+                } else {
+                    echo '<div class="overflow-x-auto">';
+                    echo '<div class="hidden sm:block">';
+                    echo '<table class="w-full text-left text-sm min-w-[600px]">';
+                    echo '<thead><tr class="text-cyan-300"><th>ID</th><th>Nombre</th><th>Email</th><th>Rol</th><th>Creado</th><th>Acciones</th></tr></thead><tbody>';
+                    foreach ($usuarios as $usuario) {
+                        echo '<tr class="border-b border-gray-700">';
+                        echo '<td>' . htmlspecialchars($usuario['id']) . '</td>';
+                        echo '<td>';
+                        echo '<form method="POST" class="flex gap-2 items-center">';
+                        echo '<input type="hidden" name="editar_usuario" value="1">';
+                        echo '<input type="hidden" name="id" value="' . htmlspecialchars($usuario['id']) . '">';
+                        echo '<input type="text" name="nombre" value="' . htmlspecialchars($usuario['nombre']) . '" class="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white w-32">';
+                        echo '</td>';
+                        echo '<td>' . htmlspecialchars($usuario['email']) . '</td>';
+                        echo '<td>';
+                        echo '<select name="rol" class="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white">';
+                        foreach (["usuario"=>"Usuario","admin"=>"Admin"] as $rolVal=>$rolTxt) {
+                            $sel = $usuario['rol']===$rolVal ? 'selected' : '';
+                            echo "<option value='$rolVal' $sel>$rolTxt</option>";
+                        }
+                        echo '</select>';
+                        echo '<button type="submit" class="ml-2 px-2 py-1 rounded bg-cyan-600 text-white hover:bg-cyan-700">Guardar</button>';
+                        echo '</form>';
+                        echo '</td>';
+                        echo '<td>' . htmlspecialchars($usuario['creado_en']) . '</td>';
+                        echo '<td>';
+                        if ($usuario['id'] != 1) {
+                            echo '<a href="?seccion=usuarios&borrar_usuario=' . $usuario['id'] . '" class="text-red-400 hover:underline" onclick="return confirm(\'¿Eliminar este usuario?\')">Eliminar</a>';
+                        } else {
+                            echo '<span class="text-gray-500">Admin</span>';
+                        }
+                        echo '</td>';
+                        echo '</tr>';
+                    }
+                    echo '</tbody></table>';
+                    echo '</div>';
+                    // Cards para móvil
+                    echo '<div class="sm:hidden flex flex-col gap-4">';
+                    foreach ($usuarios as $usuario) {
+                        echo '<div class="rounded-xl border border-slate-700 bg-gray-900 p-4 flex flex-col gap-2 shadow">';
+                        echo '<div class="flex justify-between items-center mb-2">';
+                        echo '<span class="text-xs text-cyan-300 font-semibold">ID: ' . htmlspecialchars($usuario['id']) . '</span>';
+                        echo '<span class="text-xs text-slate-400">' . htmlspecialchars($usuario['creado_en']) . '</span>';
+                        echo '</div>';
+                        echo '<form method="POST" class="flex flex-col gap-2">';
+                        echo '<input type="hidden" name="editar_usuario" value="1">';
+                        echo '<input type="hidden" name="id" value="' . htmlspecialchars($usuario['id']) . '">';
+                        echo '<label class="text-xs text-slate-400">Nombre</label>';
+                        echo '<input type="text" name="nombre" value="' . htmlspecialchars($usuario['nombre']) . '" class="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white">';
+                        echo '<label class="text-xs text-slate-400">Email</label>';
+                        echo '<div class="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white">' . htmlspecialchars($usuario['email']) . '</div>';
+                        echo '<label class="text-xs text-slate-400">Rol</label>';
+                        echo '<select name="rol" class="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white">';
+                        foreach (["usuario"=>"Usuario","admin"=>"Admin"] as $rolVal=>$rolTxt) {
+                            $sel = $usuario['rol']===$rolVal ? 'selected' : '';
+                            echo "<option value='$rolVal' $sel>$rolTxt</option>";
+                        }
+                        echo '</select>';
+                        echo '<div class="flex gap-2 mt-2">';
+                        echo '<button type="submit" class="flex-1 px-2 py-1 rounded bg-cyan-600 text-white hover:bg-cyan-700">Guardar</button>';
+                        if ($usuario['id'] != 1) {
+                            echo '<a href="?seccion=usuarios&borrar_usuario=' . $usuario['id'] . '" class="flex-1 text-center px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700" onclick="return confirm(\'¿Eliminar este usuario?\')">Eliminar</a>';
+                        } else {
+                            echo '<span class="flex-1 text-center text-gray-500">Admin</span>';
+                        }
+                        echo '</div>';
+                        echo '</form>';
+                        echo '</div>';
+                    }
+                    echo '</div>';
+                    echo '</div>';
+                }
                 break;
             case 'juegos':
                 echo '<h2 class="text-2xl font-semibold mb-8 text-cyan-300">Gestión de Juegos</h2>';

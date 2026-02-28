@@ -75,17 +75,25 @@ $tenantSlugAttr = isset($tenantData["tenant"]["slug"]) ? $tenantData["tenant"]["
         </div>
         <div id="auth-container" class="relative">
           <?php if (!isset($_SESSION['auth_user'])): ?>
-          <button id="auth-trigger" type="button" class="flex items-center gap-2 rounded-full border border-cyan-400/30 bg-slate-900/80 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-cyan-200 transition hover:border-cyan-300 hover:text-white">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
-              <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 20.118a7.5 7.5 0 0115 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.5-1.632z" />
-            </svg>
-            Iniciar sesión / Registrarse
-          </button>
-          <div id="auth-menu" class="absolute right-0 mt-2 z-[70] hidden w-48 rounded-2xl border border-slate-800 bg-slate-950/95 p-2 shadow-2xl">
-            <button type="button" data-auth-open="login" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-left text-xs font-semibold text-slate-100 transition hover:border-cyan-400/70">Iniciar sesión</button>
-            <button type="button" data-auth-open="register" class="mt-2 w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-left text-xs font-semibold text-slate-100 transition hover:border-cyan-400/70">Registrarse</button>
-          </div>
+            <button id="auth-trigger" type="button" class="flex items-center gap-2 rounded-full border border-cyan-400/30 bg-slate-900/80 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-cyan-200 transition hover:border-cyan-300 hover:text-white">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 20.118a7.5 7.5 0 0115 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.5-1.632z" />
+              </svg>
+              Iniciar sesión / Registrarse
+            </button>
+            <div id="auth-menu" class="absolute right-0 mt-2 z-[70] hidden w-48 rounded-2xl border border-slate-800 bg-slate-950/95 p-2 shadow-2xl">
+              <button type="button" data-auth-open="login" class="w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-left text-xs font-semibold text-slate-100 transition hover:border-cyan-400/70">Iniciar sesión</button>
+              <button type="button" data-auth-open="register" class="mt-2 w-full rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-left text-xs font-semibold text-slate-100 transition hover:border-cyan-400/70">Registrarse</button>
+            </div>
+          <?php else: ?>
+            <div class="flex items-center gap-2 rounded-full border border-cyan-400/30 bg-slate-900/80 px-3 py-1.5 text-[13px] font-semibold text-cyan-200">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 20.118a7.5 7.5 0 0115 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.5-1.632z" />
+              </svg>
+              <?php echo htmlspecialchars($_SESSION['auth_user']['nombre'] ?? $_SESSION['auth_user']['full_name'] ?? $_SESSION['auth_user']['email'] ?? 'Usuario', ENT_QUOTES, 'UTF-8'); ?>
+            </div>
           <?php endif; ?>
         </div>
       </header>
@@ -178,19 +186,19 @@ $tenantSlugAttr = isset($tenantData["tenant"]["slug"]) ? $tenantData["tenant"]["
               <h2 class="mt-2 font-oxanium text-2xl font-semibold">Crear cuenta</h2>
               <p class="mt-1 text-xs text-slate-400">Regístrate para empezar a operar en <?php echo htmlspecialchars($brandName, ENT_QUOTES, "UTF-8"); ?>.</p>
             </div>
-            <form action="/registro.php" method="post" class="space-y-4" novalidate>
-              <input type="hidden" name="tenant" value="<?php echo htmlspecialchars($tenantSlugAttr, ENT_QUOTES, "UTF-8"); ?>" />
+            <form id="registro-form" class="space-y-4" novalidate autocomplete="off">
+              <input type="hidden" id="tenant" value="<?php echo htmlspecialchars($tenantSlugAttr, ENT_QUOTES, 'UTF-8'); ?>" />
               <div class="space-y-3">
                 <label class="block text-xs text-slate-400">Nombre completo</label>
-                <input type="text" name="full_name" autocomplete="name" class="w-full rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400/70" placeholder="Ej. Juan Pérez" />
+                <input type="text" id="nombre" autocomplete="name" class="w-full rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400/70" placeholder="Ej. Juan Pérez" required />
                 <label class="block text-xs text-slate-400">Correo electrónico</label>
-                <input type="email" name="email" autocomplete="email" class="w-full rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400/70" placeholder="nombre@correo.com" />
+                <input type="email" id="correo" autocomplete="email" class="w-full rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400/70" placeholder="nombre@correo.com" required />
                 <label class="block text-xs text-slate-400">Número de teléfono</label>
-                <input type="tel" name="phone" autocomplete="tel" class="w-full rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400/70" placeholder="+58 412 0000000" />
+                <input type="tel" id="telefono" autocomplete="tel" class="w-full rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400/70" placeholder="+58 412 0000000" />
                 <label class="block text-xs text-slate-400">Contraseña</label>
                 <div class="relative">
-                  <input type="password" name="password" autocomplete="new-password" class="w-full rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400/70 pr-10" placeholder="Crea una contraseña segura" id="register-password" />
-                  <button type="button" tabindex="-1" class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-cyan-400" onclick="togglePassword('register-password', this)">
+                  <input type="password" id="contrasena" autocomplete="new-password" class="w-full rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400/70 pr-10" placeholder="Crea una contraseña segura" required />
+                  <button type="button" tabindex="-1" class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-cyan-400" onclick="togglePassword('contrasena', this)">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12.001C3.226 16.273 7.322 19.5 12 19.5c1.658 0 3.237-.336 4.677-.947M6.228 6.228A9.956 9.956 0 0112 4.5c4.677 0 8.773 3.227 10.065 7.499a10.523 10.523 0 01-4.293 5.774M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       <path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18" />
@@ -211,8 +219,9 @@ $tenantSlugAttr = isset($tenantData["tenant"]["slug"]) ? $tenantData["tenant"]["
                   }
                 </script>
               </div>
-              <button type="submit" class="w-full rounded-xl border border-sky-400/30 bg-sky-500/80 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-sky-400">Registrarse ahora</button>
+              <button type="submit" id="registro-btn" class="w-full rounded-xl border border-sky-400/30 bg-sky-500/80 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-sky-400">Registrarse ahora</button>
             </form>
+            <script src="/registro.js"></script>
             <button type="button" data-auth-switch="login" class="w-full text-xs font-semibold text-cyan-300">¿Ya tienes una cuenta? Inicia sesión</button>
           </div>
         </div>
