@@ -120,6 +120,13 @@ $tenantSlugAttr = isset($tenantData["tenant"]["slug"]) ? $tenantData["tenant"]["
           <a href="/" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-cyan-400/70">Inicio</a>
           <a href="/populares" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-cyan-400/70">Juegos populares</a>
           <a href="/juegos" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-cyan-400/70">Juegos</a>
+          <?php if (isset($_SESSION['auth_user']) && ($_SESSION['auth_user']['rol'] ?? '') === 'admin'): ?>
+            <hr class="my-2 border-slate-700">
+            <a href="/admin.php?seccion=dashboard" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-cyan-300 transition hover:border-cyan-400/70">Dashboard</a>
+            <a href="/admin.php?seccion=juegos" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-cyan-300 transition hover:border-cyan-400/70">Juegos</a>
+            <a href="/admin.php?seccion=pedidos" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-cyan-300 transition hover:border-cyan-400/70">Pedidos</a>
+            <a href="/admin.php?seccion=usuarios" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-cyan-300 transition hover:border-cyan-400/70">Usuarios</a>
+          <?php endif; ?>
         </div>
       </nav>
 
