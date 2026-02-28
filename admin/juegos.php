@@ -3,6 +3,45 @@
 // admin/juegos.php - Gestión de juegos y características
 require_once '../includes/db_connect.php';
 
+// Procesar eliminación de juego (antes de cualquier salida)
+if (isset($_GET['eliminar'])) {
+    $del_id = intval($_GET['eliminar']);
+    // Eliminar imágenes de paquetes asociados
+    $stmt_paq = $mysqli->prepare("SELECT imagen_icono FROM juego_paquetes WHERE juego_id=?");
+    $stmt_paq->bind_param('i', $del_id);
+    $stmt_paq->execute();
+    $res_paq = $stmt_paq->get_result();
+    while ($row = $res_paq->fetch_assoc()) {
+        if ($row['imagen_icono'] && file_exists('../' . $row['imagen_icono'])) {
+            unlink('../' . $row['imagen_icono']);
+        }
+    }
+    $stmt_paq->close();
+    // Eliminar paquetes
+    $stmt = $mysqli->prepare("DELETE FROM juego_paquetes WHERE juego_id=?");
+    $stmt->bind_param('i', $del_id);
+    $stmt->execute();
+    // Eliminar características
+    $stmt = $mysqli->prepare("DELETE FROM juego_caracteristicas WHERE juego_id=?");
+    $stmt->bind_param('i', $del_id);
+    $stmt->execute();
+    // Eliminar imagen del juego
+    $stmt_img = $mysqli->prepare("SELECT imagen FROM juegos WHERE id=?");
+    $stmt_img->bind_param('i', $del_id);
+    $stmt_img->execute();
+    $stmt_img->bind_result($img_juego);
+    $stmt_img->fetch();
+    $stmt_img->close();
+    if ($img_juego && file_exists('../' . $img_juego)) {
+        unlink('../' . $img_juego);
+    }
+    // Eliminar el juego
+    $stmt = $mysqli->prepare("DELETE FROM juegos WHERE id=?");
+    $stmt->bind_param('i', $del_id);
+    $stmt->execute();
+    header('Location: /admin/juegos');
+    exit;
+}
 // Procesar edición de cabecera de juego (antes de cualquier salida)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_juego_submit'], $_POST['edit_juego_id'], $_POST['edit_nombre'], $_POST['edit_descripcion'])) {
     $edit_id = intval($_POST['edit_juego_id']);

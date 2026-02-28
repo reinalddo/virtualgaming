@@ -1,5 +1,6 @@
 <?php
 // admin/paquetes.php - Gestión de paquetes de un juego
+
 require_once '../includes/db_connect.php';
 
 $juego_id = 0;
@@ -12,6 +13,28 @@ if (isset($_GET['juego'])) {
     }
 }
 if ($juego_id <= 0) { die('Juego no especificado.'); }
+
+// Procesar eliminación de paquete (antes de cualquier salida)
+if (isset($_GET['eliminar'])) {
+    $del_id = intval($_GET['eliminar']);
+    // Obtener la ruta de la imagen antes de borrar
+    $stmt_img = $mysqli->prepare("SELECT imagen_icono FROM juego_paquetes WHERE id=? AND juego_id=?");
+    $stmt_img->bind_param('ii', $del_id, $juego_id);
+    $stmt_img->execute();
+    $stmt_img->bind_result($img_path);
+    $stmt_img->fetch();
+    $stmt_img->close();
+    // Borrar el registro
+    $stmt = $mysqli->prepare("DELETE FROM juego_paquetes WHERE id=? AND juego_id=?");
+    $stmt->bind_param('ii', $del_id, $juego_id);
+    $stmt->execute();
+    // Borrar la imagen física si existe y no está vacía
+    if ($img_path && file_exists('../' . $img_path)) {
+        unlink('../' . $img_path);
+    }
+    header('Location: /admin/paquetes/' . $juego_id);
+    exit;
+}
 
 // Procesar edición de paquete (antes de cualquier salida)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_paquete_id'])) {
@@ -164,17 +187,7 @@ $juego = $resj->get_result()->fetch_assoc();
 
 
         
-    <?php
-    // Procesar eliminación de paquete
-    if (isset($_GET['eliminar'])) {
-        $del_id = intval($_GET['eliminar']);
-        $stmt = $mysqli->prepare("DELETE FROM juego_paquetes WHERE id=? AND juego_id=?");
-        $stmt->bind_param('ii', $del_id, $juego_id);
-        $stmt->execute();
-        header('Location: /admin/paquetes/' . $juego_id);
-        exit;
-    }
-    ?>
+    <!-- Eliminación de paquete ahora se procesa al inicio del archivo -->
     </ul>
 
 <?php
