@@ -221,6 +221,18 @@ $pageScripts = [
   const buyButton = document.getElementById("buy-button");
   let activePack = null;
 
+  // Validación en tiempo real para el input de cupón
+  const couponInput = orderForm.querySelector('input[name="coupon"]');
+  if (couponInput) {
+    couponInput.addEventListener('input', function(e) {
+      let val = e.target.value;
+      val = val.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // quitar acentos
+      val = val.replace(/[^A-Z0-9_\-]/gi, ""); // solo letras, números, guion y guion bajo
+      val = val.toUpperCase();
+      e.target.value = val;
+    });
+  }
+
   function updateButtonState() {
     const requiredFilled = Array.from(orderForm.querySelectorAll("[required]")).every(
       (field) => field.value.trim() !== ""
