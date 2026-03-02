@@ -47,6 +47,28 @@ $tenantSlugAttr = isset($tenantData["tenant"]["slug"]) ? $tenantData["tenant"]["
     .glow-ring {
       box-shadow: 0 0 0.75rem rgba(34, 211, 238, 0.4), 0 0 2.2rem rgba(45, 212, 191, 0.2);
     }
+    /* Gaming-styled scrollbar for the menu (supports WebKit + Firefox) */
+    #menu-panel {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(34, 211, 238, 0.45) transparent;
+    }
+    #menu-panel::-webkit-scrollbar {
+      width: 10px;
+    }
+    #menu-panel::-webkit-scrollbar-track {
+      background: linear-gradient(180deg, rgba(12, 21, 34, 0.9), rgba(8, 11, 16, 0.6));
+      border-radius: 999px;
+      border: 1px solid rgba(30, 41, 59, 0.7);
+    }
+    #menu-panel::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, rgba(34, 211, 238, 0.85), rgba(52, 211, 153, 0.85));
+      border-radius: 999px;
+      box-shadow: 0 0 12px rgba(34, 211, 238, 0.35);
+      border: 1px solid rgba(12, 21, 34, 0.9);
+    }
+    #menu-panel::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, rgba(34, 211, 238, 1), rgba(52, 211, 153, 1));
+    }
     @keyframes floaty {
       0%, 100% { transform: translateY(0); }
       50% { transform: translateY(-6px); }
@@ -117,7 +139,7 @@ $tenantSlugAttr = isset($tenantData["tenant"]["slug"]) ? $tenantData["tenant"]["
       <?php endif; ?>
 
       <div id="menu-overlay" class="fixed inset-0 z-40 hidden bg-slate-950/70 backdrop-blur-sm"></div>
-      <nav id="menu-panel" class="fixed left-1/2 top-20 z-50 hidden w-[min(92vw,420px)] -translate-x-1/2 rounded-2xl border border-slate-800 bg-slate-900/95 p-4 shadow-2xl">
+      <nav id="menu-panel" class="fixed left-1/2 top-20 z-50 hidden w-[min(92vw,420px)] max-h-[calc(100vh-96px)] -translate-x-1/2 overflow-y-auto overscroll-contain rounded-2xl border border-slate-800 bg-slate-900/95 p-4 shadow-2xl touch-pan-y" style="-webkit-overflow-scrolling: touch;">
         <div class="flex items-center justify-between">
           <p class="text-xs uppercase tracking-[0.35em] text-slate-400">Menu</p>
           <button id="menu-close" class="rounded-full border border-slate-800 bg-slate-950/70 p-2 text-slate-200 transition hover:border-cyan-400/70 hover:text-cyan-200" aria-label="Cerrar menu">
