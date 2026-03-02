@@ -243,23 +243,12 @@ include __DIR__ . "/includes/header.php";
               updatePackPrices();
 
               function updateButtonState() {
+                // Solo controlar el estado del botón, no mostrar mensajes de error aquí
                 const requiredFields = Array.from(orderForm.querySelectorAll("[required]"));
                 let requiredFilled = true;
                 requiredFields.forEach(field => {
-                  const errorId = field.name + "-error";
-                  let errorElem = document.getElementById(errorId);
                   if (field.value.trim() === "") {
                     requiredFilled = false;
-                    if (!errorElem) {
-                      errorElem = document.createElement("div");
-                      errorElem.id = errorId;
-                      errorElem.style.color = "#f87171";
-                      errorElem.style.fontSize = "12px";
-                      errorElem.textContent = "Este campo es obligatorio.";
-                      field.parentNode.appendChild(errorElem);
-                    }
-                  } else {
-                    if (errorElem) errorElem.remove();
                   }
                 });
                 if (!activePack) {
@@ -298,8 +287,7 @@ include __DIR__ . "/includes/header.php";
                 });
               });
               if (packCards2.length) {
-                // Selecciona el primero por defecto
-                packCards2[0].click();
+                // Ya no se selecciona automáticamente ningún paquete al cargar
               }
               if (couponInput) {
               // Función simple para mostrar mensajes tipo toast
@@ -365,6 +353,30 @@ include __DIR__ . "/includes/header.php";
               orderForm.addEventListener('input', updateButtonState);
               orderForm.addEventListener('submit', function(event) {
                 const couponVal = couponInput.value.trim();
+                // Validar campos obligatorios solo al intentar comprar
+                const requiredFields = Array.from(orderForm.querySelectorAll('[required]'));
+                let requiredFilled = true;
+                requiredFields.forEach(field => {
+                  const errorId = field.name + "-error";
+                  let errorElem = document.getElementById(errorId);
+                  if (field.value.trim() === "") {
+                    requiredFilled = false;
+                    if (!errorElem) {
+                      errorElem = document.createElement("div");
+                      errorElem.id = errorId;
+                      errorElem.style.color = "#f87171";
+                      errorElem.style.fontSize = "12px";
+                      errorElem.textContent = "Este campo es obligatorio.";
+                      field.parentNode.appendChild(errorElem);
+                    }
+                  } else {
+                    if (errorElem) errorElem.remove();
+                  }
+                });
+                if (!requiredFilled) {
+                  event.preventDefault();
+                  return;
+                }
                 if (couponVal && !couponApplied) {
                   event.preventDefault();
                   couponModal.classList.remove('hidden');
@@ -372,7 +384,7 @@ include __DIR__ . "/includes/header.php";
                   return;
                 }
                 // ...continúa el envío normal del formulario...
-                });
+              });
               }
               </script>
             </section>

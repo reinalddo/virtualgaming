@@ -4,3 +4,4 @@
 2026-03-02 22:24:13 | code: CUPON01 | pack_price: 5
 2026-03-02 22:25:43 | code: CUPON01 | pack_price: 5
 2026-03-02 22:27:19 | code: CUPON01 | pack_price: 5495
+2026-03-02 22:33:33 | code: CUPON01 | pack_price: 5495
