@@ -106,7 +106,7 @@ include __DIR__ . "/includes/header.php";
         data-base="<?= htmlspecialchars($precio_base) ?>"
         data-name="<?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?>"
         data-cantidad="<?= htmlspecialchars($pack['cantidad'], ENT_QUOTES, 'UTF-8') ?>"
-        data-price="<?= number_format($precio_mostrar, 2, '.', ',') ?>"
+        data-price="<?= number_format($precio_mostrar, 2, '.', '') ?>"
         data-moneda="<?= htmlspecialchars($clave_moneda) ?>">
         <div class="flex flex-col items-center justify-center h-20 rounded-xl border border-slate-800 bg-slate-950/70 overflow-hidden">
           <span class="text-sm font-semibold text-cyan-200"><?= htmlspecialchars($pack['cantidad'], ENT_QUOTES, 'UTF-8') ?></span>
@@ -140,7 +140,6 @@ include __DIR__ . "/includes/header.php";
   ?>
   <script>
     const monedas = <?= json_encode($monedas_js) ?>;
-    const isVariable = <?= $is_variable ? 'true' : 'false' ?>;
     let monedaActualId = "<?= $moneda_actual['id'] ?? '' ?>";
     let monedaActualClave = "<?= $moneda_actual['clave'] ?? 'USD' ?>";
     let monedaActualTasa = <?= $moneda_actual['tasa'] ?? 1 ?>;
@@ -152,16 +151,8 @@ include __DIR__ . "/includes/header.php";
         const precio = base * monedaActualTasa;
         card.querySelector('.precio-label').textContent = precio.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         card.querySelector('.moneda-label').textContent = monedaActualClave;
-        card.setAttribute('data-price', precio.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+        card.setAttribute('data-price', precio.toFixed(2).replace(/,/g, ''));
         card.setAttribute('data-moneda', monedaActualClave);
-      });
-    }
-    if (isVariable && monedaSelect) {
-      monedaSelect.addEventListener('change', function() {
-        monedaActualId = this.value;
-        monedaActualClave = monedas[monedaActualId].clave;
-        monedaActualTasa = monedas[monedaActualId].tasa;
-        updatePackPrices();
       });
     }
     updatePackPrices();
@@ -198,92 +189,193 @@ include __DIR__ . "/includes/header.php";
             <label class="text-xs text-slate-400">Correo</label>
             <input type="email" name="email" placeholder="tu@email.com" class="form-field mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-cyan-400 focus:outline-none" required />
           </div>
-          <div>
+          <div class="relative">
             <label class="text-xs text-slate-400">Cupon</label>
-            <input type="text" name="coupon" placeholder="Codigo opcional" class="form-field mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-cyan-400 focus:outline-none" />
+            <div style="display: flex; gap: 8px;">
+              <input type="text" name="coupon" id="coupon-input" placeholder="Codigo opcional" class="form-field mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-cyan-400 focus:outline-none" />
+              <button type="button" id="apply-coupon-btn" class="mt-1 px-3 py-2 rounded-xl bg-cyan-400 text-slate-900 font-bold shadow hover:bg-cyan-300 transition">Aplicar cupón</button>
+            </div>
           </div>
           <button type="submit" id="buy-button" class="glow-ring mt-4 w-full rounded-2xl bg-gradient-to-r from-cyan-400 via-emerald-400 to-cyan-300 px-4 py-4 text-center text-sm font-bold uppercase tracking-[0.3em] text-slate-950 transition disabled:cursor-not-allowed disabled:opacity-50" disabled>
             Compra ahora
           </button>
         </form>
-      </section>
-    </div>
-  </div>
 
-<?php
-$pageScripts = [
-  <<<'SCRIPT'
+        <!-- Modal Neon Tailwind -->
+        <div id="coupon-modal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 hidden">
+          <div class="bg-slate-900 rounded-2xl border-2 border-cyan-400 shadow-lg p-6 max-w-xs w-full text-center animate-fadeUp">
+            <h4 class="text-lg font-bold text-cyan-300 mb-2">¿Desea aplicar el cupón <span id="modal-coupon-name" class="text-emerald-400"></span>?</h4>
+            <div class="flex gap-2 justify-center mt-4">
+              <button id="modal-yes" class="px-4 py-2 rounded-lg bg-emerald-400 text-slate-900 font-bold shadow hover:bg-emerald-300 transition">Sí</button>
+              <button id="modal-no" class="px-4 py-2 rounded-lg bg-cyan-400 text-slate-900 font-bold shadow hover:bg-cyan-300 transition">No</button>
+              <button id="modal-cancel" class="px-4 py-2 rounded-lg bg-slate-700 text-white font-bold shadow hover:bg-slate-600 transition">Cancelar</button>
+            </div>
+          </div>
+        </div>
+
 <script>
-  const packCards2 = Array.from(document.querySelectorAll(".pack-card"));
-  const selectedPack = document.getElementById("selected-pack");
-  const selectedPrice = document.getElementById("selected-price");
-  const orderForm = document.getElementById("order-form");
-  const buyButton = document.getElementById("buy-button");
-  let activePack = null;
+              // Todas las variables y lógica JS en un solo bloque
+              const packCards2 = Array.from(document.querySelectorAll('.pack-card'));
+              const selectedPack = document.getElementById("selected-pack");
+              const selectedPrice = document.getElementById("selected-price");
+              const orderForm = document.getElementById("order-form");
+              const buyButton = document.getElementById("buy-button");
+              const couponInput = document.getElementById('coupon-input');
+              const couponModal = document.getElementById('coupon-modal');
+              const modalCouponName = document.getElementById('modal-coupon-name');
+              const modalYes = document.getElementById('modal-yes');
+              const modalNo = document.getElementById('modal-no');
+              const modalCancel = document.getElementById('modal-cancel');
+              let activePack = null;
+              let couponApplied = false;
+              let couponValue = '';
 
-  // Validación en tiempo real para el input de cupón
-  const couponInput = orderForm.querySelector('input[name="coupon"]');
-  if (couponInput) {
-    couponInput.addEventListener('input', function(e) {
-      let val = e.target.value;
-      val = val.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // quitar acentos
-      val = val.replace(/[^A-Z0-9_\-]/gi, ""); // solo letras, números, guion y guion bajo
-      val = val.toUpperCase();
-      e.target.value = val;
-    });
-  }
+              function updatePackPrices() {
+                packCards.forEach(card => {
+                  const base = parseFloat(card.getAttribute('data-base'));
+                  const precio = base * monedaActualTasa;
+                  card.querySelector('.precio-label').textContent = precio.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                  card.querySelector('.moneda-label').textContent = monedaActualClave;
+                  card.setAttribute('data-price', precio.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+                  card.setAttribute('data-moneda', monedaActualClave);
+                });
+              }
+              updatePackPrices();
 
-  function updateButtonState() {
-    const requiredFilled = Array.from(orderForm.querySelectorAll("[required]")).every(
-      (field) => field.value.trim() !== ""
-    );
-    buyButton.disabled = !activePack || !requiredFilled;
-  }
-
-  function updateResumenCompra(pack) {
-    if (pack) {
-      selectedPack.textContent = pack.name;
-      selectedPrice.textContent = `${pack.moneda} ${pack.price}`;
-    } else {
-      selectedPack.textContent = 'Ninguno';
-      selectedPrice.textContent = `${monedaActualClave} 0.00`;
-    }
-  }
-
-  packCards2.forEach((card) => {
-    card.addEventListener("click", () => {
-      packCards2.forEach((item) => {
-        item.classList.remove("border-cyan-400", "bg-slate-900/90");
-        item.classList.add("border-slate-800", "bg-slate-900/60");
-      });
-      card.classList.remove("border-slate-800", "bg-slate-900/60");
-      card.classList.add("border-cyan-400", "bg-slate-900/90");
-
-      activePack = {
-        name: card.dataset.name,
-        price: card.dataset.price,
-        moneda: card.dataset.moneda
-      };
-      updateResumenCompra(activePack);
-      updateButtonState();
-    });
-  });
-
-  if (isVariable && monedaSelect) {
-    monedaSelect.addEventListener('change', function() {
-      // Limpiar selección de paquete y resumen al cambiar moneda
-      activePack = null;
-      updateResumenCompra(null);
-      updateButtonState();
-    });
-  }
-
-  orderForm.addEventListener("input", updateButtonState);
-  orderForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-  });
-</script>
-SCRIPT
-];
+              function updateButtonState() {
+                const requiredFields = Array.from(orderForm.querySelectorAll("[required]"));
+                let requiredFilled = true;
+                requiredFields.forEach(field => {
+                  const errorId = field.name + "-error";
+                  let errorElem = document.getElementById(errorId);
+                  if (field.value.trim() === "") {
+                    requiredFilled = false;
+                    if (!errorElem) {
+                      errorElem = document.createElement("div");
+                      errorElem.id = errorId;
+                      errorElem.style.color = "#f87171";
+                      errorElem.style.fontSize = "12px";
+                      errorElem.textContent = "Este campo es obligatorio.";
+                      field.parentNode.appendChild(errorElem);
+                    }
+                  } else {
+                    if (errorElem) errorElem.remove();
+                  }
+                });
+                if (!activePack) {
+                  selectedPack.style.color = "#f87171";
+                  selectedPack.textContent = "Debes seleccionar un paquete.";
+                } else {
+                  selectedPack.style.color = "";
+                  selectedPack.textContent = activePack.name;
+                }
+                buyButton.disabled = !activePack || !requiredFilled;
+              }
+              function updateResumenCompra(pack) {
+                if (pack) {
+                  selectedPack.textContent = pack.name;
+                  selectedPrice.textContent = `${pack.moneda} ${pack.price}`;
+                } else {
+                  selectedPack.textContent = 'Ninguno';
+                  selectedPrice.textContent = `${monedaActualClave} 0.00`;
+                }
+              }
+              packCards2.forEach((card) => {
+                card.addEventListener("click", () => {
+                  packCards2.forEach((item) => {
+                    item.classList.remove("border-cyan-400", "bg-slate-900/90");
+                    item.classList.add("border-slate-800", "bg-slate-900/60");
+                  });
+                  card.classList.remove("border-slate-800", "bg-slate-900/60");
+                  card.classList.add("border-cyan-400", "bg-slate-900/90");
+                  activePack = {
+                    name: card.dataset.name,
+                    price: card.dataset.price,
+                    moneda: card.dataset.moneda
+                  };
+                  updateResumenCompra(activePack);
+                  updateButtonState();
+                });
+              });
+              if (packCards2.length) {
+                // Selecciona el primero por defecto
+                packCards2[0].click();
+              }
+              if (couponInput) {
+              // Función simple para mostrar mensajes tipo toast
+              function showToast(msg, type) {
+                const toast = document.createElement('div');
+                toast.textContent = msg;
+                toast.style.position = 'fixed';
+                toast.style.bottom = '30px';
+                toast.style.left = '50%';
+                toast.style.transform = 'translateX(-50%)';
+                toast.style.background = type === 'error' ? '#f87171' : '#34d399';
+                toast.style.color = '#222';
+                toast.style.padding = '12px 24px';
+                toast.style.borderRadius = '8px';
+                toast.style.fontWeight = 'bold';
+                toast.style.zIndex = '9999';
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 3000);
+              }
+              // Validación de cupón por AJAX
+              document.getElementById('apply-coupon-btn').addEventListener('click', function() {
+                const cupon = couponInput.value.trim();
+                const pack = activePack;
+                // Aseguramos que el precio sea un número puro
+                const precioNumerico = typeof pack.price === 'string' ? pack.price.replace(/,/g, '') : pack.price;
+                console.log('Enviando cupón:', cupon, 'Precio:', precioNumerico);
+                if (!cupon) {
+                  showToast('Ingresa un cupón.', 'error');
+                  return;
+                }
+                if (!pack) {
+                  showToast('Selecciona un paquete antes de aplicar el cupón.', 'error');
+                  return;
+                }
+                fetch('../api/validar_cupon.php', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                  body: `code=${encodeURIComponent(cupon)}&pack_price=${encodeURIComponent(precioNumerico)}`
+                })
+                .then(res => res.json())
+                .then(data => {
+                  console.log('Respuesta backend:', data);
+                  if (data.success) {
+                    selectedPrice.textContent = `${pack.moneda} ${data.nuevo_total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    showToast(data.message + ` Descuento: ${data.descuento.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`,'success');
+                  } else {
+                    showToast(data.message, 'error');
+                  }
+                })
+                .catch(() => {
+                  showToast('Error de red al validar cupón.', 'error');
+                });
+              });
+              modalNo.addEventListener('click', function() {
+                couponApplied = false;
+                couponValue = couponInput.value.trim();
+                couponModal.classList.add('hidden');
+                showToast('Compra sin cupón aplicado', 'info');
+              });
+              modalCancel.addEventListener('click', function() {
+                couponModal.classList.add('hidden');
+              });
+              orderForm.addEventListener('input', updateButtonState);
+              orderForm.addEventListener('submit', function(event) {
+                const couponVal = couponInput.value.trim();
+                if (couponVal && !couponApplied) {
+                  event.preventDefault();
+                  couponModal.classList.remove('hidden');
+                  modalCouponName.textContent = couponVal;
+                  return;
+                }
+                // ...continúa el envío normal del formulario...
+                });
+              }
+              </script>
+            </section>
+<?php
 include __DIR__ . "/includes/footer.php";
 ?>
