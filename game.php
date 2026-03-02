@@ -333,6 +333,9 @@ include __DIR__ . "/includes/header.php";
                   if (data.success) {
                     selectedPrice.textContent = `${pack.moneda} ${data.nuevo_total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
                     showToast(data.message + ` Descuento: ${data.descuento.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`,'success');
+                    couponInput.disabled = true;
+                    document.getElementById('apply-coupon-btn').disabled = true;
+                    couponApplied = true;
                   } else {
                     showToast(data.message, 'error');
                   }
@@ -352,7 +355,15 @@ include __DIR__ . "/includes/header.php";
               });
               orderForm.addEventListener('input', updateButtonState);
               orderForm.addEventListener('submit', function(event) {
+                event.preventDefault();
                 const couponVal = couponInput.value.trim();
+                const userId = orderForm.user_id.value.trim();
+                const email = orderForm.email.value.trim();
+                const pack = activePack;
+                if (!pack) {
+                  showToast('Debes seleccionar un paquete.', 'error');
+                  return;
+                }
                 // Validar campos obligatorios solo al intentar comprar
                 const requiredFields = Array.from(orderForm.querySelectorAll('[required]'));
                 let requiredFilled = true;
@@ -374,16 +385,65 @@ include __DIR__ . "/includes/header.php";
                   }
                 });
                 if (!requiredFilled) {
-                  event.preventDefault();
                   return;
                 }
+                // Si el cupón no está aplicado y hay valor, mostrar modal
                 if (couponVal && !couponApplied) {
-                  event.preventDefault();
                   couponModal.classList.remove('hidden');
                   modalCouponName.textContent = couponVal;
+                  modalYes.onclick = function() {
+                    couponModal.classList.add('hidden');
+                    document.getElementById('apply-coupon-btn').click();
+                    // Esperar a que se aplique el cupón y luego enviar el formulario
+                    setTimeout(() => orderForm.dispatchEvent(new Event('submit', {cancelable: true})), 500);
+                  };
+                  modalNo.onclick = function() {
+                    couponModal.classList.add('hidden');
+                    couponApplied = false;
+                    // Enviar el formulario sin aplicar cupón
+                    setTimeout(() => orderForm.dispatchEvent(new Event('submit', {cancelable: true})), 100);
+                  };
+                  modalCancel.onclick = function() {
+                    couponModal.classList.add('hidden');
+                  };
                   return;
                 }
-                // ...continúa el envío normal del formulario...
+                // Envío AJAX del pedido
+                const pedidoData = {
+                  action: 'create',
+                  game_id: "<?= $game['id'] ?>",
+                  game_name: "<?= $game['nombre'] ?>",//window.gameName,
+                  pack_name: pack.name || '',
+                  pack_amount: pack.cantidad || '',
+                  currency: pack.moneda || '',
+                  price: couponApplied ? selectedPrice.textContent.replace(/[^\d.]/g, '') : pack.price,
+                  user_identifier: userId,
+                  email: email,
+                  cupon: couponApplied ? couponVal : '',
+                };
+                console.log('Datos enviados a pedidos.php:', pedidoData);
+                fetch('../api/pedidos.php', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                  body: Object.keys(pedidoData).map(k => `${encodeURIComponent(k)}=${encodeURIComponent(pedidoData[k])}`).join('&')
+                })
+                .then(res => res.json())
+                .then(data => {
+                  if (data.ok) {
+                    showToast('Pedido registrado correctamente', 'success');
+                    orderForm.reset();
+                    couponInput.disabled = false;
+                    document.getElementById('apply-coupon-btn').disabled = false;
+                    couponApplied = false;
+                    selectedPack.textContent = 'Ninguno';
+                    selectedPrice.textContent = `${monedaActualClave} 0.00`;
+                  } else {
+                    showToast(data.message || 'Error al registrar pedido', 'error');
+                  }
+                })
+                .catch(() => {
+                  showToast('Error de red al registrar pedido.', 'error');
+                });
               });
               }
               </script>

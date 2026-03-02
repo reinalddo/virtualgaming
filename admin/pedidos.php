@@ -86,9 +86,11 @@ function format_money($amount): string {
                         $juegoTexto = 'Juego #' . htmlspecialchars((string)($order['juego_id'] ?? '')); }
                       echo $juegoTexto;
                     ?></td>
-                    <td class="px-3 py-2 text-slate-100"><?= htmlspecialchars($order['paquete_nombre']) ?> <span class="text-xs text-slate-400">(<?= htmlspecialchars($order['paquete_cantidad']) ?>)</span></td>
-                    <td class="px-3 py-2 font-semibold text-emerald-300"><?= htmlspecialchars($order['moneda']) ?> <?= format_money($order['precio']) ?></td>
-                    <td class="px-3 py-2 text-slate-400"><?= $order['cupon'] ? htmlspecialchars($order['cupon']) : '—' ?></td>
+                    <td class="px-3 py-2 text-slate-100"><?= htmlspecialchars($order['paquete_nombre'] ?? '') ?> <span class="text-xs text-slate-400">(<?= htmlspecialchars($order['paquete_cantidad'] ?? '') ?>)</span></td>
+                    <td class="px-3 py-2 font-semibold text-emerald-300"><?= htmlspecialchars($order['moneda'] ?? '') ?> <?= format_money($order['precio']) ?></td>
+                    <td class="px-3 py-2 text-slate-400">
+                      <?= !empty($order['cupon']) ? htmlspecialchars($order['cupon']) : '—' ?>
+                    </td>
                     <td class="px-3 py-2">
                       <select class="js-status inline-flex rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-1 text-xs font-semibold text-slate-100" data-order-id="<?= $order['id'] ?>">
                         <?php foreach ($statuses as $opt): ?>
@@ -117,9 +119,9 @@ function format_money($amount): string {
                     $juegoTexto = 'Juego #' . htmlspecialchars((string)($order['juego_id'] ?? '')); }
                   echo 'Juego: ' . $juegoTexto;
                 ?></p>
-                <p class="text-slate-100 text-sm">Paquete: <?= htmlspecialchars($order['paquete_nombre']) ?> (<?= htmlspecialchars($order['paquete_cantidad']) ?>)</p>
-                <p class="text-emerald-300 font-semibold mt-1">Total: <?= htmlspecialchars($order['moneda']) ?> <?= format_money($order['precio']) ?></p>
-                <p class="text-slate-400 text-xs">Cupón: <?= $order['cupon'] ? htmlspecialchars($order['cupon']) : '—' ?></p>
+                <p class="text-slate-100 text-sm">Paquete: <?= htmlspecialchars($order['paquete_nombre'] ?? '') ?> (<?= htmlspecialchars($order['paquete_cantidad'] ?? '') ?>)</p>
+                <p class="text-emerald-300 font-semibold mt-1">Total: <?= htmlspecialchars($order['moneda'] ?? '') ?> <?= format_money($order['precio']) ?></p>
+                <p class="text-slate-400 text-xs">Cupón: <?= !empty($order['cupon']) ? htmlspecialchars($order['cupon']) : '—' ?></p>
                 <div class="mt-3">
                   <select class="js-status w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-sm font-semibold text-slate-100" data-order-id="<?= $order['id'] ?>">
                     <?php foreach ($statuses as $opt): ?>
