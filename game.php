@@ -400,7 +400,8 @@ include __DIR__ . "/includes/header.php";
                   modalNo.onclick = function() {
                     couponModal.classList.add('hidden');
                     couponApplied = false;
-                    // Enviar el formulario sin aplicar cupón
+                    couponInput.value = '';
+                    // Enviar el formulario sin cupón (ya no se mostrará el modal)
                     setTimeout(() => orderForm.dispatchEvent(new Event('submit', {cancelable: true})), 100);
                   };
                   modalCancel.onclick = function() {
