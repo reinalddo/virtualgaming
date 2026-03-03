@@ -168,12 +168,11 @@ require_once __DIR__ . '/includes/header.php';
                 } else {
                     echo '<div class="overflow-x-auto">';
                     echo '<table class="w-full text-left text-sm min-w-[400px]">';
-                    echo '<thead><tr class="text-cyan-300"><th>ID</th><th>Nombre</th><th>Precio</th><th>Acciones</th></tr></thead><tbody>';
+                    echo '<thead><tr class="text-cyan-300"><th>ID</th><th>Nombre</th><th>Acciones</th></tr></thead><tbody>';
                     foreach ($juegos as $juego) {
                         echo '<tr class="border-b border-gray-700">';
                         echo '<td>' . htmlspecialchars($juego['id']) . '</td>';
                         echo '<td>' . htmlspecialchars($juego['nombre']) . '</td>';
-                        echo '<td>Bs. ' . htmlspecialchars($juego['precio']) . '</td>';
                         echo '<td><a href="?seccion=juegos&borrar_juego=' . $juego['id'] . '" class="text-red-400 hover:underline" onclick="return confirm(\'¿Eliminar este juego?\')">Eliminar</a></td>';
                         echo '</tr>';
                     }
