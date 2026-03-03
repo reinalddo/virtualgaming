@@ -35,12 +35,38 @@ function format_money($amount): string {
     </div>
   </div>
 
-  <div class="mt-6 flex gap-2 flex-wrap" id="tabs">
+  <div class="mt-6 flex gap-2 flex-wrap items-center" id="tabs">
     <?php foreach ($statuses as $st): ?>
       <button data-tab="<?= $st ?>" class="tab-btn rounded-full border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-cyan-400/70" type="button">
         <?= ucfirst($st) ?>
       </button>
     <?php endforeach; ?>
+    <div class="w-full overflow-x-auto pb-2">
+    <form id="date-filter-form" class="flex flex-wrap gap-2 items-center ml-0 md:ml-4 md:flex-nowrap md:gap-2 md:items-center w-full min-w-[320px]">
+      <div class="flex items-center gap-1 w-full md:w-auto">
+        <label class="text-xs text-slate-400 flex items-center gap-1 mb-0">Desde:</label>
+        <button type="button" id="calendar-from-btn" class="inline-block text-cyan-400 p-0 bg-transparent border-0 focus:outline-none" tabindex="-1" aria-label="Abrir calendario">
+          <svg width="16" height="16" fill="none" viewBox="0 0 16 16"><rect x="2" y="4" width="12" height="10" rx="2" stroke="#22d3ee" stroke-width="1.5"/><path d="M4 2v2M12 2v2" stroke="#34d399" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+        <input type="date" id="date-from" name="date_from" class="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none w-full md:w-auto" style="min-width:110px">
+      </div>
+      <div class="flex items-center gap-1 w-full md:w-auto">
+        <label class="text-xs text-slate-400 flex items-center gap-1 mb-0">Hasta:</label>
+        <button type="button" id="calendar-to-btn" class="inline-block text-cyan-400 p-0 bg-transparent border-0 focus:outline-none" tabindex="-1" aria-label="Abrir calendario">
+          <svg width="16" height="16" fill="none" viewBox="0 0 16 16"><rect x="2" y="4" width="12" height="10" rx="2" stroke="#22d3ee" stroke-width="1.5"/><path d="M4 2v2M12 2v2" stroke="#34d399" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+        <input type="date" id="date-to" name="date_to" class="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none w-full md:w-auto" style="min-width:110px">
+      </div>
+      <button type="submit" class="rounded-lg bg-cyan-400 text-slate-900 font-bold px-3 py-1 text-xs hover:bg-cyan-300 transition flex items-center gap-1">
+        <svg width="15" height="15" fill="none" viewBox="0 0 15 15"><rect x="2" y="4" width="11" height="9" rx="2" stroke="#22d3ee" stroke-width="1.2"/><path d="M4 2v2M11 2v2" stroke="#34d399" stroke-width="1.2" stroke-linecap="round"/></svg>
+        Filtrar
+      </button>
+      <button type="button" id="clear-date-filter" class="rounded-lg bg-slate-700 text-slate-100 font-bold px-3 py-1 text-xs hover:bg-slate-600 transition flex items-center gap-1">
+        <svg width="14" height="14" fill="none" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" stroke="#22d3ee" stroke-width="1.2"/><path d="M4 4l6 6M10 4l-6 6" stroke="#34d399" stroke-width="1.2" stroke-linecap="round"/></svg>
+        Limpiar
+      </button>
+    </form>
+    </div>
   </div>
 
   <?php foreach ($statuses as $st): ?>
@@ -140,6 +166,83 @@ function format_money($amount): string {
 
 <script>
 (function(){
+  // Filtro de rango de fecha
+  const dateForm = document.getElementById('date-filter-form');
+  const dateFrom = document.getElementById('date-from');
+  const dateTo = document.getElementById('date-to');
+  const clearBtn = document.getElementById('clear-date-filter');
+  const calendarFromBtn = document.getElementById('calendar-from-btn');
+  const calendarToBtn = document.getElementById('calendar-to-btn');
+
+  // Abrir selector de fecha al hacer clic en el ícono
+  calendarFromBtn.addEventListener('click', function(){ dateFrom.showPicker && dateFrom.showPicker(); dateFrom.focus(); });
+  calendarToBtn.addEventListener('click', function(){ dateTo.showPicker && dateTo.showPicker(); dateTo.focus(); });
+
+  // Responsive: los inputs y botones ocupan todo el ancho en móvil
+  function adjustDateFilterResponsive(){
+    if (window.innerWidth < 600) {
+      dateForm.classList.add('flex-col','items-stretch');
+      dateForm.classList.remove('ml-4');
+      dateForm.style.minWidth = '0';
+      dateForm.parentElement.style.overflowX = 'auto';
+      dateForm.parentElement.style.width = '100%';
+      dateForm.querySelectorAll('input,button').forEach(el => {
+        el.classList.add('w-full','mb-1');
+        el.style.minWidth = '0';
+      });
+    } else {
+      dateForm.classList.remove('flex-col','items-stretch');
+      dateForm.classList.add('ml-4');
+      dateForm.style.minWidth = '320px';
+      dateForm.parentElement.style.overflowX = '';
+      dateForm.parentElement.style.width = '';
+      dateForm.querySelectorAll('input,button').forEach(el => {
+        el.classList.remove('w-full','mb-1');
+        el.style.minWidth = '';
+      });
+    }
+  }
+  window.addEventListener('resize', adjustDateFilterResponsive);
+  adjustDateFilterResponsive();
+
+  dateForm.addEventListener('submit', function(e){
+    e.preventDefault();
+    const from = dateFrom.value;
+    const to = dateTo.value;
+    document.querySelectorAll('.tab-panel').forEach(panel => {
+      panel.querySelectorAll('tbody tr').forEach(row => {
+        const fecha = row.querySelector('td:nth-child(2)')?.textContent.trim();
+        if (!fecha) { row.style.display = ''; return; }
+        let mostrar = true;
+        if (from && fecha < from) mostrar = false;
+        if (to && fecha > to) mostrar = false;
+        row.style.display = mostrar ? '' : 'none';
+      });
+      // Corregido: buscar los cards correctamente
+      const cardsContainer = panel.querySelector('[id^="cards-"]');
+      if (cardsContainer) {
+        cardsContainer.querySelectorAll('div[data-order-card]').forEach(card => {
+          const fecha = card.querySelector('p.text-xs.text-slate-400')?.textContent.trim().split(' ')[0];
+          let mostrar = true;
+          if (from && fecha < from) mostrar = false;
+          if (to && fecha > to) mostrar = false;
+          card.style.display = mostrar ? '' : 'none';
+        });
+      }
+    });
+  });
+
+  clearBtn.addEventListener('click', function(){
+    dateFrom.value = '';
+    dateTo.value = '';
+    document.querySelectorAll('.tab-panel').forEach(panel => {
+      panel.querySelectorAll('tbody tr').forEach(row => { row.style.display = ''; });
+      const cardsContainer = panel.querySelector('[id^="cards-"]');
+      if (cardsContainer) {
+        cardsContainer.querySelectorAll('div[data-order-card]').forEach(card => { card.style.display = ''; });
+      }
+    });
+  });
   const tabs = Array.from(document.querySelectorAll('.tab-btn'));
   const panels = Array.from(document.querySelectorAll('.tab-panel'));
   function showTab(tab){
