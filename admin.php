@@ -374,6 +374,9 @@ require_once __DIR__ . '/includes/header.php';
                 echo '<h2 class="text-2xl font-semibold mb-4 text-cyan-300">Gestión de Pedidos</h2>';
                 echo '<p class="text-gray-400">Aquí se listarán y gestionarán los pedidos.</p>';
                 break;
+            case 'configuracion':
+                require_once __DIR__ . '/admin_configuracion.php';
+                break;
             default:
                 echo '<h2 class="text-2xl font-semibold mb-4 text-cyan-300">Bienvenido al panel de administración</h2>';
                 echo '<p class="text-gray-400 mb-8">Selecciona una sección para comenzar.</p>';
@@ -389,6 +392,9 @@ require_once __DIR__ . '/includes/header.php';
                 echo '</a>';
                 echo '<a href="/admin/pedidos" class="flex flex-col items-center justify-center rounded-xl border border-cyan-700 bg-gray-900 p-6 shadow hover:bg-cyan-950/30 transition">';
                 echo '<span class="text-3xl mb-2">🧾</span><span class="text-lg font-semibold text-cyan-300">Pedidos</span>';
+                echo '</a>';
+                echo '<a href="/admin/configuracion" class="flex flex-col items-center justify-center rounded-xl border border-emerald-400 bg-gray-900 p-6 shadow hover:bg-emerald-950/30 transition">';
+                echo '<span class="text-3xl mb-2">⚙️</span><span class="text-lg font-semibold text-emerald-300">Configuración</span>';
                 echo '</a>';
                 echo '</div>';
                 break;

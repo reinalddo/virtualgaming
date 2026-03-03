@@ -1,0 +1,17 @@
+-- Tabla de configuración general para la tienda
+CREATE TABLE IF NOT EXISTS configuracion_general (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    clave VARCHAR(64) NOT NULL UNIQUE,
+    valor TEXT NOT NULL,
+    descripcion VARCHAR(255) DEFAULT NULL,
+    actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Ejemplo de inserción de variables iniciales
+INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
+('correo_corporativo', 'no-reply@tvirtualgaming.local', 'Correo usado para notificaciones'),
+('smtp_host', 'smtp.tuservidor.com', 'Host SMTP para envío de correos'),
+('smtp_user', 'no-reply@tvirtualgaming.local', 'Usuario SMTP'),
+('smtp_pass', '', 'Contraseña SMTP'),
+('smtp_port', '587', 'Puerto SMTP'),
+('smtp_secure', 'tls', 'Tipo de seguridad SMTP');

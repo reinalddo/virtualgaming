@@ -99,11 +99,42 @@ function json_error(string $message, int $code = 400): void {
 }
 
 function send_app_mail(string $to, string $subject, string $html, ?string $from = null): void {
-    $fromAddr = $from ?: (getenv('TVG_MAIL_FROM') ?: 'no-reply@tvirtualgaming.local');
-    $headers = "MIME-Version: 1.0\r\n";
-    $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
-    $headers .= "From: TVirtualGaming <{$fromAddr}>\r\n";
-    @mail($to, $subject, $html, $headers);
+    require_once __DIR__ . '/../includes/PHPMailerAutoload.php';
+    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+    // Obtener configuración SMTP desde la base de datos
+    global $mysqli;
+    $smtp_host = 'smtp.tuservidor.com';
+    $smtp_user = 'no-reply@tvirtualgaming.local';
+    $smtp_pass = '';
+    $smtp_port = 587;
+    $smtp_secure = 'tls';
+    $fromAddr = $from ?: $smtp_user;
+    $resCfg = $mysqli->query("SELECT * FROM configuracion LIMIT 1");
+    if ($resCfg && $cfg = $resCfg->fetch_assoc()) {
+        $smtp_host = $cfg['smtp_host'] ?: $smtp_host;
+        $smtp_user = $cfg['smtp_user'] ?: $smtp_user;
+        $smtp_pass = $cfg['smtp_pass'] ?: $smtp_pass;
+        $smtp_port = $cfg['smtp_port'] ?: $smtp_port;
+        $smtp_secure = $cfg['smtp_secure'] ?: $smtp_secure;
+        $fromAddr = $cfg['correo_corporativo'] ?: $smtp_user;
+    }
+    try {
+        $mail->isSMTP();
+        $mail->Host = $smtp_host;
+        $mail->SMTPAuth = true;
+        $mail->Username = $smtp_user;
+        $mail->Password = $smtp_pass;
+        $mail->SMTPSecure = $smtp_secure;
+        $mail->Port = $smtp_port;
+        $mail->setFrom($fromAddr, 'TVirtualGaming');
+        $mail->addAddress($to);
+        $mail->isHTML(true);
+        $mail->Subject = $subject;
+        $mail->Body = $html;
+        $mail->send();
+    } catch (Exception $e) {
+        // Puedes loguear el error si lo deseas
+    }
 }
 
 function sanitize_str(?string $value, int $max = 255): ?string {
@@ -192,7 +223,14 @@ if ($action === 'create') {
         json_error('No se pudo guardar el pedido');
     }
     $order_id = $mysqli->insert_id;
-    $adminEmail = getenv('TVG_ADMIN_EMAIL') ?: 'admin@tvirtualgaming.local';
+    // Obtener correo del primer usuario admin
+    $adminEmail = null;
+    $resAdmin = $mysqli->query("SELECT email FROM usuarios WHERE rol='admin' AND email IS NOT NULL AND email != '' LIMIT 1");
+    if ($resAdmin && $rowAdmin = $resAdmin->fetch_assoc()) {
+        $adminEmail = $rowAdmin['email'];
+    } else {
+        $adminEmail = 'admin@tvirtualgaming.local';
+    }
 
     $summary = "<strong>Pedido #{$order_id}</strong><br>Juego: {$game_name}<br>Paquete: {$pack_name} ({$pack_amount})<br>Total: {$currency} {$price}<br>Cliente: {$user_identifier} ({$email})";
     send_app_mail($email, "Pedido recibido #{$order_id}", "<p>Hemos recibido tu pedido.</p><p>{$summary}</p><p>Estado: pendiente</p>");

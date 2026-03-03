@@ -161,6 +161,7 @@ $tenantSlugAttr = isset($tenantData["tenant"]["slug"]) ? $tenantData["tenant"]["
               <a href="/admin/pedidos" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-cyan-300 transition hover:border-cyan-400/70">Pedidos</a>
               <a href="/admin/usuarios" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-cyan-300 transition hover:border-cyan-400/70">Usuarios</a>
               <a href="/admin/cupones" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-cyan-300 transition hover:border-cyan-400/70">Cupones</a>
+              <a href="/admin/configuracion" class="block rounded-xl border border-emerald-400 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-emerald-300 transition hover:border-emerald-400/70">Configuración</a>
               <a href="/admin/dashboard" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-cyan-300 transition hover:border-cyan-400/70">Ir al Admin</a>
             <?php endif; ?>
             <a href="/logout" class="block rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm font-semibold text-rose-300 transition hover:border-rose-400/70">Cerrar sesión</a>
