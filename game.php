@@ -409,6 +409,12 @@ include __DIR__ . "/includes/header.php";
                   return;
                 }
                 // Envío AJAX del pedido
+                // El precio mostrado SIEMPRE es el que se envía, así se evita doble descuento
+                let precioFinal = selectedPrice.textContent.replace(/[^\d.]/g, '');
+                // Si no hay cupón aplicado, usar el precio base del paquete
+                if (!couponApplied || !couponVal) {
+                  precioFinal = typeof pack.price === 'string' ? pack.price.replace(/,/g, '') : pack.price;
+                }
                 const pedidoData = {
                   action: 'create',
                   game_id: "<?= $game['id'] ?>",
@@ -416,7 +422,8 @@ include __DIR__ . "/includes/header.php";
                   pack_name: pack.name || '',
                   pack_amount: pack.cantidad || '',
                   currency: pack.moneda || '',
-                  price: couponApplied ? selectedPrice.textContent.replace(/[^\d.]/g, '') : pack.price,
+                  price: precioFinal,
+                  pack_base: typeof pack.price === 'string' ? pack.price.replace(/,/g, '') : pack.price,
                   user_identifier: userId,
                   email: email,
                   coupon: couponApplied ? couponVal : '',

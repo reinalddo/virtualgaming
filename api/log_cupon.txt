@@ -29,3 +29,10 @@
 2026-03-03 14:40:16 | code: CUPON01 | pack_price: 5
 2026-03-03 14:40:16 | code: CUPON01 | pack_price: 5
 2026-03-03 15:01:49 | code: CUPON01 | pack_price: 10.99
+2026-03-03 15:26:56 | code: CUPON01 | pack_price: 15.99
+2026-03-03 15:27:30 | code: CUPON01 | pack_price: 15.99
+2026-03-03 15:27:52 | code: CUPON01 | pack_price: 15.99
+2026-03-03 15:30:20 | code: CUPON01 | pack_price: 15.99
+2026-03-03 15:37:06 | code: CUPON01 | pack_price: 15.99
+2026-03-03 15:37:49 | code: CUPON01 | pack_price: 15.99
+2026-03-03 15:40:17 | code: CUPON01 | pack_price: 15.99

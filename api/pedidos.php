@@ -164,7 +164,11 @@ if ($action === 'create') {
         if (!$couponData) {
             json_error('Cupón inválido o vencido');
         }
-        $price = apply_coupon_to_price($price, $couponData);
+        // Solo aplicar el cupón si el precio recibido es el base
+        $precio_base = floatval($_POST['pack_base'] ?? 0);
+        if ($precio_base > 0 && abs($price - $precio_base) < 0.01) {
+            $price = apply_coupon_to_price($price, $couponData);
+        }
         // Registrar uso del cupón (best effort)
         if (isset($couponData['id'])) {
             $upd = $mysqli->prepare("UPDATE cupones SET usos_actuales = COALESCE(usos_actuales,0) + 1 WHERE id = ?");
