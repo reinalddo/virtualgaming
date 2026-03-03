@@ -1,48 +1,48 @@
 <?php
-require_once __DIR__ . "/includes/auth.php";
+require_once __DIR__ . "/includes/db_connect.php";
 
 if ($_SERVER["REQUEST_METHOD"] !== "POST") {
-  auth_redirect_back("/");
-}
-
-$tenantSlug = auth_get_tenant_slug();
-$email = auth_normalize_email($_POST["email"] ?? "");
-$password = (string) ($_POST["password"] ?? "");
-
-if ($email === "" || $password === "") {
-  auth_set_flash("error", "Completa el correo y la contraseña.");
-  auth_redirect_back("/");
-}
-
-$users = auth_load_users($tenantSlug);
-$user = auth_find_user_by_email($users, $email);
-
-if ($user === null || empty($user["password_hash"]) || !password_verify($password, $user["password_hash"])) {
-  auth_set_flash("error", "Credenciales inválidas.");
-  auth_redirect_back("/");
-}
-
-
-if (session_status() !== PHP_SESSION_ACTIVE) {
-  session_start();
-}
-
-$_SESSION["auth_user"] = [
-  "id" => $user["id"] ?? "",
-  "email" => $user["email"] ?? $email,
-  "full_name" => $user["full_name"] ?? "",
-  "phone" => $user["phone"] ?? "",
-  "tenant" => $tenantSlug,
-  "rol" => $user["rol"] ?? "usuario"
-];
-
-auth_set_flash("success", "Inicio de sesión exitoso.");
-
-// Si es admin, redirigir al panel admin con URL amigable
-if (($_SESSION["auth_user"]["rol"] ?? "") === "admin") {
-  header("Location: /admin/dashboard");
+  header("Location: /");
   exit;
 }
 
-// Redirect back to the page where the modal was opened.
-auth_redirect_back("/");
+$email = strtolower(trim($_POST["email"] ?? ""));
+$password = (string) ($_POST["password"] ?? "");
+
+if ($email === "" || $password === "") {
+  session_start();
+  $_SESSION["auth_flash"] = ["type" => "error", "message" => "Completa el correo y la contraseña."];
+  header("Location: /");
+  exit;
+}
+
+$stmt = $mysqli->prepare("SELECT id, username, password, nombre, email, rol FROM usuarios WHERE email = ? LIMIT 1");
+$stmt->bind_param('s', $email);
+$stmt->execute();
+$res = $stmt->get_result();
+$user = $res ? $res->fetch_assoc() : null;
+$stmt->close();
+
+if ($user === null || empty($user["password"]) || !password_verify($password, $user["password"])) {
+  session_start();
+  $_SESSION["auth_flash"] = ["type" => "error", "message" => "Credenciales inválidas."];
+  header("Location: /");
+  exit;
+}
+
+session_start();
+$_SESSION["auth_user"] = [
+  "id" => $user["id"],
+  "email" => $user["email"],
+  "full_name" => $user["nombre"],
+  "username" => $user["username"],
+  "rol" => $user["rol"]
+];
+$_SESSION["auth_flash"] = ["type" => "success", "message" => "Inicio de sesión exitoso."];
+
+if (($user["rol"] ?? "") === "admin") {
+  header("Location: /admin/dashboard");
+  exit;
+}
+header("Location: /");
+exit;

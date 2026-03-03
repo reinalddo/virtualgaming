@@ -131,7 +131,7 @@ if ($action === 'create') {
     $price = is_numeric($price_raw) ? floatval($price_raw) : 0;
     $user_identifier = sanitize_str($_POST['user_identifier'] ?? null, 150);
     $email = sanitize_str($_POST['email'] ?? null, 180);
-    $coupon = sanitize_str($_POST['coupon'] ?? null, 60);
+    $cupon = sanitize_str($_POST['coupon'] ?? null, 60);
     $tenant_slug = sanitize_str($_POST['tenant_slug'] ?? null, 80);
 
     $missing = [];
@@ -159,8 +159,8 @@ if ($action === 'create') {
     }
 
     // Validar y aplicar cupón si existe
-    if ($coupon) {
-        $couponData = fetch_valid_coupon($mysqli, $coupon);
+    if ($cupon) {
+        $couponData = fetch_valid_coupon($mysqli, $cupon);
         if (!$couponData) {
             json_error('Cupón inválido o vencido');
         }
@@ -173,13 +173,17 @@ if ($action === 'create') {
                 $upd->execute();
             }
         }
+        // Aseguramos que el cupón se inserte como string, no como null
+        $cupon = $couponData['codigo'];
+    } else {
+        $cupon = null;
     }
 
     $stmt = $mysqli->prepare("INSERT INTO pedidos (tenant_slug, juego_id, juego_nombre, paquete_nombre, paquete_cantidad, moneda, precio, user_identifier, email, cupon, estado) VALUES (?,?,?,?,?,?,?,?,?,?, 'pendiente')");
     if (!$stmt) {
         json_error('No se pudo preparar el pedido');
     }
-    $stmt->bind_param('sissssdsss', $tenant_slug, $game_id, $game_name, $pack_name, $pack_amount, $currency, $price, $user_identifier, $email, $coupon);
+    $stmt->bind_param('sissssdsss', $tenant_slug, $game_id, $game_name, $pack_name, $pack_amount, $currency, $price, $user_identifier, $email, $cupon);
     if (!$stmt->execute()) {
         json_error('No se pudo guardar el pedido');
     }

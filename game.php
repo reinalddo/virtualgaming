@@ -419,7 +419,7 @@ include __DIR__ . "/includes/header.php";
                   price: couponApplied ? selectedPrice.textContent.replace(/[^\d.]/g, '') : pack.price,
                   user_identifier: userId,
                   email: email,
-                  cupon: couponApplied ? couponVal : '',
+                  coupon: couponApplied ? couponVal : '',
                 };
                 console.log('Datos enviados a pedidos.php:', pedidoData);
                 fetch('../api/pedidos.php', {

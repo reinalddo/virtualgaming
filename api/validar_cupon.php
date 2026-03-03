@@ -7,6 +7,8 @@ try {
         throw new Exception('Error de conexión a la base de datos: ' . ($mysqli->connect_error ?? 'Desconocido'));
     }
 } catch (Exception $e) {
+    $errorMsg = date('Y-m-d H:i:s') . " | ERROR: " . $e->getMessage() . "\n";
+    file_put_contents(__DIR__ . '/log_cupon.txt', $errorMsg, FILE_APPEND);
     echo json_encode([
         'success' => false,
         'message' => $e->getMessage()
@@ -18,6 +20,8 @@ $code = isset($_POST['code']) ? trim($_POST['code']) : '';
 $pack_price = isset($_POST['pack_price']) ? floatval($_POST['pack_price']) : 0;
 
 if ($code === '') {
+    $errorMsg = date('Y-m-d H:i:s') . " | ERROR: Cupón vacío.\n";
+    file_put_contents(__DIR__ . '/log_cupon.txt', $errorMsg, FILE_APPEND);
     echo json_encode(['success' => false, 'message' => 'Cupón vacío.']);
     exit;
 }
@@ -33,18 +37,26 @@ $cupon = $res->fetch_assoc();
 $stmt->close();
 
 if (!$cupon) {
+    $errorMsg = date('Y-m-d H:i:s') . " | ERROR: Cupón inexistente.\n";
+    file_put_contents(__DIR__ . '/log_cupon.txt', $errorMsg, FILE_APPEND);
     echo json_encode(['success' => false, 'message' => 'Cupón inexistente.']);
     exit;
 }
 if ($cupon['activo'] != 1) {
+    $errorMsg = date('Y-m-d H:i:s') . " | ERROR: Cupón inactivo.\n";
+    file_put_contents(__DIR__ . '/log_cupon.txt', $errorMsg, FILE_APPEND);
     echo json_encode(['success' => false, 'message' => 'Cupón inactivo.']);
     exit;
 }
 if (!is_null($cupon['fecha_expiracion']) && strtotime($cupon['fecha_expiracion']) < time()) {
+    $errorMsg = date('Y-m-d H:i:s') . " | ERROR: Cupón expirado.\n";
+    file_put_contents(__DIR__ . '/log_cupon.txt', $errorMsg, FILE_APPEND);
     echo json_encode(['success' => false, 'message' => 'Cupón expirado.']);
     exit;
 }
 if (!is_null($cupon['limite_usos']) && $cupon['limite_usos'] > 0 && $cupon['usos_actuales'] >= $cupon['limite_usos']) {
+    $errorMsg = date('Y-m-d H:i:s') . " | ERROR: Cupón agotado.\n";
+    file_put_contents(__DIR__ . '/log_cupon.txt', $errorMsg, FILE_APPEND);
     echo json_encode(['success' => false, 'message' => 'Cupón agotado.']);
     exit;
 }
@@ -57,6 +69,22 @@ if ($cupon['tipo_descuento'] === 'porcentaje') {
 }
 
 $nuevo_total = max(0, $pack_price - $descuento);
+
+// Actualizar usos_actuales si el cupón tiene límite de usos
+if (!is_null($cupon['limite_usos']) && $cupon['limite_usos'] > 0) {
+    $updateStmt = $mysqli->prepare('UPDATE cupones SET usos_actuales = usos_actuales + 1 WHERE id = ?');
+    if ($updateStmt) {
+        $updateStmt->bind_param('i', $cupon['id']);
+        if (!$updateStmt->execute()) {
+            $errorMsg = date('Y-m-d H:i:s') . " | ERROR SQL: " . $updateStmt->error . "\n";
+            file_put_contents(__DIR__ . '/log_cupon.txt', $errorMsg, FILE_APPEND);
+        }
+        $updateStmt->close();
+    } else {
+        $errorMsg = date('Y-m-d H:i:s') . " | ERROR PREPARE SQL: " . $mysqli->error . "\n";
+        file_put_contents(__DIR__ . '/log_cupon.txt', $errorMsg, FILE_APPEND);
+    }
+}
 
 echo json_encode([
     'success' => true,
