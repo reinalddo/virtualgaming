@@ -86,13 +86,13 @@ function format_money($amount): string {
                         $juegoTexto = 'Juego #' . htmlspecialchars((string)($order['juego_id'] ?? '')); }
                       echo $juegoTexto;
                     ?></td>
-                    <td class="px-3 py-2 text-slate-100"><?= htmlspecialchars($order['paquete_nombre'] ?? '') ?> <span class="text-xs text-slate-400">(<?= htmlspecialchars($order['paquete_cantidad'] ?? '') ?>)</span></td>
+                    <td class="px-3 py-2 text-slate-100"><?= htmlspecialchars($order['paquete_nombre'] ?? '') ?> <span class="text-xs text-slate-400"></span></td>
                     <td class="px-3 py-2 font-semibold text-emerald-300"><?= htmlspecialchars($order['moneda'] ?? '') ?> <?= format_money($order['precio']) ?></td>
                     <td class="px-3 py-2 text-slate-400">
                       <?= !empty($order['cupon']) ? htmlspecialchars($order['cupon']) : '—' ?>
                     </td>
                     <td class="px-3 py-2">
-                      <select class="js-status inline-flex rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-1 text-xs font-semibold text-slate-100" data-order-id="<?= $order['id'] ?>">
+                      <select class="js-status inline-flex rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-1 text-xs font-semibold text-slate-100" data-order-id="<?= $order['id'] ?>" data-status="<?= $st ?>">
                         <?php foreach ($statuses as $opt): ?>
                           <option value="<?= $opt ?>" <?= $opt === $st ? 'selected' : '' ?>><?= ucfirst($opt) ?></option>
                         <?php endforeach; ?>
@@ -123,7 +123,7 @@ function format_money($amount): string {
                 <p class="text-emerald-300 font-semibold mt-1">Total: <?= htmlspecialchars($order['moneda'] ?? '') ?> <?= format_money($order['precio']) ?></p>
                 <p class="text-slate-400 text-xs">Cupón: <?= !empty($order['cupon']) ? htmlspecialchars($order['cupon']) : '—' ?></p>
                 <div class="mt-3">
-                  <select class="js-status w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-sm font-semibold text-slate-100" data-order-id="<?= $order['id'] ?>">
+                  <select class="js-status w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-sm font-semibold text-slate-100" data-order-id="<?= $order['id'] ?>" data-status="<?= $st ?>">
                     <?php foreach ($statuses as $opt): ?>
                       <option value="<?= $opt ?>" <?= $opt === $st ? 'selected' : '' ?>><?= ucfirst($opt) ?></option>
                     <?php endforeach; ?>
@@ -169,15 +169,18 @@ function format_money($amount): string {
       const selectCard = card.querySelector('select');
       if (selectCard) selectCard.value = newStatus;
     }
-    showTab(newStatus);
+    // Ya no cambiamos de pestaña automáticamente
   }
 
   function bindStatusSelectors(){
     document.querySelectorAll('.js-status').forEach(sel => {
       sel.addEventListener('change', async (e) => {
         const orderId = sel.dataset.orderId;
+        const prevStatus = sel.dataset.status;
         const newStatus = sel.value;
         sel.disabled = true;
+        // Mueve el pedido inmediatamente en el frontend
+        moveOrder(orderId, newStatus);
         const fd = new FormData();
         fd.append('action','update_status');
         fd.append('order_id', orderId);
@@ -188,10 +191,13 @@ function format_money($amount): string {
           let data;
           try { data = JSON.parse(txt); } catch (_) { throw new Error('Respuesta no válida del servidor'); }
           if (!data.ok) throw new Error(data.message || 'Error');
-          moveOrder(orderId, newStatus);
+          // Actualiza el status en el selector para futuras referencias
+          sel.dataset.status = newStatus;
         } catch(err){
+          // Si hay error, revierte el cambio en el frontend
+          moveOrder(orderId, prevStatus);
+          sel.value = prevStatus;
           alert(err.message || 'No se pudo cambiar el estado');
-          sel.value = sel.dataset.status;
         } finally {
           sel.disabled = false;
         }
