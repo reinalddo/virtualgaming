@@ -202,6 +202,19 @@ include __DIR__ . "/includes/header.php";
         </form>
 
         <!-- Modal Neon Tailwind -->
+                <!-- Modal Loading Neon -->
+                <div id="loading-modal" class="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 hidden">
+                  <div class="bg-slate-900 rounded-2xl border-2 border-cyan-400 shadow-lg p-8 max-w-xs w-full text-center animate-fadeUp flex flex-col items-center">
+                    <div class="mb-4">
+                      <svg width="48" height="48" viewBox="0 0 50 50">
+                        <circle cx="25" cy="25" r="20" fill="none" stroke="#34d399" stroke-width="5" stroke-linecap="round" stroke-dasharray="31.4 31.4" transform="rotate(-90 25 25)">
+                          <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite"/>
+                        </circle>
+                      </svg>
+                    </div>
+                    <h4 class="text-lg font-bold text-cyan-300 mb-2">Procesando pedido...</h4>
+                  </div>
+                </div>
         <div id="coupon-modal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 hidden">
           <div class="bg-slate-900 rounded-2xl border-2 border-cyan-400 shadow-lg p-6 max-w-xs w-full text-center animate-fadeUp">
             <h4 class="text-lg font-bold text-cyan-300 mb-2">¿Desea aplicar el cupón <span id="modal-coupon-name" class="text-emerald-400"></span>?</h4>
@@ -295,7 +308,7 @@ include __DIR__ . "/includes/header.php";
                 const toast = document.createElement('div');
                 toast.textContent = msg;
                 toast.style.position = 'fixed';
-                toast.style.bottom = '30px';
+                toast.style.top = '30px';
                 toast.style.left = '50%';
                 toast.style.transform = 'translateX(-50%)';
                 toast.style.background = type === 'error' ? '#f87171' : '#34d399';
@@ -305,7 +318,7 @@ include __DIR__ . "/includes/header.php";
                 toast.style.fontWeight = 'bold';
                 toast.style.zIndex = '9999';
                 document.body.appendChild(toast);
-                setTimeout(() => toast.remove(), 3000);
+                setTimeout(() => toast.remove(), 2500);
               }
               // Validación de cupón por AJAX
               document.getElementById('apply-coupon-btn').addEventListener('click', function() {
@@ -356,6 +369,7 @@ include __DIR__ . "/includes/header.php";
               orderForm.addEventListener('input', updateButtonState);
               orderForm.addEventListener('submit', function(event) {
                 event.preventDefault();
+                const btn = document.getElementById('buy-button');
                 const couponVal = couponInput.value.trim();
                 const userId = orderForm.user_id.value.trim();
                 const email = orderForm.email.value.trim();
@@ -395,7 +409,7 @@ include __DIR__ . "/includes/header.php";
                     couponModal.classList.add('hidden');
                     document.getElementById('apply-coupon-btn').click();
                     // Esperar a que se aplique el cupón y luego enviar el formulario
-                    setTimeout(() => orderForm.dispatchEvent(new Event('submit', {cancelable: true})), 500);
+                    setTimeout(() => orderForm.dispatchEvent(new Event('submit', {cancelable: true})), 150);
                   };
                   modalNo.onclick = function() {
                     couponModal.classList.add('hidden');
@@ -410,6 +424,16 @@ include __DIR__ . "/includes/header.php";
                   return;
                 }
                 // Envío AJAX del pedido
+                                // Mostrar spinner y deshabilitar botón justo antes de enviar la compra
+                                var spinner = document.getElementById('spinner-compra');
+                                if (!spinner) {
+                                  spinner = document.createElement('span');
+                                  spinner.id = 'spinner-compra';
+                                  spinner.innerHTML = `<svg width="22" height="22" viewBox="0 0 50 50" style="vertical-align:middle;"><circle cx="25" cy="25" r="20" fill="none" stroke="#34d399" stroke-width="5" stroke-linecap="round" stroke-dasharray="31.4 31.4" transform="rotate(-90 25 25)"><animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite"/></circle></svg>`;
+                                  spinner.style.marginLeft = '8px';
+                                  btn.appendChild(spinner);
+                                }
+                                btn.disabled = true;
                 // El precio mostrado SIEMPRE es el que se envía, así se evita doble descuento
                 let precioFinal = selectedPrice.textContent.replace(/[^\d.]/g, '');
                 // Si no hay cupón aplicado, usar el precio base del paquete
@@ -430,6 +454,13 @@ include __DIR__ . "/includes/header.php";
                   coupon: couponApplied ? couponVal : '',
                 };
                 console.log('Datos enviados a pedidos.php:', pedidoData);
+                btn.disabled = true;
+                // Eliminar spinner si existe
+                var spinner = document.getElementById('spinner-compra');
+                if (spinner) spinner.remove();
+                // Mostrar modal loading
+                const loadingModal = document.getElementById('loading-modal');
+                loadingModal.classList.remove('hidden');
                 fetch('../api/pedidos.php', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -437,6 +468,9 @@ include __DIR__ . "/includes/header.php";
                 })
                 .then(res => res.json())
                 .then(data => {
+                  btn.disabled = false;
+                  const loadingModal = document.getElementById('loading-modal');
+                  loadingModal.classList.add('hidden');
                   if (data.ok) {
                     showToast('Pedido registrado correctamente', 'success');
                     orderForm.reset();
@@ -450,6 +484,9 @@ include __DIR__ . "/includes/header.php";
                   }
                 })
                 .catch(() => {
+                  btn.disabled = false;
+                  const loadingModal = document.getElementById('loading-modal');
+                  loadingModal.classList.add('hidden');
                   showToast('Error de red al registrar pedido.', 'error');
                 });
               });
