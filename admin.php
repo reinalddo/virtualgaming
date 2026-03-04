@@ -171,7 +171,8 @@ require_once __DIR__ . '/includes/header.php';
                 if (count($juegos) === 0) {
                     echo '<div class="text-gray-400">No hay juegos registrados.</div>';
                 } else {
-                    echo '<div class="overflow-x-auto">';
+                    // Tabla para desktop
+                    echo '<div class="overflow-x-auto hidden sm:block">';
                     echo '<table class="w-full text-left text-sm min-w-[800px]">';
                     echo '<thead><tr class="text-cyan-300">'
                         .'<th>Imagen</th>'
@@ -198,7 +199,7 @@ require_once __DIR__ . '/includes/header.php';
                         echo '<td>' . htmlspecialchars($juego['nombre']) . '</td>';
                         // Popular
                         echo '<td>' . ((isset($juego['popular']) && $juego['popular']) ? '<span class="text-green-400">★</span>' : '—') . '</td>';
-                        // Imagen Paquete (ejemplo: puedes ajustar la lógica según tu estructura)
+                        // Imagen Paquete
                         echo '<td>';
                         if (!empty($juego['imagen_paquete'])) {
                             $imgPaqSrc = '/' . ltrim($juego['imagen_paquete'], '/');
@@ -222,6 +223,40 @@ require_once __DIR__ . '/includes/header.php';
                         echo '</tr>';
                     }
                     echo '</tbody></table>';
+                    echo '</div>';
+
+                    // Cards para móvil
+                    echo '<div class="sm:hidden flex flex-col gap-4">';
+                    foreach ($juegos as $juego) {
+                        echo '<div class="rounded-xl border border-slate-700 bg-gray-900 p-4 flex flex-col gap-2 shadow">';
+                        // Imagen principal
+                        if (!empty($juego['imagen'])) {
+                            $imgSrc = '/' . ltrim($juego['imagen'], '/');
+                            echo '<img src="'.htmlspecialchars($imgSrc).'" alt="img" class="w-full h-32 object-cover rounded mb-2" />';
+                        } else {
+                            echo '<span class="text-gray-400 mb-2">Sin imagen</span>';
+                        }
+                        echo '<div class="font-bold text-lg text-cyan-200">' . htmlspecialchars($juego['nombre']) . '</div>';
+                        if (isset($juego['popular']) && $juego['popular']) {
+                            echo '<div class="text-green-400 text-sm">★ Popular</div>';
+                        }
+                        // Imagen Paquete
+                        if (!empty($juego['imagen_paquete'])) {
+                            $imgPaqSrc = '/' . ltrim($juego['imagen_paquete'], '/');
+                            echo '<img src="'.htmlspecialchars($imgPaqSrc).'" alt="img" class="w-full h-16 object-cover rounded mb-2" />';
+                        } else {
+                            echo '<span class="text-gray-400 mb-2">Sin imagen de paquete</span>';
+                        }
+                        echo '<div class="text-sm text-slate-300"><strong>Descripción:</strong> ' . htmlspecialchars($juego['descripcion'] ?? '') . '</div>';
+                        echo '<div class="text-sm text-slate-300"><strong>Moneda:</strong> ' . htmlspecialchars($juego['moneda'] ?? '') . '</div>';
+                        echo '<div class="text-sm text-slate-300"><strong>Características:</strong> ' . htmlspecialchars($juego['caracteristicas'] ?? '') . '</div>';
+                        echo '<div class="flex gap-4 mt-2">';
+                        echo '<a href="?seccion=juegos&editar_juego=' . $juego['id'] . '" class="text-green-400 hover:underline">Editar</a>';
+                        echo '<a href="?seccion=paquetes&juego_id=' . $juego['id'] . '" class="text-cyan-400 hover:underline">Paquetes</a>';
+                        echo '<a href="?seccion=juegos&borrar_juego=' . $juego['id'] . '" class="text-red-400 hover:underline" onclick="return confirm(\'¿Eliminar este juego?\')">Eliminar</a>';
+                        echo '</div>';
+                        echo '</div>';
+                    }
                     echo '</div>';
                 }
                 break;
