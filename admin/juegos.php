@@ -173,71 +173,94 @@ $resj = $mysqli->query("SELECT * FROM juegos ORDER BY id DESC");
 $juegos = $resj->fetch_all(MYSQLI_ASSOC);
 ?>
 <?php include '../includes/header.php'; ?>
-<main class="max-w-5xl mx-auto mt-10 bg-slate-900/80 rounded-xl p-8 shadow-lg">
-    <h2 class="text-2xl font-bold mb-6 text-cyan-300">Gestión de Juegos</h2>
-    <form method="post" enctype="multipart/form-data" class="space-y-4">
-                <label class="inline-flex items-center mt-2">
-                    <input type="checkbox" name="popular" class="form-checkbox h-5 w-5 text-emerald-500">
-                    <span class="ml-2 text-slate-300">Marcar como popular</span>
-                </label>
-        <input type="text" name="nombre" placeholder="Nombre del juego" required class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white placeholder-slate-400">
-        <textarea name="descripcion" placeholder="Descripción" required class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white placeholder-slate-400"></textarea>
-        <input type="file" name="imagen" accept="image/*" class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white placeholder-slate-400" onchange="previewImagenJuego(event)">
-        <div class="flex justify-center my-2">
-            <img id="preview-juego-img" src="#" alt="Previsualización" style="display:none;max-width:180px;max-height:180px;border-radius:0.75rem;box-shadow:0 0 0.5rem #22d3ee55;" />
+<main class="container-lg mt-5 bg-dark bg-opacity-75 rounded-4 p-4 shadow">
+    <h2 class="text-center text-info mb-4">Gestión de Juegos</h2>
+    <form method="post" enctype="multipart/form-data" class="row g-3 mb-4">
+        <div class="col-md-6">
+            <label class="form-label">Nombre del juego</label>
+            <input type="text" name="nombre" placeholder="Nombre del juego" required class="form-control">
         </div>
-        <label class="block text-slate-300 font-medium mt-2">Imagen común para paquetes:</label>
-        <input type="file" name="imagen_paquete" accept="image/*" class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white placeholder-slate-400" onchange="previewImagenPaqueteJuego(event)">
-        <div class="flex justify-center my-2">
-            <img id="preview-juego-img-paquete" src="#" alt="Previsualización Paquete" style="display:none;max-width:120px;max-height:120px;border-radius:0.75rem;box-shadow:0 0 0.5rem #22d3ee55;" />
+        <div class="col-md-6">
+            <label class="form-label">Marcar como popular</label>
+            <div class="form-check">
+                <input type="checkbox" name="popular" class="form-check-input" id="popularCheck">
+                <label class="form-check-label text-secondary" for="popularCheck">Popular</label>
+            </div>
         </div>
-        <select name="moneda_fija_id" class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white">
-            <option value="">Moneda variable (usuario elige)</option>
-            <?php foreach ($monedas as $m): ?>
-            <option value="<?= $m['id'] ?>">Solo <?= htmlspecialchars($m['nombre']) ?></option>
-            <?php endforeach; ?>
-        </select>
-        <label class="block text-slate-300 font-medium">Seleccionar características existentes:</label>
-        <select name="caracteristicas_select[]" multiple class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white" size="3">
-            <?php foreach ($caracteristicas_unicas as $car): ?>
-                <option value="<?= htmlspecialchars($car) ?>"><?= htmlspecialchars($car) ?></option>
-            <?php endforeach; ?>
-        </select>
-        <div id="caracteristicas" class="space-y-2 mt-2">
-            <input type="text" name="caracteristicas[]" placeholder="Nueva característica" class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white placeholder-slate-400">
+        <div class="col-12">
+            <label class="form-label">Descripción</label>
+            <textarea name="descripcion" placeholder="Descripción" required class="form-control"></textarea>
         </div>
-        <button type="button" onclick="addCarField()" class="bg-cyan-700 hover:bg-cyan-600 text-white px-4 py-2 rounded-lg">Agregar nueva característica</button>
-        <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg w-full">Agregar juego</button>
+        <div class="col-md-6">
+            <label class="form-label">Imagen del juego</label>
+            <input type="file" name="imagen" accept="image/*" class="form-control" onchange="previewImagenJuego(event)">
+            <div class="text-center mt-2">
+                <img id="preview-juego-img" src="#" alt="Previsualización" style="display:none;max-width:180px;max-height:180px;border-radius:0.75rem;box-shadow:0 0 0.5rem #22d3ee55;" />
+            </div>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">Imagen común para paquetes</label>
+            <input type="file" name="imagen_paquete" accept="image/*" class="form-control" onchange="previewImagenPaqueteJuego(event)">
+            <div class="text-center mt-2">
+                <img id="preview-juego-img-paquete" src="#" alt="Previsualización Paquete" style="display:none;max-width:120px;max-height:120px;border-radius:0.75rem;box-shadow:0 0 0.5rem #22d3ee55;" />
+            </div>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">Moneda fija</label>
+            <select name="moneda_fija_id" class="form-select">
+                <option value="">Moneda variable (usuario elige)</option>
+                <?php foreach ($monedas as $m): ?>
+                <option value="<?= $m['id'] ?>">Solo <?= htmlspecialchars($m['nombre']) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">Seleccionar características existentes</label>
+            <select name="caracteristicas_select[]" multiple class="form-select" size="3">
+                <?php foreach ($caracteristicas_unicas as $car): ?>
+                    <option value="<?= htmlspecialchars($car) ?>"><?= htmlspecialchars($car) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div class="col-12">
+            <label class="form-label">Nuevas características</label>
+            <div id="caracteristicas" class="mb-2">
+                <input type="text" name="caracteristicas[]" placeholder="Nueva característica" class="form-control mb-2">
+            </div>
+            <button type="button" onclick="addCarField()" class="btn btn-outline-info btn-sm">Agregar nueva característica</button>
+        </div>
+        <div class="col-12">
+            <button type="submit" class="btn btn-success w-100">Agregar juego</button>
+        </div>
     </form>
-        <h3 class="text-xl font-semibold mt-10 mb-4">Juegos existentes</h3>
-        <!-- Desktop Table -->
-        <div class="overflow-x-auto hidden md:block">
-            <table class="min-w-full text-sm text-left text-white">
-                <thead class="bg-slate-700 text-cyan-200">
-                    <tr>
-                        <th class="px-3 py-2">Imagen</th>
-                        <th class="px-3 py-2">Nombre</th>
-                        <th class="px-3 py-2">Popular</th>
-                        <th class="px-3 py-2">Imagen Paquete</th>
-                        <th class="px-3 py-2">Descripción</th>
-                        <th class="px-3 py-2">Moneda</th>
-                        <th class="px-3 py-2">Características</th>
-                        <th class="px-3 py-2">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                <?php foreach ($juegos as $j): ?>
-                    <tr class="bg-slate-800 border-b border-slate-700">
-                        <td class="px-3 py-2">
-                            <?php if (!empty($j['imagen'])): ?>
-                                <img src="/<?= htmlspecialchars($j['imagen']) ?>" alt="img" class="rounded-lg max-h-16 max-w-16">
-                            <?php else: ?>
-                                <span class="italic text-slate-400">Sin imagen</span>
-                            <?php endif; ?>
-                        </td>
-                        <td class="px-3 py-2 font-semibold"><?= htmlspecialchars($j['nombre']) ?></td>
-                        <td class="px-3 py-2 text-center">
-                            <?php if (!empty($j['popular'])): ?>
+    <h3 class="text-info mt-5 mb-3">Juegos existentes</h3>
+    <div class="table-responsive d-none d-md-block">
+        <table class="table table-dark table-striped align-middle">
+            <thead class="table-info">
+                <tr>
+                    <th>Imagen</th>
+                    <th>Nombre</th>
+                    <th>Popular</th>
+                    <th>Imagen Paquete</th>
+                    <th>Descripción</th>
+                    <th>Moneda</th>
+                    <th>Características</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($juegos as $j): ?>
+                <tr>
+                    <td>
+                        <?php if (!empty($j['imagen'])): ?>
+                            <img src="/<?= htmlspecialchars($j['imagen']) ?>" alt="img" class="rounded img-thumbnail" style="max-height:64px;max-width:64px;">
+                        <?php else: ?>
+                            <span class="fst-italic text-secondary">Sin imagen</span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="fw-semibold"><?= htmlspecialchars($j['nombre']) ?></td>
+                    <td class="text-center">
+                        <?php if (!empty($j['popular'])): ?>
                                 <span title="Popular" class="text-emerald-400 text-xl">★</span>
                             <?php else: ?>
                                 <span class="text-slate-500">—</span>

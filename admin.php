@@ -7,31 +7,36 @@ if (!isset($_SESSION['auth_user']) || ($_SESSION['auth_user']['rol'] ?? '') !== 
     exit();
 }
 
-
+// Definir la variable $seccion
 $seccion = $_GET['seccion'] ?? 'dashboard';
-// Permitir también URLs amigables: /admin/seccion
 if (isset($_SERVER['REQUEST_URI'])) {
     if (preg_match('#/admin/([a-zA-Z0-9_-]+)#', $_SERVER['REQUEST_URI'], $m)) {
         $seccion = $m[1];
     }
 }
 
-function nav_link($nombre, $seccion_actual) {
-    $active = $nombre === $seccion_actual ? 'style="font-weight:bold;"' : '';
-    // Usar URL amigable
-    echo "<a href='/admin/$nombre' $active>".ucfirst($nombre)."</a> | ";
-}
-?>
-<?php
 // Header y menú igual al inicio
 require_once __DIR__ . '/includes/header.php';
 ?>
 <body class="min-h-screen text-slate-100">
 <div class="relative min-h-screen overflow-hidden">
 
-<div class="w-full min-h-screen flex flex-col items-center px-2 sm:px-0">
-    <div class="w-[90%] mt-6">
-        <h1 class="text-2xl sm:text-3xl font-bold mb-8 text-center text-cyan-400">Panel de Administración</h1>
+<div class="container-lg min-vh-100 d-flex flex-column align-items-center justify-content-center px-2">
+    <div class="w-100 mt-5">
+        <?php if ($seccion === 'dashboard'): ?>
+        <div class="mb-5 text-center">
+            <h1 class="display-4 fw-bold text-info mb-4">Panel de Administración</h1>
+            <h2 class="h3 fw-semibold mb-3">Bienvenido al panel de administración</h2>
+            <p class="mb-4">Selecciona una sección para comenzar.</p>
+            <div class="d-flex flex-wrap justify-content-center gap-3">
+                <a href="/admin/usuarios" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>👤</span>Usuarios</a>
+                <a href="/admin/juegos" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>🎮</span>Juegos</a>
+                <a href="/admin/cupones" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>✏️</span>Cupones</a>
+                <a href="/admin/pedidos" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>📋</span>Pedidos</a>
+                <a href="/admin/configuracion" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>⚙️</span>Configuración</a>
+            </div>
+        </div>
+        <?php endif; ?>
         <div class="relative mb-8">
         <?php
         switch ($seccion) {
@@ -470,27 +475,6 @@ require_once __DIR__ . '/includes/header.php';
                 break;
             case 'configuracion':
                 require_once __DIR__ . '/admin_configuracion.php';
-                break;
-            default:
-                echo '<h2 class="text-2xl font-semibold mb-4 text-cyan-300">Bienvenido al panel de administración</h2>';
-                echo '<p class="text-gray-400 mb-8">Selecciona una sección para comenzar.</p>';
-                echo '<div class="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-lg mx-auto">';
-                echo '<a href="/admin/usuarios" class="flex flex-col items-center justify-center rounded-xl border border-cyan-700 bg-gray-900 p-6 shadow hover:bg-cyan-950/30 transition">';
-                echo '<span class="text-3xl mb-2">👤</span><span class="text-lg font-semibold text-cyan-300">Usuarios</span>';
-                echo '</a>';
-                echo '<a href="/admin/juegos" class="flex flex-col items-center justify-center rounded-xl border border-cyan-700 bg-gray-900 p-6 shadow hover:bg-cyan-950/30 transition">';
-                echo '<span class="text-3xl mb-2">🎮</span><span class="text-lg font-semibold text-cyan-300">Juegos</span>';
-                echo '</a>';
-                echo '<a href="/admin/cupones" class="flex flex-col items-center justify-center rounded-xl border border-cyan-700 bg-gray-900 p-6 shadow hover:bg-cyan-950/30 transition">';
-                echo '<span class="text-3xl mb-2">🏷️</span><span class="text-lg font-semibold text-cyan-300">Cupones</span>';
-                echo '</a>';
-                echo '<a href="/admin/pedidos" class="flex flex-col items-center justify-center rounded-xl border border-cyan-700 bg-gray-900 p-6 shadow hover:bg-cyan-950/30 transition">';
-                echo '<span class="text-3xl mb-2">🧾</span><span class="text-lg font-semibold text-cyan-300">Pedidos</span>';
-                echo '</a>';
-                echo '<a href="/admin/configuracion" class="flex flex-col items-center justify-center rounded-xl border border-emerald-400 bg-gray-900 p-6 shadow hover:bg-emerald-950/30 transition">';
-                echo '<span class="text-3xl mb-2">⚙️</span><span class="text-lg font-semibold text-emerald-300">Configuración</span>';
-                echo '</a>';
-                echo '</div>';
                 break;
         }
         ?>

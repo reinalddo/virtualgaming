@@ -109,58 +109,74 @@ $resj->execute();
 $juego = $resj->get_result()->fetch_assoc();
 ?>
 <?php include '../includes/header.php'; ?>
-<main class="max-w-2xl mx-auto mt-10 bg-slate-900/80 rounded-xl p-8 shadow-lg">
-    <h2 class="text-2xl font-bold mb-6 text-cyan-300">Paquetes de <?= htmlspecialchars($juego['nombre']) ?></h2>
-    <form method="post" enctype="multipart/form-data" class="space-y-4 mb-8">
-        <input type="text" name="nombre" placeholder="Nombre del paquete" required class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white placeholder-slate-400">
-        <input type="text" name="clave" placeholder="Clave interna" required class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white placeholder-slate-400">
-        <input type="number" name="cantidad" placeholder="Cantidad" required class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white placeholder-slate-400">
-        <input type="number" step="0.01" name="precio" placeholder="Precio USD" required class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white placeholder-slate-400">
-        <input type="file" name="imagen_icono" accept="image/*" class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white placeholder-slate-400" onchange="previewPaqueteImg(event)">
-        <div class="flex justify-center my-2">
-            <img id="preview-paquete-img" src="#" alt="Previsualización" style="display:none;max-width:120px;max-height:120px;border-radius:0.75rem;box-shadow:0 0 0.5rem #22d3ee55;" />
+<main class="container-sm mt-5 bg-dark bg-opacity-75 rounded-4 p-4 shadow">
+    <h2 class="text-center text-info mb-4">Paquetes de <?= htmlspecialchars($juego['nombre']) ?></h2>
+    <form method="post" enctype="multipart/form-data" class="row g-3 mb-4">
+        <div class="col-md-4">
+            <label class="form-label">Nombre del paquete</label>
+            <input type="text" name="nombre" placeholder="Nombre del paquete" required class="form-control">
         </div>
-        <button type="submit" class="bg-cyan-700 hover:bg-cyan-600 text-white px-4 py-2 rounded-lg w-full">Agregar paquete</button>
+        <div class="col-md-4">
+            <label class="form-label">Clave interna</label>
+            <input type="text" name="clave" placeholder="Clave interna" required class="form-control">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Cantidad</label>
+            <input type="number" name="cantidad" placeholder="Cantidad" required class="form-control">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Precio USD</label>
+            <input type="number" step="0.01" name="precio" placeholder="Precio USD" required class="form-control">
+        </div>
+        <div class="col-12">
+            <label class="form-label">Imagen del paquete</label>
+            <input type="file" name="imagen_icono" accept="image/*" class="form-control" onchange="previewPaqueteImg(event)">
+            <div class="text-center mt-2">
+                <img id="preview-paquete-img" src="#" alt="Previsualización" style="display:none;max-width:120px;max-height:120px;border-radius:0.75rem;box-shadow:0 0 0.5rem #22d3ee55;" />
+            </div>
+        </div>
+        <div class="col-12">
+            <button type="submit" class="btn btn-success w-100">Agregar paquete</button>
+        </div>
     </form>
-        <h3 class="text-xl font-semibold mt-10 mb-4">Paquetes existentes</h3>
-        <!-- Desktop Table -->
-        <div class="overflow-x-auto hidden md:block">
-            <table class="min-w-full text-sm text-left text-white">
-                <thead class="bg-slate-700 text-cyan-200">
-                    <tr>
-                        <th class="px-3 py-2">Imagen</th>
-                        <th class="px-3 py-2">Nombre</th>
-                        <th class="px-3 py-2">Clave</th>
-                        <th class="px-3 py-2">Cantidad</th>
-                        <th class="px-3 py-2">Precio</th>
-                        <th class="px-3 py-2">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                <?php foreach ($paquetes as $p): ?>
-                    <tr class="bg-slate-800 border-b border-slate-700">
-                        <td class="px-3 py-2">
-                            <?php if (!empty($p['imagen_icono'])): ?>
-                                <img src="/<?= htmlspecialchars($p['imagen_icono']) ?>" alt="icono" class="rounded-lg max-h-12 max-w-12">
-                            <?php elseif (!empty($juego['imagen_paquete'])): ?>
-                                <img src="/<?= htmlspecialchars($juego['imagen_paquete']) ?>" alt="icono" class="rounded-lg max-h-12 max-w-12">
-                            <?php else: ?>
-                                <span class="italic text-slate-400">Sin imagen</span>
-                            <?php endif; ?>
-                        </td>
-                        <td class="px-3 py-2 font-semibold"><?= htmlspecialchars($p['nombre']) ?></td>
-                        <td class="px-3 py-2"><?= htmlspecialchars($p['clave']) ?></td>
-                        <td class="px-3 py-2"><?= htmlspecialchars($p['cantidad']) ?></td>
-                        <td class="px-3 py-2">$<?= number_format($p['precio'], 2) ?></td>
-                        <td class="px-3 py-2 whitespace-nowrap">
-                            <a href="/admin/paquetes/<?= $juego_id ?>?editar=<?= $p['id'] ?>" class="text-emerald-400 hover:underline mr-4">Editar</a>
-                            <a href="/admin/paquetes/<?= $juego_id ?>?eliminar=<?= $p['id'] ?>" class="text-rose-400 hover:underline" onclick="return confirm('¿Eliminar este paquete?')">Eliminar</a>
-                        </td>
-                    </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
+    <h3 class="text-info mt-5 mb-3">Paquetes existentes</h3>
+    <div class="table-responsive d-none d-md-block">
+        <table class="table table-dark table-striped align-middle">
+            <thead class="table-info">
+                <tr>
+                    <th>Imagen</th>
+                    <th>Nombre</th>
+                    <th>Clave</th>
+                    <th>Cantidad</th>
+                    <th>Precio</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($paquetes as $p): ?>
+                <tr>
+                    <td>
+                        <?php if (!empty($p['imagen_icono'])): ?>
+                            <img src="/<?= htmlspecialchars($p['imagen_icono']) ?>" alt="icono" class="rounded img-thumbnail" style="max-height:48px;max-width:48px;">
+                        <?php elseif (!empty($juego['imagen_paquete'])): ?>
+                            <img src="/<?= htmlspecialchars($juego['imagen_paquete']) ?>" alt="icono" class="rounded img-thumbnail" style="max-height:48px;max-width:48px;">
+                        <?php else: ?>
+                            <span class="fst-italic text-secondary">Sin imagen</span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="fw-semibold"><?= htmlspecialchars($p['nombre']) ?></td>
+                    <td><?= htmlspecialchars($p['clave']) ?></td>
+                    <td><?= htmlspecialchars($p['cantidad']) ?></td>
+                    <td>$<?= number_format($p['precio'], 2) ?></td>
+                    <td class="text-nowrap">
+                        <a href="/admin/paquetes/<?= $juego_id ?>?editar=<?= $p['id'] ?>" class="btn btn-outline-info btn-sm me-2">Editar</a>
+                        <a href="/admin/paquetes/<?= $juego_id ?>?eliminar=<?= $p['id'] ?>" class="btn btn-outline-danger btn-sm" onclick="return confirm('¿Eliminar este paquete?')">Eliminar</a>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
         <!-- Mobile Cards -->
         <div class="block md:hidden space-y-4">
             <?php foreach ($paquetes as $p): ?>

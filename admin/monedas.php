@@ -43,21 +43,30 @@ $res = $mysqli->query("SELECT * FROM monedas ORDER BY es_base DESC, nombre ASC")
 $monedas = $res->fetch_all(MYSQLI_ASSOC);
 ?>
 <?php include '../includes/header.php'; ?>
-<main class="max-w-2xl mx-auto mt-10 bg-slate-900/80 rounded-xl p-8 shadow-lg">
-    <h2 class="text-2xl font-bold mb-6 text-cyan-300">Gestión de Monedas</h2>
-    <form method="post" class="space-y-4 mb-8">
-        <input type="text" name="nombre" placeholder="Nombre de la moneda" required class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white placeholder-slate-400">
-        <input type="text" name="clave" placeholder="Clave (ej: USD, BS)" maxlength="10" required class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white placeholder-slate-400">
-        <input type="number" step="0.000001" name="tasa" placeholder="Tasa respecto al USD" required class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white placeholder-slate-400">
-        <button type="submit" class="bg-cyan-700 hover:bg-cyan-600 text-white px-4 py-2 rounded-lg w-full">Agregar moneda</button>
+<main class="container-sm mt-5 bg-dark bg-opacity-75 rounded-4 p-4 shadow">
+    <h2 class="text-center text-info mb-4">Gestión de Monedas</h2>
+    <form method="post" class="row g-3 mb-4">
+        <div class="col-md-4">
+            <label class="form-label">Nombre de la moneda</label>
+            <input type="text" name="nombre" placeholder="Nombre de la moneda" required class="form-control">
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Clave (ej: USD, BS)</label>
+            <input type="text" name="clave" placeholder="Clave" maxlength="10" required class="form-control">
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Tasa respecto al USD</label>
+            <input type="number" step="0.000001" name="tasa" placeholder="Tasa" required class="form-control">
+        </div>
+        <div class="col-12">
+            <button type="submit" class="btn btn-success w-100">Agregar moneda</button>
+        </div>
     </form>
-        <div class="overflow-x-auto">
-            <!-- Tabla desktop -->
-            <div class="hidden sm:block">
-                <table class="min-w-full bg-slate-800 rounded-lg">
-                        <thead>
-                        <tr class="text-cyan-200 text-left">
-                                <th class="px-4 py-2">Nombre</th>
+    <div class="table-responsive">
+        <table class="table table-dark table-striped align-middle">
+            <thead class="table-info">
+                <tr>
+                    <th>Nombre</th>
                                 <th class="px-4 py-2">Clave</th>
                                 <th class="px-4 py-2">Tasa</th>
                                 <th class="px-4 py-2">Base</th>
