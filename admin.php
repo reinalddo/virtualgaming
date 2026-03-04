@@ -136,7 +136,12 @@ require_once __DIR__ . '/includes/header.php';
                 break;
             case 'juegos':
                 echo '<h2 class="text-2xl font-semibold mb-8 text-cyan-300">Gestión de Juegos</h2>';
-                require_once __DIR__ . "/../includes/db.php";
+                if (file_exists(__DIR__ . "/includes/db.php")) {
+                    require_once __DIR__ . "/includes/db.php";
+                } else {
+                    echo '<div class="text-red-400">Error: No se encontró el archivo de conexión a la base de datos (includes/db.php).</div>';
+                    break;
+                }
                 // Alta de juego
                 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nuevo_juego'])) {
                     $nombre = $_POST['nombre'] ?? '';
