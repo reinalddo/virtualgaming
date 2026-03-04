@@ -172,13 +172,51 @@ require_once __DIR__ . '/includes/header.php';
                     echo '<div class="text-gray-400">No hay juegos registrados.</div>';
                 } else {
                     echo '<div class="overflow-x-auto">';
-                    echo '<table class="w-full text-left text-sm min-w-[400px]">';
-                    echo '<thead><tr class="text-cyan-300"><th>ID</th><th>Nombre</th><th>Acciones</th></tr></thead><tbody>';
+                    echo '<table class="w-full text-left text-sm min-w-[800px]">';
+                    echo '<thead><tr class="text-cyan-300">'
+                        .'<th>Imagen</th>'
+                        .'<th>Nombre</th>'
+                        .'<th>Popular</th>'
+                        .'<th>Imagen Paquete</th>'
+                        .'<th>Descripción</th>'
+                        .'<th>Moneda</th>'
+                        .'<th>Características</th>'
+                        .'<th>Acciones</th>'
+                        .'</tr></thead><tbody>';
                     foreach ($juegos as $juego) {
                         echo '<tr class="border-b border-gray-700">';
-                        echo '<td>' . htmlspecialchars($juego['id']) . '</td>';
+                        // Imagen principal
+                        echo '<td>';
+                        if (!empty($juego['imagen'])) {
+                            echo '<img src="'.htmlspecialchars($juego['imagen']).'" alt="img" class="w-16 h-16 object-cover rounded" />';
+                        } else {
+                            echo '<span class="text-gray-400">Sin imagen</span>';
+                        }
+                        echo '</td>';
+                        // Nombre
                         echo '<td>' . htmlspecialchars($juego['nombre']) . '</td>';
-                        echo '<td><a href="?seccion=juegos&borrar_juego=' . $juego['id'] . '" class="text-red-400 hover:underline" onclick="return confirm(\'¿Eliminar este juego?\')">Eliminar</a></td>';
+                        // Popular
+                        echo '<td>' . ((isset($juego['popular']) && $juego['popular']) ? '<span class="text-green-400">★</span>' : '—') . '</td>';
+                        // Imagen Paquete (ejemplo: puedes ajustar la lógica según tu estructura)
+                        echo '<td>';
+                        if (!empty($juego['imagen_paquete'])) {
+                            echo '<img src="'.htmlspecialchars($juego['imagen_paquete']).'" alt="img" class="w-16 h-16 object-cover rounded" />';
+                        } else {
+                            echo '<span class="text-gray-400">Sin imagen</span>';
+                        }
+                        echo '</td>';
+                        // Descripción
+                        echo '<td>' . htmlspecialchars($juego['descripcion'] ?? '') . '</td>';
+                        // Moneda
+                        echo '<td>' . htmlspecialchars($juego['moneda'] ?? '') . '</td>';
+                        // Características
+                        echo '<td>' . htmlspecialchars($juego['caracteristicas'] ?? '') . '</td>';
+                        // Acciones
+                        echo '<td>';
+                        echo '<a href="?seccion=juegos&editar_juego=' . $juego['id'] . '" class="text-green-400 hover:underline mr-2">Editar</a>';
+                        echo '<a href="?seccion=paquetes&juego_id=' . $juego['id'] . '" class="text-cyan-400 hover:underline mr-2">Paquetes</a>';
+                        echo '<a href="?seccion=juegos&borrar_juego=' . $juego['id'] . '" class="text-red-400 hover:underline" onclick="return confirm(\'¿Eliminar este juego?\')">Eliminar</a>';
+                        echo '</td>';
                         echo '</tr>';
                     }
                     echo '</tbody></table>';
