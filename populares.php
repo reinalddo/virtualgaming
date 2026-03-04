@@ -13,27 +13,28 @@ $popularGames = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
   <div class="flex items-center justify-between">
     <div>
       <p class="text-xs uppercase tracking-[0.35em] text-cyan-300/70">seleccionados</p>
-      <h2 class="mt-2 font-oxanium text-lg font-semibold">Juegos populares</h2>
+      <h2 class="game-section-title">Juegos populares</h2>
     </div>
     <a href="/juegos" class="text-xs font-semibold uppercase tracking-wide text-cyan-300">Ver todo</a>
   </div>
-  <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+  <div class="mt-4 row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4">
     <?php foreach ($popularGames as $game): ?>
       <?php
         $resPaqCount = $mysqli->query("SELECT COUNT(*) as total FROM juego_paquetes WHERE juego_id=" . intval($game['id']));
         $paqCount = $resPaqCount ? $resPaqCount->fetch_assoc()['total'] : 0;
         if ($paqCount == 0) continue;
       ?>
-      <a href="/juego/<?= urlencode($game['id']) ?>" class="group rounded-2xl border border-slate-800 bg-slate-900/60 p-2 transition hover:border-cyan-400/60">
-        <div class="overflow-hidden rounded-xl relative">
-          <img src="/<?= htmlspecialchars($game['imagen'] ?? '', ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="aspect-square w-full object-cover" />
-          <span title="Popular" class="absolute top-2 right-2 text-emerald-400 text-xl drop-shadow">★</span>
+      <div class="col">
+        <a href="/juego/<?= urlencode($game['id']) ?>" class="game-card h-100 d-block text-decoration-none">
+        <div class="overflow-hidden rounded-xl position-relative">
+          <img src="/<?= htmlspecialchars($game['imagen'] ?? '', ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="img-fluid w-100" style="aspect-ratio:1/1;object-fit:cover;" />
+          <span title="Popular" class="position-absolute top-0 end-0 text-success fs-4" style="text-shadow:0 0 4px #000;">★</span>
         </div>
-        <div class="mt-2 space-y-1">
-          <p class="text-sm font-semibold flex items-center">
+        <div class="mt-2">
+          <p class="game-card-title mb-1">
             <?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>
           </p>
-          <p class="text-xs text-slate-400">
+          <p class="game-card-price mb-0">
             <?php if (!empty($game['imagen_paquete'])): ?>
               <img src="/<?= htmlspecialchars($game['imagen_paquete'], ENT_QUOTES, 'UTF-8') ?>" alt="Paquete" class="inline-block h-5 w-5 rounded mr-1 align-middle" />
             <?php endif; ?>
@@ -56,7 +57,8 @@ $popularGames = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
             <?php endif; ?>
           </p>
         </div>
-      </a>
+        </a>
+      </div>
     <?php endforeach; ?>
   </div>
 </section>

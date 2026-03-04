@@ -24,60 +24,60 @@ $accentMap = [
 ];
 ?>
 
-      <section class="mt-6 space-y-4" style="animation: fadeUp 650ms ease-out both;">
-        <div class="relative">
-          <div id="promo-slider" class="flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth rounded-2xl border border-slate-800 bg-slate-900/60 p-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <section class="mt-4" style="animation: fadeUp 650ms ease-out both;">
+        <div class="position-relative">
+          <div id="promo-slider" class="d-flex gap-3 overflow-auto rounded-4 border bg-dark p-2" style="scroll-snap-type:x mandatory;">
             <?php foreach ($banners as $banner): ?>
               <?php
                 $accent = $banner["accent"] ?? "cyan";
                 $labelClass = $accentMap[$accent]["label"] ?? $accentMap["cyan"]["label"];
                 $gradientClass = $accentMap[$accent]["gradient"] ?? $accentMap["cyan"]["gradient"];
               ?>
-              <article class="relative h-32 min-w-[80%] snap-start overflow-hidden rounded-2xl border border-slate-800">
-                <img src="<?php echo htmlspecialchars($banner["image"], ENT_QUOTES, "UTF-8"); ?>" alt="<?php echo htmlspecialchars($banner["title"], ENT_QUOTES, "UTF-8"); ?>" class="h-full w-full object-cover opacity-85" />
-                <div class="absolute inset-0 bg-gradient-to-r <?php echo $gradientClass; ?>"></div>
-                <div class="absolute inset-0 flex flex-col justify-center px-4">
-                  <p class="text-[10px] uppercase tracking-[0.35em] <?php echo $labelClass; ?>">
+              <article class="position-relative flex-shrink-0 w-100" style="height:220px;min-width:80%;scroll-snap-align:start;overflow:hidden;border-radius:1.5rem;border:1px solid #334155;">
+                <img src="<?php echo htmlspecialchars($banner["image"], ENT_QUOTES, "UTF-8"); ?>" alt="<?php echo htmlspecialchars($banner["title"], ENT_QUOTES, "UTF-8"); ?>" class="img-fluid w-100 h-100 object-fit-cover" style="opacity:0.85;" />
+                <div class="position-absolute top-0 start-0 w-100 h-100" style="background:linear-gradient(90deg,rgba(12,21,34,0.9),rgba(12,21,34,0.3),transparent);"></div>
+                <div class="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column justify-content-center px-4">
+                  <p class="small text-uppercase text-info mb-0" style="letter-spacing:0.35em;">
                     <?php echo htmlspecialchars($banner["label"], ENT_QUOTES, "UTF-8"); ?>
                   </p>
-                  <h2 class="mt-1 font-oxanium text-lg font-semibold text-white">
+                  <h2 class="mt-1 fw-bold" style="font-family:'Oxanium',sans-serif;font-size:1.25rem;color:#fff;">
                     <?php echo htmlspecialchars($banner["title"], ENT_QUOTES, "UTF-8"); ?>
                   </h2>
-                  <p class="mt-1 text-xs text-slate-300">
+                  <p class="mt-1 small text-secondary">
                     <?php echo htmlspecialchars($banner["subtitle"], ENT_QUOTES, "UTF-8"); ?>
                   </p>
                 </div>
               </article>
             <?php endforeach; ?>
           </div>
-          <div id="promo-dots" class="mt-3 flex items-center gap-2">
+          <div id="promo-dots" class="mt-3 d-flex align-items-center gap-2">
             <?php foreach ($banners as $index => $banner): ?>
               <?php $isActive = $index === 0; ?>
-              <button type="button" class="h-1.5 <?php echo $isActive ? "w-6 bg-cyan-400" : "w-4 bg-slate-700"; ?> rounded-full transition" data-index="<?php echo $index; ?>" aria-label="Banner <?php echo $index + 1; ?>"></button>
+              <button type="button" class="btn p-0" style="height:6px;width:<?php echo $isActive ? '24px' : '16px'; ?>;background:<?php echo $isActive ? '#22d3ee' : '#334155'; ?>;border-radius:1rem;transition:all 0.2s;" data-index="<?php echo $index; ?>" aria-label="Banner <?php echo $index + 1; ?>"></button>
             <?php endforeach; ?>
           </div>
-          <div class="pointer-events-none absolute inset-y-0 left-3 right-3 hidden items-center justify-between md:flex">
-            <button type="button" class="pointer-events-auto rounded-full border border-slate-700 bg-slate-950/70 p-2 text-slate-200 transition hover:border-cyan-400/70 hover:text-cyan-200" data-action="prev" aria-label="Anterior">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+          <div class="position-absolute top-0 start-0 end-0 h-100 d-none d-md-flex align-items-center justify-content-between" style="pointer-events:none;">
+            <button type="button" class="btn btn-outline-info rounded-circle d-flex align-items-center justify-content-center" style="width:40px;height:40px;pointer-events:auto;background:rgba(34,211,238,0.15);border:2px solid #22d3ee;color:#22d3ee;position:relative;z-index:2;" data-action="prev" aria-label="Anterior">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16">
+                <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
               </svg>
             </button>
-            <button type="button" class="pointer-events-auto rounded-full border border-slate-700 bg-slate-950/70 p-2 text-slate-200 transition hover:border-cyan-400/70 hover:text-cyan-200" data-action="next" aria-label="Siguiente">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+            <button type="button" class="btn btn-outline-info rounded-circle d-flex align-items-center justify-content-center" style="width:40px;height:40px;pointer-events:auto;background:rgba(34,211,238,0.15);border:2px solid #22d3ee;color:#22d3ee;position:relative;z-index:2;" data-action="next" aria-label="Siguiente">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
+                <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
               </svg>
             </button>
           </div>
-          <p class="mt-2 text-[11px] text-slate-500">Desliza para ver mas promociones</p>
+          <p class="mt-2 small text-secondary">Desliza para ver más promociones</p>
         </div>
       </section>
 
-      <section class="mt-8">
-        <div class="flex items-center justify-between">
-          <h2 class="font-oxanium text-base font-semibold">Juegos populares</h2>
-          <a href="/populares" class="text-xs font-semibold uppercase tracking-wide text-cyan-300">Ver todo</a>
+      <section class="mt-5">
+        <div class="d-flex align-items-center justify-content-between">
+          <h2 class="fw-bold" style="font-family:'Oxanium',sans-serif;font-size:1.1rem;">Juegos populares</h2>
+          <a href="/populares" class="small fw-semibold text-info text-uppercase">Ver todo</a>
         </div>
-        <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <div class="mt-4 row row-cols-2 row-cols-sm-3 row-cols-lg-4 g-3">
           <?php foreach ($popularGames as $game): ?>
             <?php
               $resPaqCount = $mysqli->query("SELECT COUNT(*) as total FROM juego_paquetes WHERE juego_id=" . intval($game['id']));
@@ -99,49 +99,51 @@ $accentMap = [
                 }
               }
             ?>
-            <a href="/juego/<?= urlencode($game['id']) ?>" class="group rounded-2xl border border-slate-800 bg-slate-900/60 p-2 transition hover:border-cyan-400/60">
-              <div class="overflow-hidden rounded-xl relative">
-                <img src="/<?= htmlspecialchars($game['imagen'] ?? '', ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="aspect-square w-full object-cover" />
-                <span title="Popular" class="absolute top-2 right-2 text-emerald-400 text-xl drop-shadow">★</span>
-              </div>
-              <div class="mt-2 space-y-1">
-                <p class="text-sm font-semibold flex items-center">
-                  <?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>
-                </p>
-                <p class="text-xs text-slate-400">
-                  <?php if (!empty($game['imagen_paquete'])): ?>
-                    <img src="/<?= htmlspecialchars($game['imagen_paquete'], ENT_QUOTES, 'UTF-8') ?>" alt="Paquete" class="inline-block h-5 w-5 rounded mr-1 align-middle" />
-                  <?php endif; ?>
-                  <?php if ($min_precio_bs !== null && isset($mon['clave'])): ?>
-                    Desde <span class="text-cyan-300"><?= htmlspecialchars(strtoupper($mon['clave'])) ?> <?= number_format($min_precio_bs, 2, '.', ',') ?></span>
-                  <?php endif; ?>
-                </p>
-              </div>
-            </a>
+            <div class="col">
+              <a href="/juego/<?= urlencode($game['id']) ?>" class="d-block rounded-4 border bg-dark p-2 h-100 text-decoration-none">
+                <div class="position-relative overflow-hidden rounded-3" style="aspect-ratio:1/1;">
+                  <img src="/<?= htmlspecialchars($game['imagen'] ?? '', ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="img-fluid w-100 h-100 object-fit-cover" style="aspect-ratio:1/1;" />
+                  <span title="Popular" class="position-absolute top-0 end-0 text-success fs-4" style="text-shadow:0 0 4px #000;">★</span>
+                </div>
+                <div class="mt-2">
+                  <p class="fw-semibold d-flex align-items-center mb-1" style="font-size:1rem;">
+                    <?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>
+                  </p>
+                  <p class="small text-secondary mb-0">
+                    <?php if (!empty($game['imagen_paquete'])): ?>
+                      <img src="/<?= htmlspecialchars($game['imagen_paquete'], ENT_QUOTES, 'UTF-8') ?>" alt="Paquete" class="img-fluid rounded me-1 align-middle" style="height:20px;width:20px;display:inline-block;" />
+                    <?php endif; ?>
+                    <?php if ($min_precio_bs !== null && isset($mon['clave'])): ?>
+                      Desde <span class="text-info"><?= htmlspecialchars(strtoupper($mon['clave'])) ?> <?= number_format($min_precio_bs, 2, '.', ',') ?></span>
+                    <?php endif; ?>
+                  </p>
+                </div>
+              </a>
+            </div>
           <?php endforeach; ?>
         </div>
       </section>
 
       <?php if (!empty($featured)): ?>
-        <section class="mt-8">
-          <div class="relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/70">
-            <img src="<?php echo htmlspecialchars($featured["image"], ENT_QUOTES, "UTF-8"); ?>" alt="<?php echo htmlspecialchars($featured["title"], ENT_QUOTES, "UTF-8"); ?>" class="h-36 w-full object-cover opacity-85" />
-            <div class="absolute inset-0 bg-gradient-to-r from-slate-950/85 via-slate-950/40 to-transparent"></div>
-            <div class="absolute inset-0 flex flex-col justify-center px-4">
-              <p class="text-xs uppercase tracking-[0.35em] text-cyan-300/70"><?php echo htmlspecialchars($featured["label"], ENT_QUOTES, "UTF-8"); ?></p>
-              <h3 class="mt-1 font-oxanium text-lg font-semibold"><?php echo htmlspecialchars($featured["title"], ENT_QUOTES, "UTF-8"); ?></h3>
-              <p class="mt-1 text-xs text-slate-300"><?php echo htmlspecialchars($featured["subtitle"], ENT_QUOTES, "UTF-8"); ?></p>
+        <section class="mt-5">
+          <div class="position-relative overflow-hidden rounded-4 border bg-dark">
+            <img src="<?php echo htmlspecialchars($featured["image"], ENT_QUOTES, "UTF-8"); ?>" alt="<?php echo htmlspecialchars($featured["title"], ENT_QUOTES, "UTF-8"); ?>" class="img-fluid w-100" style="height:140px;object-fit:cover;opacity:0.85;" />
+            <div class="position-absolute top-0 start-0 w-100 h-100" style="background:linear-gradient(90deg,rgba(12,21,34,0.85),rgba(12,21,34,0.4),transparent);"></div>
+            <div class="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column justify-content-center px-4">
+              <p class="small text-uppercase text-info mb-0" style="letter-spacing:0.35em;"><?php echo htmlspecialchars($featured["label"], ENT_QUOTES, "UTF-8"); ?></p>
+              <h3 class="mt-1 fw-bold" style="font-family:'Oxanium',sans-serif;font-size:1.25rem;"><?php echo htmlspecialchars($featured["title"], ENT_QUOTES, "UTF-8"); ?></h3>
+              <p class="mt-1 small text-secondary"><?php echo htmlspecialchars($featured["subtitle"], ENT_QUOTES, "UTF-8"); ?></p>
             </div>
           </div>
         </section>
       <?php endif; ?>
 
-      <section class="mt-8">
-        <div class="flex items-center justify-between">
-          <h2 class="font-oxanium text-base font-semibold">Mas juegos</h2>
-          <a href="/juegos" class="text-xs font-semibold uppercase tracking-wide text-cyan-300">Explorar</a>
+      <section class="mt-5">
+        <div class="d-flex align-items-center justify-content-between">
+          <h2 class="fw-bold" style="font-family:'Oxanium',sans-serif;font-size:1.1rem;">Más juegos</h2>
+          <a href="/juegos" class="small fw-semibold text-info text-uppercase">Explorar</a>
         </div>
-        <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <div class="mt-4 row row-cols-2 row-cols-sm-3 row-cols-lg-4 g-3">
           <?php foreach ($moreGames as $game): ?>
             <?php
               $resPaqCount = $mysqli->query("SELECT COUNT(*) as total FROM juego_paquetes WHERE juego_id=" . intval($game['id']));
@@ -162,27 +164,29 @@ $accentMap = [
                 }
               }
             ?>
-            <a href="/juego/<?= urlencode($game['id']) ?>" class="group rounded-2xl border border-slate-800 bg-slate-900/60 p-2 transition hover:border-cyan-400/60">
-              <div class="overflow-hidden rounded-xl relative">
-                <img src="/<?= htmlspecialchars($game['imagen'] ?? '', ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="aspect-square w-full object-cover" />
-                <?php if (!empty($game['popular'])): ?>
-                  <span title="Popular" class="absolute top-2 right-2 text-emerald-400 text-xl drop-shadow">★</span>
-                <?php endif; ?>
-              </div>
-              <div class="mt-2 space-y-1">
-                <p class="text-sm font-semibold flex items-center">
-                  <?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>
-                </p>
-                <p class="text-xs text-slate-400">
-                  <?php if (!empty($game['imagen_paquete'])): ?>
-                    <img src="/<?= htmlspecialchars($game['imagen_paquete'], ENT_QUOTES, 'UTF-8') ?>" alt="Paquete" class="inline-block h-5 w-5 rounded mr-1 align-middle" />
+            <div class="col">
+              <a href="/juego/<?= urlencode($game['id']) ?>" class="d-block rounded-4 border bg-dark p-2 h-100 text-decoration-none">
+                <div class="position-relative overflow-hidden rounded-3" style="aspect-ratio:1/1;">
+                  <img src="/<?= htmlspecialchars($game['imagen'] ?? '', ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="img-fluid w-100 h-100 object-fit-cover" style="aspect-ratio:1/1;" />
+                  <?php if (!empty($game['popular'])): ?>
+                    <span title="Popular" class="position-absolute top-0 end-0 text-success fs-4" style="text-shadow:0 0 4px #000;">★</span>
                   <?php endif; ?>
-                  <?php if ($min_precio_bs !== null && isset($mon['clave'])): ?>
-                    Desde <span class="text-cyan-300"><?= htmlspecialchars(strtoupper($mon['clave'])) ?> <?= number_format($min_precio_bs, 2, '.', ',') ?></span>
-                  <?php endif; ?>
-                </p>
-              </div>
-            </a>
+                </div>
+                <div class="mt-2">
+                  <p class="fw-semibold d-flex align-items-center mb-1" style="font-size:1rem;">
+                    <?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>
+                  </p>
+                  <p class="small text-secondary mb-0">
+                    <?php if (!empty($game['imagen_paquete'])): ?>
+                      <img src="/<?= htmlspecialchars($game['imagen_paquete'], ENT_QUOTES, 'UTF-8') ?>" alt="Paquete" class="img-fluid rounded me-1 align-middle" style="height:20px;width:20px;display:inline-block;" />
+                    <?php endif; ?>
+                    <?php if ($min_precio_bs !== null && isset($mon['clave'])): ?>
+                      Desde <span class="text-info"><?= htmlspecialchars(strtoupper($mon['clave'])) ?> <?= number_format($min_precio_bs, 2, '.', ',') ?></span>
+                    <?php endif; ?>
+                  </p>
+                </div>
+              </a>
+            </div>
           <?php endforeach; ?>
         </div>
       </section>
