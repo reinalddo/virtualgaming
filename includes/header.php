@@ -21,7 +21,7 @@ $tenantSlugAttr = isset($tenantData["tenant"]["slug"]) ? $tenantData["tenant"]["
   <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
   <!--<link rel="stylesheet" href="/assets/css/estilos.css" />-->
-  <link rel="stylesheet" href="/assets/css/tailwind.css" />
+  <link rel="stylesheet" href="/assets/css/output.css" />
   <script>
     tailwind.config = {
       theme: {
