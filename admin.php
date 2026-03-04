@@ -188,7 +188,8 @@ require_once __DIR__ . '/includes/header.php';
                         // Imagen principal
                         echo '<td>';
                         if (!empty($juego['imagen'])) {
-                            echo '<img src="'.htmlspecialchars($juego['imagen']).'" alt="img" class="w-16 h-16 object-cover rounded" />';
+                            $imgSrc = '/' . ltrim($juego['imagen'], '/');
+                            echo '<img src="'.htmlspecialchars($imgSrc).'" alt="img" class="w-16 h-16 object-cover rounded" />';
                         } else {
                             echo '<span class="text-gray-400">Sin imagen</span>';
                         }
@@ -200,7 +201,8 @@ require_once __DIR__ . '/includes/header.php';
                         // Imagen Paquete (ejemplo: puedes ajustar la lógica según tu estructura)
                         echo '<td>';
                         if (!empty($juego['imagen_paquete'])) {
-                            echo '<img src="'.htmlspecialchars($juego['imagen_paquete']).'" alt="img" class="w-16 h-16 object-cover rounded" />';
+                            $imgPaqSrc = '/' . ltrim($juego['imagen_paquete'], '/');
+                            echo '<img src="'.htmlspecialchars($imgPaqSrc).'" alt="img" class="w-16 h-16 object-cover rounded" />';
                         } else {
                             echo '<span class="text-gray-400">Sin imagen</span>';
                         }
