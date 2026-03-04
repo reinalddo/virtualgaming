@@ -19,7 +19,7 @@ $tenantSlugAttr = isset($tenantData["tenant"]["slug"]) ? $tenantData["tenant"]["
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/assets/css/tailwind.prod.css" />
   <link rel="stylesheet" href="/assets/css/estilos.css" />
   <script>
     tailwind.config = {
