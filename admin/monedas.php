@@ -44,91 +44,84 @@ $monedas = $res->fetch_all(MYSQLI_ASSOC);
 ?>
 <?php include '../includes/header.php'; ?>
 <main class="container-sm mt-5 bg-dark bg-opacity-75 rounded-4 p-4 shadow">
-    <h2 class="text-center text-info mb-4">Gestión de Monedas</h2>
-    <form method="post" class="row g-3 mb-4">
+    <h2 class="text-center mb-4" style="color:#00fff7;">Gestión de Monedas</h2>
+    <form method="post" class="row g-3 mb-4" style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:2rem;">
         <div class="col-md-4">
-            <label class="form-label">Nombre de la moneda</label>
-            <input type="text" name="nombre" placeholder="Nombre de la moneda" required class="form-control">
+            <label class="form-label" style="color:#00fff7;">Nombre de la moneda</label>
+            <input type="text" name="nombre" placeholder="Nombre de la moneda" required class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
         </div>
         <div class="col-md-4">
-            <label class="form-label">Clave (ej: USD, BS)</label>
-            <input type="text" name="clave" placeholder="Clave" maxlength="10" required class="form-control">
+            <label class="form-label" style="color:#00fff7;">Clave (ej: USD, BS)</label>
+            <input type="text" name="clave" placeholder="Clave" maxlength="10" required class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
         </div>
         <div class="col-md-4">
-            <label class="form-label">Tasa respecto al USD</label>
-            <input type="number" step="0.000001" name="tasa" placeholder="Tasa" required class="form-control">
+            <label class="form-label" style="color:#00fff7;">Tasa respecto al USD</label>
+            <input type="number" step="0.000001" name="tasa" placeholder="Tasa" required class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
         </div>
         <div class="col-12">
-            <button type="submit" class="btn btn-success w-100">Agregar moneda</button>
+            <button type="submit" class="btn btn-info w-100" style="background:#00fff7; color:#222; border:none; box-shadow:0 0 8px #00fff7;">Agregar moneda</button>
         </div>
     </form>
-    <div class="table-responsive">
-        <table class="table table-dark table-striped align-middle">
-            <thead class="table-info">
+    <h3 class="text-info mt-5 mb-3">Monedas existentes</h3>
+    <div class="table-responsive d-none d-md-block">
+        <table class="table align-middle" style="background:#181f2a; color:#00fff7; border-radius:12px;">
+            <thead style="background:#181f2a; color:#00fff7; border-bottom:2px solid #00fff7;">
                 <tr>
-                    <th>Nombre</th>
-                                <th class="px-4 py-2">Clave</th>
-                                <th class="px-4 py-2">Tasa</th>
-                                <th class="px-4 py-2">Base</th>
-                                <th class="px-4 py-2">Acciones</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <?php foreach ($monedas as $m): ?>
-                        <tr class="border-b border-slate-700">
-                                <?php if (!$m['es_base'] && isset($_GET['editar']) && $_GET['editar'] == $m['id']): ?>
-                                <form method="post" class="contents">
-                                        <td class="px-4 py-2"><input type="text" name="editar_nombre" value="<?= htmlspecialchars($m['nombre']) ?>" class="rounded px-2 py-1 bg-slate-700 text-white w-full"></td>
-                                        <td class="px-4 py-2"><input type="text" name="editar_clave" value="<?= htmlspecialchars($m['clave']) ?>" class="rounded px-2 py-1 bg-slate-700 text-white w-full"></td>
-                                        <td class="px-4 py-2"><input type="number" step="0.000001" name="editar_tasa" value="<?= htmlspecialchars($m['tasa']) ?>" class="rounded px-2 py-1 bg-slate-700 text-white w-full"></td>
-                                        <td class="px-4 py-2">No</td>
-                                        <td class="px-4 py-2">
-                                                <input type="hidden" name="editar_id" value="<?= $m['id'] ?>">
-                                                <button type="submit" class="text-emerald-400 hover:underline mr-2">Guardar</button>
-                                                <a href="monedas.php" class="text-slate-400 hover:underline">Cancelar</a>
-                                        </td>
-                                </form>
-                                <?php else: ?>
-                                <td class="px-4 py-2"><?= htmlspecialchars($m['nombre']) ?></td>
-                                <td class="px-4 py-2"><?= htmlspecialchars($m['clave']) ?></td>
-                                <td class="px-4 py-2"><?= htmlspecialchars($m['tasa']) ?></td>
-                                <td class="px-4 py-2"><?= $m['es_base'] ? '<span class=\'text-emerald-400\'>Sí</span>' : 'No' ?></td>
-                                <td class="px-4 py-2">
-                                        <?php if (!$m['es_base']): ?>
-                                        <a href="?editar=<?= $m['id'] ?>" class="text-cyan-400 hover:underline mr-2">Editar</a>
-                                        <a href="?eliminar=<?= $m['id'] ?>" onclick="return confirm('¿Eliminar moneda?')" class="text-rose-400 hover:underline">Eliminar</a>
-                                        <?php else: ?>
-                                        -
-                                        <?php endif; ?>
-                                </td>
-                                <?php endif; ?>
-                        </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                </table>
+                    <th style="color:#00fff7; background:#181f2a;">Nombre</th>
+                    <th style="color:#00fff7; background:#181f2a;">Clave</th>
+                    <th style="color:#00fff7; background:#181f2a;">Tasa</th>
+                    <th style="color:#00fff7; background:#181f2a;">Base</th>
+                    <th style="color:#00fff7; background:#181f2a;">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($monedas as $m): ?>
+            <tr style="background:#181f2a; color:#fff;">
+                <?php if (!$m['es_base'] && isset($_GET['editar']) && $_GET['editar'] == $m['id']): ?>
+                <form method="post" class="contents">
+                    <td><input type="text" name="editar_nombre" value="<?= htmlspecialchars($m['nombre']) ?>" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;"></td>
+                    <td><input type="text" name="editar_clave" value="<?= htmlspecialchars($m['clave']) ?>" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;"></td>
+                    <td><input type="number" step="0.000001" name="editar_tasa" value="<?= htmlspecialchars($m['tasa']) ?>" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;"></td>
+                    <td>No</td>
+                    <td>
+                        <input type="hidden" name="editar_id" value="<?= $m['id'] ?>">
+                        <button type="submit" class="btn btn-info btn-sm" style="background:#00fff7; color:#222; border:none; box-shadow:0 0 8px #00fff7;">Guardar</button>
+                        <a href="monedas.php" class="btn btn-secondary btn-sm ms-2">Cancelar</a>
+                    </td>
+                </form>
+                <?php else: ?>
+                <td style="background:#181f2a; color:#00fff7;"><?= htmlspecialchars($m['nombre']) ?></td>
+                <td style="background:#181f2a; color:#00fff7;"><?= htmlspecialchars($m['clave']) ?></td>
+                <td style="background:#181f2a; color:#00fff7;"><?= htmlspecialchars($m['tasa']) ?></td>
+                <td style="background:#181f2a; color:#00fff7;"><?= $m['es_base'] ? '<span style=\'color:#00fff7;\'>Sí</span>' : 'No' ?></td>
+                <td style="background:#181f2a;"><?php if (!$m['es_base']): ?><a href="?editar=<?= $m['id'] ?>" style="color:#00fff7; text-decoration:underline; margin-right:1em;">Editar</a><a href="?eliminar=<?= $m['id'] ?>" onclick="return confirm('¿Eliminar moneda?')" style="color:#ff0059; text-decoration:underline;">Eliminar</a><?php else: ?>-<?php endif; ?></td>
+                <?php endif; ?>
+            </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+    <!-- Mobile Cards -->
+    <div class="d-block d-md-none space-y-4 mt-4">
+        <?php foreach ($monedas as $m): ?>
+        <div style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:1rem; color:#00fff7; margin-bottom:1.2rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5em;">
+                <span style="font-size:1em; color:#00fff7; font-weight:bold;"><?= htmlspecialchars($m['nombre']) ?></span>
+                <span style="font-size:1em; color:#b2f6ff;"><?= htmlspecialchars($m['clave']) ?></span>
             </div>
-            <!-- Cards mobile -->
-            <div class="sm:hidden flex flex-col gap-4 mt-4">
-                <?php foreach ($monedas as $m): ?>
-                <div class="rounded-xl border border-slate-700 bg-gray-900 p-4 flex flex-col gap-2 shadow">
-                    <div class="flex justify-between items-center mb-2">
-                        <span class="text-xs text-cyan-300 font-semibold"><?= htmlspecialchars($m['nombre']) ?></span>
-                        <span class="text-xs text-slate-400"><?= htmlspecialchars($m['clave']) ?></span>
-                    </div>
-                    <div class="text-sm text-slate-300">Tasa: <?= htmlspecialchars($m['tasa']) ?></div>
-                    <div class="text-sm text-slate-300">Base: <?= $m['es_base'] ? '<span class=\'text-emerald-400\'>Sí</span>' : 'No' ?></div>
-                    <div class="flex gap-2 mt-2">
-                        <?php if (!$m['es_base']): ?>
-                            <a href="?editar=<?= $m['id'] ?>" class="flex-1 text-center px-2 py-1 rounded bg-cyan-600 text-white hover:bg-cyan-700">Editar</a>
-                            <a href="?eliminar=<?= $m['id'] ?>" onclick="return confirm('¿Eliminar moneda?')" class="flex-1 text-center px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700">Eliminar</a>
-                        <?php else: ?>
-                            <span class="flex-1 text-center text-gray-500">-</span>
-                        <?php endif; ?>
-                    </div>
-                </div>
-                <?php endforeach; ?>
+            <div style="color:#fff; margin-bottom:0.3em;"><span style="color:#00fff7; font-weight:bold;">Tasa:</span> <?= htmlspecialchars($m['tasa']) ?></div>
+            <div style="color:#fff; margin-bottom:0.3em;"><span style="color:#00fff7; font-weight:bold;">Base:</span> <?= $m['es_base'] ? '<span style=\'color:#00fff7;\'>Sí</span>' : 'No' ?></div>
+            <div style="display:flex; gap:1rem; margin-top:1rem;">
+                <?php if (!$m['es_base']): ?>
+                    <a href="?editar=<?= $m['id'] ?>" style="color:#00fff7; text-decoration:underline; font-weight:bold;">Editar</a>
+                    <a href="?eliminar=<?= $m['id'] ?>" onclick="return confirm('¿Eliminar moneda?')" style="color:#ff0059; text-decoration:underline; font-weight:bold;">Eliminar</a>
+                <?php else: ?>
+                    <span style="color:#888;">-</span>
+                <?php endif; ?>
             </div>
         </div>
+        <?php endforeach; ?>
+    </div>
     <a href="/admin/juegos" class="inline-block mt-6 text-cyan-300 hover:underline">Volver a juegos</a>
 </main>
 <?php include '../includes/footer.php'; ?>
