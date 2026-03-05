@@ -27,6 +27,17 @@ function format_money($amount): string {
 }
 ?>
 <main class="container-lg mt-5 mb-5 px-2">
+  <style>
+    .hidden { display: none !important; }
+    .table { background: #181f2a !important; border-radius:12px !important; border:2px solid #00fff7 !important; box-shadow:0 0 24px #00fff733 !important; }
+    .tab-btn.active, .tab-btn.border-cyan-400 {
+      border:2px solid #00fff7 !important;
+      color:#00fff7 !important;
+      box-shadow:0 0 8px #00fff7;
+      background:#181f2a !important;
+    }
+    .tab-panel { margin-top: 0.5rem !important; }
+  </style>
   <div class="row mb-4">
     <div class="col-12 text-center">
       <p class="text-uppercase text-info mb-1">Panel</p>
@@ -36,90 +47,86 @@ function format_money($amount): string {
   </div>
 
   <div class="row mb-3" id="tabs">
-    <div class="col-auto d-flex flex-wrap gap-2 justify-content-center">
+    <div class="col-auto d-flex flex-wrap gap-2 justify-content-center" style="margin-bottom:0.5rem;">
       <?php foreach ($statuses as $st): ?>
-        <button data-tab="<?= $st ?>" class="btn btn-outline-info rounded-pill px-4 py-2 fw-semibold" type="button">
+        <button data-tab="<?= $st ?>" class="btn btn-outline-info rounded-pill px-4 py-2 fw-semibold tab-btn" type="button">
           <?= ucfirst($st) ?>
         </button>
       <?php endforeach; ?>
     </div>
     <div class="col-12 mt-3">
-      <form id="date-filter-form" class="row g-2 align-items-center justify-content-center">
+      <form id="date-filter-form" class="row g-2 align-items-center justify-content-center" style="margin-bottom:0.5rem;">
         <div class="col-auto">
-          <label class="form-label mb-0">Desde:</label>
-          <input type="date" id="date-from" name="date_from" class="form-control form-control-sm">
+          <label class="form-label mb-0" style="color:#00fff7;">Desde:</label>
+          <input type="date" id="date-from" name="date_from" class="form-control form-control-sm" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
         </div>
         <div class="col-auto">
-          <label class="form-label mb-0">Hasta:</label>
-          <input type="date" id="date-to" name="date_to" class="form-control form-control-sm">
+          <label class="form-label mb-0" style="color:#00fff7;">Hasta:</label>
+          <input type="date" id="date-to" name="date_to" class="form-control form-control-sm" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
         </div>
-        <div class="col-auto">
-          <button type="submit" class="btn btn-info btn-sm fw-bold">Filtrar</button>
+        <div class="col-auto d-flex align-items-end gap-2">
+          <button type="submit" class="btn btn-info btn-sm fw-bold" style="background:#00fff7; color:#222c3a; border:none; box-shadow:0 0 8px #00fff7;">Filtrar</button>
+          <button type="button" id="clear-date-filter" class="btn btn-outline-info btn-sm fw-bold" style="border:1px solid #00fff7; color:#00fff7; background:#181f2a; box-shadow:0 0 8px #00fff7; display:flex; align-items:center; gap:4px;">
+            <svg width="14" height="14" fill="none" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" stroke="#00fff7" stroke-width="1.2"/><path d="M4 4l6 6M10 4l-6 6" stroke="#00fff7" stroke-width="1.2" stroke-linecap="round"/></svg>
+            <span style="color:#00fff7; font-weight:bold;">Limpiar</span>
+          </button>
         </div>
       </form>
-    </div>
-  </div>
-        <svg width="15" height="15" fill="none" viewBox="0 0 15 15"><rect x="2" y="4" width="11" height="9" rx="2" stroke="#22d3ee" stroke-width="1.2"/><path d="M4 2v2M11 2v2" stroke="#34d399" stroke-width="1.2" stroke-linecap="round"/></svg>
-        Filtrar
-      </button>
-      <button type="button" id="clear-date-filter" class="rounded-lg bg-slate-700 text-slate-100 font-bold px-3 py-1 text-xs hover:bg-slate-600 transition flex items-center gap-1">
-        <svg width="14" height="14" fill="none" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" stroke="#22d3ee" stroke-width="1.2"/><path d="M4 4l6 6M10 4l-6 6" stroke="#34d399" stroke-width="1.2" stroke-linecap="round"/></svg>
-        Limpiar
-      </button>
-    </form>
     </div>
   </div>
 
   <?php foreach ($statuses as $st): ?>
     <?php $list = $ordersByStatus[$st] ?? []; ?>
-    <section data-panel="<?= $st ?>" class="tab-panel mt-6 hidden">
-      <div class="rounded-xl border border-slate-800 bg-slate-900/80 p-4 shadow-lg">
-        <div class="flex items-center justify-between gap-4">
-          <div class="flex items-center gap-2">
-            <span class="inline-flex h-2 w-2 rounded-full <?= $st === 'pendiente' ? 'bg-amber-400' : ($st === 'pagado' ? 'bg-emerald-400' : ($st === 'enviado' ? 'bg-cyan-400' : 'bg-rose-400')) ?>"></span>
-            <h2 class="text-lg font-semibold text-slate-100">Estado: <?= ucfirst($st) ?></h2>
+    <section data-panel="<?= $st ?>" class="tab-panel mt-6<?= ($st !== ($initialTab ?? 'pendiente')) ? ' hidden' : '' ?>">
+      <div style="border-radius:16px; border:2px solid #00fff7; background:#181f2a; box-shadow:0 0 24px #00fff733; padding:1.5rem; margin-bottom:2rem;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
+          <div style="display:flex; align-items:center; gap:0.75rem;">
+            <span style="display:inline-block; height:10px; width:10px; border-radius:50%; background:<?= $st === 'pendiente' ? '#ffc107' : ($st === 'pagado' ? '#00ffb3' : ($st === 'enviado' ? '#00fff7' : '#ff0059')) ?>;"></span>
+            <h2 style="font-size:1.2em; font-weight:bold; color:#00fff7;">Estado: <?= ucfirst($st) ?></h2>
           </div>
-          <p class="text-sm text-slate-400">Total: <?= count($list) ?> pedidos</p>
+          <p style="font-size:1em; color:#b2f6ff;">Total: <?= count($list) ?> pedidos</p>
         </div>
 
         <?php if (count($list) === 0): ?>
-          <p class="mt-4 text-sm text-slate-400">No hay pedidos en este estado.</p>
+          <p style="margin-top:1.5rem; color:#b2f6ff; font-size:1em;">No hay pedidos en este estado.</p>
         <?php else: ?>
-          <div class="hidden md:block overflow-x-auto mt-4">
-            <table class="min-w-full text-sm text-slate-200">
-              <thead class="text-cyan-200 bg-slate-800/70">
+          <div class="table-responsive d-none d-md-block" style="margin-top:1.5rem;">
+            <table class="table align-middle" style="background:#181f2a; color:#00fff7; border-radius:12px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733;">
+              <thead style="background:#181f2a; color:#00fff7; border-bottom:2px solid #00fff7;">
                 <tr>
-                  <th class="px-3 py-2 text-left">#</th>
-                  <th class="px-3 py-2 text-left">Fecha</th>
-                  <th class="px-3 py-2 text-left">Cliente</th>
-                  <th class="px-3 py-2 text-left">Email</th>
-                  <th class="px-3 py-2 text-left">Juego</th>
-                  <th class="px-3 py-2 text-left">Paquete</th>
-                  <th class="px-3 py-2 text-left">Total</th>
-                  <th class="px-3 py-2 text-left">Cupón</th>
-                  <th class="px-3 py-2 text-left">Estado</th>
+                  <th style="color:#00fff7; background:#181f2a;">#</th>
+                  <th style="color:#00fff7; background:#181f2a;">Fecha</th>
+                  <th style="color:#00fff7; background:#181f2a;">Cliente</th>
+                  <th style="color:#00fff7; background:#181f2a;">Email</th>
+                  <th style="color:#00fff7; background:#181f2a;">Juego</th>
+                  <th style="color:#00fff7; background:#181f2a;">Paquete</th>
+                  <th style="color:#00fff7; background:#181f2a;">Total</th>
+                  <th style="color:#00fff7; background:#181f2a;">Cupón</th>
+                  <th style="color:#00fff7; background:#181f2a;">Estado</th>
                 </tr>
               </thead>
               <tbody id="table-body-<?= $st ?>">
                 <?php foreach ($list as $order): ?>
-                  <tr data-order-row="<?= $order['id'] ?>" data-status="<?= $st ?>" class="border-b border-slate-800/70">
-                    <td class="px-3 py-2 font-semibold text-cyan-200">#<?= $order['id'] ?></td>
-                    <td class="px-3 py-2 text-slate-400"><?= htmlspecialchars($order['creado_en']) ?></td>
-                    <td class="px-3 py-2 text-slate-100"><?= htmlspecialchars($order['user_identifier']) ?></td>
-                    <td class="px-3 py-2 text-slate-400"><?= htmlspecialchars($order['email']) ?></td>
-                    <td class="px-3 py-2 text-slate-100"><?php
-                      $juegoTexto = htmlspecialchars($order['juego_nombre']);
-                      if ($juegoTexto === '' || str_contains($order['juego_nombre'], '<?')) {
-                        $juegoTexto = 'Juego #' . htmlspecialchars((string)($order['juego_id'] ?? '')); }
-                      echo $juegoTexto;
-                    ?></td>
-                    <td class="px-3 py-2 text-slate-100"><?= htmlspecialchars($order['paquete_nombre'] ?? '') ?> <span class="text-xs text-slate-400"></span></td>
-                    <td class="px-3 py-2 font-semibold text-emerald-300"><?= htmlspecialchars($order['moneda'] ?? '') ?> <?= format_money($order['precio']) ?></td>
-                    <td class="px-3 py-2 text-slate-400">
+                  <tr style="background:#181f2a; color:#fff;">
+                    <td style="background:#181f2a; color:#00fff7; font-weight:bold;">#<?= $order['id'] ?></td>
+                    <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars($order['creado_en']) ?></td>
+                    <td style="background:#181f2a; color:#00fff7; font-weight:bold;"><?= htmlspecialchars($order['user_identifier']) ?></td>
+                    <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars($order['email']) ?></td>
+                    <td style="background:#181f2a; color:#00fff7; font-weight:bold;">
+                      <?php
+                        $juegoTexto = htmlspecialchars($order['juego_nombre']);
+                        if ($juegoTexto === '' || str_contains($order['juego_nombre'], '<?')) {
+                          $juegoTexto = 'Juego #' . htmlspecialchars((string)($order['juego_id'] ?? '')); }
+                        echo $juegoTexto;
+                      ?>
+                    </td>
+                    <td style="background:#181f2a; color:#00fff7; font-weight:bold;"><?= htmlspecialchars($order['paquete_nombre'] ?? '') ?> <span style="color:#b2f6ff; font-size:0.9em;"></span></td>
+                    <td style="background:#181f2a; color:#00ffb3; font-weight:bold;"><?= htmlspecialchars($order['moneda'] ?? '') ?> <?= format_money($order['precio']) ?></td>
+                    <td style="background:#181f2a; color:#b2f6ff;">
                       <?= !empty($order['cupon']) ? htmlspecialchars($order['cupon']) : '—' ?>
                     </td>
-                    <td class="px-3 py-2">
-                      <select class="js-status inline-flex rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-1 text-xs font-semibold text-slate-100" data-order-id="<?= $order['id'] ?>" data-status="<?= $st ?>">
+                    <td style="background:#181f2a;">
+                      <select class="js-status" style="border-radius:8px; border:1px solid #00fff7; background:#222c3a; color:#00fff7; font-weight:bold; padding:0.25em 0.5em;" data-order-id="<?= $order['id'] ?>" data-status="<?= $st ?>">
                         <?php foreach ($statuses as $opt): ?>
                           <option value="<?= $opt ?>" <?= $opt === $st ? 'selected' : '' ?>><?= ucfirst($opt) ?></option>
                         <?php endforeach; ?>
@@ -131,26 +138,29 @@ function format_money($amount): string {
             </table>
           </div>
 
-          <div class="md:hidden mt-4 space-y-3" id="cards-<?= $st ?>">
+          <!-- Mobile Cards -->
+          <div class="d-block d-md-none" style="margin-top:1.5rem;">
             <?php foreach ($list as $order): ?>
-              <div data-order-card="<?= $order['id'] ?>" data-status="<?= $st ?>" class="rounded-xl border border-slate-800 bg-slate-900/80 p-3 shadow">
-                <div class="flex items-center justify-between">
-                  <p class="text-sm font-semibold text-cyan-200">#<?= $order['id'] ?></p>
-                  <p class="text-xs text-slate-400"><?= htmlspecialchars($order['creado_en']) ?></p>
+              <div data-order-card="<?= $order['id'] ?>" data-status="<?= $st ?>" style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:1rem; color:#00fff7; margin-bottom:1.5rem;">
+                <div style="display:flex; align-items:center; justify-content:space-between;">
+                  <div style="font-weight:bold; font-size:1.1em; color:#00fff7;">#<?= $order['id'] ?></div>
+                  <div style="font-size:0.95em; color:#b2f6ff;"><?= htmlspecialchars($order['creado_en']) ?></div>
                 </div>
-                <p class="mt-1 text-slate-100 text-sm">Cliente: <?= htmlspecialchars($order['user_identifier']) ?></p>
-                <p class="text-slate-400 text-sm">Email: <?= htmlspecialchars($order['email']) ?></p>
-                <p class="text-slate-100 text-sm mt-1"><?php
-                  $juegoTexto = htmlspecialchars($order['juego_nombre']);
-                  if ($juegoTexto === '' || str_contains($order['juego_nombre'], '<?')) {
-                    $juegoTexto = 'Juego #' . htmlspecialchars((string)($order['juego_id'] ?? '')); }
-                  echo 'Juego: ' . $juegoTexto;
-                ?></p>
-                <p class="text-slate-100 text-sm">Paquete: <?= htmlspecialchars($order['paquete_nombre'] ?? '') ?> (<?= htmlspecialchars($order['paquete_cantidad'] ?? '') ?>)</p>
-                <p class="text-emerald-300 font-semibold mt-1">Total: <?= htmlspecialchars($order['moneda'] ?? '') ?> <?= format_money($order['precio']) ?></p>
-                <p class="text-slate-400 text-xs">Cupón: <?= !empty($order['cupon']) ? htmlspecialchars($order['cupon']) : '—' ?></p>
-                <div class="mt-3">
-                  <select class="js-status w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-sm font-semibold text-slate-100" data-order-id="<?= $order['id'] ?>" data-status="<?= $st ?>">
+                <div style="margin-top:0.5em; color:#00fff7; font-size:1em;">Cliente: <span style="color:#b2f6ff; font-weight:bold;"><?= htmlspecialchars($order['user_identifier']) ?></span></div>
+                <div style="color:#b2f6ff; font-size:1em;">Email: <?= htmlspecialchars($order['email']) ?></div>
+                <div style="margin-top:0.5em; color:#00fff7; font-size:1em;">Juego: <span style="color:#b2f6ff; font-weight:bold;">
+                  <?php
+                    $juegoTexto = htmlspecialchars($order['juego_nombre']);
+                    if ($juegoTexto === '' || str_contains($order['juego_nombre'], '<?')) {
+                      $juegoTexto = 'Juego #' . htmlspecialchars((string)($order['juego_id'] ?? '')); }
+                    echo $juegoTexto;
+                  ?>
+                </span></div>
+                <div style="color:#b2f6ff; font-size:1em;">Paquete: <span style="color:#00fff7; font-weight:bold;"><?= htmlspecialchars($order['paquete_nombre'] ?? '') ?> (<?= htmlspecialchars($order['paquete_cantidad'] ?? '') ?>)</span></div>
+                <div style="color:#00ffb3; font-weight:bold; margin-top:0.5em;">Total: <?= htmlspecialchars($order['moneda'] ?? '') ?> <?= format_money($order['precio']) ?></div>
+                <div style="color:#b2f6ff; font-size:0.95em; margin-top:0.5em;">Cupón: <?= !empty($order['cupon']) ? htmlspecialchars($order['cupon']) : '—' ?></div>
+                <div style="margin-top:1em;">
+                  <select class="js-status" style="width:100%; border-radius:8px; border:1px solid #00fff7; background:#222c3a; color:#00fff7; font-weight:bold; padding:0.5em;" data-order-id="<?= $order['id'] ?>" data-status="<?= $st ?>">
                     <?php foreach ($statuses as $opt): ?>
                       <option value="<?= $opt ?>" <?= $opt === $st ? 'selected' : '' ?>><?= ucfirst($opt) ?></option>
                     <?php endforeach; ?>
@@ -166,7 +176,11 @@ function format_money($amount): string {
 </main>
 
 <script>
+// Forzar ocultamiento inicial y mostrar solo el tab activo
 (function(){
+  // Detectar tab inicial
+  var initialTab = localStorage.getItem('tvg_tab') || 'pendiente';
+  window.initialTab = initialTab;
   // Filtro de rango de fecha
   const dateForm = document.getElementById('date-filter-form');
   const dateFrom = document.getElementById('date-from');
@@ -176,8 +190,12 @@ function format_money($amount): string {
   const calendarToBtn = document.getElementById('calendar-to-btn');
 
   // Abrir selector de fecha al hacer clic en el ícono
-  calendarFromBtn.addEventListener('click', function(){ dateFrom.showPicker && dateFrom.showPicker(); dateFrom.focus(); });
-  calendarToBtn.addEventListener('click', function(){ dateTo.showPicker && dateTo.showPicker(); dateTo.focus(); });
+  if (calendarFromBtn) {
+    calendarFromBtn.addEventListener('click', function(){ dateFrom.showPicker && dateFrom.showPicker(); dateFrom.focus(); });
+  }
+  if (calendarToBtn) {
+    calendarToBtn.addEventListener('click', function(){ dateTo.showPicker && dateTo.showPicker(); dateTo.focus(); });
+  }
 
   // Responsive: los inputs y botones ocupan todo el ancho en móvil
   function adjustDateFilterResponsive(){
@@ -247,9 +265,14 @@ function format_money($amount): string {
   const tabs = Array.from(document.querySelectorAll('.tab-btn'));
   const panels = Array.from(document.querySelectorAll('.tab-panel'));
   function showTab(tab){
-    panels.forEach(p => p.classList.toggle('hidden', p.dataset.panel !== tab));
-    tabs.forEach(b => b.classList.toggle('border-cyan-400', b.dataset.tab === tab));
-    tabs.forEach(b => b.classList.toggle('text-cyan-200', b.dataset.tab === tab));
+    panels.forEach(p => p.classList.add('hidden'));
+    const activePanel = panels.find(p => p.dataset.panel === tab);
+    if (activePanel) activePanel.classList.remove('hidden');
+    tabs.forEach(b => b.classList.remove('active','border-cyan-400','text-cyan-200'));
+    const activeTab = tabs.find(b => b.dataset.tab === tab);
+    if (activeTab) {
+      activeTab.classList.add('active','border-cyan-400','text-cyan-200');
+    }
     localStorage.setItem('tvg_tab', tab);
   }
   const initial = localStorage.getItem('tvg_tab') || 'pendiente';
