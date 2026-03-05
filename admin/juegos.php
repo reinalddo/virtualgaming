@@ -1,4 +1,3 @@
-
 <?php
 // admin/juegos.php - Gestión de juegos y características
 require_once '../includes/db_connect.php';
@@ -174,40 +173,40 @@ $juegos = $resj->fetch_all(MYSQLI_ASSOC);
 ?>
 <?php include '../includes/header.php'; ?>
 <main class="container-lg mt-5 bg-dark bg-opacity-75 rounded-4 p-4 shadow">
-    <h2 class="text-center text-info mb-4">Gestión de Juegos</h2>
-    <form method="post" enctype="multipart/form-data" class="row g-3 mb-4">
+    <h2 class="text-center mb-4" style="color:#00fff7;">Gestión de Juegos</h2>
+    <form method="post" enctype="multipart/form-data" class="row g-3 mb-4" style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:2rem;">
         <div class="col-md-6">
-            <label class="form-label">Nombre del juego</label>
-            <input type="text" name="nombre" placeholder="Nombre del juego" required class="form-control">
+            <label class="form-label" style="color:#00fff7;">Nombre del juego</label>
+            <input type="text" name="nombre" placeholder="Nombre del juego" required class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
         </div>
         <div class="col-md-6">
-            <label class="form-label">Marcar como popular</label>
+            <label class="form-label" style="color:#00fff7;">Marcar como popular</label>
             <div class="form-check">
                 <input type="checkbox" name="popular" class="form-check-input" id="popularCheck">
-                <label class="form-check-label text-secondary" for="popularCheck">Popular</label>
+                <label class="form-check-label" for="popularCheck" style="color:#00fff7;">Popular</label>
             </div>
         </div>
         <div class="col-12">
-            <label class="form-label">Descripción</label>
-            <textarea name="descripcion" placeholder="Descripción" required class="form-control"></textarea>
+            <label class="form-label" style="color:#00fff7;">Descripción</label>
+            <textarea name="descripcion" placeholder="Descripción" required class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;"></textarea>
         </div>
         <div class="col-md-6">
-            <label class="form-label">Imagen del juego</label>
-            <input type="file" name="imagen" accept="image/*" class="form-control" onchange="previewImagenJuego(event)">
+            <label class="form-label" style="color:#00fff7;">Imagen del juego</label>
+            <input type="file" name="imagen" accept="image/*" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;" onchange="previewImagenJuego(event)">
             <div class="text-center mt-2">
-                <img id="preview-juego-img" src="#" alt="Previsualización" style="display:none;max-width:180px;max-height:180px;border-radius:0.75rem;box-shadow:0 0 0.5rem #22d3ee55;" />
+                <img id="preview-juego-img" src="#" alt="Previsualización" style="display:none;max-width:180px;max-height:180px;border-radius:0.75rem;box-shadow:0 0 0.5rem #00fff7; border:2px solid #00fff7;" />
             </div>
         </div>
         <div class="col-md-6">
-            <label class="form-label">Imagen común para paquetes</label>
-            <input type="file" name="imagen_paquete" accept="image/*" class="form-control" onchange="previewImagenPaqueteJuego(event)">
+            <label class="form-label" style="color:#00fff7;">Imagen común para paquetes</label>
+            <input type="file" name="imagen_paquete" accept="image/*" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;" onchange="previewImagenPaqueteJuego(event)">
             <div class="text-center mt-2">
-                <img id="preview-juego-img-paquete" src="#" alt="Previsualización Paquete" style="display:none;max-width:120px;max-height:120px;border-radius:0.75rem;box-shadow:0 0 0.5rem #22d3ee55;" />
+                <img id="preview-juego-img-paquete" src="#" alt="Previsualización Paquete" style="display:none;max-width:120px;max-height:120px;border-radius:0.75rem;box-shadow:0 0 0.5rem #00fff7; border:2px solid #00fff7;" />
             </div>
         </div>
         <div class="col-md-6">
-            <label class="form-label">Moneda fija</label>
-            <select name="moneda_fija_id" class="form-select">
+            <label class="form-label" style="color:#00fff7;">Moneda fija</label>
+            <select name="moneda_fija_id" class="form-select" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
                 <option value="">Moneda variable (usuario elige)</option>
                 <?php foreach ($monedas as $m): ?>
                 <option value="<?= $m['id'] ?>">Solo <?= htmlspecialchars($m['nombre']) ?></option>
@@ -215,66 +214,66 @@ $juegos = $resj->fetch_all(MYSQLI_ASSOC);
             </select>
         </div>
         <div class="col-md-6">
-            <label class="form-label">Seleccionar características existentes</label>
-            <select name="caracteristicas_select[]" multiple class="form-select" size="3">
+            <label class="form-label" style="color:#00fff7;">Seleccionar características existentes</label>
+            <select name="caracteristicas_select[]" multiple class="form-select" size="3" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
                 <?php foreach ($caracteristicas_unicas as $car): ?>
-                    <option value="<?= htmlspecialchars($car) ?>"><?= htmlspecialchars($car) ?></option>
+                    <option value="<?= htmlspecialchars($car) ?>" style="background:#222c3a; color:#00fff7;"><?= htmlspecialchars($car) ?></option>
                 <?php endforeach; ?>
             </select>
         </div>
         <div class="col-12">
-            <label class="form-label">Nuevas características</label>
+            <label class="form-label" style="color:#00fff7;">Nuevas características</label>
             <div id="caracteristicas" class="mb-2">
-                <input type="text" name="caracteristicas[]" placeholder="Nueva característica" class="form-control mb-2">
+                <input type="text" name="caracteristicas[]" placeholder="Nueva característica" class="form-control mb-2" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
             </div>
-            <button type="button" onclick="addCarField()" class="btn btn-outline-info btn-sm">Agregar nueva característica</button>
+            <button type="button" onclick="addCarField()" class="btn btn-outline-info btn-sm" style="border-color:#00fff7; color:#00fff7;">Agregar nueva característica</button>
         </div>
         <div class="col-12">
-            <button type="submit" class="btn btn-success w-100">Agregar juego</button>
+            <button type="submit" class="btn btn-info w-100" style="background:#00fff7; color:#222; border:none; box-shadow:0 0 8px #00fff7;">Agregar juego</button>
         </div>
     </form>
     <h3 class="text-info mt-5 mb-3">Juegos existentes</h3>
     <div class="table-responsive d-none d-md-block">
-        <table class="table table-dark table-striped align-middle">
-            <thead class="table-info">
+        <table class="table align-middle" style="background:#181f2a; color:#00fff7; border-radius:12px;">
+            <thead style="background:#181f2a; color:#00fff7; border-bottom:2px solid #00fff7;">
                 <tr>
-                    <th>Imagen</th>
-                    <th>Nombre</th>
-                    <th>Popular</th>
-                    <th>Imagen Paquete</th>
-                    <th>Descripción</th>
-                    <th>Moneda</th>
-                    <th>Características</th>
-                    <th>Acciones</th>
+                    <th style="color:#00fff7; background:#181f2a;">Imagen</th>
+                    <th style="color:#00fff7; background:#181f2a;">Nombre</th>
+                    <th style="color:#00fff7; background:#181f2a;">Popular</th>
+                    <th style="color:#00fff7; background:#181f2a;">Imagen Paquete</th>
+                    <th style="color:#00fff7; background:#181f2a;">Descripción</th>
+                    <th style="color:#00fff7; background:#181f2a;">Moneda</th>
+                    <th style="color:#00fff7; background:#181f2a;">Características</th>
+                    <th style="color:#00fff7; background:#181f2a;">Acciones</th>
                 </tr>
             </thead>
             <tbody>
             <?php foreach ($juegos as $j): ?>
-                <tr>
-                    <td>
+                <tr style="background:#181f2a; color:#fff;">
+                    <td style="background:#181f2a;">
                         <?php if (!empty($j['imagen'])): ?>
-                            <img src="/<?= htmlspecialchars($j['imagen']) ?>" alt="img" class="rounded img-thumbnail" style="max-height:64px;max-width:64px;">
+                            <img src="/<?= htmlspecialchars($j['imagen']) ?>" alt="img" class="rounded img-thumbnail" style="max-height:64px;max-width:64px; border:2px solid #00fff7; background:#222c3a;">
                         <?php else: ?>
                             <span class="fst-italic text-secondary">Sin imagen</span>
                         <?php endif; ?>
                     </td>
-                    <td class="fw-semibold"><?= htmlspecialchars($j['nombre']) ?></td>
-                    <td class="text-center">
+                    <td class="fw-semibold" style="background:#181f2a; color:#00fff7;"><?= htmlspecialchars($j['nombre']) ?></td>
+                    <td class="text-center" style="background:#181f2a;">
                         <?php if (!empty($j['popular'])): ?>
-                                <span title="Popular" class="text-emerald-400 text-xl">★</span>
+                                <span title="Popular" style="color:#00fff7; font-size:1.2em;">★</span>
                             <?php else: ?>
-                                <span class="text-slate-500">—</span>
+                                <span style="color:#444;">—</span>
                             <?php endif; ?>
                         </td>
-                        <td class="px-3 py-2">
+                        <td style="background:#181f2a;">
                             <?php if (!empty($j['imagen_paquete'])): ?>
-                                <img src="/<?= htmlspecialchars($j['imagen_paquete']) ?>" alt="imgpaq" class="rounded-lg max-h-12 max-w-12">
+                                <img src="/<?= htmlspecialchars($j['imagen_paquete']) ?>" alt="imgpaq" class="rounded-lg" style="max-height:48px;max-width:48px; border:2px solid #00fff7; background:#222c3a;">
                             <?php else: ?>
                                 <span class="italic text-slate-400">Sin imagen</span>
                             <?php endif; ?>
                         </td>
-                        <td class="px-3 py-2" style="max-width:220px;overflow-x:auto;white-space:pre-line;"><?= nl2br(htmlspecialchars($j['descripcion'])) ?></td>
-                        <td class="px-3 py-2">
+                        <td style="background:#181f2a; color:#fff; max-width:220px;overflow-x:auto;white-space:pre-line;"><?= nl2br(htmlspecialchars($j['descripcion'])) ?></td>
+                        <td style="background:#181f2a; color:#00fff7;">
                             <?php 
                                 if (!empty($j['moneda_fija_id'])) {
                                     $mon = $mysqli->query("SELECT nombre FROM monedas WHERE id=" . intval($j['moneda_fija_id']));
@@ -285,7 +284,7 @@ $juegos = $resj->fetch_all(MYSQLI_ASSOC);
                                 }
                             ?>
                         </td>
-                        <td class="px-3 py-2">
+                        <td style="background:#181f2a; color:#00fff7;">
                             <?php 
                                 $carRes = $mysqli->query("SELECT caracteristica FROM juego_caracteristicas WHERE juego_id=" . intval($j['id']));
                                 $cars = [];
@@ -293,60 +292,60 @@ $juegos = $resj->fetch_all(MYSQLI_ASSOC);
                                 echo $cars ? htmlspecialchars(implode(', ', $cars)) : '<span class="italic text-slate-400">Ninguna</span>';
                             ?>
                         </td>
-                        <td class="px-3 py-2 whitespace-nowrap">
-                            <a href="/admin/juegos?editar=<?= $j['id'] ?>" class="text-emerald-400 hover:underline mr-4">Editar</a>
-                            <a href="/admin/paquetes/<?= $j['id'] ?>" class="text-cyan-400 hover:underline mr-4">Paquetes</a>
-                            <a href="/admin/juegos?eliminar=<?= $j['id'] ?>" class="text-rose-400 hover:underline" onclick="return confirm('¿Eliminar este juego y todos sus paquetes/características?')">Eliminar</a>
+                        <td style="background:#181f2a;">
+                            <a href="/admin/juegos?editar=<?= $j['id'] ?>" style="color:#00fff7; text-decoration:underline; margin-right:1em;">Editar</a>
+                            <a href="/admin/paquetes/<?= $j['id'] ?>" style="color:#00fff7; text-decoration:underline; margin-right:1em;">Paquetes</a>
+                            <a href="/admin/juegos?eliminar=<?= $j['id'] ?>" style="color:#ff0059; text-decoration:underline;" onclick="return confirm('¿Eliminar este juego y todos sus paquetes/características?')">Eliminar</a>
                         </td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
             </table>
         </div>
-        <!-- Mobile Cards -->
-        <div class="block md:hidden space-y-4">
-            <?php foreach ($juegos as $j): ?>
-                <div class="bg-slate-800 rounded-lg p-4 shadow flex flex-col gap-2">
-                    <div class="flex items-center gap-4">
-                        <?php if (!empty($j['imagen'])): ?>
-                            <img src="/<?= htmlspecialchars($j['imagen']) ?>" alt="img" class="rounded-lg max-h-16 max-w-16">
-                        <?php else: ?>
-                            <span class="italic text-slate-400">Sin imagen</span>
-                        <?php endif; ?>
-                        <div>
-                            <div class="font-bold text-lg text-cyan-200 flex items-center">
-                                <?= htmlspecialchars($j['nombre']) ?>
-                                <?php if (!empty($j['popular'])): ?>
-                                    <span title="Popular" class="ml-2 text-emerald-400 text-xl">★</span>
-                                <?php endif; ?>
-                            </div>
-                            <div class="text-xs text-slate-400">ID: <?= $j['id'] ?></div>
-                        </div>
-                    </div>
-                    <div class="text-slate-300"><span class="font-semibold">Descripción:</span> <?= nl2br(htmlspecialchars($j['descripcion'])) ?></div>
-                    <div class="text-slate-300"><span class="font-semibold">Moneda:</span> <?php 
-                        if (!empty($j['moneda_fija_id'])) {
-                            $mon = $mysqli->query("SELECT nombre FROM monedas WHERE id=" . intval($j['moneda_fija_id']));
-                            $moneda = $mon && $mon->num_rows ? $mon->fetch_assoc()['nombre'] : 'Desconocida';
-                            echo htmlspecialchars($moneda);
-                        } else {
-                            echo '<span class="italic text-slate-400">Variable</span>';
-                        }
-                    ?></div>
-                    <div class="text-slate-300"><span class="font-semibold">Características:</span> <?php 
-                        $carRes = $mysqli->query("SELECT caracteristica FROM juego_caracteristicas WHERE juego_id=" . intval($j['id']));
-                        $cars = [];
-                        while ($row = $carRes->fetch_assoc()) $cars[] = $row['caracteristica'];
-                        echo $cars ? htmlspecialchars(implode(', ', $cars)) : '<span class="italic text-slate-400">Ninguna</span>';
-                    ?></div>
-                    <div class="flex gap-4 mt-2">
-                        <a href="/admin/juegos?editar=<?= $j['id'] ?>" class="text-emerald-400 hover:underline">Editar</a>
-                        <a href="/admin/paquetes/<?= $j['id'] ?>" class="text-cyan-400 hover:underline">Paquetes</a>
-                        <a href="/admin/juegos?eliminar=<?= $j['id'] ?>" class="text-rose-400 hover:underline" onclick="return confirm('¿Eliminar este juego y todos sus paquetes/características?')">Eliminar</a>
-                    </div>
+    <!-- Mobile Cards -->
+    <div class="d-block d-md-none space-y-4">
+        <?php foreach ($juegos as $j): ?>
+            <div style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:1rem; color:#00fff7;">
+                <div style="display:flex; align-items:center; gap:1rem;">
+                    <?php if (!empty($j['imagen'])): ?>
+                        <img src="/<?= htmlspecialchars($j['imagen']) ?>" alt="img" style="border-radius:12px; max-height:180px; max-width:100%; border:2px solid #00fff7; background:#222c3a; box-shadow:0 0 12px #00fff7;">
+                    <?php else: ?>
+                        <span style="font-style:italic; color:#b2f6ff;">Sin imagen</span>
+                    <?php endif; ?>
                 </div>
-            <?php endforeach; ?>
-        </div>
+                <div style="margin-top:1rem;">
+                    <div style="font-weight:bold; font-size:1.2em; color:#00fff7; display:flex; align-items:center;">
+                        <?= htmlspecialchars($j['nombre']) ?>
+                        <?php if (!empty($j['popular'])): ?>
+                            <span title="Popular" style="margin-left:0.5em; color:#00fff7; font-size:1.2em;">★</span>
+                        <?php endif; ?>
+                    </div>
+                    <div style="font-size:0.9em; color:#b2f6ff;">ID: <?= $j['id'] ?></div>
+                </div>
+                <div style="margin-top:0.5em; color:#fff;"><span style="color:#00fff7; font-weight:bold;">Descripción:</span> <?= nl2br(htmlspecialchars($j['descripcion'])) ?></div>
+                <div style="margin-top:0.5em; color:#fff;"><span style="color:#00fff7; font-weight:bold;">Moneda:</span> <?php 
+                    if (!empty($j['moneda_fija_id'])) {
+                        $mon = $mysqli->query("SELECT nombre FROM monedas WHERE id=" . intval($j['moneda_fija_id']));
+                        $moneda = $mon && $mon->num_rows ? $mon->fetch_assoc()['nombre'] : 'Desconocida';
+                        echo '<span style="color:#b2f6ff;">' . htmlspecialchars($moneda) . '</span>';
+                    } else {
+                        echo '<span style="font-style:italic; color:#b2f6ff;">Variable</span>';
+                    }
+                ?></div>
+                <div style="margin-top:0.5em; color:#fff;"><span style="color:#00fff7; font-weight:bold;">Características:</span> <?php 
+                    $carRes = $mysqli->query("SELECT caracteristica FROM juego_caracteristicas WHERE juego_id=" . intval($j['id']));
+                    $cars = [];
+                    while ($row = $carRes->fetch_assoc()) $cars[] = $row['caracteristica'];
+                    echo $cars ? '<span style="color:#b2f6ff;">' . htmlspecialchars(implode(', ', $cars)) . '</span>' : '<span style="font-style:italic; color:#b2f6ff;">Ninguna</span>';
+                ?></div>
+                <div style="display:flex; gap:1rem; margin-top:1rem;">
+                    <a href="/admin/juegos?editar=<?= $j['id'] ?>" style="color:#00fff7; text-decoration:underline; font-weight:bold;">Editar</a>
+                    <a href="/admin/paquetes/<?= $j['id'] ?>" style="color:#00fff7; text-decoration:underline; font-weight:bold;">Paquetes</a>
+                    <a href="/admin/juegos?eliminar=<?= $j['id'] ?>" style="color:#ff0059; text-decoration:underline; font-weight:bold;" onclick="return confirm('¿Eliminar este juego y todos sus paquetes/características?')">Eliminar</a>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
     <?php
     // Procesar eliminación de juego
     if (isset($_GET['eliminar'])) {
@@ -486,8 +485,6 @@ $juegos = $resj->fetch_all(MYSQLI_ASSOC);
         exit;
     }
     ?>
-    </ul>
-    <a href="/admin/monedas" class="inline-block mt-6 text-cyan-300 hover:underline">Gestionar monedas</a>
 </main>
 <script>
 function addCarField() {
