@@ -97,55 +97,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['cla
 }
 
 // Listar paquetes existentes
+// Listar paquetes existentes
+// Listar paquetes existentes
+
+// Obtener datos del juego para mostrar nombre, imagen, etc.
+$juego = [];
+$res_juego = $mysqli->prepare("SELECT * FROM juegos WHERE id=?");
+$res_juego->bind_param('i', $juego_id);
+$res_juego->execute();
+$juego = $res_juego->get_result()->fetch_assoc();
+
+// Listar paquetes
 $res = $mysqli->prepare("SELECT * FROM juego_paquetes WHERE juego_id=?");
 $res->bind_param('i', $juego_id);
 $res->execute();
-$paquetes = $res->get_result()->fetch_all(MYSQLI_ASSOC);
+$result = $res->get_result();
+$paquetes = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
 
-// Obtener nombre e imagen_paquete del juego
-$resj = $mysqli->prepare("SELECT nombre, imagen_paquete FROM juegos WHERE id=?");
-$resj->bind_param('i', $juego_id);
-$resj->execute();
-$juego = $resj->get_result()->fetch_assoc();
+// Incluir header
+include '../includes/header.php';
 ?>
-<?php include '../includes/header.php'; ?>
-<main class="container-sm mt-5 bg-dark bg-opacity-75 rounded-4 p-4 shadow">
-    <h2 class="text-center text-info mb-4">Paquetes de <?= htmlspecialchars($juego['nombre']) ?></h2>
-    <form method="post" enctype="multipart/form-data" class="row g-3 mb-4">
-        <div class="col-md-4">
-            <label class="form-label">Nombre del paquete</label>
-            <input type="text" name="nombre" placeholder="Nombre del paquete" required class="form-control">
-        </div>
-        <div class="col-md-4">
-            <label class="form-label">Clave interna</label>
-            <input type="text" name="clave" placeholder="Clave interna" required class="form-control">
-        </div>
-        <div class="col-md-2">
-            <label class="form-label">Cantidad</label>
-            <input type="number" name="cantidad" placeholder="Cantidad" required class="form-control">
-        </div>
-        <div class="col-md-2">
-            <label class="form-label">Precio USD</label>
-            <input type="number" step="0.01" name="precio" placeholder="Precio USD" required class="form-control">
-        </div>
-        <div class="col-12">
-            <label class="form-label">Imagen del paquete</label>
-            <input type="file" name="imagen_icono" accept="image/*" class="form-control" onchange="previewPaqueteImg(event)">
-            <div class="text-center mt-2">
-                <img id="preview-paquete-img" src="#" alt="Previsualización" style="display:none;max-width:120px;max-height:120px;border-radius:0.75rem;box-shadow:0 0 0.5rem #22d3ee55;" />
-            </div>
-        </div>
-        <div class="col-12">
-            <button type="submit" class="btn btn-success w-100">Agregar paquete</button>
-        </div>
-    </form>
-    <h3 class="text-info mt-5 mb-3">Paquetes existentes</h3>
-    <!-- Tabla desktop -->
+<main class="container py-4">
+    <h2 class="mb-4 text-neon">Paquetes de <?= htmlspecialchars($juego['nombre'] ?? 'Juego') ?></h2>
     <div class="table-responsive d-none d-md-block">
-        <table class="table align-middle" style="background:#181f2a; color:#22d3ee; border-radius:12px; border:2px solid #22d3ee; box-shadow:0 0 24px #22d3ee33;">
-            <thead style="background:#181f2a; color:#22d3ee; border-bottom:2px solid #22d3ee;">
+        <table class="table table-dark table-bordered align-middle" style="border:2px solid #22d3ee;">
+            <thead>
                 <tr>
-                    <th style="color:#22d3ee; background:#181f2a;">Imagen</th>
+                    <th style="color:#22d3ee; background:#181f2a;">Icono</th>
                     <th style="color:#22d3ee; background:#181f2a;">Nombre</th>
                     <th style="color:#22d3ee; background:#181f2a;">Clave</th>
                     <th style="color:#22d3ee; background:#181f2a;">Cantidad</th>
@@ -171,7 +149,7 @@ $juego = $resj->get_result()->fetch_assoc();
                     <td class="text-neon" style="background:#181f2a; color:#22d3ee;">$<?= number_format($p['precio'], 2) ?></td>
                     <td style="background:#181f2a;" class="text-nowrap">
                         <a href="/admin/paquetes/<?= $juego_id ?>?editar=<?= $p['id'] ?>" class="btn neon-btn-info btn-sm me-2">Editar</a>
-                        <a href="/admin/paquetes/<?= $juego_id ?>?eliminar=<?= $p['id'] ?>" class="btn btn-danger btn-sm neon-btn" onclick="return confirm('¿Eliminar este paquete?')">Eliminar</a>
+                        <a href="/admin/paquetes/<?= $juego_id ?>?eliminar=<?= $p['id'] ?>" class="btn btn-danger btn-sm" onclick="return confirm('¿Eliminar este paquete?')">Eliminar</a>
                     </td>
                 </tr>
             <?php endforeach; ?>
@@ -202,7 +180,7 @@ $juego = $resj->get_result()->fetch_assoc();
                     <div class="text-neon" style="color:#22d3ee;"><span class="fw-semibold">Precio:</span> $<?= number_format($p['precio'], 2) ?></div>
                     <div class="mt-3 d-flex gap-2">
                         <a href="/admin/paquetes/<?= $juego_id ?>?editar=<?= $p['id'] ?>" class="btn neon-btn-info btn-sm flex-fill">Editar</a>
-                        <a href="/admin/paquetes/<?= $juego_id ?>?eliminar=<?= $p['id'] ?>" class="btn btn-danger btn-sm neon-btn flex-fill" onclick="return confirm('¿Eliminar este paquete?')">Eliminar</a>
+                        <a href="/admin/paquetes/<?= $juego_id ?>?eliminar=<?= $p['id'] ?>" class="btn btn-danger btn-sm flex-fill" onclick="return confirm('¿Eliminar este paquete?')">Eliminar</a>
                     </div>
                 </div>
             </div>
@@ -210,13 +188,12 @@ $juego = $resj->get_result()->fetch_assoc();
         </div>
     </div>
 
+    <a href="/admin/juegos" class="inline-block mt-4 text-neon">&larr; Volver a juegos</a>
+</main>
 
-        
-    <!-- Eliminación de paquete ahora se procesa al inicio del archivo -->
-    </ul>
 
 <?php
-// Formulario de edición de paquete
+// Modal edición de paquete
 if (isset($_GET['editar'])) {
     $edit_id = intval($_GET['editar']);
     $res_edit = $mysqli->prepare("SELECT * FROM juego_paquetes WHERE id=? AND juego_id=?");
@@ -225,61 +202,58 @@ if (isset($_GET['editar'])) {
     $paq_edit = $res_edit->get_result()->fetch_assoc();
     if ($paq_edit):
 ?>
-<div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-  <form method="post" enctype="multipart/form-data" class="bg-slate-900 rounded-xl p-8 max-w-lg w-full relative" style="box-shadow:0 0 2rem #22d3ee33;">
-    <h3 class="text-xl font-bold mb-4 text-cyan-300">Editar paquete</h3>
-    <input type="hidden" name="edit_paquete_id" value="<?= $paq_edit['id'] ?>">
-    <input type="text" name="edit_nombre" value="<?= htmlspecialchars($paq_edit['nombre']) ?>" required class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white mb-2">
-    <input type="text" name="edit_clave" value="<?= htmlspecialchars($paq_edit['clave']) ?>" required class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white mb-2">
-    <input type="number" name="edit_cantidad" value="<?= htmlspecialchars($paq_edit['cantidad']) ?>" required class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white mb-2">
-    <input type="number" step="0.01" name="edit_precio" value="<?= htmlspecialchars($paq_edit['precio']) ?>" required class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white mb-2">
-    <label class="block text-slate-300 mb-1">Icono actual:</label>
-    <?php if ($paq_edit['imagen_icono']): ?>
-      <img src="/<?= htmlspecialchars($paq_edit['imagen_icono']) ?>" alt="Icono actual" class="mb-2 rounded-lg max-h-24">
-    <?php endif; ?>
-    <input type="file" name="edit_imagen_icono" accept="image/*" class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white mb-2" onchange="previewEditPaqueteImg(event)">
-    <div class="flex justify-center my-2">
-      <img id="preview-edit-paquete-img" src="#" alt="Previsualización" style="display:none;max-width:120px;max-height:120px;border-radius:0.75rem;box-shadow:0 0 0.5rem #22d3ee55;" />
-    </div>
-    <button type="submit" name="edit_paquete_submit" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg w-full">Guardar cambios</button>
-    <a href="/admin/paquetes/<?= $juego_id ?>" class="absolute top-2 right-4 text-cyan-300 hover:underline text-lg">&times;</a>
-  </form>
+<div class="fixed-top w-100 h-100 d-flex align-items-center justify-content-center" style="background:rgba(0,0,0,0.7);z-index:1050;">
+    <form method="post" enctype="multipart/form-data" class="bg-dark neon-card p-4 rounded-4 position-relative" style="max-width:500px;width:100%;box-shadow:0 0 2rem #22d3ee33;">
+        <h3 class="text-neon mb-3">Editar paquete</h3>
+        <input type="hidden" name="edit_paquete_id" value="<?= $paq_edit['id'] ?>">
+        <div class="mb-3">
+            <label class="form-label text-neon">Nombre</label>
+            <input type="text" name="edit_nombre" value="<?= htmlspecialchars($paq_edit['nombre']) ?>" required class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
+        </div>
+        <div class="mb-3">
+            <label class="form-label text-neon">Clave interna</label>
+            <input type="text" name="edit_clave" value="<?= htmlspecialchars($paq_edit['clave']) ?>" required class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
+        </div>
+        <div class="mb-3">
+            <label class="form-label text-neon">Cantidad</label>
+            <input type="number" name="edit_cantidad" value="<?= htmlspecialchars($paq_edit['cantidad']) ?>" required class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
+        </div>
+        <div class="mb-3">
+            <label class="form-label text-neon">Precio USD</label>
+            <input type="number" step="0.01" name="edit_precio" value="<?= htmlspecialchars($paq_edit['precio']) ?>" required class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
+        </div>
+        <div class="mb-3">
+            <label class="form-label text-neon">Icono actual:</label><br>
+            <?php if ($paq_edit['imagen_icono']): ?>
+                <img src="/<?= htmlspecialchars($paq_edit['imagen_icono']) ?>" alt="Icono actual" class="mb-2 rounded" style="max-width:80px;max-height:80px;border:2px solid #22d3ee;background:#222c3a;box-shadow:0 0 8px #22d3ee;">
+            <?php endif; ?>
+            <input type="file" name="edit_imagen_icono" accept="image/*" class="form-control mt-2" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;" onchange="previewEditPaqueteImg(event)">
+            <div class="text-center my-2">
+                <img id="preview-edit-paquete-img" src="#" alt="Previsualización" style="display:none;max-width:120px;max-height:120px;border-radius:0.75rem;box-shadow:0 0 0.5rem #22d3ee55;" />
+            </div>
+        </div>
+        <button type="submit" name="edit_paquete_submit" class="btn neon-btn-info w-100 mt-3">Guardar cambios</button>
+        <a href="/admin/paquetes/<?= $juego_id ?>" class="position-absolute top-0 end-0 m-3 text-neon fs-3" style="text-decoration:none;">&times;</a>
+    </form>
 </div>
 <script>
 function previewEditPaqueteImg(event) {
-    const input = event.target;
-    const img = document.getElementById('preview-edit-paquete-img');
-    if (input.files && input.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            img.src = e.target.result;
-            img.style.display = 'block';
-        };
-        reader.readAsDataURL(input.files[0]);
-    } else {
-        img.src = '#';
-        img.style.display = 'none';
-    }
+        const input = event.target;
+        const img = document.getElementById('preview-edit-paquete-img');
+        if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                        img.src = e.target.result;
+                        img.style.display = 'block';
+                };
+                reader.readAsDataURL(input.files[0]);
+        } else {
+                img.src = '#';
+                img.style.display = 'none';
+        }
 }
 </script>
-<?php endif; } ?>
-    <a href="/admin/juegos" class="inline-block mt-6 text-cyan-300 hover:underline">Volver a juegos</a>
-<script>
-function previewPaqueteImg(event) {
-    const input = event.target;
-    const img = document.getElementById('preview-paquete-img');
-    if (input.files && input.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            img.src = e.target.result;
-            img.style.display = 'block';
-        };
-        reader.readAsDataURL(input.files[0]);
-    } else {
-        img.src = '#';
-        img.style.display = 'none';
-    }
-}
-</script>
-</main>
+<?php endif; }
+?>
+
 <?php include '../includes/footer.php'; ?>
