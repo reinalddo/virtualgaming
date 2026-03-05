@@ -31,36 +31,39 @@ $pageTitle = "TVirtualGaming | " . ($game["nombre"] ?? "Juego");
 include __DIR__ . "/includes/header.php";
 ?>
 
-<section class="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-  <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-    <div class="flex items-center gap-4">
-      <div class="h-16 w-16 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/70 relative">
-        <img src="/<?= htmlspecialchars($game["imagen"] ?? '', ENT_QUOTES, "UTF-8") ?>" alt="<?= htmlspecialchars($game["nombre"] ?? '', ENT_QUOTES, "UTF-8") ?>" class="h-full w-full object-cover" />
+
+<section class="container mt-5 mb-4 p-4 bg-dark bg-opacity-75 rounded-4 shadow">
+  <div class="row align-items-center">
+    <div class="col-auto">
+      <div class="rounded-4 border border-info bg-dark position-relative overflow-hidden" style="width:64px; height:64px;">
+        <img src="/<?= htmlspecialchars($game["imagen"] ?? '', ENT_QUOTES, "UTF-8") ?>" alt="<?= htmlspecialchars($game["nombre"] ?? '', ENT_QUOTES, "UTF-8") ?>" class="w-100 h-100 object-fit-cover" />
         <?php if (!empty($game['popular'])): ?>
-          <span title="Popular" class="absolute top-2 right-2 text-emerald-400 text-xl drop-shadow">★</span>
+          <span title="Popular" class="position-absolute top-0 end-0 text-success fs-4" style="right:8px;top:8px;">★</span>
         <?php endif; ?>
       </div>
-      <div>
-        <h2 class="font-oxanium text-lg font-semibold flex items-center">
-          <?= htmlspecialchars($game["nombre"] ?? '', ENT_QUOTES, "UTF-8") ?>
-        </h2>
-        <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-          <?php 
-            $carRes = $mysqli->query("SELECT caracteristica FROM juego_caracteristicas WHERE juego_id=" . intval($game['id']));
-            while ($row = $carRes->fetch_assoc()) {
-              echo '<span class="rounded-full border border-slate-700 px-2 py-0.5">' . htmlspecialchars($row['caracteristica']) . '</span>';
-            }
-          ?>
-        </div>
+    </div>
+    <div class="col">
+      <h2 class="h4 fw-bold mb-2 text-info"><?= htmlspecialchars($game["nombre"] ?? '', ENT_QUOTES, "UTF-8") ?></h2>
+      <div class="d-flex flex-wrap gap-2 text-secondary small">
+        <?php 
+          $carRes = $mysqli->query("SELECT caracteristica FROM juego_caracteristicas WHERE juego_id=" . intval($game['id']));
+          while ($row = $carRes->fetch_assoc()) {
+            echo '<span class="badge rounded-pill border border-info text-info px-2 py-1 bg-dark">' . htmlspecialchars($row['caracteristica']) . '</span>';
+          }
+        ?>
       </div>
     </div>
   </div>
 </section>
 
-<section class="mt-6">
-  <div class="flex items-center justify-between">
-    <h3 class="font-oxanium text-base font-semibold">Paquetes disponibles</h3>
-    <span class="text-xs uppercase tracking-[0.3em] text-slate-500">elige uno</span>
+<section class="container mt-4">
+  <div class="row mb-2 align-items-center">
+    <div class="col">
+      <h3 class="h5 fw-bold text-info">Paquetes disponibles</h3>
+    </div>
+    <div class="col-auto">
+      <span class="text-uppercase text-secondary small">elige uno</span>
+    </div>
   </div>
   <?php
     // Obtener todas las monedas
@@ -82,15 +85,15 @@ include __DIR__ . "/includes/header.php";
   ?>
   <?php if ($is_variable && count($monedas) > 1): ?>
     <div class="mb-4">
-      <label for="moneda-select" class="block text-slate-300 text-sm mb-1">Selecciona la moneda:</label>
-      <select id="moneda-select" class="rounded-lg px-3 py-2 bg-slate-800 text-white" style="min-width:180px">
+      <label for="moneda-select" class="form-label text-info">Selecciona la moneda:</label>
+      <select id="moneda-select" class="form-select bg-dark text-info border-info" style="min-width:180px">
         <?php foreach ($monedas as $m): ?>
           <option value="<?= $m['id'] ?>" data-tasa="<?= htmlspecialchars($m['tasa']) ?>" data-clave="<?= htmlspecialchars($m['clave']) ?>" <?= $m['id'] == $moneda_actual['id'] ? 'selected' : '' ?>><?= htmlspecialchars($m['nombre']) ?></option>
         <?php endforeach; ?>
       </select>
     </div>
   <?php endif; ?>
-  <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 max-w-4xl mx-auto" id="pack-grid">
+  <div class="row row-cols-2 row-cols-sm-3 row-cols-lg-4 g-3 mb-4" id="pack-grid">
     <?php 
       $resPaq = $mysqli->query("SELECT * FROM juego_paquetes WHERE juego_id=" . intval($game['id']) . " ORDER BY precio ASC");
       $paquetes = [];
@@ -102,31 +105,31 @@ include __DIR__ . "/includes/header.php";
         $precio_mostrar = $moneda_actual ? $precio_base * floatval($moneda_actual['tasa']) : $precio_base;
         $clave_moneda = $moneda_actual['clave'] ?? 'USD';
     ?>
-      <button type="button" class="pack-card relative rounded-2xl border border-slate-800 bg-slate-900/60 p-3 text-left transition hover:border-cyan-400/60"
-        data-base="<?= htmlspecialchars($precio_base) ?>"
-        data-name="<?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?>"
-        data-cantidad="<?= htmlspecialchars($pack['cantidad'], ENT_QUOTES, 'UTF-8') ?>"
-        data-price="<?= number_format($precio_mostrar, 2, '.', '') ?>"
-        data-moneda="<?= htmlspecialchars($clave_moneda) ?>">
-        <div class="flex flex-col items-center justify-center h-20 rounded-xl border border-slate-800 bg-slate-950/70 overflow-hidden">
-          <span class="text-sm font-semibold text-cyan-200"><?= htmlspecialchars($pack['cantidad'], ENT_QUOTES, 'UTF-8') ?></span>
-        </div>
-        <p class="mt-3 text-sm font-semibold"><?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?></p>
-        <div class="flex items-end justify-between mt-1">
-          <p class="text-xs text-slate-400">
-            <span class="moneda-label"><?= htmlspecialchars($clave_moneda) ?></span>.
-            <span class="text-cyan-300 precio-label">
-              <?= number_format($precio_mostrar, 2, '.', ',') ?>
-            </span>
-          </p>
-          <?php 
-            $img_paquete = !empty($pack['imagen_icono']) ? $pack['imagen_icono'] : (!empty($game['imagen_paquete']) ? $game['imagen_paquete'] : null);
-            if ($img_paquete):
-          ?>
-            <img src="/<?= htmlspecialchars($img_paquete, ENT_QUOTES, 'UTF-8') ?>" alt="Imagen Paquete" class="h-10 w-10 object-cover rounded absolute bottom-3 right-3 shadow-md border border-slate-700 bg-slate-900" />
-          <?php endif; ?>
-        </div>
-      </button>
+      <div class="col">
+        <button type="button" class="pack-card card border-info bg-dark text-start w-100 h-100 shadow-sm"
+          data-base="<?= htmlspecialchars($precio_base) ?>"
+          data-name="<?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?>"
+          data-cantidad="<?= htmlspecialchars($pack['cantidad'], ENT_QUOTES, 'UTF-8') ?>"
+          data-price="<?= number_format($precio_mostrar, 2, '.', '') ?>"
+          data-moneda="<?= htmlspecialchars($clave_moneda) ?>">
+          <div class="card-body p-2 d-flex flex-column align-items-center justify-content-center">
+            <span class="fw-bold text-info fs-6 mb-2"><?= htmlspecialchars($pack['cantidad'], ENT_QUOTES, 'UTF-8') ?></span>
+            <p class="mb-2 fw-semibold text-white small"><?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?></p>
+            <div class="d-flex justify-content-between align-items-end w-100">
+              <span class="moneda-label text-info small"><?= htmlspecialchars($clave_moneda) ?></span>
+              <span class="precio-label text-info small ms-2">
+                <?= number_format($precio_mostrar, 2, '.', ',') ?>
+              </span>
+              <?php 
+                $img_paquete = !empty($pack['imagen_icono']) ? $pack['imagen_icono'] : (!empty($game['imagen_paquete']) ? $game['imagen_paquete'] : null);
+                if ($img_paquete):
+              ?>
+                <img src="/<?= htmlspecialchars($img_paquete, ENT_QUOTES, 'UTF-8') ?>" alt="Imagen Paquete" class="img-thumbnail ms-auto" style="width:40px;height:40px;object-fit:cover;" />
+              <?php endif; ?>
+            </div>
+          </div>
+        </button>
+      </div>
     <?php endforeach; ?>
   </div>
   <?php 
@@ -159,149 +162,179 @@ include __DIR__ . "/includes/header.php";
   </script>
 </section>
 
-      <br><br>
-      <h3 class="font-oxanium text-base font-semibold">Resumen de compra</h3>
-      <span class="text-[10px] uppercase tracking-[0.3em] text-slate-500">verifica</span>
-    </div>
-    <div class="mt-4 grid gap-3 sm:grid-cols-[1.2fr_1fr] max-w-4xl mx-auto">
-      <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-        <p class="text-xs text-slate-400">Paquete seleccionado</p>
-        <p id="selected-pack" class="mt-2 text-sm font-semibold text-white">Ninguno</p>
-      </div>
-      <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-        <p class="text-xs text-slate-400">Total</p>
-        <p id="selected-price" class="mt-2 text-lg font-semibold text-cyan-300"><?= $moneda_actual['clave'] ?? 'Bs.' ?> 0.00</p>
+
+  <div class="container mb-4">
+    <div class="row mb-2">
+      <div class="col">
+        <h3 class="h5 fw-bold text-info">Resumen de compra</h3>
+        <span class="text-uppercase text-secondary small">verifica</span>
       </div>
     </div>
-  </section>
-
-      <section class="mt-8 rounded-2xl border border-slate-800 bg-slate-900/70 p-4 max-w-4xl mx-auto">
-        <div class="flex items-center justify-between">
-          <h3 class="font-oxanium text-base font-semibold">Informacion de pedido</h3>
-          <span class="text-[10px] uppercase tracking-[0.3em] text-slate-500">seguro</span>
-        </div>
-        <form class="mt-4 space-y-3" id="order-form">
-          <div>
-            <label class="text-xs text-slate-400">ID de usuario</label>
-            <input type="text" name="user_id" placeholder="Ej: 12345678" class="form-field mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-cyan-400 focus:outline-none" required />
-          </div>
-          <div>
-            <label class="text-xs text-slate-400">Correo</label>
-            <input type="email" name="email" placeholder="tu@email.com" class="form-field mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-cyan-400 focus:outline-none" required />
-          </div>
-          <div class="relative">
-            <label class="text-xs text-slate-400">Cupon</label>
-            <div style="display: flex; gap: 8px;">
-              <input type="text" name="coupon" id="coupon-input" placeholder="Codigo opcional" class="form-field mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-cyan-400 focus:outline-none" />
-              <button type="button" id="apply-coupon-btn" class="mt-1 px-3 py-2 rounded-xl bg-cyan-400 text-slate-900 font-bold shadow hover:bg-cyan-300 transition">Aplicar cupón</button>
-            </div>
-          </div>
-          <button type="submit" id="buy-button" class="glow-ring mt-4 w-full rounded-2xl bg-gradient-to-r from-cyan-400 via-emerald-400 to-cyan-300 px-4 py-4 text-center text-sm font-bold uppercase tracking-[0.3em] text-slate-950 transition disabled:cursor-not-allowed disabled:opacity-50" disabled>
-            Compra ahora
-          </button>
-        </form>
-
-        <!-- Modal Neon Tailwind -->
-                <!-- Modal Loading Neon -->
-                <div id="loading-modal" class="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 hidden">
-                  <div class="bg-slate-900 rounded-2xl border-2 border-cyan-400 shadow-lg p-8 max-w-xs w-full text-center animate-fadeUp flex flex-col items-center">
-                    <div class="mb-4">
-                      <svg width="48" height="48" viewBox="0 0 50 50">
-                        <circle cx="25" cy="25" r="20" fill="none" stroke="#34d399" stroke-width="5" stroke-linecap="round" stroke-dasharray="31.4 31.4" transform="rotate(-90 25 25)">
-                          <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite"/>
-                        </circle>
-                      </svg>
-                    </div>
-                    <h4 class="text-lg font-bold text-cyan-300 mb-2">Procesando pedido...</h4>
-                  </div>
-                </div>
-        <div id="coupon-modal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 hidden">
-          <div class="bg-slate-900 rounded-2xl border-2 border-cyan-400 shadow-lg p-6 max-w-xs w-full text-center animate-fadeUp">
-            <h4 class="text-lg font-bold text-cyan-300 mb-2">¿Desea aplicar el cupón <span id="modal-coupon-name" class="text-emerald-400"></span>?</h4>
-            <div class="flex gap-2 justify-center mt-4">
-              <button id="modal-yes" class="px-4 py-2 rounded-lg bg-emerald-400 text-slate-900 font-bold shadow hover:bg-emerald-300 transition">Sí</button>
-              <button id="modal-no" class="px-4 py-2 rounded-lg bg-cyan-400 text-slate-900 font-bold shadow hover:bg-cyan-300 transition">No</button>
-              <button id="modal-cancel" class="px-4 py-2 rounded-lg bg-slate-700 text-white font-bold shadow hover:bg-slate-600 transition">Cancelar</button>
-            </div>
+    <div class="row g-3">
+      <div class="col-md-8">
+        <div class="card bg-dark border-info mb-2">
+          <div class="card-body">
+            <p class="small text-secondary mb-1">Paquete seleccionado</p>
+            <p id="selected-pack" class="fw-bold text-white">Ninguno</p>
           </div>
         </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card bg-dark border-info mb-2">
+          <div class="card-body">
+            <p class="small text-secondary mb-1">Total</p>
+            <p id="selected-price" class="fw-bold text-info fs-5"><?= $moneda_actual['clave'] ?? 'Bs.' ?> 0.00</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
 
+
+<section class="container mt-5 mb-5 p-4 bg-dark bg-opacity-75 rounded-4 shadow">
+  <div class="row mb-2 align-items-center">
+    <div class="col">
+      <h3 class="h5 fw-bold text-info">Información de pedido</h3>
+      <span class="text-uppercase text-secondary small">seguro</span>
+    </div>
+  </div>
+  <form class="row g-3" id="order-form">
+    <div class="col-md-4">
+      <label class="form-label text-info">ID de usuario</label>
+      <input type="text" name="user_id" placeholder="Ej: 12345678" class="form-control bg-dark text-info border-info" required />
+    </div>
+    <div class="col-md-4">
+      <label class="form-label text-info">Correo</label>
+      <input type="email" name="email" placeholder="tu@email.com" class="form-control bg-dark text-info border-info" required />
+    </div>
+    <div class="col-md-4">
+      <label class="form-label text-info">Cupón</label>
+      <div class="input-group">
+        <input type="text" name="coupon" id="coupon-input" placeholder="Código opcional" class="form-control bg-dark text-info border-info" />
+        <button type="button" id="apply-coupon-btn" class="btn btn-info fw-bold">Aplicar cupón</button>
+      </div>
+    </div>
+    <div class="col-12">
+      <button type="submit" id="buy-button" class="btn btn-success w-100 fw-bold text-uppercase" disabled>
+        Compra ahora
+      </button>
+    </div>
+  </form>
+
+
+  <!-- Modal Loading Bootstrap -->
+  <div id="loading-modal" class="modal fade" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content bg-dark border-info text-center p-4">
+        <div class="mb-3">
+          <svg width="48" height="48" viewBox="0 0 50 50">
+            <circle cx="25" cy="25" r="20" fill="none" stroke="#34d399" stroke-width="5" stroke-linecap="round" stroke-dasharray="31.4 31.4" transform="rotate(-90 25 25)">
+              <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite"/>
+            </circle>
+          </svg>
+        </div>
+        <h4 class="fw-bold text-info mb-2">Procesando pedido...</h4>
+      </div>
+    </div>
+  </div>
+  <!-- Modal Cupón Bootstrap -->
+  <div id="coupon-modal" class="modal fade" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content bg-dark border-info text-center p-4">
+        <h4 class="fw-bold text-info mb-2">¿Desea aplicar el cupón <span id="modal-coupon-name" class="text-success"></span>?</h4>
+        <div class="d-flex gap-2 justify-content-center mt-4">
+          <button id="modal-yes" class="btn btn-success">Sí</button>
+          <button id="modal-no" class="btn btn-info">No</button>
+          <button id="modal-cancel" class="btn btn-secondary">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<style>
+  .neon-selected {
+    box-shadow: 0 0 16px 4px #00fff7, 0 0 32px 8px #34d399;
+    border: 2px solid #00fff7 !important;
+    background: #181f2a !important;
+    transition: box-shadow 0.2s, border-color 0.2s;
+    z-index: 2;
+  }
+</style>
 <script>
-              // Todas las variables y lógica JS en un solo bloque
-              const packCards2 = Array.from(document.querySelectorAll('.pack-card'));
-              const selectedPack = document.getElementById("selected-pack");
-              const selectedPrice = document.getElementById("selected-price");
-              const orderForm = document.getElementById("order-form");
-              const buyButton = document.getElementById("buy-button");
-              const couponInput = document.getElementById('coupon-input');
-              const couponModal = document.getElementById('coupon-modal');
-              const modalCouponName = document.getElementById('modal-coupon-name');
-              const modalYes = document.getElementById('modal-yes');
-              const modalNo = document.getElementById('modal-no');
-              const modalCancel = document.getElementById('modal-cancel');
-              let activePack = null;
-              let couponApplied = false;
-              let couponValue = '';
+  // Todas las variables y lógica JS en un solo bloque
+  const packCards2 = Array.from(document.querySelectorAll('.pack-card'));
+  const selectedPack = document.getElementById("selected-pack");
+  const selectedPrice = document.getElementById("selected-price");
+  const orderForm = document.getElementById("order-form");
+  const buyButton = document.getElementById("buy-button");
+  const couponInput = document.getElementById('coupon-input');
+  const couponModal = document.getElementById('coupon-modal');
+  const modalCouponName = document.getElementById('modal-coupon-name');
+  const modalYes = document.getElementById('modal-yes');
+  const modalNo = document.getElementById('modal-no');
+  const modalCancel = document.getElementById('modal-cancel');
+  let activePack = null;
+  let couponApplied = false;
+  let couponValue = '';
 
-              function updatePackPrices() {
-                packCards.forEach(card => {
-                  const base = parseFloat(card.getAttribute('data-base'));
-                  const precio = base * monedaActualTasa;
-                  card.querySelector('.precio-label').textContent = precio.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                  card.querySelector('.moneda-label').textContent = monedaActualClave;
-                  card.setAttribute('data-price', precio.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
-                  card.setAttribute('data-moneda', monedaActualClave);
-                });
-              }
-              updatePackPrices();
+  function updatePackPrices() {
+    packCards.forEach(card => {
+      const base = parseFloat(card.getAttribute('data-base'));
+      const precio = base * monedaActualTasa;
+      card.querySelector('.precio-label').textContent = precio.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      card.querySelector('.moneda-label').textContent = monedaActualClave;
+      card.setAttribute('data-price', precio.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+      card.setAttribute('data-moneda', monedaActualClave);
+    });
+  }
+  updatePackPrices();
 
-              function updateButtonState() {
-                // Solo controlar el estado del botón, no mostrar mensajes de error aquí
-                const requiredFields = Array.from(orderForm.querySelectorAll("[required]"));
-                let requiredFilled = true;
-                requiredFields.forEach(field => {
-                  if (field.value.trim() === "") {
-                    requiredFilled = false;
-                  }
-                });
-                if (!activePack) {
-                  selectedPack.style.color = "#f87171";
-                  selectedPack.textContent = "Debes seleccionar un paquete.";
-                } else {
-                  selectedPack.style.color = "";
-                  selectedPack.textContent = activePack.name;
-                }
-                buyButton.disabled = !activePack || !requiredFilled;
-              }
-              function updateResumenCompra(pack) {
-                if (pack) {
-                  selectedPack.textContent = pack.name;
-                  selectedPrice.textContent = `${pack.moneda} ${pack.price}`;
-                } else {
-                  selectedPack.textContent = 'Ninguno';
-                  selectedPrice.textContent = `${monedaActualClave} 0.00`;
-                }
-              }
-              packCards2.forEach((card) => {
-                card.addEventListener("click", () => {
-                  packCards2.forEach((item) => {
-                    item.classList.remove("border-cyan-400", "bg-slate-900/90");
-                    item.classList.add("border-slate-800", "bg-slate-900/60");
-                  });
-                  card.classList.remove("border-slate-800", "bg-slate-900/60");
-                  card.classList.add("border-cyan-400", "bg-slate-900/90");
-                  activePack = {
-                    name: card.dataset.name,
-                    price: card.dataset.price,
-                    moneda: card.dataset.moneda
-                  };
-                  updateResumenCompra(activePack);
-                  updateButtonState();
-                });
-              });
-              if (packCards2.length) {
-                // Ya no se selecciona automáticamente ningún paquete al cargar
-              }
+  function updateButtonState() {
+    // Solo controlar el estado del botón, no mostrar mensajes de error aquí
+    const requiredFields = Array.from(orderForm.querySelectorAll("[required]"));
+    let requiredFilled = true;
+    requiredFields.forEach(field => {
+      if (field.value.trim() === "") {
+        requiredFilled = false;
+      }
+    });
+    if (!activePack) {
+      selectedPack.style.color = "#f87171";
+      selectedPack.textContent = "Debes seleccionar un paquete.";
+    } else {
+      selectedPack.style.color = "";
+      selectedPack.textContent = activePack.name;
+    }
+    buyButton.disabled = !activePack || !requiredFilled;
+  }
+  function updateResumenCompra(pack) {
+    if (pack) {
+      selectedPack.textContent = pack.name;
+      selectedPrice.textContent = `${pack.moneda} ${pack.price}`;
+    } else {
+      selectedPack.textContent = 'Ninguno';
+      selectedPrice.textContent = `${monedaActualClave} 0.00`;
+    }
+  }
+  packCards2.forEach((card) => {
+    card.addEventListener("click", () => {
+      packCards2.forEach((item) => {
+        item.classList.remove("neon-selected");
+      });
+      card.classList.add("neon-selected");
+      activePack = {
+        name: card.dataset.name,
+        price: card.dataset.price,
+        moneda: card.dataset.moneda
+      };
+      updateResumenCompra(activePack);
+      updateButtonState();
+    });
+  });
+  if (packCards2.length) {
+    // Ya no se selecciona automáticamente ningún paquete al cargar
+  }
               if (couponInput) {
               // Función simple para mostrar mensajes tipo toast
               function showToast(msg, type) {
