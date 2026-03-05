@@ -41,3 +41,4 @@
 2026-03-03 18:21:52 | code: CUPON01 | pack_price: 10.99
 2026-03-03 18:24:42 | code: CUPON01 | pack_price: 10.99
 2026-03-03 18:24:42 | ERROR: Cupón agotado.
+2026-03-05 22:45:26 | code: cupon01 | pack_price: 10.99

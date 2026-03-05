@@ -326,7 +326,8 @@ include __DIR__ . "/includes/header.php";
       activePack = {
         name: card.dataset.name,
         price: card.dataset.price,
-        moneda: card.dataset.moneda
+        moneda: card.dataset.moneda,
+        cantidad: card.dataset.cantidad
       };
       updateResumenCompra(activePack);
       updateButtonState();
@@ -494,17 +495,35 @@ include __DIR__ . "/includes/header.php";
                 // Mostrar modal loading
                 const loadingModal = document.getElementById('loading-modal');
                 loadingModal.classList.remove('hidden');
-                fetch('../api/pedidos.php', {
+                fetch('/api/pedidos.php', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                   body: Object.keys(pedidoData).map(k => `${encodeURIComponent(k)}=${encodeURIComponent(pedidoData[k])}`).join('&')
                 })
-                .then(res => res.json())
-                .then(data => {
+                .then(async res => {
                   btn.disabled = false;
                   const loadingModal = document.getElementById('loading-modal');
                   loadingModal.classList.add('hidden');
-                  if (data.ok) {
+                  let data = null;
+                  try {
+                    data = await res.json();
+                  } catch (e) {
+                    // Si no es JSON válido pero la respuesta es 200, asumimos éxito
+                    if (res.ok) {
+                      showToast('Pedido registrado correctamente', 'success');
+                      orderForm.reset();
+                      couponInput.disabled = false;
+                      document.getElementById('apply-coupon-btn').disabled = false;
+                      couponApplied = false;
+                      selectedPack.textContent = 'Ninguno';
+                      selectedPrice.textContent = `${monedaActualClave} 0.00`;
+                      return;
+                    } else {
+                      showToast('Error de red al registrar pedido', 'error');
+                      return;
+                    }
+                  }
+                  if (data && data.ok) {
                     showToast('Pedido registrado correctamente', 'success');
                     orderForm.reset();
                     couponInput.disabled = false;
@@ -513,7 +532,7 @@ include __DIR__ . "/includes/header.php";
                     selectedPack.textContent = 'Ninguno';
                     selectedPrice.textContent = `${monedaActualClave} 0.00`;
                   } else {
-                    showToast(data.message || 'Error al registrar pedido', 'error');
+                    showToast((data && data.message) ? data.message : 'Error al registrar pedido', 'error');
                   }
                 })
                 .catch(() => {

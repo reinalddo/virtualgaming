@@ -1,7 +1,7 @@
 <?php
 session_start();
 header('Content-Type: application/json');
-@ini_set('display_errors', '0');
+@ini_set('display_errors', '1');
 error_reporting(E_ALL);
 
 require_once __DIR__ . '/../includes/db_connect.php';
@@ -156,7 +156,11 @@ if ($action === 'create') {
     // Si no viene game_name, intentar obtenerlo por ID
     $game_name = sanitize_str($_POST['game_name'] ?? null, 180);
     $pack_name = sanitize_str($_POST['pack_name'] ?? null, 180);
-    $pack_amount = sanitize_str($_POST['pack_amount'] ?? null, 80);
+    $pack_amount_text = sanitize_str($_POST['pack_amount'] ?? null, 80); // texto descriptivo
+    $pack_amount_num = 1;
+    if ($pack_amount_text !== null && is_numeric($pack_amount_text)) {
+        $pack_amount_num = intval($pack_amount_text);
+    }
     $currency = sanitize_str($_POST['currency'] ?? null, 20);
     $price_raw = str_replace([',', ' '], '', $_POST['price'] ?? '0');
     $price = is_numeric($price_raw) ? floatval($price_raw) : 0;
@@ -214,11 +218,11 @@ if ($action === 'create') {
         $cupon = null;
     }
 
-    $stmt = $mysqli->prepare("INSERT INTO pedidos (tenant_slug, juego_id, juego_nombre, paquete_nombre, paquete_cantidad, moneda, precio, user_identifier, email, cupon, estado) VALUES (?,?,?,?,?,?,?,?,?,?, 'pendiente')");
+    $stmt = $mysqli->prepare("INSERT INTO pedidos (tenant_slug, juego_id, juego_nombre, paquete_nombre, paquete_cantidad, moneda, precio, user_identifier, email, cupon, cantidad, estado) VALUES (?,?,?,?,?,?,?,?,?,?,?, 'pendiente')");
     if (!$stmt) {
         json_error('No se pudo preparar el pedido');
     }
-    $stmt->bind_param('sissssdsss', $tenant_slug, $game_id, $game_name, $pack_name, $pack_amount, $currency, $price, $user_identifier, $email, $cupon);
+    $stmt->bind_param('sissssdsssi', $tenant_slug, $game_id, $game_name, $pack_name, $pack_amount_text, $currency, $price, $user_identifier, $email, $cupon, $pack_amount_num);
     if (!$stmt->execute()) {
         json_error('No se pudo guardar el pedido');
     }
