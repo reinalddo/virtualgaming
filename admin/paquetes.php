@@ -140,70 +140,75 @@ $juego = $resj->get_result()->fetch_assoc();
         </div>
     </form>
     <h3 class="text-info mt-5 mb-3">Paquetes existentes</h3>
+    <!-- Tabla desktop -->
     <div class="table-responsive d-none d-md-block">
-        <table class="table table-dark table-striped align-middle">
-            <thead class="table-info">
+        <table class="table align-middle" style="background:#181f2a; color:#22d3ee; border-radius:12px; border:2px solid #22d3ee; box-shadow:0 0 24px #22d3ee33;">
+            <thead style="background:#181f2a; color:#22d3ee; border-bottom:2px solid #22d3ee;">
                 <tr>
-                    <th>Imagen</th>
-                    <th>Nombre</th>
-                    <th>Clave</th>
-                    <th>Cantidad</th>
-                    <th>Precio</th>
-                    <th>Acciones</th>
+                    <th style="color:#22d3ee; background:#181f2a;">Imagen</th>
+                    <th style="color:#22d3ee; background:#181f2a;">Nombre</th>
+                    <th style="color:#22d3ee; background:#181f2a;">Clave</th>
+                    <th style="color:#22d3ee; background:#181f2a;">Cantidad</th>
+                    <th style="color:#22d3ee; background:#181f2a;">Precio</th>
+                    <th style="color:#22d3ee; background:#181f2a;">Acciones</th>
                 </tr>
             </thead>
             <tbody>
             <?php foreach ($paquetes as $p): ?>
-                <tr>
-                    <td>
+                <tr style="background:#181f2a; color:#fff;">
+                    <td style="background:#181f2a;">
                         <?php if (!empty($p['imagen_icono'])): ?>
-                            <img src="/<?= htmlspecialchars($p['imagen_icono']) ?>" alt="icono" class="rounded img-thumbnail" style="max-height:48px;max-width:48px;">
+                            <img src="/<?= htmlspecialchars($p['imagen_icono']) ?>" alt="icono" class="rounded img-thumbnail" style="max-height:48px;max-width:48px;box-shadow:0 0 8px #22d3ee; border:2px solid #22d3ee; background:#222c3a;">
                         <?php elseif (!empty($juego['imagen_paquete'])): ?>
-                            <img src="/<?= htmlspecialchars($juego['imagen_paquete']) ?>" alt="icono" class="rounded img-thumbnail" style="max-height:48px;max-width:48px;">
+                            <img src="/<?= htmlspecialchars($juego['imagen_paquete']) ?>" alt="icono" class="rounded img-thumbnail" style="max-height:48px;max-width:48px;box-shadow:0 0 8px #22d3ee; border:2px solid #22d3ee; background:#222c3a;">
                         <?php else: ?>
                             <span class="fst-italic text-secondary">Sin imagen</span>
                         <?php endif; ?>
                     </td>
-                    <td class="fw-semibold"><?= htmlspecialchars($p['nombre']) ?></td>
-                    <td><?= htmlspecialchars($p['clave']) ?></td>
-                    <td><?= htmlspecialchars($p['cantidad']) ?></td>
-                    <td>$<?= number_format($p['precio'], 2) ?></td>
-                    <td class="text-nowrap">
-                        <a href="/admin/paquetes/<?= $juego_id ?>?editar=<?= $p['id'] ?>" class="btn btn-outline-info btn-sm me-2">Editar</a>
-                        <a href="/admin/paquetes/<?= $juego_id ?>?eliminar=<?= $p['id'] ?>" class="btn btn-outline-danger btn-sm" onclick="return confirm('¿Eliminar este paquete?')">Eliminar</a>
+                    <td class="fw-semibold text-neon" style="background:#181f2a; color:#22d3ee;"><?= htmlspecialchars($p['nombre']) ?></td>
+                    <td style="background:#181f2a; color:#fff;"><?= htmlspecialchars($p['clave']) ?></td>
+                    <td style="background:#181f2a; color:#fff;"><?= htmlspecialchars($p['cantidad']) ?></td>
+                    <td class="text-neon" style="background:#181f2a; color:#22d3ee;">$<?= number_format($p['precio'], 2) ?></td>
+                    <td style="background:#181f2a;" class="text-nowrap">
+                        <a href="/admin/paquetes/<?= $juego_id ?>?editar=<?= $p['id'] ?>" class="btn neon-btn-info btn-sm me-2">Editar</a>
+                        <a href="/admin/paquetes/<?= $juego_id ?>?eliminar=<?= $p['id'] ?>" class="btn btn-danger btn-sm neon-btn" onclick="return confirm('¿Eliminar este paquete?')">Eliminar</a>
                     </td>
                 </tr>
             <?php endforeach; ?>
             </tbody>
         </table>
     </div>
-        <!-- Mobile Cards -->
-        <div class="block md:hidden space-y-4">
+    <!-- Cards móvil -->
+    <div class="d-md-none">
+        <div class="row gy-4">
             <?php foreach ($paquetes as $p): ?>
-                <div class="bg-slate-800 rounded-lg p-4 shadow flex flex-col gap-2">
-                    <div class="flex items-center gap-4">
+            <div class="col-12">
+                <div class="card neon-card p-3" style="background:#181f2a; border:2px solid #22d3ee; box-shadow:0 0 16px #22d3ee,0 0 4px #2dd4bf; color:#22d3ee;">
+                    <div class="d-flex align-items-center mb-2">
                         <?php if (!empty($p['imagen_icono'])): ?>
-                            <img src="/<?= htmlspecialchars($p['imagen_icono']) ?>" alt="icono" class="rounded-lg max-h-12 max-w-12">
+                            <img src="/<?= htmlspecialchars($p['imagen_icono']) ?>" alt="icono" class="rounded img-thumbnail me-3" style="max-height:56px;max-width:56px;box-shadow:0 0 8px #22d3ee; border:2px solid #22d3ee; background:#222c3a;">
                         <?php elseif (!empty($juego['imagen_paquete'])): ?>
-                            <img src="/<?= htmlspecialchars($juego['imagen_paquete']) ?>" alt="icono" class="rounded-lg max-h-12 max-w-12">
+                            <img src="/<?= htmlspecialchars($juego['imagen_paquete']) ?>" alt="icono" class="rounded img-thumbnail me-3" style="max-height:56px;max-width:56px;box-shadow:0 0 8px #22d3ee; border:2px solid #22d3ee; background:#222c3a;">
                         <?php else: ?>
-                            <span class="italic text-slate-400">Sin imagen</span>
+                            <span class="fst-italic text-secondary">Sin imagen</span>
                         <?php endif; ?>
                         <div>
-                            <div class="font-bold text-lg text-cyan-200"><?= htmlspecialchars($p['nombre']) ?></div>
-                            <div class="text-xs text-slate-400">ID: <?= $p['id'] ?></div>
+                            <div class="fw-bold text-neon" style="font-size:1.1rem; color:#22d3ee;"><?= htmlspecialchars($p['nombre']) ?></div>
+                            <div class="text-muted" style="font-size:0.85rem; color:#b2f6ff;">ID: <?= $p['id'] ?></div>
                         </div>
                     </div>
-                    <div class="text-slate-300"><span class="font-semibold">Clave:</span> <?= htmlspecialchars($p['clave']) ?></div>
-                    <div class="text-slate-300"><span class="font-semibold">Cantidad:</span> <?= htmlspecialchars($p['cantidad']) ?></div>
-                    <div class="text-slate-300"><span class="font-semibold">Precio:</span> $<?= number_format($p['precio'], 2) ?></div>
-                    <div class="flex gap-4 mt-2">
-                        <a href="/admin/paquetes/<?= $juego_id ?>?editar=<?= $p['id'] ?>" class="text-emerald-400 hover:underline">Editar</a>
-                        <a href="/admin/paquetes/<?= $juego_id ?>?eliminar=<?= $p['id'] ?>" class="text-rose-400 hover:underline" onclick="return confirm('¿Eliminar este paquete?')">Eliminar</a>
+                    <div style="color:#fff;"><span class="fw-semibold">Clave:</span> <?= htmlspecialchars($p['clave']) ?></div>
+                    <div style="color:#fff;"><span class="fw-semibold">Cantidad:</span> <?= htmlspecialchars($p['cantidad']) ?></div>
+                    <div class="text-neon" style="color:#22d3ee;"><span class="fw-semibold">Precio:</span> $<?= number_format($p['precio'], 2) ?></div>
+                    <div class="mt-3 d-flex gap-2">
+                        <a href="/admin/paquetes/<?= $juego_id ?>?editar=<?= $p['id'] ?>" class="btn neon-btn-info btn-sm flex-fill">Editar</a>
+                        <a href="/admin/paquetes/<?= $juego_id ?>?eliminar=<?= $p['id'] ?>" class="btn btn-danger btn-sm neon-btn flex-fill" onclick="return confirm('¿Eliminar este paquete?')">Eliminar</a>
                     </div>
                 </div>
+            </div>
             <?php endforeach; ?>
         </div>
+    </div>
 
 
         
