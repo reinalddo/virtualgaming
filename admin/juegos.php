@@ -173,6 +173,61 @@ $juegos = $resj->fetch_all(MYSQLI_ASSOC);
 ?>
 <?php include '../includes/header.php'; ?>
 <main class="container-lg mt-5 bg-dark bg-opacity-75 rounded-4 p-4 shadow">
+    <?php
+    // Modal edición de juego
+    if (isset($_GET['editar'])) {
+            $edit_id = intval($_GET['editar']);
+            $res_edit = $mysqli->prepare("SELECT * FROM juegos WHERE id=?");
+            $res_edit->bind_param('i', $edit_id);
+            $res_edit->execute();
+            $juego_edit = $res_edit->get_result()->fetch_assoc();
+            if ($juego_edit):
+    ?>
+    <div class="fixed-top w-100 h-100 d-flex align-items-center justify-content-center" style="background:rgba(0,0,0,0.7);z-index:1050;">
+        <form method="post" enctype="multipart/form-data" class="bg-dark neon-card p-4 rounded-4 position-relative" style="max-width:600px;width:100%;box-shadow:0 0 2rem #00fff733;">
+            <h3 class="text-neon mb-3">Editar juego</h3>
+            <input type="hidden" name="edit_juego_id" value="<?= $juego_edit['id'] ?>">
+            <div class="mb-3">
+                <label class="form-label text-neon">Nombre</label>
+                <input type="text" name="edit_nombre" value="<?= htmlspecialchars($juego_edit['nombre']) ?>" required class="form-control" style="background:#222c3a;color:#00fff7;border:1px solid #00fff7;">
+            </div>
+            <div class="mb-3">
+                <label class="form-label text-neon">Descripción</label>
+                <textarea name="edit_descripcion" required class="form-control" style="background:#222c3a;color:#00fff7;border:1px solid #00fff7;"><?= htmlspecialchars($juego_edit['descripcion']) ?></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label text-neon">Moneda fija o variable</label>
+                <select name="edit_moneda_fija_id" class="form-select" style="background:#222c3a;color:#00fff7;border:1px solid #00fff7;">
+                    <option value="" <?= ($juego_edit['moneda_fija_id'] === null || $juego_edit['moneda_fija_id'] === '' || $juego_edit['moneda_fija_id'] == 0) ? 'selected' : '' ?>>Moneda variable (usuario elige)</option>
+                    <?php foreach ($monedas as $m): ?>
+                    <option value="<?= $m['id'] ?>" <?= ($juego_edit['moneda_fija_id'] == $m['id']) ? 'selected' : '' ?>><?= htmlspecialchars($m['nombre']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="form-check mb-3">
+                <input type="checkbox" name="edit_popular" class="form-check-input" id="editPopularCheck" <?= !empty($juego_edit['popular']) ? 'checked' : '' ?>>
+                <label class="form-check-label text-neon" for="editPopularCheck">Marcar como popular</label>
+            </div>
+            <div class="mb-3">
+                <label class="form-label text-neon">Imagen actual:</label><br>
+                <?php if ($juego_edit['imagen']): ?>
+                    <img src="/<?= htmlspecialchars($juego_edit['imagen']) ?>" alt="Imagen actual" class="mb-2 rounded" style="max-width:120px;max-height:120px;border:2px solid #00fff7;background:#222c3a;box-shadow:0 0 8px #00fff7;">
+                <?php endif; ?>
+                <input type="file" name="edit_imagen" accept="image/*" class="form-control mt-2" style="background:#222c3a;color:#00fff7;border:1px solid #00fff7;">
+            </div>
+            <div class="mb-3">
+                <label class="form-label text-neon">Imagen común para paquetes:</label><br>
+                <?php if ($juego_edit['imagen_paquete']): ?>
+                    <img src="/<?= htmlspecialchars($juego_edit['imagen_paquete']) ?>" alt="Imagen paquete actual" class="mb-2 rounded" style="max-width:80px;max-height:80px;border:2px solid #00fff7;background:#222c3a;box-shadow:0 0 8px #00fff7;">
+                <?php endif; ?>
+                <input type="file" name="edit_imagen_paquete" accept="image/*" class="form-control mt-2" style="background:#222c3a;color:#00fff7;border:1px solid #00fff7;">
+            </div>
+            <button type="submit" name="edit_juego_submit" class="btn neon-btn-info w-100 mt-3">Guardar cambios</button>
+            <a href="/admin/juegos" class="position-absolute top-0 end-0 m-3 text-neon fs-3" style="text-decoration:none;">&times;</a>
+        </form>
+    </div>
+    <?php endif; }
+    ?>
     <h2 class="text-center mb-4" style="color:#00fff7;">Gestión de Juegos</h2>
     <form method="post" enctype="multipart/form-data" class="row g-3 mb-4" style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:2rem;">
         <div class="col-md-6">
