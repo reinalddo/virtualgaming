@@ -303,8 +303,62 @@ require_once __DIR__ . '/includes/header.php';
                 break;
             case 'cupones':
                 require_once __DIR__ . '/includes/db.php';
-                echo '<h2 class="text-2xl font-semibold mb-4 text-cyan-300">Gestión de Cupones</h2>';
-                // Alta de cupón
+                echo '<h2 class="text-center mb-4" style="color:#00fff7;">Gestión de Cupones</h2>';
+                // Alta y edición de cupón
+                $edit_cupon = null;
+                if (isset($_GET['editar_cupon'])) {
+                    $edit_id = intval($_GET['editar_cupon']);
+                    $cupones = $pdo->query('SELECT * FROM cupones ORDER BY id DESC')->fetchAll(PDO::FETCH_ASSOC);
+                    foreach ($cupones as $cupon) {
+                        if ($cupon['id'] == $edit_id) {
+                            $edit_cupon = $cupon;
+                            break;
+                        }
+                    }
+                }
+                // Formulario
+                echo '<form method="POST" action="" class="row g-3 mb-4" style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:2rem;">';
+                if ($edit_cupon) {
+                    echo '<input type="hidden" name="editar_cupon" value="1">';
+                    echo '<input type="hidden" name="id" value="' . htmlspecialchars($edit_cupon['id']) . '">';
+                } else {
+                    echo '<input type="hidden" name="nuevo_cupon" value="1">';
+                }
+                echo '<div class="col-md-4">';
+                echo '<label class="form-label" style="color:#00fff7;">Código del cupón</label>';
+                echo '<input type="text" name="codigo" value="' . ($edit_cupon ? htmlspecialchars($edit_cupon['codigo']) : '') . '" required class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">';
+                echo '</div>';
+                echo '<div class="col-md-4">';
+                echo '<label class="form-label" style="color:#00fff7;">Tipo de descuento</label>';
+                echo '<select name="tipo_descuento" class="form-select" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">';
+                echo '<option value="porcentaje"' . ($edit_cupon && $edit_cupon['tipo_descuento']=='porcentaje' ? ' selected' : '') . '>Porcentaje (%)</option>';
+                echo '<option value="fijo"' . ($edit_cupon && $edit_cupon['tipo_descuento']=='fijo' ? ' selected' : '') . '>Monto fijo</option>';
+                echo '</select>';
+                echo '</div>';
+                echo '<div class="col-md-4">';
+                echo '<label class="form-label" style="color:#00fff7;">Valor del descuento</label>';
+                echo '<input type="number" name="valor_descuento" step="0.01" min="0.01" value="' . ($edit_cupon ? htmlspecialchars($edit_cupon['valor_descuento']) : '') . '" required class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">';
+                echo '</div>';
+                echo '<div class="col-md-4">';
+                echo '<label class="form-label" style="color:#00fff7;">Fecha expiración</label>';
+                echo '<input type="datetime-local" name="fecha_expiracion" value="' . ($edit_cupon && $edit_cupon['fecha_expiracion'] ? date('Y-m-d\TH:i', strtotime($edit_cupon['fecha_expiracion'])) : '') . '" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">';
+                echo '</div>';
+                echo '<div class="col-md-4">';
+                echo '<label class="form-label" style="color:#00fff7;">Límite de usos</label>';
+                echo '<input type="number" name="limite_usos" min="0" value="' . ($edit_cupon ? htmlspecialchars($edit_cupon['limite_usos']) : '') . '" placeholder="0 = ilimitado" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">';
+                echo '</div>';
+                echo '<div class="col-md-4 d-flex align-items-end">';
+                echo '<div class="form-check">';
+                echo '<input type="checkbox" name="activo" class="form-check-input" id="activoCheck"' . ($edit_cupon && $edit_cupon['activo'] ? ' checked' : (!$edit_cupon ? ' checked' : '')) . '>';
+                echo '<label class="form-check-label" for="activoCheck" style="color:#00fff7;">Cupón activo</label>';
+                echo '</div>';
+                echo '</div>';
+                echo '<div class="col-12">';
+                echo '<button type="submit" class="btn btn-info w-100" style="background:#00fff7; color:#222; border:none; box-shadow:0 0 8px #00fff7;">' . ($edit_cupon ? 'Guardar cambios' : 'Crear cupón') . '</button>';
+                if ($edit_cupon) echo '<a href="?seccion=cupones" class="btn btn-secondary ms-2">Cancelar</a>';
+                echo '</div>';
+                echo '</form>';
+                // Procesar alta/edición/borrado/activación
                 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nuevo_cupon'])) {
                     $codigo = trim($_POST['codigo'] ?? '');
                     $codigo = strtoupper($codigo);
@@ -326,8 +380,6 @@ require_once __DIR__ . '/includes/header.php';
                         echo '<div class="text-red-400 mb-2">Datos inválidos para el cupón.</div>';
                     }
                 }
-
-                // Edición de cupón
                 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['editar_cupon'])) {
                     $id = intval($_POST['id'] ?? 0);
                     $codigo = trim($_POST['codigo'] ?? '');
@@ -338,7 +390,6 @@ require_once __DIR__ . '/includes/header.php';
                     $fecha_expiracion = $_POST['fecha_expiracion'] ?? null;
                     $limite_usos = $_POST['limite_usos'] !== '' ? intval($_POST['limite_usos']) : null;
                     $activo = isset($_POST['activo']) ? 1 : 0;
-                    // Verificar duplicados excepto el actual
                     $stmt_check = $pdo->prepare("SELECT 1 FROM cupones WHERE codigo = ? AND id <> ? LIMIT 1");
                     $stmt_check->execute([$codigo, $id]);
                     if ($stmt_check->fetch()) {
@@ -351,144 +402,69 @@ require_once __DIR__ . '/includes/header.php';
                         echo '<div class="text-red-400 mb-2">Datos inválidos para el cupón.</div>';
                     }
                 }
-                // Borrado de cupón
                 if (isset($_GET['borrar_cupon'])) {
                     $id = intval($_GET['borrar_cupon']);
                     $pdo->prepare('DELETE FROM cupones WHERE id = ?')->execute([$id]);
                     echo '<div class="text-green-400 mb-2">Cupón eliminado.</div>';
                 }
-                // Activar/desactivar cupón
                 if (isset($_GET['toggle_cupon'])) {
                     $id = intval($_GET['toggle_cupon']);
                     $pdo->prepare('UPDATE cupones SET activo = NOT activo WHERE id = ?')->execute([$id]);
                 }
-                // Obtener cupones
                 $cupones = $pdo->query('SELECT * FROM cupones ORDER BY id DESC')->fetchAll(PDO::FETCH_ASSOC);
-
-                // Mostrar formulario de edición si corresponde
-                $edit_cupon = null;
-                if (isset($_GET['editar_cupon'])) {
-                    $edit_id = intval($_GET['editar_cupon']);
-                    foreach ($cupones as $cupon) {
-                        if ($cupon['id'] == $edit_id) {
-                            $edit_cupon = $cupon;
-                            break;
-                        }
-                    }
+                echo '<h3 class="text-info mt-5 mb-3">Cupones existentes</h3>';
+                echo '<div class="table-responsive d-none d-md-block">';
+                echo '<table class="table align-middle" style="background:#181f2a; color:#00fff7; border-radius:12px;">';
+                echo '<thead style="background:#181f2a; color:#00fff7; border-bottom:2px solid #00fff7;">';
+                echo '<tr>';
+                echo '<th style="color:#00fff7; background:#181f2a;">ID</th>';
+                echo '<th style="color:#00fff7; background:#181f2a;">Código</th>';
+                echo '<th style="color:#00fff7; background:#181f2a;">Tipo</th>';
+                echo '<th style="color:#00fff7; background:#181f2a;">Valor</th>';
+                echo '<th style="color:#00fff7; background:#181f2a;">Expira</th>';
+                echo '<th style="color:#00fff7; background:#181f2a;">Límite usos</th>';
+                echo '<th style="color:#00fff7; background:#181f2a;">Usos actuales</th>';
+                echo '<th style="color:#00fff7; background:#181f2a;">Activo</th>';
+                echo '<th style="color:#00fff7; background:#181f2a;">Acciones</th>';
+                echo '</tr>';
+                echo '</thead>';
+                echo '<tbody>';
+                foreach ($cupones as $c) {
+                    echo '<tr style="background:#181f2a; color:#fff;">';
+                    echo '<td style="background:#181f2a; color:#00fff7;">' . $c['id'] . '</td>';
+                    echo '<td style="background:#181f2a; color:#00fff7;">' . htmlspecialchars($c['codigo']) . '</td>';
+                    echo '<td style="background:#181f2a; color:#00fff7;">' . htmlspecialchars($c['tipo_descuento']) . '</td>';
+                    echo '<td style="background:#181f2a; color:#00fff7;">' . htmlspecialchars($c['valor_descuento']) . '</td>';
+                    echo '<td style="background:#181f2a; color:#00fff7;">' . ($c['fecha_expiracion'] ? htmlspecialchars($c['fecha_expiracion']) : '-') . '</td>';
+                    echo '<td style="background:#181f2a; color:#00fff7;">' . ($c['limite_usos'] ?? '-') . '</td>';
+                    echo '<td style="background:#181f2a; color:#00fff7;">' . $c['usos_actuales'] . '</td>';
+                    echo '<td style="background:#181f2a; color:#00fff7;">' . ($c['activo'] ? 'Sí' : 'No') . '</td>';
+                    echo '<td style="background:#181f2a;">';
+                    echo '<a href="?seccion=cupones&editar_cupon=' . $c['id'] . '" style="color:#00fff7; text-decoration:underline; margin-right:1em;">Editar</a>';
+                    echo ($c['activo'] ? '<a href="?seccion=cupones&toggle_cupon=' . $c['id'] . '" style="color:#00fff7; text-decoration:underline; margin-right:1em;">Desactivar</a>' : '<a href="?seccion=cupones&toggle_cupon=' . $c['id'] . '" style="color:#00fff7; text-decoration:underline; margin-right:1em;">Activar</a>');
+                    echo '<a href="?seccion=cupones&borrar_cupon=' . $c['id'] . '" style="color:#ff0059; text-decoration:underline;" onclick="return confirm(\'¿Eliminar este cupón?\')">Eliminar</a>';
+                    echo '</td>';
+                    echo '</tr>';
                 }
-
-                if ($edit_cupon) {
-                    // Formulario de edición
-                    echo '<form method="POST" class="mb-6 flex flex-col gap-8 bg-gray-900 pt-12 pb-12 px-0 sm:p-4 sm:rounded-lg rounded-none shadow-sm w-full">';
-                    echo '<input type="hidden" name="editar_cupon" value="1">';
-                    echo '<input type="hidden" name="id" value="' . htmlspecialchars($edit_cupon['id']) . '">';
-                    echo '<input type="text" name="codigo" id="codigo-cupon-input-edit" value="' . htmlspecialchars($edit_cupon['codigo']) . '" placeholder="Código del cupón" class="block w-full text-2xl px-6 py-4 rounded bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400" required autocomplete="off" />';
-                    echo '<script>';
-                    echo 'document.addEventListener("DOMContentLoaded", function() {';
-                    echo '  var input = document.getElementById("codigo-cupon-input-edit");';
-                    echo '  if (input) {';
-                    echo '    input.addEventListener("input", function(e) {';
-                    echo '      let val = e.target.value;';
-                    echo '      val = val.normalize("NFD").replace(/[\u0300-\u036f]/g, "");';
-                    echo '      val = val.replace(/[^A-Z0-9_\-]/gi, "");';
-                    echo '      val = val.toUpperCase();';
-                    echo '      e.target.value = val;';
-                    echo '    });';
-                    echo '  }';
-                    echo '});';
-                    echo '</script>';
-                    echo '<select name="tipo_descuento" class="block w-full text-2xl px-6 py-4 rounded bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400">';
-                    echo '<option value="porcentaje"' . ($edit_cupon['tipo_descuento'] == 'porcentaje' ? ' selected' : '') . '>Porcentaje (%)</option>';
-                    echo '<option value="fijo"' . ($edit_cupon['tipo_descuento'] == 'fijo' ? ' selected' : '') . '>Monto fijo</option>';
-                    echo '</select>';
-                    echo '<input type="number" step="0.01" name="valor_descuento" value="' . htmlspecialchars($edit_cupon['valor_descuento']) . '" placeholder="Valor del descuento" class="block w-full text-2xl px-6 py-4 rounded bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400" required />';
-                    echo '<input type="datetime-local" name="fecha_expiracion" value="' . ($edit_cupon['fecha_expiracion'] ? date('Y-m-d\TH:i', strtotime($edit_cupon['fecha_expiracion'])) : '') . '" placeholder="Fecha de expiración" class="block w-full text-2xl px-6 py-4 rounded bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400" />';
-                    echo '<input type="number" name="limite_usos" value="' . htmlspecialchars($edit_cupon['limite_usos']) . '" placeholder="Límite de usos (0 = ilimitado)" class="block w-full text-2xl px-6 py-4 rounded bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400" />';
-                    echo '<label class="flex items-center gap-2"><input type="checkbox" name="activo" class="form-checkbox"' . ($edit_cupon['activo'] ? ' checked' : '') . '> Activo</label>';
-                    echo '<button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white text-2xl px-6 py-4 rounded font-semibold transition">Guardar cambios</button>';
-                    echo '<a href="?seccion=cupones" class="w-full text-center mt-2 text-cyan-400 hover:underline">Cancelar</a>';
-                    echo '</form>';
-                } else {
-                    // Formulario de alta
-                    echo '<form method="POST" class="mb-6 flex flex-col gap-8 bg-gray-900 pt-12 pb-12 px-0 sm:p-4 sm:rounded-lg rounded-none shadow-sm w-full">';
-                    echo '<input type="hidden" name="nuevo_cupon" value="1">';
-                    echo '<input type="text" name="codigo" id="codigo-cupon-input" placeholder="Código del cupón" class="block w-full text-2xl px-6 py-4 rounded bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400" required autocomplete="off" />';
-                    echo '<script>';
-                    echo 'document.addEventListener("DOMContentLoaded", function() {';
-                    echo '  var input = document.getElementById("codigo-cupon-input");';
-                    echo '  if (input) {';
-                    echo '    input.addEventListener("input", function(e) {';
-                    echo '      let val = e.target.value;';
-                    echo '      val = val.normalize("NFD").replace(/[\u0300-\u036f]/g, "");';
-                    echo '      val = val.replace(/[^A-Z0-9_\-]/gi, "");';
-                    echo '      val = val.toUpperCase();';
-                    echo '      e.target.value = val;';
-                    echo '    });';
-                    echo '  }';
-                    echo '});';
-                    echo '</script>';
-                    echo '<select name="tipo_descuento" class="block w-full text-2xl px-6 py-4 rounded bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400">';
-                    echo '<option value="porcentaje">Porcentaje (%)</option>';
-                    echo '<option value="fijo">Monto fijo</option>';
-                    echo '</select>';
-                    echo '<input type="number" step="0.01" name="valor_descuento" placeholder="Valor del descuento" class="block w-full text-2xl px-6 py-4 rounded bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400" required />';
-                    echo '<input type="datetime-local" name="fecha_expiracion" placeholder="Fecha de expiración" class="block w-full text-2xl px-6 py-4 rounded bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400" />';
-                    echo '<input type="number" name="limite_usos" placeholder="Límite de usos (0 = ilimitado)" class="block w-full text-2xl px-6 py-4 rounded bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400" />';
-                    echo '<label class="flex items-center gap-2"><input type="checkbox" name="activo" checked class="form-checkbox"> Activo</label>';
-                    echo '<button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white text-2xl px-6 py-4 rounded font-semibold transition">Crear cupón</button>';
-                    echo '</form>';
-                }
-
-                // Tabla desktop y cards mobile
-                if (count($cupones) === 0) {
-                    echo '<div class="text-gray-400">No hay cupones registrados.</div>';
-                } else {
-                    echo '<div class="overflow-x-auto">';
-                    // Desktop table
-                    echo '<div class="hidden md:block">';
-                    echo '<table class="w-full text-left text-base min-w-[900px]">';
-                    echo '<thead><tr class="text-cyan-300"><th>ID</th><th>Código</th><th>Tipo</th><th>Valor</th><th>Expira</th><th>Límite usos</th><th>Usos actuales</th><th>Activo</th><th>Acciones</th></tr></thead><tbody>';
-                    foreach ($cupones as $c) {
-                        echo '<tr class="border-b border-gray-700">';
-                        echo '<td>' . htmlspecialchars($c['id']) . '</td>';
-                        echo '<td>' . htmlspecialchars($c['codigo']) . '</td>';
-                        echo '<td>' . htmlspecialchars($c['tipo_descuento']) . '</td>';
-                        echo '<td>' . htmlspecialchars($c['valor_descuento']) . '</td>';
-                        echo '<td>' . ($c['fecha_expiracion'] ? htmlspecialchars($c['fecha_expiracion']) : '-') . '</td>';
-                        echo '<td>' . ($c['limite_usos'] ?? '-') . '</td>';
-                        echo '<td>' . $c['usos_actuales'] . '</td>';
-                        echo '<td>' . ($c['activo'] ? 'Sí' : 'No') . '</td>';
-                        echo '<td>';
-                        echo '<a href="?seccion=cupones&editar_cupon=' . $c['id'] . '" class="text-yellow-400 hover:underline">Editar</a> | ';
-                        echo '<a href="?seccion=cupones&toggle_cupon=' . $c['id'] . '" class="text-cyan-400 hover:underline">' . ($c['activo'] ? 'Desactivar' : 'Activar') . '</a> | ';
-                        echo '<a href="?seccion=cupones&borrar_cupon=' . $c['id'] . '" class="text-red-400 hover:underline" onclick="return confirm(\'¿Eliminar este cupón?\')">Eliminar</a>';
-                        echo '</td>';
-                        echo '</tr>';
-                    }
-                    echo '</tbody></table>';
-                    echo '</div>';
-                    // Mobile cards
-                    echo '<div class="md:hidden flex flex-col gap-4 mt-6">';
-                    foreach ($cupones as $c) {
-                        echo '<div class="rounded-xl border border-slate-700 bg-gray-900 p-4 flex flex-col gap-2 shadow">';
-                        echo '<div class="flex justify-between items-center mb-2">';
-                        echo '<span class="text-xs text-cyan-300 font-semibold">ID: ' . htmlspecialchars($c['id']) . '</span>';
-                        echo '<span class="text-xs text-slate-400">' . ($c['fecha_expiracion'] ? htmlspecialchars($c['fecha_expiracion']) : '-') . '</span>';
-                        echo '</div>';
-                        echo '<div class="text-lg font-bold text-cyan-200">' . htmlspecialchars($c['codigo']) . '</div>';
-                        echo '<div class="text-sm text-slate-300">Tipo: ' . htmlspecialchars($c['tipo_descuento']) . ' | Valor: ' . htmlspecialchars($c['valor_descuento']) . '</div>';
-                        echo '<div class="text-sm text-slate-300">Límite usos: ' . ($c['limite_usos'] ?? '-') . ' | Usos actuales: ' . $c['usos_actuales'] . '</div>';
-                        echo '<div class="text-sm text-slate-300">Activo: ' . ($c['activo'] ? 'Sí' : 'No') . '</div>';
-                        echo '<div class="flex gap-2 mt-2">';
-                        echo '<a href="?seccion=cupones&editar_cupon=' . $c['id'] . '" class="flex-1 text-center px-2 py-1 rounded bg-yellow-600 text-white hover:bg-yellow-700">Editar</a>';
-                        echo '<a href="?seccion=cupones&toggle_cupon=' . $c['id'] . '" class="flex-1 text-center px-2 py-1 rounded bg-cyan-600 text-white hover:bg-cyan-700">' . ($c['activo'] ? 'Desactivar' : 'Activar') . '</a>';
-                        echo '<a href="?seccion=cupones&borrar_cupon=' . $c['id'] . '" class="flex-1 text-center px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700" onclick="return confirm(\'¿Eliminar este cupón?\')">Eliminar</a>';
-                        echo '</div>';
-                        echo '</div>';
-                    }
+                echo '</tbody></table>';
+                echo '</div>';
+                // Mobile Cards
+                echo '<div class="d-block d-md-none space-y-4">';
+                foreach ($cupones as $c) {
+                    echo '<div style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:1rem; color:#00fff7; margin-bottom:1.2rem;">';
+                    echo '<div style="font-weight:bold; font-size:1.2em; color:#00fff7; display:flex; align-items:center;">' . htmlspecialchars($c['codigo']) . '<span style="font-size:0.9em; color:#b2f6ff; margin-left:0.5em;">ID: ' . $c['id'] . '</span></div>';
+                    echo '<div style="margin-top:0.5em; color:#fff;"><span style="color:#00fff7; font-weight:bold;">Tipo:</span> ' . htmlspecialchars($c['tipo_descuento']) . ' | <span style="color:#00fff7; font-weight:bold;">Valor:</span> ' . htmlspecialchars($c['valor_descuento']) . '</div>';
+                    echo '<div style="margin-top:0.5em; color:#fff;"><span style="color:#00fff7; font-weight:bold;">Expira:</span> ' . ($c['fecha_expiracion'] ? htmlspecialchars($c['fecha_expiracion']) : '-') . '</div>';
+                    echo '<div style="margin-top:0.5em; color:#fff;"><span style="color:#00fff7; font-weight:bold;">Límite usos:</span> ' . ($c['limite_usos'] ?? '-') . ' | <span style="color:#00fff7; font-weight:bold;">Usos actuales:</span> ' . $c['usos_actuales'] . '</div>';
+                    echo '<div style="margin-top:0.5em; color:#fff;"><span style="color:#00fff7; font-weight:bold;">Activo:</span> ' . ($c['activo'] ? 'Sí' : 'No') . '</div>';
+                    echo '<div style="display:flex; gap:1rem; margin-top:1rem;">';
+                    echo '<a href="?seccion=cupones&editar_cupon=' . $c['id'] . '" style="color:#00fff7; text-decoration:underline; font-weight:bold;">Editar</a>';
+                    echo ($c['activo'] ? '<a href="?seccion=cupones&toggle_cupon=' . $c['id'] . '" style="color:#00fff7; text-decoration:underline; font-weight:bold;">Desactivar</a>' : '<a href="?seccion=cupones&toggle_cupon=' . $c['id'] . '" style="color:#00fff7; text-decoration:underline; font-weight:bold;">Activar</a>');
+                    echo '<a href="?seccion=cupones&borrar_cupon=' . $c['id'] . '" style="color:#ff0059; text-decoration:underline; font-weight:bold;" onclick="return confirm(\'¿Eliminar este cupón?\')">Eliminar</a>';
                     echo '</div>';
                     echo '</div>';
                 }
+                echo '</div>';
                 break;
             case 'pedidos':
                 echo '<h2 class="text-2xl font-semibold mb-4 text-cyan-300">Gestión de Pedidos</h2>';
