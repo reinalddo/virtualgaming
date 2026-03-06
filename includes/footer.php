@@ -101,7 +101,12 @@ SCRIPT;
 ?>
     </div>
   </div>
-  <?php echo $menuScript; ?>
+  <?php
+  $menuScriptVersioned = str_replace('<script', '<script', $menuScript);
+  $menuScriptVersioned = str_replace('</script>', '</script>', $menuScriptVersioned);
+  // Si hay scripts externos, agregar ?v=fecha
+  echo $menuScriptVersioned;
+  ?>
   <?php
   if (!empty($pageScripts) && is_array($pageScripts)) {
     foreach ($pageScripts as $script) {
