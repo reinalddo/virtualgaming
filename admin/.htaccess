@@ -2,5 +2,5 @@ Options -Indexes
 RewriteEngine On
 RewriteRule ^monedas$ monedas.php [L,QSA]
 RewriteRule ^juegos$ juegos.php [L,QSA]
-RewriteRule ^paquetes$ paquetes.php [L,QSA]
+RewriteRule ^paquetes/?([0-9]*)$ paquetes.php [L,QSA]
 RewriteRule ^pedidos$ pedidos.php [L,QSA]
