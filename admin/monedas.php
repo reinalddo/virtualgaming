@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['cla
     header('Location: monedas.php');
     exit;
 }
-
+fsafsdfasdf
 // Editar moneda
 if (isset($_POST['editar_id'], $_POST['editar_nombre'], $_POST['editar_clave'], $_POST['editar_tasa'])) {
     $id = intval($_POST['editar_id']);
