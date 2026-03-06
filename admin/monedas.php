@@ -45,6 +45,9 @@ if (isset($_GET['eliminar'])) {
 // Listar monedas
 $res = $mysqli->query("SELECT * FROM monedas ORDER BY es_base DESC, nombre ASC");
 $monedas = $res->fetch_all(MYSQLI_ASSOC);
+echo '<pre style="background:#222;color:#0ff;font-size:16px;">';
+print_r($monedas);
+echo '</pre>';
 ?>
 <?php include '../includes/header.php'; ?>
 <main class="container-sm mt-5 bg-dark bg-opacity-75 rounded-4 p-4 shadow">
