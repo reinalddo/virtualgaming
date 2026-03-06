@@ -1,4 +1,8 @@
 <?php
+// Mostrar errores PHP para debug
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 // admin/monedas.php - Gestión de monedas (CRUD)
 require_once '../includes/db_connect.php';
 
