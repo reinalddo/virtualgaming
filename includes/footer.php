@@ -39,22 +39,27 @@ $menuScript = <<<"SCRIPT"
   };
 
   const openAuthModal = (mode) => {
+    console.log("Opening auth modal with mode:", mode);
     if (!authModal || !authLogin || !authRegister) return;
-    authModal.classList.remove("hidden");
-    authModal.classList.add("flex");
+    authModal.classList.remove("d-none");
+    authModal.classList.add("d-flex");
     if (mode === "register") {
-      authLogin.classList.add("hidden");
-      authRegister.classList.remove("hidden");
+      console.log("Showing registration form");
+      authLogin.classList.add("d-none");
+      authRegister.classList.remove("d-none");
+      authRegister.classList.add("d-grid");
     } else {
-      authRegister.classList.add("hidden");
-      authLogin.classList.remove("hidden");
+      console.log("Showing login form");
+      authRegister.classList.add("d-none");
+      authLogin.classList.remove("d-none");
+      authLogin.classList.add("d-grid");
     }
   };
 
   const closeAuthModal = () => {
     if (!authModal) return;
-    authModal.classList.add("hidden");
-    authModal.classList.remove("flex");
+    authModal.classList.add("d-none");
+    authModal.classList.remove("d-flex");
   };
 
   if (authTrigger && authMenu && authContainer) {
