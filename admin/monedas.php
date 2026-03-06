@@ -106,7 +106,7 @@ $monedas = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
         </table>
     </div>
     <!-- Mobile Cards -->
-    <div class="d-block d-md-none space-y-4 mt-4">
+    <div class="d-block d-md-none mt-4">
         <?php foreach ($monedas as $m): ?>
         <div style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:1rem; color:#00fff7; margin-bottom:1.2rem;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5em;">
@@ -115,7 +115,7 @@ $monedas = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
             </div>
             <div style="color:#fff; margin-bottom:0.3em;"><span style="color:#00fff7; font-weight:bold;">Tasa:</span> <?= htmlspecialchars($m['tasa']) ?></div>
             <div style="color:#fff; margin-bottom:0.3em;"><span style="color:#00fff7; font-weight:bold;">Base:</span> <?= $m['es_base'] ? '<span style=\'color:#00fff7;\'>Sí</span>' : 'No' ?></div>
-            <div style="display:flex; gap:1rem; margin-top:1rem;">
+            <div style="display:flex; margin-top:1rem;">
                 <?php if (!$m['es_base']): ?>
                     <a href="?editar=<?= $m['id'] ?>" style="color:#00fff7; text-decoration:underline; font-weight:bold;">Editar</a>
                     <a href="?eliminar=<?= $m['id'] ?>" onclick="return confirm('¿Eliminar moneda?')" style="color:#ff0059; text-decoration:underline; font-weight:bold;">Eliminar</a>
@@ -126,6 +126,6 @@ $monedas = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
         </div>
         <?php endforeach; ?>
     </div>
-    <a href="/admin/juegos" class="inline-block mt-6 text-cyan-300 hover:underline">Volver a juegos</a>
+    <a href="/admin/juegos" class="btn btn-link text-info">Volver a juegos</a>
 </main>
 <?php include '../includes/footer.php'; ?>
