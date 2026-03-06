@@ -4,7 +4,7 @@
 //ini_set('display_startup_errors', 1);
 //error_reporting(E_ALL);
 // admin/monedas.php - Gestión de monedas (CRUD)
-require_once '../includes/db_connect.php';
+//require_once '../includes/db_connect.php';
 
 // Procesar formulario de creación
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['clave'], $_POST['tasa'])) {
