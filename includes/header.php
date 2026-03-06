@@ -13,43 +13,6 @@ $tenantSlugAttr = isset($tenantData["tenant"]["slug"]) ? $tenantData["tenant"]["
 <!doctype html>
 <html lang="es">
 <head>
-    <script>
-      function openAuthModal(mode) {
-        var authModal = document.getElementById('auth-modal');
-        var authLogin = document.getElementById('auth-login');
-        var authRegister = document.getElementById('auth-register');
-        if (!authModal || !authLogin || !authRegister) return;
-        authModal.classList.remove('d-none');
-        authModal.classList.add('flex');
-        if (mode === 'register') {
-          authLogin.classList.add('d-none');
-          authRegister.classList.remove('d-none');
-        } else {
-          authRegister.classList.add('d-none');
-          authLogin.classList.remove('d-none');
-        }
-      }
-      function closeAuthModal() {
-        var authModal = document.getElementById('auth-modal');
-        if (!authModal) return;
-        authModal.classList.add('d-none');
-        authModal.classList.remove('flex');
-      }
-      document.addEventListener('DOMContentLoaded', function() {
-        document.querySelectorAll('[data-auth-close]').forEach(function(btn) {
-          btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            closeAuthModal();
-          });
-        });
-        document.querySelectorAll('[data-auth-switch]').forEach(function(btn) {
-          btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            openAuthModal(btn.dataset.authSwitch);
-          });
-        });
-      });
-    </script>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title><?php echo htmlspecialchars($pageTitle, ENT_QUOTES, "UTF-8"); ?></title>
