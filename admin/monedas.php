@@ -1,9 +1,8 @@
 <?php
-echo 'DEBUG: inicio monedas.php<br>';
 // Mostrar errores PHP para debug
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
+//ini_set('display_errors', 1);
+//ini_set('display_startup_errors', 1);
+//error_reporting(E_ALL);
 // admin/monedas.php - Gestión de monedas (CRUD)
 require_once '../includes/db_connect.php';
 
@@ -46,10 +45,6 @@ if (isset($_GET['eliminar'])) {
 // Listar monedas
 $res = $mysqli->query("SELECT * FROM monedas ORDER BY es_base DESC, nombre ASC");
 $monedas = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
-echo '<pre style="background:#222;color:#0ff;font-size:16px;">';
-var_dump($res);
-print_r($monedas);
-echo '</pre>';
 ?>
 <?php include '../includes/header.php'; ?>
 <main class="container-sm mt-5 bg-dark bg-opacity-75 rounded-4 p-4 shadow">
