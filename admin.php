@@ -31,6 +31,7 @@ require_once __DIR__ . '/includes/header.php';
             <div class="d-flex flex-wrap justify-content-center gap-3">
                 <a href="/admin/usuarios" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>👤</span>Usuarios</a>
                 <a href="/admin/juegos" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>🎮</span>Juegos</a>
+                <a href="/admin/monedas" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>💵</span>Monedas</a>
                 <a href="/admin/cupones" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>✏️</span>Cupones</a>
                 <a href="/admin/pedidos" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>📋</span>Pedidos</a>
                 <a href="/admin/configuracion" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>⚙️</span>Configuración</a>
