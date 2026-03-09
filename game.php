@@ -227,7 +227,7 @@ include __DIR__ . "/includes/header.php";
 
 
   <!-- Modal Loading Bootstrap -->
-  <div id="loading-modal" class="modal fade" tabindex="-1" aria-hidden="true">
+  <div id="loading-modal" class="modal fade app-overlay-modal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content bg-dark border-info text-center p-4">
         <div class="mb-3">
@@ -242,20 +242,47 @@ include __DIR__ . "/includes/header.php";
     </div>
   </div>
   <!-- Modal Cupón Bootstrap -->
-  <div id="coupon-modal" class="modal fade" tabindex="-1" aria-hidden="true">
+  <div id="coupon-modal" class="modal fade app-overlay-modal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content bg-dark border-info text-center p-4">
         <h4 class="fw-bold text-info mb-2">¿Desea aplicar el cupón <span id="modal-coupon-name" class="text-success"></span>?</h4>
         <div class="d-flex gap-2 justify-content-center mt-4">
-          <button id="modal-yes" class="btn btn-success">Sí</button>
-          <button id="modal-no" class="btn btn-info">No</button>
-          <button id="modal-cancel" class="btn btn-secondary">Cancelar</button>
+          <button type="button" id="modal-yes" class="btn btn-success">Sí</button>
+          <button type="button" id="modal-no" class="btn btn-info">No</button>
+          <button type="button" id="modal-cancel" class="btn btn-secondary">Cancelar</button>
         </div>
       </div>
     </div>
   </div>
 
 <style>
+  .app-overlay-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1080;
+    opacity: 0;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(5, 10, 20, 0.78);
+    backdrop-filter: blur(4px);
+  }
+
+  .app-overlay-modal.is-visible {
+    display: flex !important;
+    opacity: 1 !important;
+  }
+
+  .app-overlay-modal .modal-dialog {
+    width: min(92vw, 28rem);
+    margin: 0;
+  }
+
+  body.overlay-open {
+    overflow: hidden;
+  }
+
   .pack-card {
     min-height: 12.5rem;
     border-width: 1px;
@@ -320,14 +347,51 @@ include __DIR__ . "/includes/header.php";
   const buyButton = document.getElementById("buy-button");
   const couponInput = document.getElementById('coupon-input');
   const couponModal = document.getElementById('coupon-modal');
+  const loadingModal = document.getElementById('loading-modal');
   const modalCouponName = document.getElementById('modal-coupon-name');
   const modalYes = document.getElementById('modal-yes');
   const modalNo = document.getElementById('modal-no');
   const modalCancel = document.getElementById('modal-cancel');
   const applyCouponButton = document.getElementById('apply-coupon-btn');
+  let lastFocusedElement = null;
   let activePack = null;
   let couponApplied = false;
   let couponValue = '';
+
+  function syncOverlayState() {
+    document.body.classList.toggle('overlay-open', Boolean(document.querySelector('.app-overlay-modal.is-visible')));
+  }
+
+  function setOverlayVisible(modalElement, visible) {
+    if (!modalElement) {
+      return;
+    }
+    if (visible) {
+      lastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    } else if (modalElement.contains(document.activeElement) && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    modalElement.classList.toggle('show', visible);
+    modalElement.classList.toggle('is-visible', visible);
+    modalElement.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    syncOverlayState();
+    if (visible) {
+      const autofocusTarget = modalElement.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (autofocusTarget instanceof HTMLElement) {
+        setTimeout(() => autofocusTarget.focus(), 0);
+      }
+    } else if (lastFocusedElement instanceof HTMLElement && document.body.contains(lastFocusedElement)) {
+      setTimeout(() => lastFocusedElement.focus(), 0);
+      lastFocusedElement = null;
+    }
+  }
+
+  function removeBuySpinner() {
+    const spinner = document.getElementById('spinner-compra');
+    if (spinner) {
+      spinner.remove();
+    }
+  }
 
   function updatePackPrices() {
     packCards.forEach(card => {
@@ -497,11 +561,11 @@ include __DIR__ . "/includes/header.php";
               modalNo.addEventListener('click', function() {
                 couponApplied = false;
                 couponValue = couponInput.value.trim();
-                couponModal.classList.add('hidden');
+                setOverlayVisible(couponModal, false);
                 showToast('Compra sin cupón aplicado', 'info');
               });
               modalCancel.addEventListener('click', function() {
-                couponModal.classList.add('hidden');
+                setOverlayVisible(couponModal, false);
               });
               orderForm.addEventListener('input', updateButtonState);
               orderForm.addEventListener('submit', function(event) {
@@ -541,23 +605,23 @@ include __DIR__ . "/includes/header.php";
                 }
                 // Si el cupón no está aplicado y hay valor, mostrar modal
                 if (couponVal && !couponApplied) {
-                  couponModal.classList.remove('hidden');
+                  setOverlayVisible(couponModal, true);
                   modalCouponName.textContent = couponVal;
                   modalYes.onclick = function() {
-                    couponModal.classList.add('hidden');
+                    setOverlayVisible(couponModal, false);
                     document.getElementById('apply-coupon-btn').click();
                     // Esperar a que se aplique el cupón y luego enviar el formulario
                     setTimeout(() => orderForm.dispatchEvent(new Event('submit', {cancelable: true})), 150);
                   };
                   modalNo.onclick = function() {
-                    couponModal.classList.add('hidden');
+                    setOverlayVisible(couponModal, false);
                     couponApplied = false;
                     couponInput.value = '';
                     // Enviar el formulario sin cupón (ya no se mostrará el modal)
                     setTimeout(() => orderForm.dispatchEvent(new Event('submit', {cancelable: true})), 100);
                   };
                   modalCancel.onclick = function() {
-                    couponModal.classList.add('hidden');
+                    setOverlayVisible(couponModal, false);
                   };
                   return;
                 }
@@ -593,21 +657,13 @@ include __DIR__ . "/includes/header.php";
                 };
                 console.log('Datos enviados a pedidos.php:', pedidoData);
                 btn.disabled = true;
-                // Eliminar spinner si existe
-                var spinner = document.getElementById('spinner-compra');
-                if (spinner) spinner.remove();
-                // Mostrar modal loading
-                const loadingModal = document.getElementById('loading-modal');
-                loadingModal.classList.remove('hidden');
+                setOverlayVisible(loadingModal, true);
                 fetch('/api/pedidos.php', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                   body: Object.keys(pedidoData).map(k => `${encodeURIComponent(k)}=${encodeURIComponent(pedidoData[k])}`).join('&')
                 })
                 .then(async res => {
-                  btn.disabled = false;
-                  const loadingModal = document.getElementById('loading-modal');
-                  loadingModal.classList.add('hidden');
                   let data = null;
                   try {
                     data = await res.json();
@@ -640,10 +696,12 @@ include __DIR__ . "/includes/header.php";
                   }
                 })
                 .catch(() => {
-                  btn.disabled = false;
-                  const loadingModal = document.getElementById('loading-modal');
-                  loadingModal.classList.add('hidden');
                   showToast('Error de red al registrar pedido.', 'error');
+                })
+                .finally(() => {
+                  btn.disabled = false;
+                  removeBuySpinner();
+                  setOverlayVisible(loadingModal, false);
                 });
               });
               }

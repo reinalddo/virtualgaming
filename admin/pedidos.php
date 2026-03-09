@@ -37,6 +37,45 @@ function format_money($amount): string {
       background:#181f2a !important;
     }
     .tab-panel { margin-top: 0.5rem !important; }
+    .admin-loading-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1080;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      background: rgba(5, 10, 20, 0.78);
+      backdrop-filter: blur(4px);
+    }
+    .admin-loading-modal.is-visible {
+      display: flex;
+    }
+    .admin-loading-card {
+      width: min(92vw, 25rem);
+      border-radius: 18px;
+      border: 2px solid #00fff7;
+      background: linear-gradient(135deg, rgba(11, 17, 32, 0.97), rgba(24, 31, 42, 0.96));
+      box-shadow: 0 0 24px rgba(0, 255, 247, 0.25);
+      padding: 1.75rem 1.5rem;
+      text-align: center;
+      color: #b2f6ff;
+    }
+    .admin-loading-spinner {
+      width: 3rem;
+      height: 3rem;
+      margin: 0 auto 1rem;
+      border: 4px solid rgba(0, 255, 247, 0.22);
+      border-top-color: #00fff7;
+      border-radius: 50%;
+      animation: adminSpin 0.85s linear infinite;
+    }
+    body.admin-loading-open {
+      overflow: hidden;
+    }
+    @keyframes adminSpin {
+      to { transform: rotate(360deg); }
+    }
   </style>
   <div class="row mb-4">
     <div class="col-12 text-center">
@@ -173,6 +212,14 @@ function format_money($amount): string {
       </div>
     </section>
   <?php endforeach; ?>
+
+  <div id="admin-loading-modal" class="admin-loading-modal" aria-hidden="true">
+    <div class="admin-loading-card">
+      <div class="admin-loading-spinner" aria-hidden="true"></div>
+      <h3 class="h5 fw-bold text-info mb-2">Actualizando pedido...</h3>
+      <p class="mb-0">Espera mientras se procesa el cambio de estado y se envian las notificaciones.</p>
+    </div>
+  </div>
 </main>
 
 <script>
@@ -264,6 +311,17 @@ function format_money($amount): string {
   });
   const tabs = Array.from(document.querySelectorAll('.tab-btn'));
   const panels = Array.from(document.querySelectorAll('.tab-panel'));
+  const adminLoadingModal = document.getElementById('admin-loading-modal');
+
+  function setAdminLoadingVisible(visible) {
+    if (!adminLoadingModal) {
+      return;
+    }
+    adminLoadingModal.classList.toggle('is-visible', visible);
+    adminLoadingModal.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    document.body.classList.toggle('admin-loading-open', visible);
+  }
+
   function showTab(tab){
     panels.forEach(p => p.classList.add('hidden'));
     const activePanel = panels.find(p => p.dataset.panel === tab);
@@ -316,6 +374,7 @@ function format_money($amount): string {
         const prevStatus = sel.dataset.status;
         const newStatus = sel.value;
         sel.disabled = true;
+        setAdminLoadingVisible(true);
         const fd = new FormData();
         fd.append('action','update_status');
         fd.append('order_id', orderId);
@@ -343,6 +402,7 @@ function format_money($amount): string {
           alert(err.message || 'No se pudo cambiar el estado');
         } finally {
           sel.disabled = false;
+          setAdminLoadingVisible(false);
         }
       });
     });
