@@ -11,4 +11,4 @@ CREATE TABLE IF NOT EXISTS configuracion (
 
 -- Ejemplo de inserción inicial
 INSERT INTO configuracion (correo_corporativo, smtp_host, smtp_user, smtp_pass, smtp_port, smtp_secure)
-VALUES ('no-reply@tvirtualgaming.local', 'smtp.tuservidor.com', 'no-reply@tvirtualgaming.local', '', 587, 'tls');
+VALUES ('', '', '', '', 587, 'tls');

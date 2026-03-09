@@ -73,9 +73,9 @@ function table_exists(mysqli $mysqli, string $tableName): bool {
 
 function load_mail_settings(mysqli $mysqli): array {
     $settings = [
-        'correo_corporativo' => 'no-reply@tvirtualgaming.local',
-        'smtp_host' => 'smtp.tuservidor.com',
-        'smtp_user' => 'no-reply@tvirtualgaming.local',
+        'correo_corporativo' => '',
+        'smtp_host' => '',
+        'smtp_user' => '',
         'smtp_pass' => '',
         'smtp_port' => 587,
         'smtp_secure' => 'tls',
@@ -109,6 +109,33 @@ function load_mail_settings(mysqli $mysqli): array {
     }
 
     return $settings;
+}
+
+function resolve_admin_email(mysqli $mysqli): ?string {
+    $envEmail = trim((string) getenv('TVG_ADMIN_EMAIL'));
+    if ($envEmail !== '' && filter_var($envEmail, FILTER_VALIDATE_EMAIL)) {
+        return $envEmail;
+    }
+
+    if (table_exists($mysqli, 'usuarios')) {
+        $resAdmin = $mysqli->query("SELECT email FROM usuarios WHERE rol='admin' AND email IS NOT NULL AND email != '' ORDER BY id ASC LIMIT 1");
+        if ($resAdmin && ($rowAdmin = $resAdmin->fetch_assoc())) {
+            $adminEmail = trim((string) ($rowAdmin['email'] ?? ''));
+            if ($adminEmail !== '' && filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
+                return $adminEmail;
+            }
+        }
+    }
+
+    $settings = load_mail_settings($mysqli);
+    foreach (['correo_corporativo', 'smtp_user'] as $key) {
+        $candidate = trim((string) ($settings[$key] ?? ''));
+        if ($candidate !== '' && filter_var($candidate, FILTER_VALIDATE_EMAIL)) {
+            return $candidate;
+        }
+    }
+
+    return null;
 }
 
 function fetch_valid_coupon(mysqli $mysqli, string $code): ?array {
@@ -155,9 +182,9 @@ function send_app_mail(string $to, string $subject, string $html, ?string $from 
     $settings = isset($mysqli) && $mysqli instanceof mysqli
         ? load_mail_settings($mysqli)
         : [
-            'correo_corporativo' => 'no-reply@tvirtualgaming.local',
-            'smtp_host' => 'smtp.tuservidor.com',
-            'smtp_user' => 'no-reply@tvirtualgaming.local',
+            'correo_corporativo' => '',
+            'smtp_host' => '',
+            'smtp_user' => '',
             'smtp_pass' => '',
             'smtp_port' => 587,
             'smtp_secure' => 'tls',
@@ -258,7 +285,7 @@ function send_app_mail_via_smtp_socket(string $to, string $subject, string $html
 
     try {
         smtp_expect_ok($socket, [220], 'Conexión SMTP');
-        smtp_send_command($socket, 'EHLO virtualgaming.local', [250], 'EHLO inicial');
+        smtp_send_command($socket, 'EHLO localhost', [250], 'EHLO inicial');
 
         if ($secure === 'tls') {
             smtp_send_command($socket, 'STARTTLS', [220], 'STARTTLS');
@@ -266,7 +293,7 @@ function send_app_mail_via_smtp_socket(string $to, string $subject, string $html
             if ($cryptoEnabled !== true) {
                 throw new RuntimeException('No se pudo habilitar TLS');
             }
-            smtp_send_command($socket, 'EHLO virtualgaming.local', [250], 'EHLO tras TLS');
+            smtp_send_command($socket, 'EHLO localhost', [250], 'EHLO tras TLS');
         }
 
         smtp_send_command($socket, 'AUTH LOGIN', [334], 'AUTH LOGIN');
@@ -458,14 +485,7 @@ if ($action === 'create') {
         json_error('No se pudo guardar el pedido');
     }
     $order_id = $mysqli->insert_id;
-    // Obtener correo del primer usuario admin
-    $adminEmail = null;
-    $resAdmin = $mysqli->query("SELECT email FROM usuarios WHERE rol='admin' AND email IS NOT NULL AND email != '' LIMIT 1");
-    if ($resAdmin && $rowAdmin = $resAdmin->fetch_assoc()) {
-        $adminEmail = $rowAdmin['email'];
-    } else {
-        $adminEmail = 'admin@tvirtualgaming.local';
-    }
+    $adminEmail = resolve_admin_email($mysqli);
 
     $customerMessage = '<p style="margin:0 0 10px;">Hemos recibido tu pedido correctamente y ya quedó registrado en el sistema.</p>'
         . '<p style="margin:0;">Te notificaremos cuando el estado cambie o cuando el equipo procese la entrega.</p>';
@@ -496,7 +516,9 @@ if ($action === 'create') {
         'status' => 'Pendiente',
     ], '#34d399');
     send_app_mail($email, "Pedido recibido #{$order_id}", $customerHtml);
-    send_app_mail($adminEmail, "Nuevo pedido #{$order_id}", $adminHtml);
+    if ($adminEmail !== null) {
+        send_app_mail($adminEmail, "Nuevo pedido #{$order_id}", $adminHtml);
+    }
 
     echo json_encode([
         'ok' => true,
@@ -530,7 +552,7 @@ if ($action === 'update_status') {
     $stmt->bind_param('si', $new_status, $order_id);
     $stmt->execute();
 
-    $adminEmail = getenv('TVG_ADMIN_EMAIL') ?: 'admin@tvirtualgaming.local';
+    $adminEmail = resolve_admin_email($mysqli);
     $statusLabel = ucfirst($new_status);
     $customerStatusMessage = '<p style="margin:0 0 10px;">El estado de tu pedido fue actualizado correctamente.</p>'
         . '<p style="margin:0;">Estado actual: <strong style="color:#22d3ee;">' . email_escape($statusLabel) . '</strong>.</p>';
@@ -560,7 +582,9 @@ if ($action === 'update_status') {
         'status' => $statusLabel,
     ], '#34d399');
     send_app_mail($order['email'], "Estado actualizado #{$order_id}", $customerStatusHtml);
-    send_app_mail($adminEmail, "Pedido #{$order_id} cambiado a {$new_status}", $adminStatusHtml);
+    if ($adminEmail !== null) {
+        send_app_mail($adminEmail, "Pedido #{$order_id} cambiado a {$new_status}", $adminStatusHtml);
+    }
 
     if (ob_get_length()) {
         ob_clean();

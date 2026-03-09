@@ -9,9 +9,9 @@ CREATE TABLE IF NOT EXISTS configuracion_general (
 
 -- Ejemplo de inserción de variables iniciales
 INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
-('correo_corporativo', 'no-reply@tvirtualgaming.local', 'Correo usado para notificaciones'),
-('smtp_host', 'smtp.tuservidor.com', 'Host SMTP para envío de correos'),
-('smtp_user', 'no-reply@tvirtualgaming.local', 'Usuario SMTP'),
+('correo_corporativo', '', 'Correo usado para notificaciones'),
+('smtp_host', '', 'Host SMTP para envío de correos'),
+('smtp_user', '', 'Usuario SMTP'),
 ('smtp_pass', '', 'Contraseña SMTP'),
 ('smtp_port', '587', 'Puerto SMTP'),
 ('smtp_secure', 'tls', 'Tipo de seguridad SMTP');
