@@ -8,20 +8,32 @@ if (!isset($pageTitle)) {
 if (!isset($brandName)) {
   $brandName = "TVirtualGaming";
 }
+
+if (!function_exists('asset_version')) {
+  function asset_version($absolutePath) {
+    return is_file($absolutePath) ? (string) filemtime($absolutePath) : '1';
+  }
+}
+
 $tenantSlugAttr = isset($tenantData["tenant"]["slug"]) ? $tenantData["tenant"]["slug"] : "default";
+$mainStylesPath = __DIR__ . '/../assets/css/estilos.css';
+$mainStylesVersion = asset_version($mainStylesPath);
 ?>
 <!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title><?php echo htmlspecialchars($pageTitle, ENT_QUOTES, "UTF-8"); ?></title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
   <!--<link rel="stylesheet" href="/assets/css/estilos.css" />-->
-  <link rel="stylesheet" href="/assets/css/estilos.css?v=<?php echo date('YmdHis'); ?>" />
+  <link rel="stylesheet" href="/assets/css/estilos.css?v=<?php echo htmlspecialchars($mainStylesVersion, ENT_QUOTES, 'UTF-8'); ?>" />
   <!-- Bootstrap does not require JS config for colors here -->
   <style>
     :root {

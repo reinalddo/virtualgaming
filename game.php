@@ -256,6 +256,53 @@ include __DIR__ . "/includes/header.php";
   </div>
 
 <style>
+  .pack-card {
+    min-height: 12.5rem;
+    border-width: 1px;
+  }
+
+  .pack-card .card-body {
+    min-height: 100%;
+  }
+
+  .pack-card-media {
+    width: 3.5rem;
+    height: 3.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border: 2px solid #22d3ee;
+    border-radius: 0.85rem;
+    background: #111827;
+    box-shadow: 0 0 10px rgba(34, 211, 238, 0.4);
+    flex-shrink: 0;
+  }
+
+  .pack-card-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .pack-card-placeholder {
+    color: #22d3ee;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+  }
+
+  .pack-card-name {
+    min-height: 2.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    line-height: 1.25;
+    width: 100%;
+  }
+
   .neon-selected {
     box-shadow: 0 0 16px 4px #00fff7, 0 0 32px 8px #34d399;
     border: 2px solid #00fff7 !important;
