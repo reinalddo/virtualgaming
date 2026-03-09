@@ -1,7 +1,10 @@
 <?php
 session_start();
+if (ob_get_level() === 0) {
+    ob_start();
+}
 header('Content-Type: application/json');
-@ini_set('display_errors', '1');
+@ini_set('display_errors', '0');
 error_reporting(E_ALL);
 
 require_once __DIR__ . '/../includes/db_connect.php';
@@ -62,6 +65,12 @@ function coupon_table_exists(mysqli $mysqli): bool {
     return $res && $res->num_rows > 0;
 }
 
+function table_exists(mysqli $mysqli, string $tableName): bool {
+    $safeName = $mysqli->real_escape_string($tableName);
+    $res = $mysqli->query("SHOW TABLES LIKE '{$safeName}'");
+    return $res && $res->num_rows > 0;
+}
+
 function fetch_valid_coupon(mysqli $mysqli, string $code): ?array {
     if ($code === '' || !coupon_table_exists($mysqli)) {
         return null;
@@ -94,31 +103,38 @@ function apply_coupon_to_price(float $price, array $coupon): float {
 
 function json_error(string $message, int $code = 400): void {
     http_response_code($code);
+    if (ob_get_length()) {
+        ob_clean();
+    }
     echo json_encode(['ok' => false, 'message' => $message]);
     exit;
 }
 
 function send_app_mail(string $to, string $subject, string $html, ?string $from = null): void {
-    require_once __DIR__ . '/../includes/PHPMailerAutoload.php';
-    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
-    // Obtener configuración SMTP desde la base de datos
-    global $mysqli;
-    $smtp_host = 'smtp.tuservidor.com';
-    $smtp_user = 'no-reply@tvirtualgaming.local';
-    $smtp_pass = '';
-    $smtp_port = 587;
-    $smtp_secure = 'tls';
-    $fromAddr = $from ?: $smtp_user;
-    $resCfg = $mysqli->query("SELECT * FROM configuracion LIMIT 1");
-    if ($resCfg && $cfg = $resCfg->fetch_assoc()) {
-        $smtp_host = $cfg['smtp_host'] ?: $smtp_host;
-        $smtp_user = $cfg['smtp_user'] ?: $smtp_user;
-        $smtp_pass = $cfg['smtp_pass'] ?: $smtp_pass;
-        $smtp_port = $cfg['smtp_port'] ?: $smtp_port;
-        $smtp_secure = $cfg['smtp_secure'] ?: $smtp_secure;
-        $fromAddr = $cfg['correo_corporativo'] ?: $smtp_user;
-    }
     try {
+        require_once __DIR__ . '/../includes/PHPMailerAutoload.php';
+        $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+        // Obtener configuración SMTP desde la base de datos si existe
+        global $mysqli;
+        $smtp_host = 'smtp.tuservidor.com';
+        $smtp_user = 'no-reply@tvirtualgaming.local';
+        $smtp_pass = '';
+        $smtp_port = 587;
+        $smtp_secure = 'tls';
+        $fromAddr = $from ?: $smtp_user;
+
+        if (isset($mysqli) && $mysqli instanceof mysqli && table_exists($mysqli, 'configuracion')) {
+            $resCfg = $mysqli->query("SELECT * FROM configuracion LIMIT 1");
+            if ($resCfg && $cfg = $resCfg->fetch_assoc()) {
+                $smtp_host = $cfg['smtp_host'] ?: $smtp_host;
+                $smtp_user = $cfg['smtp_user'] ?: $smtp_user;
+                $smtp_pass = $cfg['smtp_pass'] ?: $smtp_pass;
+                $smtp_port = $cfg['smtp_port'] ?: $smtp_port;
+                $smtp_secure = $cfg['smtp_secure'] ?: $smtp_secure;
+                $fromAddr = $cfg['correo_corporativo'] ?: $smtp_user;
+            }
+        }
+
         $mail->isSMTP();
         $mail->Host = $smtp_host;
         $mail->SMTPAuth = true;
@@ -132,8 +148,8 @@ function send_app_mail(string $to, string $subject, string $html, ?string $from 
         $mail->Subject = $subject;
         $mail->Body = $html;
         $mail->send();
-    } catch (Exception $e) {
-        // Puedes loguear el error si lo deseas
+    } catch (Throwable $e) {
+        // El correo no debe romper el flujo principal del pedido o del cambio de estado.
     }
 }
 
@@ -251,7 +267,7 @@ if ($action === 'create') {
         $adminEmail = 'admin@tvirtualgaming.local';
     }
 
-    $summary = "<strong>Pedido #{$order_id}</strong><br>Juego: {$game_name}<br>Paquete: {$pack_name} ({$pack_amount})<br>Total: {$currency} {$price}<br>Cliente: {$user_identifier} ({$email})";
+    $summary = "<strong>Pedido #{$order_id}</strong><br>Juego: {$game_name}<br>Paquete: {$pack_name} ({$pack_amount_text})<br>Total: {$currency} {$price}<br>Cliente: {$user_identifier} ({$email})";
     send_app_mail($email, "Pedido recibido #{$order_id}", "<p>Hemos recibido tu pedido.</p><p>{$summary}</p><p>Estado: pendiente</p>");
     send_app_mail($adminEmail, "Nuevo pedido #{$order_id}", "<p>Se generó un nuevo pedido.</p><p>{$summary}</p>");
 
@@ -292,7 +308,10 @@ if ($action === 'update_status') {
     send_app_mail($order['email'], "Estado actualizado #{$order_id}", "<p>El estado de tu pedido ahora es: <strong>{$new_status}</strong>.</p><p>{$summary}</p>");
     send_app_mail($adminEmail, "Pedido #{$order_id} cambiado a {$new_status}", "<p>Se actualizó el pedido.</p><p>{$summary}</p>");
 
-    echo json_encode(['ok' => true, 'message' => 'Estado actualizado', 'estado' => $new_status]);
+    if (ob_get_length()) {
+        ob_clean();
+    }
+    echo json_encode(['ok' => true, 'message' => 'Estado actualizado', 'estado' => $new_status, 'order_id' => $order_id]);
     exit;
 }
 

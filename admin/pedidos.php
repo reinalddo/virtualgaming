@@ -107,7 +107,7 @@ function format_money($amount): string {
               </thead>
               <tbody id="table-body-<?= $st ?>">
                 <?php foreach ($list as $order): ?>
-                  <tr style="background:#181f2a; color:#fff;">
+                  <tr data-order-row="<?= $order['id'] ?>" data-status="<?= $st ?>" style="background:#181f2a; color:#fff;">
                     <td style="background:#181f2a; color:#00fff7; font-weight:bold;">#<?= $order['id'] ?></td>
                     <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars($order['creado_en']) ?></td>
                     <td style="background:#181f2a; color:#00fff7; font-weight:bold;"><?= htmlspecialchars($order['user_identifier']) ?></td>
@@ -139,7 +139,7 @@ function format_money($amount): string {
           </div>
 
           <!-- Mobile Cards -->
-          <div class="d-block d-md-none" style="margin-top:1.5rem;">
+          <div id="cards-<?= $st ?>" class="d-block d-md-none" style="margin-top:1.5rem;">
             <?php foreach ($list as $order): ?>
               <div data-order-card="<?= $order['id'] ?>" data-status="<?= $st ?>" style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:1rem; color:#00fff7; margin-bottom:1.5rem;">
                 <div style="display:flex; align-items:center; justify-content:space-between;">
@@ -296,7 +296,17 @@ function format_money($amount): string {
       const selectCard = card.querySelector('select');
       if (selectCard) selectCard.value = newStatus;
     }
-    // Ya no cambiamos de pestaña automáticamente
+  }
+
+  function updateTabCounts() {
+    panels.forEach(panel => {
+      const status = panel.dataset.panel;
+      const count = document.querySelectorAll(`[data-order-row][data-status="${status}"]`).length;
+      const totalLabel = panel.querySelector('p[style*="Total:"]');
+      if (totalLabel) {
+        totalLabel.textContent = `Total: ${count} pedidos`;
+      }
+    });
   }
 
   function bindStatusSelectors(){
@@ -306,8 +316,6 @@ function format_money($amount): string {
         const prevStatus = sel.dataset.status;
         const newStatus = sel.value;
         sel.disabled = true;
-        // Mueve el pedido inmediatamente en el frontend
-        moveOrder(orderId, newStatus);
         const fd = new FormData();
         fd.append('action','update_status');
         fd.append('order_id', orderId);
@@ -316,13 +324,22 @@ function format_money($amount): string {
           const res = await fetch('/api/pedidos.php', { method: 'POST', body: fd });
           const txt = await res.text();
           let data;
-          try { data = JSON.parse(txt); } catch (_) { throw new Error('Respuesta no válida del servidor'); }
+          try {
+            data = JSON.parse(txt);
+          } catch (_) {
+            throw new Error('Respuesta no válida del servidor');
+          }
           if (!data.ok) throw new Error(data.message || 'Error');
+          moveOrder(orderId, newStatus);
+          document.querySelectorAll(`.js-status[data-order-id="${orderId}"]`).forEach(control => {
+            control.dataset.status = newStatus;
+            control.value = newStatus;
+          });
+          updateTabCounts();
+          showTab(newStatus);
           // Actualiza el status en el selector para futuras referencias
           sel.dataset.status = newStatus;
         } catch(err){
-          // Si hay error, revierte el cambio en el frontend
-          moveOrder(orderId, prevStatus);
           sel.value = prevStatus;
           alert(err.message || 'No se pudo cambiar el estado');
         } finally {
@@ -331,6 +348,7 @@ function format_money($amount): string {
       });
     });
   }
+  updateTabCounts();
   bindStatusSelectors();
 })();
 </script>
