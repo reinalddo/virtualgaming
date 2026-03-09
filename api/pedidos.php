@@ -304,6 +304,62 @@ function sanitize_str(?string $value, int $max = 255): ?string {
     return substr($clean, 0, $max);
 }
 
+function email_escape(?string $value): string {
+    return htmlspecialchars((string) ($value ?? ''), ENT_QUOTES, 'UTF-8');
+}
+
+function render_order_email(string $title, string $eyebrow, string $messageHtml, array $orderData, string $accent = '#22d3ee'): string {
+    $orderId = email_escape((string) ($orderData['order_id'] ?? ''));
+    $gameName = email_escape($orderData['game_name'] ?? '');
+    $packName = email_escape($orderData['pack_name'] ?? '');
+    $packAmount = email_escape($orderData['pack_amount'] ?? '');
+    $currency = email_escape($orderData['currency'] ?? '');
+    $price = email_escape($orderData['price'] ?? '');
+    $userIdentifier = email_escape($orderData['user_identifier'] ?? '');
+    $email = email_escape($orderData['email'] ?? '');
+    $coupon = trim((string) ($orderData['coupon'] ?? ''));
+    $status = email_escape($orderData['status'] ?? '');
+    $couponRow = $coupon !== ''
+        ? '<tr><td style="padding:10px 0;color:#94a3b8;font-size:14px;border-bottom:1px solid #1e293b;">Cupón</td><td style="padding:10px 0;color:#e2e8f0;font-size:14px;text-align:right;border-bottom:1px solid #1e293b;">' . email_escape($coupon) . '</td></tr>'
+        : '';
+    $statusRow = $status !== ''
+        ? '<tr><td style="padding:10px 0;color:#94a3b8;font-size:14px;border-bottom:1px solid #1e293b;">Estado</td><td style="padding:10px 0;color:#e2e8f0;font-size:14px;text-align:right;border-bottom:1px solid #1e293b;">' . $status . '</td></tr>'
+        : '';
+
+    return '<!doctype html>'
+        . '<html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>' . email_escape($title) . '</title></head>'
+        . '<body style="margin:0;padding:0;background:#0a0f14;font-family:Arial,Helvetica,sans-serif;color:#e2e8f0;">'
+        . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0a0f14;padding:24px 12px;">'
+        . '<tr><td align="center">'
+        . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:#111827;border:1px solid #164e63;border-radius:20px;overflow:hidden;box-shadow:0 0 0 1px rgba(34,211,238,0.08),0 20px 40px rgba(0,0,0,0.35);">'
+        . '<tr><td style="padding:28px 32px;background:linear-gradient(135deg,#0b1220 0%,#102133 55%,#0f3b46 100%);text-align:center;">'
+        . '<div style="color:#67e8f9;font-size:12px;letter-spacing:4px;text-transform:uppercase;margin-bottom:10px;">' . email_escape($eyebrow) . '</div>'
+        . '<div style="color:#ffffff;font-size:32px;line-height:1.2;font-weight:700;margin-bottom:8px;">TVirtualGaming</div>'
+        . '<div style="display:inline-block;padding:6px 14px;border:1px solid ' . $accent . ';border-radius:999px;color:' . $accent . ';font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">Notificación de pedido</div>'
+        . '</td></tr>'
+        . '<tr><td style="padding:32px;">'
+        . '<h1 style="margin:0 0 14px;color:#f8fafc;font-size:28px;line-height:1.2;">' . email_escape($title) . '</h1>'
+        . '<div style="color:#cbd5e1;font-size:15px;line-height:1.7;margin-bottom:24px;">' . $messageHtml . '</div>'
+        . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background:#0f172a;border:1px solid #1e293b;border-radius:16px;overflow:hidden;">'
+        . '<tr><td colspan="2" style="padding:16px 20px;background:#0b1220;color:#67e8f9;font-size:16px;font-weight:700;">Pedido #' . $orderId . '</td></tr>'
+        . '<tr><td style="padding:10px 0 10px 20px;color:#94a3b8;font-size:14px;border-bottom:1px solid #1e293b;">Juego</td><td style="padding:10px 20px 10px 0;color:#e2e8f0;font-size:14px;text-align:right;border-bottom:1px solid #1e293b;">' . $gameName . '</td></tr>'
+        . '<tr><td style="padding:10px 0 10px 20px;color:#94a3b8;font-size:14px;border-bottom:1px solid #1e293b;">Paquete</td><td style="padding:10px 20px 10px 0;color:#e2e8f0;font-size:14px;text-align:right;border-bottom:1px solid #1e293b;">' . $packName . ($packAmount !== '' ? ' (' . $packAmount . ')' : '') . '</td></tr>'
+        . '<tr><td style="padding:10px 0 10px 20px;color:#94a3b8;font-size:14px;border-bottom:1px solid #1e293b;">Total</td><td style="padding:10px 20px 10px 0;color:' . $accent . ';font-size:18px;font-weight:700;text-align:right;border-bottom:1px solid #1e293b;">' . $currency . ' ' . $price . '</td></tr>'
+        . '<tr><td style="padding:10px 0 10px 20px;color:#94a3b8;font-size:14px;border-bottom:1px solid #1e293b;">Cliente</td><td style="padding:10px 20px 10px 0;color:#e2e8f0;font-size:14px;text-align:right;border-bottom:1px solid #1e293b;">' . $userIdentifier . '</td></tr>'
+        . '<tr><td style="padding:10px 0 10px 20px;color:#94a3b8;font-size:14px;border-bottom:1px solid #1e293b;">Correo</td><td style="padding:10px 20px 10px 0;color:#e2e8f0;font-size:14px;text-align:right;border-bottom:1px solid #1e293b;">' . $email . '</td></tr>'
+        . $couponRow
+        . $statusRow
+        . '</table>'
+        . '<div style="margin-top:24px;padding:16px 18px;background:#0b1220;border:1px solid #1e293b;border-radius:14px;color:#94a3b8;font-size:13px;line-height:1.6;">'
+        . 'Este correo fue generado automáticamente por TVirtualGaming. Si necesitas revisar el pedido, ingresa al panel o responde desde los canales de soporte configurados.'
+        . '</div>'
+        . '</td></tr>'
+        . '</table>'
+        . '</td></tr>'
+        . '</table>'
+        . '</body></html>';
+}
+
 function normalize_coupon_code(string $value): string {
     return strtoupper(trim($value));
 }
@@ -411,9 +467,36 @@ if ($action === 'create') {
         $adminEmail = 'admin@tvirtualgaming.local';
     }
 
-    $summary = "<strong>Pedido #{$order_id}</strong><br>Juego: {$game_name}<br>Paquete: {$pack_name} ({$pack_amount_text})<br>Total: {$currency} {$price}<br>Cliente: {$user_identifier} ({$email})";
-    send_app_mail($email, "Pedido recibido #{$order_id}", "<p>Hemos recibido tu pedido.</p><p>{$summary}</p><p>Estado: pendiente</p>");
-    send_app_mail($adminEmail, "Nuevo pedido #{$order_id}", "<p>Se generó un nuevo pedido.</p><p>{$summary}</p>");
+    $customerMessage = '<p style="margin:0 0 10px;">Hemos recibido tu pedido correctamente y ya quedó registrado en el sistema.</p>'
+        . '<p style="margin:0;">Te notificaremos cuando el estado cambie o cuando el equipo procese la entrega.</p>';
+    $adminMessage = '<p style="margin:0 0 10px;">Se generó un nuevo pedido y ya está disponible para revisión en el panel administrativo.</p>'
+        . '<p style="margin:0;">Valida los datos del cliente y procede con la gestión correspondiente.</p>';
+    $customerHtml = render_order_email('Pedido recibido', 'Cliente', $customerMessage, [
+        'order_id' => $order_id,
+        'game_name' => $game_name,
+        'pack_name' => $pack_name,
+        'pack_amount' => $pack_amount_text,
+        'currency' => $currency,
+        'price' => number_format($price, 2, '.', ','),
+        'user_identifier' => $user_identifier,
+        'email' => $email,
+        'coupon' => $cupon,
+        'status' => 'Pendiente',
+    ]);
+    $adminHtml = render_order_email('Nuevo pedido', 'Administrador', $adminMessage, [
+        'order_id' => $order_id,
+        'game_name' => $game_name,
+        'pack_name' => $pack_name,
+        'pack_amount' => $pack_amount_text,
+        'currency' => $currency,
+        'price' => number_format($price, 2, '.', ','),
+        'user_identifier' => $user_identifier,
+        'email' => $email,
+        'coupon' => $cupon,
+        'status' => 'Pendiente',
+    ], '#34d399');
+    send_app_mail($email, "Pedido recibido #{$order_id}", $customerHtml);
+    send_app_mail($adminEmail, "Nuevo pedido #{$order_id}", $adminHtml);
 
     echo json_encode([
         'ok' => true,
@@ -448,9 +531,36 @@ if ($action === 'update_status') {
     $stmt->execute();
 
     $adminEmail = getenv('TVG_ADMIN_EMAIL') ?: 'admin@tvirtualgaming.local';
-    $summary = "<strong>Pedido #{$order_id}</strong><br>Juego: {$order['juego_nombre']}<br>Paquete: {$order['paquete_nombre']} ({$order['paquete_cantidad']})<br>Total: {$order['moneda']} {$order['precio']}<br>Cliente: {$order['user_identifier']} ({$order['email']})";
-    send_app_mail($order['email'], "Estado actualizado #{$order_id}", "<p>El estado de tu pedido ahora es: <strong>{$new_status}</strong>.</p><p>{$summary}</p>");
-    send_app_mail($adminEmail, "Pedido #{$order_id} cambiado a {$new_status}", "<p>Se actualizó el pedido.</p><p>{$summary}</p>");
+    $statusLabel = ucfirst($new_status);
+    $customerStatusMessage = '<p style="margin:0 0 10px;">El estado de tu pedido fue actualizado correctamente.</p>'
+        . '<p style="margin:0;">Estado actual: <strong style="color:#22d3ee;">' . email_escape($statusLabel) . '</strong>.</p>';
+    $adminStatusMessage = '<p style="margin:0 0 10px;">Se actualizó el estado de un pedido desde el panel administrativo.</p>'
+        . '<p style="margin:0;">Estado actual: <strong style="color:#34d399;">' . email_escape($statusLabel) . '</strong>.</p>';
+    $customerStatusHtml = render_order_email('Estado actualizado', 'Cliente', $customerStatusMessage, [
+        'order_id' => $order_id,
+        'game_name' => $order['juego_nombre'],
+        'pack_name' => $order['paquete_nombre'],
+        'pack_amount' => $order['paquete_cantidad'],
+        'currency' => $order['moneda'],
+        'price' => number_format((float) $order['precio'], 2, '.', ','),
+        'user_identifier' => $order['user_identifier'],
+        'email' => $order['email'],
+        'status' => $statusLabel,
+    ]);
+    $adminStatusHtml = render_order_email('Pedido actualizado', 'Administrador', $adminStatusMessage, [
+        'order_id' => $order_id,
+        'game_name' => $order['juego_nombre'],
+        'pack_name' => $order['paquete_nombre'],
+        'pack_amount' => $order['paquete_cantidad'],
+        'currency' => $order['moneda'],
+        'price' => number_format((float) $order['precio'], 2, '.', ','),
+        'user_identifier' => $order['user_identifier'],
+        'email' => $order['email'],
+        'coupon' => null,
+        'status' => $statusLabel,
+    ], '#34d399');
+    send_app_mail($order['email'], "Estado actualizado #{$order_id}", $customerStatusHtml);
+    send_app_mail($adminEmail, "Pedido #{$order_id} cambiado a {$new_status}", $adminStatusHtml);
 
     if (ob_get_length()) {
         ob_clean();
