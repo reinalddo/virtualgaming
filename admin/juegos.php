@@ -358,48 +358,52 @@ $juegos = $resj->fetch_all(MYSQLI_ASSOC);
             </table>
         </div>
     <!-- Mobile Cards -->
-    <div class="d-block d-md-none space-y-4">
+    <div class="d-md-none">
+        <div class="row gy-4 mt-1 mb-2">
         <?php foreach ($juegos as $j): ?>
-            <div style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:1rem; color:#00fff7;">
-                <div style="display:flex; align-items:center; gap:1rem;">
-                    <?php if (!empty($j['imagen'])): ?>
-                        <img src="/<?= htmlspecialchars($j['imagen']) ?>" alt="img" style="border-radius:12px; max-height:180px; max-width:100%; border:2px solid #00fff7; background:#222c3a; box-shadow:0 0 12px #00fff7;">
-                    <?php else: ?>
-                        <span style="font-style:italic; color:#b2f6ff;">Sin imagen</span>
-                    <?php endif; ?>
-                </div>
-                <div style="margin-top:1rem;">
-                    <div style="font-weight:bold; font-size:1.2em; color:#00fff7; display:flex; align-items:center;">
-                        <?= htmlspecialchars($j['nombre']) ?>
-                        <?php if (!empty($j['popular'])): ?>
-                            <span title="Popular" style="margin-left:0.5em; color:#00fff7; font-size:1.2em;">★</span>
+            <div class="col-12">
+                <div class="card neon-card p-3" style="background:#181f2a; border:2px solid #22d3ee; box-shadow:0 0 16px #22d3ee,0 0 4px #2dd4bf; color:#22d3ee; border-radius:16px;">
+                    <div class="d-flex align-items-center mb-3">
+                        <?php if (!empty($j['imagen'])): ?>
+                            <img src="/<?= htmlspecialchars($j['imagen']) ?>" alt="img" class="rounded img-thumbnail me-3" style="max-height:120px;max-width:120px;box-shadow:0 0 8px #22d3ee; border:2px solid #22d3ee; background:#222c3a; object-fit:cover;">
+                        <?php else: ?>
+                            <span class="fst-italic text-secondary">Sin imagen</span>
                         <?php endif; ?>
+                        <div>
+                            <div class="fw-bold text-neon" style="font-size:1.1rem; color:#22d3ee;">
+                                <?= htmlspecialchars($j['nombre']) ?>
+                                <?php if (!empty($j['popular'])): ?>
+                                    <span title="Popular" style="margin-left:0.35rem; color:#22d3ee; font-size:1.1rem;">★</span>
+                                <?php endif; ?>
+                            </div>
+                            <div class="text-muted" style="font-size:0.85rem; color:#b2f6ff;">ID: <?= $j['id'] ?></div>
+                        </div>
                     </div>
-                    <div style="font-size:0.9em; color:#b2f6ff;">ID: <?= $j['id'] ?></div>
-                </div>
-                <div style="margin-top:0.5em; color:#fff;"><span style="color:#00fff7; font-weight:bold;">Descripción:</span> <?= nl2br(htmlspecialchars($j['descripcion'])) ?></div>
-                <div style="margin-top:0.5em; color:#fff;"><span style="color:#00fff7; font-weight:bold;">Moneda:</span> <?php 
-                    if (!empty($j['moneda_fija_id'])) {
-                        $mon = $mysqli->query("SELECT nombre FROM monedas WHERE id=" . intval($j['moneda_fija_id']));
-                        $moneda = $mon && $mon->num_rows ? $mon->fetch_assoc()['nombre'] : 'Desconocida';
-                        echo '<span style="color:#b2f6ff;">' . htmlspecialchars($moneda) . '</span>';
-                    } else {
-                        echo '<span style="font-style:italic; color:#b2f6ff;">Variable</span>';
-                    }
-                ?></div>
-                <div style="margin-top:0.5em; color:#fff;"><span style="color:#00fff7; font-weight:bold;">Características:</span> <?php 
-                    $carRes = $mysqli->query("SELECT caracteristica FROM juego_caracteristicas WHERE juego_id=" . intval($j['id']));
-                    $cars = [];
-                    while ($row = $carRes->fetch_assoc()) $cars[] = $row['caracteristica'];
-                    echo $cars ? '<span style="color:#b2f6ff;">' . htmlspecialchars(implode(', ', $cars)) . '</span>' : '<span style="font-style:italic; color:#b2f6ff;">Ninguna</span>';
-                ?></div>
-                <div style="display:flex; gap:1rem; margin-top:1rem;">
-                    <a href="/admin/juegos?editar=<?= $j['id'] ?>" style="color:#00fff7; text-decoration:underline; font-weight:bold;">Editar</a>
-                    <a href="/admin/paquetes/<?= $j['id'] ?>" style="color:#00fff7; text-decoration:underline; font-weight:bold;">Paquetes</a>
-                    <a href="/admin/juegos?eliminar=<?= $j['id'] ?>" style="color:#ff0059; text-decoration:underline; font-weight:bold;" onclick="return confirm('¿Eliminar este juego y todos sus paquetes/características?')">Eliminar</a>
+                    <div style="color:#fff;"><span class="fw-semibold">Descripción:</span> <?= nl2br(htmlspecialchars($j['descripcion'])) ?></div>
+                    <div class="mt-2" style="color:#fff;"><span class="fw-semibold">Moneda:</span> <?php 
+                        if (!empty($j['moneda_fija_id'])) {
+                            $mon = $mysqli->query("SELECT nombre FROM monedas WHERE id=" . intval($j['moneda_fija_id']));
+                            $moneda = $mon && $mon->num_rows ? $mon->fetch_assoc()['nombre'] : 'Desconocida';
+                            echo '<span style="color:#b2f6ff;">' . htmlspecialchars($moneda) . '</span>';
+                        } else {
+                            echo '<span class="fst-italic" style="color:#b2f6ff;">Variable</span>';
+                        }
+                    ?></div>
+                    <div class="mt-2" style="color:#fff;"><span class="fw-semibold">Características:</span> <?php 
+                        $carRes = $mysqli->query("SELECT caracteristica FROM juego_caracteristicas WHERE juego_id=" . intval($j['id']));
+                        $cars = [];
+                        while ($row = $carRes->fetch_assoc()) $cars[] = $row['caracteristica'];
+                        echo $cars ? '<span style="color:#b2f6ff;">' . htmlspecialchars(implode(', ', $cars)) . '</span>' : '<span class="fst-italic" style="color:#b2f6ff;">Ninguna</span>';
+                    ?></div>
+                    <div class="mt-3 d-flex gap-3 flex-wrap">
+                        <a href="/admin/juegos?editar=<?= $j['id'] ?>" style="color:#22d3ee; text-decoration:underline; font-weight:bold;">Editar</a>
+                        <a href="/admin/paquetes/<?= $j['id'] ?>" style="color:#22d3ee; text-decoration:underline; font-weight:bold;">Paquetes</a>
+                        <a href="/admin/juegos?eliminar=<?= $j['id'] ?>" style="color:#ff0059; text-decoration:underline; font-weight:bold;" onclick="return confirm('¿Eliminar este juego y todos sus paquetes/características?')">Eliminar</a>
+                    </div>
                 </div>
             </div>
         <?php endforeach; ?>
+        </div>
     </div>
     <?php
     // Procesar eliminación de juego
