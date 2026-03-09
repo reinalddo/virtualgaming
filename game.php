@@ -112,20 +112,23 @@ include __DIR__ . "/includes/header.php";
           data-cantidad="<?= htmlspecialchars($pack['cantidad'], ENT_QUOTES, 'UTF-8') ?>"
           data-price="<?= number_format($precio_mostrar, 2, '.', '') ?>"
           data-moneda="<?= htmlspecialchars($clave_moneda) ?>">
-          <div class="card-body p-2 d-flex flex-column align-items-center justify-content-center">
-            <span class="fw-bold text-info fs-6 mb-2"><?= htmlspecialchars($pack['cantidad'], ENT_QUOTES, 'UTF-8') ?></span>
-            <p class="mb-2 fw-semibold text-white small"><?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?></p>
-            <div class="d-flex justify-content-between align-items-end w-100">
+          <div class="card-body p-2 d-flex flex-column align-items-center">
+            <?php 
+              $img_paquete = !empty($pack['imagen_icono']) ? $pack['imagen_icono'] : (!empty($game['imagen_paquete']) ? $game['imagen_paquete'] : null);
+            ?>
+            <div class="pack-card-media mb-2">
+              <?php if ($img_paquete): ?>
+                <img src="/<?= htmlspecialchars($img_paquete, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?>" class="pack-card-image" />
+              <?php else: ?>
+                <span class="pack-card-placeholder">PK</span>
+              <?php endif; ?>
+            </div>
+            <p class="pack-card-name mb-2 fw-semibold text-white small"><?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?></p>
+            <div class="d-flex justify-content-between align-items-end w-100 mt-auto">
               <span class="moneda-label text-info small"><?= htmlspecialchars($clave_moneda) ?></span>
               <span class="precio-label text-info small ms-2">
                 <?= number_format($precio_mostrar, 2, '.', ',') ?>
               </span>
-              <?php 
-                $img_paquete = !empty($pack['imagen_icono']) ? $pack['imagen_icono'] : (!empty($game['imagen_paquete']) ? $game['imagen_paquete'] : null);
-                if ($img_paquete):
-              ?>
-                <img src="/<?= htmlspecialchars($img_paquete, ENT_QUOTES, 'UTF-8') ?>" alt="Imagen Paquete" class="img-thumbnail ms-auto" style="width:40px;height:40px;object-fit:cover;" />
-              <?php endif; ?>
             </div>
           </div>
         </button>
