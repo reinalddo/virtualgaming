@@ -99,25 +99,25 @@ $tenantSlugAttr = isset($tenantData["tenant"]["slug"]) ? $tenantData["tenant"]["
     <div class="position-absolute top-0 start-50 translate-middle-x rounded-circle" style="height:18rem;width:18rem;background:rgba(34,211,238,0.15);filter:blur(48px);pointer-events:none;"></div>
     <div class="position-absolute bottom-0 end-0 rounded-circle" style="height:16rem;width:16rem;background:rgba(52,211,153,0.10);filter:blur(48px);pointer-events:none;"></div>
 
-    <div class="container-lg position-relative pb-5 pt-4" data-tenant="<?php echo htmlspecialchars($tenantSlugAttr, ENT_QUOTES, "UTF-8"); ?>">
-      <header class="d-flex align-items-center justify-content-between">
+    <div class="container-lg store-shell position-relative pb-5 pt-4" data-tenant="<?php echo htmlspecialchars($tenantSlugAttr, ENT_QUOTES, "UTF-8"); ?>">
+      <header class="site-header d-flex align-items-center justify-content-between gap-3">
         <button id="menu-toggle" class="btn btn-outline-info rounded-circle d-flex align-items-center justify-content-center" style="width:44px;height:44px;" aria-label="Abrir menú">
           <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" class="bi bi-list" viewBox="0 0 16 16">
             <path fill-rule="evenodd" d="M2.5 12.5a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1h-10a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1h-10a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1h-10a.5.5 0 0 1-.5-.5z"/>
           </svg>
         </button>
-        <div class="text-center">
+        <div class="site-brand text-center">
           <p class="small text-uppercase text-info mb-0" style="letter-spacing:0.3em;">tienda</p>
           <h1 class="fw-bold" style="font-family:'Oxanium', 'Space Grotesk', sans-serif;font-size:1.25rem;color:#fff;"><?php echo htmlspecialchars($brandName, ENT_QUOTES, "UTF-8"); ?></h1>
         </div>
-        <div id="auth-container" class="position-relative">
+        <div id="auth-container" class="site-auth-container position-relative">
           <?php if (!isset($_SESSION['auth_user'])): ?>
-            <button id="auth-trigger" type="button" class="d-flex align-items-center gap-2 neon-btn border border-info bg-dark px-2 py-1 text-uppercase fw-bold text-info shadow-sm" style="font-size:11px;box-shadow:0 0 8px #22d3ee, 0 0 2px #2dd4bf;transition:box-shadow 0.2s;min-width:120px;">
+            <button id="auth-trigger" type="button" class="site-auth-trigger d-flex align-items-center gap-2 neon-btn border border-info bg-dark px-2 py-1 text-uppercase fw-bold text-info shadow-sm" style="font-size:11px;box-shadow:0 0 8px #22d3ee, 0 0 2px #2dd4bf;transition:box-shadow 0.2s;min-width:120px;">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" style="width:18px;height:18px;">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 20.118a7.5 7.5 0 0115 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.5-1.632z" />
               </svg>
-              <span style="text-shadow:0 0 4px #22d3ee, 0 0 1px #2dd4bf;">Iniciar Sesión / Registrarse</span>
+              <span class="site-auth-label" style="text-shadow:0 0 4px #22d3ee, 0 0 1px #2dd4bf;">Iniciar Sesión / Registrarse</span>
             </button>
             <div id="auth-menu" class="position-absolute end-0 mt-2 z-3 d-none" style="min-width:160px;max-width:220px;box-shadow:0 0 16px #22d3ee, 0 0 4px #2dd4bf;border-radius:0.75rem;border:1.5px solid #22d3ee;background:#181f2a;padding:0.75rem;">
               <button type="button" class="btn btn-info neon-btn-info w-100 rounded-3 border mb-2 fw-bold text-uppercase shadow-sm" style="font-size:12px;" onclick="openAuthModal('login');document.getElementById('auth-menu').classList.add('d-none');">Iniciar sesión</button>
