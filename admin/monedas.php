@@ -98,7 +98,7 @@ $monedas = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
                 <td style="background:#181f2a; color:#00fff7;"><?= htmlspecialchars($m['clave']) ?></td>
                 <td style="background:#181f2a; color:#00fff7;"><?= htmlspecialchars($m['tasa']) ?></td>
                 <td style="background:#181f2a; color:#00fff7;"><?= $m['es_base'] ? '<span style=\'color:#00fff7;\'>Sí</span>' : 'No' ?></td>
-                <td style="background:#181f2a;"><?php if (!$m['es_base']): ?><a href="?editar=<?= $m['id'] ?>" style="color:#00fff7; text-decoration:underline; margin-right:1em;">Editar</a><a href="?eliminar=<?= $m['id'] ?>" onclick="return confirm('¿Eliminar moneda?')" style="color:#ff0059; text-decoration:underline;">Eliminar</a><?php else: ?>-<?php endif; ?></td>
+                <td style="background:#181f2a;"><?php if (!$m['es_base']): ?><a href="?editar=<?= $m['id'] ?>" style="color:#00fff7; text-decoration:underline; margin-right:1em; display:inline-block;">Editar</a><a href="?eliminar=<?= $m['id'] ?>" onclick="return confirm('¿Eliminar moneda?')" style="color:#ff0059; text-decoration:underline; display:inline-block; margin-left:0.25rem;">Eliminar</a><?php else: ?>-<?php endif; ?></td>
                 <?php endif; ?>
             </tr>
             <?php endforeach; ?>
@@ -115,7 +115,7 @@ $monedas = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
             </div>
             <div style="color:#fff; margin-bottom:0.3em;"><span style="color:#00fff7; font-weight:bold;">Tasa:</span> <?= htmlspecialchars($m['tasa']) ?></div>
             <div style="color:#fff; margin-bottom:0.3em;"><span style="color:#00fff7; font-weight:bold;">Base:</span> <?= $m['es_base'] ? '<span style=\'color:#00fff7;\'>Sí</span>' : 'No' ?></div>
-            <div style="display:flex; margin-top:1rem;">
+            <div style="display:flex; margin-top:1rem; gap:1rem; flex-wrap:wrap;">
                 <?php if (!$m['es_base']): ?>
                     <a href="?editar=<?= $m['id'] ?>" style="color:#00fff7; text-decoration:underline; font-weight:bold;">Editar</a>
                     <a href="?eliminar=<?= $m['id'] ?>" onclick="return confirm('¿Eliminar moneda?')" style="color:#ff0059; text-decoration:underline; font-weight:bold;">Eliminar</a>
@@ -126,6 +126,6 @@ $monedas = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
         </div>
         <?php endforeach; ?>
     </div>
-    <a href="/admin/juegos" class="btn btn-link text-info">Volver a juegos</a>
+    <a href="/admin/dashboard" class="btn btn-link text-info">Regresar</a>
 </main>
 <?php include '../includes/footer.php'; ?>
