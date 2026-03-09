@@ -71,6 +71,46 @@ function table_exists(mysqli $mysqli, string $tableName): bool {
     return $res && $res->num_rows > 0;
 }
 
+function load_mail_settings(mysqli $mysqli): array {
+    $settings = [
+        'correo_corporativo' => 'no-reply@tvirtualgaming.local',
+        'smtp_host' => 'smtp.tuservidor.com',
+        'smtp_user' => 'no-reply@tvirtualgaming.local',
+        'smtp_pass' => '',
+        'smtp_port' => 587,
+        'smtp_secure' => 'tls',
+    ];
+
+    if (table_exists($mysqli, 'configuracion_general')) {
+        $res = $mysqli->query("SELECT clave, valor FROM configuracion_general");
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $key = $row['clave'] ?? '';
+                if ($key !== '' && array_key_exists($key, $settings)) {
+                    $settings[$key] = $row['valor'];
+                }
+            }
+        }
+    } elseif (table_exists($mysqli, 'configuracion')) {
+        $res = $mysqli->query("SELECT * FROM configuracion ORDER BY id DESC LIMIT 1");
+        if ($res && ($row = $res->fetch_assoc())) {
+            foreach ($settings as $key => $defaultValue) {
+                if (isset($row[$key]) && $row[$key] !== '') {
+                    $settings[$key] = $row[$key];
+                }
+            }
+        }
+    }
+
+    $settings['smtp_port'] = (int) ($settings['smtp_port'] ?: 587);
+    $settings['smtp_secure'] = strtolower(trim((string) $settings['smtp_secure']));
+    if (!in_array($settings['smtp_secure'], ['ssl', 'tls'], true)) {
+        $settings['smtp_secure'] = 'tls';
+    }
+
+    return $settings;
+}
+
 function fetch_valid_coupon(mysqli $mysqli, string $code): ?array {
     if ($code === '' || !coupon_table_exists($mysqli)) {
         return null;
@@ -114,26 +154,18 @@ function send_app_mail(string $to, string $subject, string $html, ?string $from 
     try {
         require_once __DIR__ . '/../includes/PHPMailerAutoload.php';
         $mail = new PHPMailer\PHPMailer\PHPMailer(true);
-        // Obtener configuración SMTP desde la base de datos si existe
+        $mail->CharSet = 'UTF-8';
         global $mysqli;
-        $smtp_host = 'smtp.tuservidor.com';
-        $smtp_user = 'no-reply@tvirtualgaming.local';
-        $smtp_pass = '';
-        $smtp_port = 587;
-        $smtp_secure = 'tls';
-        $fromAddr = $from ?: $smtp_user;
+        $settings = isset($mysqli) && $mysqli instanceof mysqli
+            ? load_mail_settings($mysqli)
+            : load_mail_settings(new mysqli('localhost', 'root', '', 'tvirtualgaming'));
 
-        if (isset($mysqli) && $mysqli instanceof mysqli && table_exists($mysqli, 'configuracion')) {
-            $resCfg = $mysqli->query("SELECT * FROM configuracion LIMIT 1");
-            if ($resCfg && $cfg = $resCfg->fetch_assoc()) {
-                $smtp_host = $cfg['smtp_host'] ?: $smtp_host;
-                $smtp_user = $cfg['smtp_user'] ?: $smtp_user;
-                $smtp_pass = $cfg['smtp_pass'] ?: $smtp_pass;
-                $smtp_port = $cfg['smtp_port'] ?: $smtp_port;
-                $smtp_secure = $cfg['smtp_secure'] ?: $smtp_secure;
-                $fromAddr = $cfg['correo_corporativo'] ?: $smtp_user;
-            }
-        }
+        $smtp_host = $settings['smtp_host'];
+        $smtp_user = $settings['smtp_user'];
+        $smtp_pass = $settings['smtp_pass'];
+        $smtp_port = $settings['smtp_port'];
+        $smtp_secure = $settings['smtp_secure'];
+        $fromAddr = $from ?: ($settings['correo_corporativo'] ?: $smtp_user);
 
         $mail->isSMTP();
         $mail->Host = $smtp_host;
@@ -149,7 +181,7 @@ function send_app_mail(string $to, string $subject, string $html, ?string $from 
         $mail->Body = $html;
         $mail->send();
     } catch (Throwable $e) {
-        // El correo no debe romper el flujo principal del pedido o del cambio de estado.
+        error_log('TVG mail error: ' . $e->getMessage());
     }
 }
 
