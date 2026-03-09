@@ -214,7 +214,7 @@ include __DIR__ . "/includes/header.php";
     <div class="col-md-4">
       <label class="form-label text-info">Cupón</label>
       <div class="input-group">
-        <input type="text" name="coupon" id="coupon-input" placeholder="Código opcional" class="form-control bg-dark text-info border-info" />
+        <input type="text" name="coupon" id="coupon-input" placeholder="Código opcional" pattern="[A-Za-z0-9]+" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" title="Solo letras y números, sin espacios ni caracteres especiales." class="form-control bg-dark text-info border-info" />
         <button type="button" id="apply-coupon-btn" class="btn btn-info fw-bold">Aplicar cupón</button>
       </div>
     </div>
@@ -404,9 +404,22 @@ include __DIR__ . "/includes/header.php";
                 document.body.appendChild(toast);
                 setTimeout(() => toast.remove(), 2500);
               }
+
+              function normalizeCouponCode(value) {
+                return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+              }
+
+              couponInput.addEventListener('input', function() {
+                const normalized = normalizeCouponCode(couponInput.value);
+                if (couponInput.value !== normalized) {
+                  couponInput.value = normalized;
+                }
+              });
+
               // Validación de cupón por AJAX
               document.getElementById('apply-coupon-btn').addEventListener('click', function() {
-                const cupon = couponInput.value.trim();
+                const cupon = normalizeCouponCode(couponInput.value);
+                couponInput.value = cupon;
                 const pack = activePack;
                 // Aseguramos que el precio sea un número puro
                 const precioNumerico = typeof pack.price === 'string' ? pack.price.replace(/,/g, '') : pack.price;
@@ -454,7 +467,8 @@ include __DIR__ . "/includes/header.php";
               orderForm.addEventListener('submit', function(event) {
                 event.preventDefault();
                 const btn = document.getElementById('buy-button');
-                const couponVal = couponInput.value.trim();
+                const couponVal = normalizeCouponCode(couponInput.value);
+                couponInput.value = couponVal;
                 const userId = orderForm.user_id.value.trim();
                 const email = orderForm.email.value.trim();
                 const pack = activePack;

@@ -16,13 +16,29 @@ try {
     exit;
 }
 
-$code = isset($_POST['code']) ? trim($_POST['code']) : '';
+function normalize_coupon_code(string $value): string {
+    return strtoupper(trim($value));
+}
+
+function is_valid_coupon_code(string $value): bool {
+    return $value !== '' && preg_match('/^[A-Za-z0-9]+$/', $value) === 1;
+}
+
+$codeInput = isset($_POST['code']) ? trim($_POST['code']) : '';
+$code = normalize_coupon_code($codeInput);
 $pack_price = isset($_POST['pack_price']) ? floatval($_POST['pack_price']) : 0;
 
 if ($code === '') {
     $errorMsg = date('Y-m-d H:i:s') . " | ERROR: Cupón vacío.\n";
     file_put_contents(__DIR__ . '/log_cupon.txt', $errorMsg, FILE_APPEND);
     echo json_encode(['success' => false, 'message' => 'Cupón vacío.']);
+    exit;
+}
+
+if (!is_valid_coupon_code($codeInput)) {
+    $errorMsg = date('Y-m-d H:i:s') . " | ERROR: Cupón con formato inválido.\n";
+    file_put_contents(__DIR__ . '/log_cupon.txt', $errorMsg, FILE_APPEND);
+    echo json_encode(['success' => false, 'message' => 'El cupón solo puede contener letras y números, sin espacios ni caracteres especiales.']);
     exit;
 }
 

@@ -144,6 +144,14 @@ function sanitize_str(?string $value, int $max = 255): ?string {
     return substr($clean, 0, $max);
 }
 
+function normalize_coupon_code(string $value): string {
+    return strtoupper(trim($value));
+}
+
+function is_valid_coupon_code(string $value): bool {
+    return $value !== '' && preg_match('/^[A-Za-z0-9]+$/', $value) === 1;
+}
+
 $action = $_POST['action'] ?? $_GET['action'] ?? null;
 if (!$action) {
     json_error('Acción no especificada', 422);
@@ -166,7 +174,14 @@ if ($action === 'create') {
     $price = is_numeric($price_raw) ? floatval($price_raw) : 0;
     $user_identifier = sanitize_str($_POST['user_identifier'] ?? null, 150);
     $email = sanitize_str($_POST['email'] ?? null, 180);
-    $cupon = sanitize_str($_POST['coupon'] ?? null, 60);
+    $cuponInput = sanitize_str($_POST['coupon'] ?? null, 60);
+    $cupon = null;
+    if ($cuponInput !== null) {
+        if (!is_valid_coupon_code($cuponInput)) {
+            json_error('El cupón solo puede contener letras y números, sin espacios ni caracteres especiales.');
+        }
+        $cupon = normalize_coupon_code($cuponInput);
+    }
     $tenant_slug = sanitize_str($_POST['tenant_slug'] ?? null, 80);
 
     $missing = [];

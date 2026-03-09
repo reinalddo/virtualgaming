@@ -15,6 +15,14 @@ if (isset($_SERVER['REQUEST_URI'])) {
     }
 }
 
+function normalize_coupon_code(string $value): string {
+    return strtoupper(trim($value));
+}
+
+function is_valid_coupon_code(string $value): bool {
+    return $value !== '' && preg_match('/^[A-Za-z0-9]+$/', $value) === 1;
+}
+
 // Header y menú igual al inicio
 require_once __DIR__ . '/includes/header.php';
 ?>
@@ -327,7 +335,7 @@ require_once __DIR__ . '/includes/header.php';
                 }
                 echo '<div class="col-md-4">';
                 echo '<label class="form-label" style="color:#00fff7;">Código del cupón</label>';
-                echo '<input type="text" name="codigo" value="' . ($edit_cupon ? htmlspecialchars($edit_cupon['codigo']) : '') . '" required class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">';
+                echo '<input type="text" name="codigo" value="' . ($edit_cupon ? htmlspecialchars($edit_cupon['codigo']) : '') . '" required pattern="[A-Za-z0-9]+" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" oninput="this.value=this.value.replace(/[^A-Za-z0-9]/g,\'\').toUpperCase()" title="Solo letras y números, sin espacios ni caracteres especiales." class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">';
                 echo '</div>';
                 echo '<div class="col-md-4">';
                 echo '<label class="form-label" style="color:#00fff7;">Tipo de descuento</label>';
@@ -361,46 +369,52 @@ require_once __DIR__ . '/includes/header.php';
                 echo '</form>';
                 // Procesar alta/edición/borrado/activación
                 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nuevo_cupon'])) {
-                    $codigo = trim($_POST['codigo'] ?? '');
-                    $codigo = strtoupper($codigo);
-                    $codigo = preg_replace('/[^A-Z0-9_\-]/', '', iconv('UTF-8', 'ASCII//TRANSLIT', $codigo));
+                    $codigoInput = trim($_POST['codigo'] ?? '');
+                    $codigo = normalize_coupon_code($codigoInput);
                     $tipo_descuento = $_POST['tipo_descuento'] ?? 'porcentaje';
                     $valor_descuento = floatval($_POST['valor_descuento'] ?? 0);
                     $fecha_expiracion = $_POST['fecha_expiracion'] ?? null;
                     $limite_usos = $_POST['limite_usos'] !== '' ? intval($_POST['limite_usos']) : null;
                     $activo = isset($_POST['activo']) ? 1 : 0;
-                    $stmt_check = $pdo->prepare("SELECT 1 FROM cupones WHERE codigo = ? LIMIT 1");
-                    $stmt_check->execute([$codigo]);
-                    if ($stmt_check->fetch()) {
-                        echo '<div class="text-red-400 mb-2">Ya existe un cupón con ese código.</div>';
-                    } elseif ($codigo && $valor_descuento > 0 && in_array($tipo_descuento, ['porcentaje','fijo'])) {
-                        $stmt = $pdo->prepare("INSERT INTO cupones (codigo, tipo_descuento, valor_descuento, fecha_expiracion, limite_usos, activo) VALUES (?, ?, ?, ?, ?, ?)");
-                        $stmt->execute([$codigo, $tipo_descuento, $valor_descuento, $fecha_expiracion !== '' ? $fecha_expiracion : null, $limite_usos, $activo]);
-                        echo '<div class="text-green-400 mb-2">Cupón creado correctamente.</div>';
+                    if (!is_valid_coupon_code($codigoInput)) {
+                        echo '<div class="text-red-400 mb-2">El código del cupón solo puede contener letras y números, sin espacios, acentos ni caracteres especiales.</div>';
                     } else {
-                        echo '<div class="text-red-400 mb-2">Datos inválidos para el cupón.</div>';
+                        $stmt_check = $pdo->prepare("SELECT 1 FROM cupones WHERE codigo = ? LIMIT 1");
+                        $stmt_check->execute([$codigo]);
+                        if ($stmt_check->fetch()) {
+                            echo '<div class="text-red-400 mb-2">Ya existe un cupón con ese código.</div>';
+                        } elseif ($codigo && $valor_descuento > 0 && in_array($tipo_descuento, ['porcentaje','fijo'])) {
+                            $stmt = $pdo->prepare("INSERT INTO cupones (codigo, tipo_descuento, valor_descuento, fecha_expiracion, limite_usos, activo) VALUES (?, ?, ?, ?, ?, ?)");
+                            $stmt->execute([$codigo, $tipo_descuento, $valor_descuento, $fecha_expiracion !== '' ? $fecha_expiracion : null, $limite_usos, $activo]);
+                            echo '<div class="text-green-400 mb-2">Cupón creado correctamente.</div>';
+                        } else {
+                            echo '<div class="text-red-400 mb-2">Datos inválidos para el cupón.</div>';
+                        }
                     }
                 }
                 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['editar_cupon'])) {
                     $id = intval($_POST['id'] ?? 0);
-                    $codigo = trim($_POST['codigo'] ?? '');
-                    $codigo = strtoupper($codigo);
-                    $codigo = preg_replace('/[^A-Z0-9_\-]/', '', iconv('UTF-8', 'ASCII//TRANSLIT', $codigo));
+                    $codigoInput = trim($_POST['codigo'] ?? '');
+                    $codigo = normalize_coupon_code($codigoInput);
                     $tipo_descuento = $_POST['tipo_descuento'] ?? 'porcentaje';
                     $valor_descuento = floatval($_POST['valor_descuento'] ?? 0);
                     $fecha_expiracion = $_POST['fecha_expiracion'] ?? null;
                     $limite_usos = $_POST['limite_usos'] !== '' ? intval($_POST['limite_usos']) : null;
                     $activo = isset($_POST['activo']) ? 1 : 0;
-                    $stmt_check = $pdo->prepare("SELECT 1 FROM cupones WHERE codigo = ? AND id <> ? LIMIT 1");
-                    $stmt_check->execute([$codigo, $id]);
-                    if ($stmt_check->fetch()) {
-                        echo '<div class="text-red-400 mb-2">Ya existe un cupón con ese código.</div>';
-                    } elseif ($id && $codigo && $valor_descuento > 0 && in_array($tipo_descuento, ['porcentaje','fijo'])) {
-                        $stmt = $pdo->prepare("UPDATE cupones SET codigo=?, tipo_descuento=?, valor_descuento=?, fecha_expiracion=?, limite_usos=?, activo=? WHERE id=?");
-                        $stmt->execute([$codigo, $tipo_descuento, $valor_descuento, $fecha_expiracion !== '' ? $fecha_expiracion : null, $limite_usos, $activo, $id]);
-                        echo '<div class="text-green-400 mb-2">Cupón actualizado correctamente.</div>';
+                    if (!is_valid_coupon_code($codigoInput)) {
+                        echo '<div class="text-red-400 mb-2">El código del cupón solo puede contener letras y números, sin espacios, acentos ni caracteres especiales.</div>';
                     } else {
-                        echo '<div class="text-red-400 mb-2">Datos inválidos para el cupón.</div>';
+                        $stmt_check = $pdo->prepare("SELECT 1 FROM cupones WHERE codigo = ? AND id <> ? LIMIT 1");
+                        $stmt_check->execute([$codigo, $id]);
+                        if ($stmt_check->fetch()) {
+                            echo '<div class="text-red-400 mb-2">Ya existe un cupón con ese código.</div>';
+                        } elseif ($id && $codigo && $valor_descuento > 0 && in_array($tipo_descuento, ['porcentaje','fijo'])) {
+                            $stmt = $pdo->prepare("UPDATE cupones SET codigo=?, tipo_descuento=?, valor_descuento=?, fecha_expiracion=?, limite_usos=?, activo=? WHERE id=?");
+                            $stmt->execute([$codigo, $tipo_descuento, $valor_descuento, $fecha_expiracion !== '' ? $fecha_expiracion : null, $limite_usos, $activo, $id]);
+                            echo '<div class="text-green-400 mb-2">Cupón actualizado correctamente.</div>';
+                        } else {
+                            echo '<div class="text-red-400 mb-2">Datos inválidos para el cupón.</div>';
+                        }
                     }
                 }
                 if (isset($_GET['borrar_cupon'])) {
