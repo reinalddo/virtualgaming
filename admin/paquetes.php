@@ -119,6 +119,35 @@ include '../includes/header.php';
 ?>
 <main class="container py-4">
     <h2 class="mb-4 text-neon">Paquetes de <?= htmlspecialchars($juego['nombre'] ?? 'Juego') ?></h2>
+    <form method="post" enctype="multipart/form-data" class="row g-3 mb-4" style="background:#181f2a; border-radius:16px; border:2px solid #22d3ee; box-shadow:0 0 24px #22d3ee33; padding:2rem;">
+        <div class="col-md-6">
+            <label class="form-label text-neon">Nombre del paquete</label>
+            <input type="text" name="nombre" placeholder="Nombre del paquete" required class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;">
+        </div>
+        <div class="col-md-6">
+            <label class="form-label text-neon">Clave interna</label>
+            <input type="text" name="clave" placeholder="Clave" required class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;">
+        </div>
+        <div class="col-md-4" style="display:none;">
+            <label class="form-label text-neon">Cantidad</label>
+            <input type="number" name="cantidad_visible" min="0" placeholder="Cantidad" class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;" value="1">
+        </div>
+        <input type="hidden" name="cantidad" value="1">
+        <div class="col-md-4">
+            <label class="form-label text-neon">Precio USD</label>
+            <input type="number" step="0.01" min="0" name="precio" placeholder="Precio" required class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;">
+        </div>
+        <div class="col-md-4">
+            <label class="form-label text-neon">Icono del paquete</label>
+            <input type="file" name="imagen_icono" accept="image/*" class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;" onchange="previewNuevoPaqueteImg(event)">
+        </div>
+        <div class="col-12 text-center">
+            <img id="preview-nuevo-paquete-img" src="#" alt="Previsualización" style="display:none;max-width:120px;max-height:120px;border-radius:0.75rem;box-shadow:0 0 0.5rem #22d3ee55;border:2px solid #22d3ee;background:#222c3a;" />
+        </div>
+        <div class="col-12">
+            <button type="submit" class="btn neon-btn-info w-100">Agregar paquete</button>
+        </div>
+    </form>
     <div class="table-responsive d-none d-md-block">
         <table class="table table-dark table-bordered align-middle" style="border:2px solid #22d3ee;">
             <thead>
@@ -126,7 +155,6 @@ include '../includes/header.php';
                     <th style="color:#22d3ee; background:#181f2a;">Icono</th>
                     <th style="color:#22d3ee; background:#181f2a;">Nombre</th>
                     <th style="color:#22d3ee; background:#181f2a;">Clave</th>
-                    <th style="color:#22d3ee; background:#181f2a;">Cantidad</th>
                     <th style="color:#22d3ee; background:#181f2a;">Precio</th>
                     <th style="color:#22d3ee; background:#181f2a;">Acciones</th>
                 </tr>
@@ -145,7 +173,6 @@ include '../includes/header.php';
                     </td>
                     <td class="fw-semibold text-neon" style="background:#181f2a; color:#22d3ee;"><?= htmlspecialchars($p['nombre']) ?></td>
                     <td style="background:#181f2a; color:#fff;"><?= htmlspecialchars($p['clave']) ?></td>
-                    <td style="background:#181f2a; color:#fff;"><?= htmlspecialchars($p['cantidad']) ?></td>
                     <td class="text-neon" style="background:#181f2a; color:#22d3ee;">$<?= number_format($p['precio'], 2) ?></td>
                     <td style="background:#181f2a;" class="text-nowrap">
                         <a href="/admin/paquetes/<?= $juego_id ?>?editar=<?= $p['id'] ?>" class="btn neon-btn-info btn-sm me-2">Editar</a>
@@ -176,7 +203,6 @@ include '../includes/header.php';
                         </div>
                     </div>
                     <div style="color:#fff;"><span class="fw-semibold">Clave:</span> <?= htmlspecialchars($p['clave']) ?></div>
-                    <div style="color:#fff;"><span class="fw-semibold">Cantidad:</span> <?= htmlspecialchars($p['cantidad']) ?></div>
                     <div class="text-neon" style="color:#22d3ee;"><span class="fw-semibold">Precio:</span> $<?= number_format($p['precio'], 2) ?></div>
                     <div class="mt-3 d-flex gap-2">
                         <a href="/admin/paquetes/<?= $juego_id ?>?editar=<?= $p['id'] ?>" class="btn neon-btn-info btn-sm flex-fill">Editar</a>
@@ -237,6 +263,22 @@ if (isset($_GET['editar'])) {
     </form>
 </div>
 <script>
+function previewNuevoPaqueteImg(event) {
+    const input = event.target;
+    const img = document.getElementById('preview-nuevo-paquete-img');
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            img.src = e.target.result;
+            img.style.display = 'block';
+        };
+        reader.readAsDataURL(input.files[0]);
+    } else {
+        img.src = '#';
+        img.style.display = 'none';
+    }
+}
+
 function previewEditPaqueteImg(event) {
         const input = event.target;
         const img = document.getElementById('preview-edit-paquete-img');
