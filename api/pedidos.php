@@ -151,21 +151,32 @@ function json_error(string $message, int $code = 400): void {
 }
 
 function send_app_mail(string $to, string $subject, string $html, ?string $from = null): void {
+    global $mysqli;
+    $settings = isset($mysqli) && $mysqli instanceof mysqli
+        ? load_mail_settings($mysqli)
+        : [
+            'correo_corporativo' => 'no-reply@tvirtualgaming.local',
+            'smtp_host' => 'smtp.tuservidor.com',
+            'smtp_user' => 'no-reply@tvirtualgaming.local',
+            'smtp_pass' => '',
+            'smtp_port' => 587,
+            'smtp_secure' => 'tls',
+        ];
+    $fromAddr = $from ?: ($settings['correo_corporativo'] ?: $settings['smtp_user']);
+
     try {
         require_once __DIR__ . '/../includes/PHPMailerAutoload.php';
+        if (!class_exists('PHPMailer\\PHPMailer\\PHPMailer')) {
+            throw new RuntimeException('PHPMailer no disponible');
+        }
+
         $mail = new PHPMailer\PHPMailer\PHPMailer(true);
         $mail->CharSet = 'UTF-8';
-        global $mysqli;
-        $settings = isset($mysqli) && $mysqli instanceof mysqli
-            ? load_mail_settings($mysqli)
-            : load_mail_settings(new mysqli('localhost', 'root', '', 'tvirtualgaming'));
-
         $smtp_host = $settings['smtp_host'];
         $smtp_user = $settings['smtp_user'];
         $smtp_pass = $settings['smtp_pass'];
         $smtp_port = $settings['smtp_port'];
         $smtp_secure = $settings['smtp_secure'];
-        $fromAddr = $from ?: ($settings['correo_corporativo'] ?: $smtp_user);
 
         $mail->isSMTP();
         $mail->Host = $smtp_host;
@@ -182,6 +193,107 @@ function send_app_mail(string $to, string $subject, string $html, ?string $from 
         $mail->send();
     } catch (Throwable $e) {
         error_log('TVG mail error: ' . $e->getMessage());
+        try {
+            send_app_mail_via_smtp_socket($to, $subject, $html, $fromAddr, $settings);
+        } catch (Throwable $smtpError) {
+            error_log('TVG SMTP fallback error: ' . $smtpError->getMessage());
+        }
+    }
+}
+
+function smtp_read_response($socket): string {
+    $response = '';
+    while (!feof($socket)) {
+        $line = fgets($socket, 515);
+        if ($line === false) {
+            break;
+        }
+        $response .= $line;
+        if (preg_match('/^\d{3}\s/', $line) === 1) {
+            break;
+        }
+    }
+    return $response;
+}
+
+function smtp_expect_ok($socket, array $allowedCodes, string $context): string {
+    $response = smtp_read_response($socket);
+    $code = (int) substr(trim($response), 0, 3);
+    if (!in_array($code, $allowedCodes, true)) {
+        throw new RuntimeException($context . ': ' . trim($response));
+    }
+    return $response;
+}
+
+function smtp_send_command($socket, string $command, array $allowedCodes, string $context): string {
+    fwrite($socket, $command . "\r\n");
+    return smtp_expect_ok($socket, $allowedCodes, $context);
+}
+
+function send_app_mail_via_smtp_socket(string $to, string $subject, string $html, string $fromAddr, array $settings): void {
+    $host = (string) ($settings['smtp_host'] ?? '');
+    $port = (int) ($settings['smtp_port'] ?? 587);
+    $secure = strtolower((string) ($settings['smtp_secure'] ?? 'tls'));
+    $username = (string) ($settings['smtp_user'] ?? '');
+    $password = (string) ($settings['smtp_pass'] ?? '');
+
+    if ($host === '' || $username === '' || $password === '') {
+        throw new RuntimeException('Configuración SMTP incompleta');
+    }
+
+    $transport = $secure === 'ssl' ? 'ssl://' : 'tcp://';
+    $socket = @stream_socket_client(
+        $transport . $host . ':' . $port,
+        $errno,
+        $errstr,
+        20,
+        STREAM_CLIENT_CONNECT
+    );
+
+    if (!$socket) {
+        throw new RuntimeException('No se pudo conectar al servidor SMTP: ' . $errstr . ' (' . $errno . ')');
+    }
+
+    stream_set_timeout($socket, 20);
+
+    try {
+        smtp_expect_ok($socket, [220], 'Conexión SMTP');
+        smtp_send_command($socket, 'EHLO virtualgaming.local', [250], 'EHLO inicial');
+
+        if ($secure === 'tls') {
+            smtp_send_command($socket, 'STARTTLS', [220], 'STARTTLS');
+            $cryptoEnabled = stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
+            if ($cryptoEnabled !== true) {
+                throw new RuntimeException('No se pudo habilitar TLS');
+            }
+            smtp_send_command($socket, 'EHLO virtualgaming.local', [250], 'EHLO tras TLS');
+        }
+
+        smtp_send_command($socket, 'AUTH LOGIN', [334], 'AUTH LOGIN');
+        smtp_send_command($socket, base64_encode($username), [334], 'SMTP usuario');
+        smtp_send_command($socket, base64_encode($password), [235], 'SMTP contraseña');
+        smtp_send_command($socket, 'MAIL FROM:<' . $fromAddr . '>', [250], 'MAIL FROM');
+        smtp_send_command($socket, 'RCPT TO:<' . $to . '>', [250, 251], 'RCPT TO');
+        smtp_send_command($socket, 'DATA', [354], 'DATA');
+
+        $encodedSubject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
+        $headers = [
+            'Date: ' . date(DATE_RFC2822),
+            'From: TVirtualGaming <' . $fromAddr . '>',
+            'To: <' . $to . '>',
+            'Subject: ' . $encodedSubject,
+            'MIME-Version: 1.0',
+            'Content-Type: text/html; charset=UTF-8',
+            'Content-Transfer-Encoding: 8bit',
+        ];
+
+        $body = implode("\r\n", $headers) . "\r\n\r\n" . $html;
+        $body = str_replace(["\r\n.", "\n."], ["\r\n..", "\n.."], $body);
+        fwrite($socket, $body . "\r\n.\r\n");
+        smtp_expect_ok($socket, [250], 'Envío de mensaje');
+        smtp_send_command($socket, 'QUIT', [221], 'QUIT');
+    } finally {
+        fclose($socket);
     }
 }
 
