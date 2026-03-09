@@ -17,7 +17,7 @@ $allGames = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
     </div>
     <a href="/populares" class="text-xs font-semibold uppercase tracking-wide text-cyan-300">Ver populares</a>
   </div>
-  <div class="mt-4 row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4">
+  <div class="mt-4 row row-cols-2 row-cols-sm-3 row-cols-lg-4 g-3">
     <?php foreach ($allGames as $game): ?>
       <?php
         $resPaqCount = $mysqli->query("SELECT COUNT(*) as total FROM juego_paquetes WHERE juego_id=" . intval($game['id']));
@@ -25,20 +25,20 @@ $allGames = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
         if ($paqCount == 0) continue;
       ?>
       <div class="col">
-        <a href="/juego/<?= urlencode($game['id']) ?>" class="game-card h-100 d-block text-decoration-none">
-          <div class="overflow-hidden rounded-xl position-relative">
-            <img src="/<?= htmlspecialchars($game['imagen'] ?? '', ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="img-fluid w-100" style="aspect-ratio:1/1;object-fit:cover;" />
+        <a href="/juego/<?= urlencode($game['id']) ?>" class="d-block rounded-4 border bg-dark p-2 h-100 text-decoration-none">
+          <div class="position-relative overflow-hidden rounded-3" style="aspect-ratio:1/1;">
+            <img src="/<?= htmlspecialchars($game['imagen'] ?? '', ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="img-fluid w-100 h-100 object-fit-cover" style="aspect-ratio:1/1;" />
             <?php if (!empty($game['popular'])): ?>
               <span title="Popular" class="position-absolute top-0 end-0 text-success fs-4" style="text-shadow:0 0 4px #000;">★</span>
             <?php endif; ?>
           </div>
           <div class="mt-2">
-            <p class="game-card-title mb-1">
+            <p class="fw-semibold d-flex align-items-center mb-1" style="font-size:1rem;">
               <?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>
             </p>
-            <p class="game-card-price mb-0">
+            <p class="small text-secondary mb-0">
               <?php if (!empty($game['imagen_paquete'])): ?>
-                <img src="/<?= htmlspecialchars($game['imagen_paquete'], ENT_QUOTES, 'UTF-8') ?>" alt="Paquete" class="img-paquete rounded" />
+                <img src="/<?= htmlspecialchars($game['imagen_paquete'], ENT_QUOTES, 'UTF-8') ?>" alt="Paquete" class="img-fluid rounded me-1 align-middle" style="height:20px;width:20px;display:inline-block;" />
               <?php endif; ?>
               <?php
                 $min_precio_bs = null;
@@ -55,7 +55,7 @@ $allGames = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
                 }
               ?>
               <?php if ($min_precio_bs !== null && isset($mon['clave'])): ?>
-                Desde <span class="text-cyan-300"><?= htmlspecialchars(strtoupper($mon['clave'])) ?> <?= number_format($min_precio_bs, 2, '.', ',') ?></span>
+                Desde <span class="text-info"><?= htmlspecialchars(strtoupper($mon['clave'])) ?> <?= number_format($min_precio_bs, 2, '.', ',') ?></span>
               <?php endif; ?>
             </p>
           </div>
