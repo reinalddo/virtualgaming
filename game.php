@@ -324,6 +324,7 @@ include __DIR__ . "/includes/header.php";
   const modalYes = document.getElementById('modal-yes');
   const modalNo = document.getElementById('modal-no');
   const modalCancel = document.getElementById('modal-cancel');
+  const applyCouponButton = document.getElementById('apply-coupon-btn');
   let activePack = null;
   let couponApplied = false;
   let couponValue = '';
@@ -409,6 +410,45 @@ include __DIR__ . "/includes/header.php";
                 return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
               }
 
+              function resetCouponState() {
+                couponApplied = false;
+                couponValue = '';
+                couponInput.disabled = false;
+                if (applyCouponButton) {
+                  applyCouponButton.disabled = false;
+                }
+              }
+
+              if (monedaSelect) {
+                monedaSelect.addEventListener('change', function() {
+                  const selectedOption = monedaSelect.options[monedaSelect.selectedIndex];
+                  monedaActualId = selectedOption.value;
+                  monedaActualClave = selectedOption.dataset.clave || 'USD';
+                  monedaActualTasa = parseFloat(selectedOption.dataset.tasa || '1');
+                  updatePackPrices();
+
+                  if (activePack) {
+                    const selectedCard = packCards2.find((card) => card.classList.contains('neon-selected'));
+                    if (selectedCard) {
+                      activePack = {
+                        name: selectedCard.dataset.name,
+                        price: selectedCard.dataset.price,
+                        moneda: selectedCard.dataset.moneda,
+                        cantidad: selectedCard.dataset.cantidad
+                      };
+                      updateResumenCompra(activePack);
+                    }
+                  } else {
+                    updateResumenCompra(null);
+                  }
+
+                  if (couponInput.value.trim() !== '') {
+                    couponInput.value = '';
+                  }
+                  resetCouponState();
+                });
+              }
+
               couponInput.addEventListener('input', function() {
                 const normalized = normalizeCouponCode(couponInput.value);
                 if (couponInput.value !== normalized) {
@@ -417,19 +457,19 @@ include __DIR__ . "/includes/header.php";
               });
 
               // Validación de cupón por AJAX
-              document.getElementById('apply-coupon-btn').addEventListener('click', function() {
+              applyCouponButton.addEventListener('click', function() {
                 const cupon = normalizeCouponCode(couponInput.value);
                 couponInput.value = cupon;
                 const pack = activePack;
+                if (!pack) {
+                  showToast('Selecciona un paquete antes de aplicar el cupón.', 'error');
+                  return;
+                }
                 // Aseguramos que el precio sea un número puro
                 const precioNumerico = typeof pack.price === 'string' ? pack.price.replace(/,/g, '') : pack.price;
                 console.log('Enviando cupón:', cupon, 'Precio:', precioNumerico);
                 if (!cupon) {
                   showToast('Ingresa un cupón.', 'error');
-                  return;
-                }
-                if (!pack) {
-                  showToast('Selecciona un paquete antes de aplicar el cupón.', 'error');
                   return;
                 }
                 fetch('../api/validar_cupon.php', {
@@ -444,7 +484,7 @@ include __DIR__ . "/includes/header.php";
                     selectedPrice.textContent = `${pack.moneda} ${data.nuevo_total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
                     showToast(data.message + ` Descuento: ${data.descuento.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`,'success');
                     couponInput.disabled = true;
-                    document.getElementById('apply-coupon-btn').disabled = true;
+                    applyCouponButton.disabled = true;
                     couponApplied = true;
                   } else {
                     showToast(data.message, 'error');
@@ -577,7 +617,7 @@ include __DIR__ . "/includes/header.php";
                       showToast('Pedido registrado correctamente', 'success');
                       orderForm.reset();
                       couponInput.disabled = false;
-                      document.getElementById('apply-coupon-btn').disabled = false;
+                      applyCouponButton.disabled = false;
                       couponApplied = false;
                       selectedPack.textContent = 'Ninguno';
                       selectedPrice.textContent = `${monedaActualClave} 0.00`;
@@ -591,7 +631,7 @@ include __DIR__ . "/includes/header.php";
                     showToast('Pedido registrado correctamente', 'success');
                     orderForm.reset();
                     couponInput.disabled = false;
-                    document.getElementById('apply-coupon-btn').disabled = false;
+                    applyCouponButton.disabled = false;
                     couponApplied = false;
                     selectedPack.textContent = 'Ninguno';
                     selectedPrice.textContent = `${monedaActualClave} 0.00`;

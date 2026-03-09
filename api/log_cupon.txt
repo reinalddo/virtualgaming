@@ -42,3 +42,6 @@
 2026-03-03 18:24:42 | code: CUPON01 | pack_price: 10.99
 2026-03-03 18:24:42 | ERROR: Cupón agotado.
 2026-03-05 22:45:26 | code: cupon01 | pack_price: 10.99
+2026-03-09 20:55:15 | code: CUPONEEOS | pack_price: 2500
+2026-03-09 20:55:15 | ERROR: Cupón inexistente.
+2026-03-09 20:55:26 | code: CUPON01 | pack_price: 2500
