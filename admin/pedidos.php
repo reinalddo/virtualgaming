@@ -336,7 +336,6 @@ function format_money($amount): string {
             control.value = newStatus;
           });
           updateTabCounts();
-          showTab(newStatus);
           // Actualiza el status en el selector para futuras referencias
           sel.dataset.status = newStatus;
         } catch(err){
