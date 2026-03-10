@@ -5,13 +5,15 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 
 require_once __DIR__ . '/includes/store_config.php';
 require_once __DIR__ . '/includes/home_gallery.php';
+require_once __DIR__ . '/includes/payment_methods.php';
 
 $activeTab = defined('ADMIN_CONFIG_ACTIVE_TAB') ? ADMIN_CONFIG_ACTIVE_TAB : ($_GET['tab'] ?? 'correo');
-if (!in_array($activeTab, ['correo', 'cabecera', 'galeria'], true)) {
+if (!in_array($activeTab, ['correo', 'cabecera', 'galeria', 'metodos-pago'], true)) {
     $activeTab = 'correo';
 }
 
 home_gallery_ensure_table();
+payment_methods_ensure_table();
 $cfg = store_config_all();
 $logoTienda = trim((string) ($cfg['logo_tienda'] ?? ''));
 $galleryItems = home_gallery_all();
@@ -26,6 +28,14 @@ $galleryForm = [
     'destacado' => !empty($galleryEditItem['destacado']),
     'imagen' => $galleryEditItem['imagen'] ?? '',
 ];
+  $paymentMethods = payment_methods_all();
+  $paymentMethodEditId = isset($_GET['editar_metodo_pago']) ? intval($_GET['editar_metodo_pago']) : 0;
+  $paymentMethodEditItem = $paymentMethodEditId > 0 ? payment_methods_find($paymentMethodEditId) : null;
+  $paymentMethodForm = [
+    'nombre' => $paymentMethodEditItem['nombre'] ?? '',
+    'datos' => $paymentMethodEditItem['datos'] ?? '',
+    'activo' => !array_key_exists('activo', $paymentMethodEditItem ?? []) ? true : !empty($paymentMethodEditItem['activo']),
+  ];
 ?>
 <style>
   .neon-card {
@@ -211,13 +221,16 @@ $galleryForm = [
           <div class="col-12 col-md-4">
             <a href="/admin/configuracion?tab=galeria" class="neon-tab-link <?= $activeTab === 'galeria' ? 'active' : '' ?>">Galería</a>
           </div>
+          <div class="col-12 col-md-4">
+            <a href="/admin/configuracion?tab=metodos-pago" class="neon-tab-link <?= $activeTab === 'metodos-pago' ? 'active' : '' ?>">Métodos de Pago</a>
+          </div>
         </div>
       </div>
 
       <div class="card neon-card mb-4">
         <div class="card-header text-center py-4" style="background: linear-gradient(90deg, #00fff7 0%, #34d399 100%); color: #181f2a; border-radius: 16px 16px 0 0;">
           <h2 class="h4 fw-bold mb-0" style="font-family: 'Oxanium', 'Montserrat', 'Arial', sans-serif; letter-spacing: 0.08em;">
-            <?php if ($activeTab === 'correo'): ?>Configuración de correo corporativo<?php elseif ($activeTab === 'cabecera'): ?>Datos de cabecera<?php else: ?>Galería principal del index<?php endif; ?>
+            <?php if ($activeTab === 'correo'): ?>Configuración de correo corporativo<?php elseif ($activeTab === 'cabecera'): ?>Datos de cabecera<?php elseif ($activeTab === 'galeria'): ?>Galería principal del index<?php else: ?>Métodos de Pago<?php endif; ?>
           </h2>
         </div>
         <div class="card-body p-4">
@@ -293,7 +306,7 @@ $galleryForm = [
               </div>
               <button type="submit" class="neon-btn w-100 py-3 mt-4">Guardar datos de cabecera</button>
             </form>
-          <?php else: ?>
+          <?php elseif ($activeTab === 'galeria'): ?>
             <form method="post" enctype="multipart/form-data">
               <input type="hidden" name="config_section" value="galeria">
               <input type="hidden" name="gallery_id" value="<?= $galleryEditItem ? (int) $galleryEditItem['id'] : 0 ?>">
@@ -301,7 +314,7 @@ $galleryForm = [
               <div class="row g-4 align-items-start">
                 <div class="col-12">
                   <label class="form-label d-block">Vista previa de imagen</label>
-                  <div class="gallery-image-preview mb-2" id="gallery-image-preview">
+                  <div class="gallery-image-preview mb-2" id="gallery-image-preview" data-original-src="<?= htmlspecialchars($galleryForm['imagen'], ENT_QUOTES, 'UTF-8') ?>">
                     <?php if ($galleryForm['imagen'] !== ''): ?>
                       <img src="<?= htmlspecialchars($galleryForm['imagen'], ENT_QUOTES, 'UTF-8') ?>" alt="Vista previa de galería" id="gallery-image-preview-img">
                     <?php else: ?>
@@ -443,6 +456,98 @@ $galleryForm = [
                 </div>
               <?php endif; ?>
             </div>
+          <?php else: ?>
+            <form method="post">
+              <input type="hidden" name="config_section" value="metodos-pago">
+              <input type="hidden" name="payment_method_id" value="<?= $paymentMethodEditItem ? (int) $paymentMethodEditItem['id'] : 0 ?>">
+              <div class="config-section-note mb-4">Registra los métodos de pago disponibles para transferencias, con el nombre visible al cliente y los datos exactos donde debe realizar el pago.</div>
+              <div class="row g-4 align-items-start">
+                <div class="col-lg-8">
+                  <div class="row g-3">
+                    <div class="col-12">
+                      <label class="form-label">Nombre Método de Pago</label>
+                      <input type="text" name="nombre_metodo_pago" value="<?= htmlspecialchars($paymentMethodForm['nombre'], ENT_QUOTES, 'UTF-8') ?>" required class="form-control" placeholder="Mercantil, Binance, Zelle">
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label">Datos Método de Pago</label>
+                      <textarea name="datos_metodo_pago" rows="6" required class="form-control" placeholder="Titular, número de cuenta, correo, teléfono o cualquier dato necesario para transferir."><?= htmlspecialchars($paymentMethodForm['datos'], ENT_QUOTES, 'UTF-8') ?></textarea>
+                    </div>
+                    <div class="col-12">
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" value="1" id="activoMetodoPago" name="activo_metodo_pago" <?= $paymentMethodForm['activo'] ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="activoMetodoPago">Método de pago activo</label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-lg-4">
+                  <div class="config-section-note">
+                    Usa este tab para crear, editar o desactivar cuentas receptoras como bancos, billeteras o servicios de pago.
+                  </div>
+                  <?php if ($paymentMethodEditItem): ?>
+                    <a href="/admin/configuracion?tab=metodos-pago" class="btn btn-outline-info w-100 rounded-4 mt-3">Cancelar edición</a>
+                  <?php endif; ?>
+                </div>
+              </div>
+              <button type="submit" class="neon-btn w-100 py-3 mt-4"><?= $paymentMethodEditItem ? 'Actualizar método de pago' : 'Crear método de pago' ?></button>
+            </form>
+
+            <div class="mt-5">
+              <div class="d-flex align-items-center justify-content-between mb-3">
+                <h3 class="h5 fw-bold mb-0 text-info">Métodos registrados</h3>
+                <span class="gallery-badge-neon"><?= count($paymentMethods) ?> métodos</span>
+              </div>
+              <?php if (empty($paymentMethods)): ?>
+                <div class="config-section-note">Aún no hay métodos de pago registrados. Crea el primero para empezar a administrarlos.</div>
+              <?php else: ?>
+                <div class="gallery-table-wrap d-none d-md-block">
+                  <div class="table-responsive">
+                    <table class="table table-striped align-middle">
+                      <thead>
+                        <tr>
+                          <th>Nombre</th>
+                          <th>Datos</th>
+                          <th>Estado</th>
+                          <th class="text-end">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <?php foreach ($paymentMethods as $method): ?>
+                          <tr>
+                            <td class="fw-bold"><?= htmlspecialchars($method['nombre'], ENT_QUOTES, 'UTF-8') ?></td>
+                            <td style="white-space: pre-line;"><?= htmlspecialchars($method['datos'], ENT_QUOTES, 'UTF-8') ?></td>
+                            <td><?= !empty($method['activo']) ? '<span class="gallery-badge-neon">Activo</span>' : '<span class="text-secondary">Inactivo</span>' ?></td>
+                            <td class="text-end">
+                              <div class="d-inline-flex gap-2 flex-wrap justify-content-end">
+                                <a href="/admin/configuracion?tab=metodos-pago&editar_metodo_pago=<?= (int) $method['id'] ?>" class="btn btn-outline-info btn-sm rounded-4">Editar</a>
+                                <a href="/admin/configuracion?tab=metodos-pago&toggle_metodo_pago=<?= (int) $method['id'] ?>" class="btn btn-outline-secondary btn-sm rounded-4"><?= !empty($method['activo']) ? 'Desactivar' : 'Activar' ?></a>
+                                <a href="/admin/configuracion?tab=metodos-pago&eliminar_metodo_pago=<?= (int) $method['id'] ?>" class="btn btn-outline-danger btn-sm rounded-4" onclick="return confirm('¿Eliminar este método de pago?');">Eliminar</a>
+                              </div>
+                            </td>
+                          </tr>
+                        <?php endforeach; ?>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div class="d-grid gap-3 d-md-none">
+                  <?php foreach ($paymentMethods as $method): ?>
+                    <div class="gallery-card-mobile">
+                      <div class="d-flex justify-content-between gap-2 align-items-start">
+                        <h4 class="h6 fw-bold mb-1 text-info"><?= htmlspecialchars($method['nombre'], ENT_QUOTES, 'UTF-8') ?></h4>
+                        <?= !empty($method['activo']) ? '<span class="gallery-badge-neon">Activo</span>' : '<span class="text-secondary small">Inactivo</span>' ?>
+                      </div>
+                      <div class="small text-light mt-2" style="white-space: pre-line;"><?= htmlspecialchars($method['datos'], ENT_QUOTES, 'UTF-8') ?></div>
+                      <div class="d-flex gap-2 mt-3 flex-wrap">
+                        <a href="/admin/configuracion?tab=metodos-pago&editar_metodo_pago=<?= (int) $method['id'] ?>" class="btn btn-outline-info btn-sm rounded-4 flex-fill">Editar</a>
+                        <a href="/admin/configuracion?tab=metodos-pago&toggle_metodo_pago=<?= (int) $method['id'] ?>" class="btn btn-outline-secondary btn-sm rounded-4 flex-fill"><?= !empty($method['activo']) ? 'Desactivar' : 'Activar' ?></a>
+                        <a href="/admin/configuracion?tab=metodos-pago&eliminar_metodo_pago=<?= (int) $method['id'] ?>" class="btn btn-outline-danger btn-sm rounded-4 flex-fill" onclick="return confirm('¿Eliminar este método de pago?');">Eliminar</a>
+                      </div>
+                    </div>
+                  <?php endforeach; ?>
+                </div>
+              <?php endif; ?>
+            </div>
           <?php endif; ?>
         </div>
       </div>
@@ -457,70 +562,53 @@ $galleryForm = [
       return;
     }
 
-    const existingImage = document.getElementById('gallery-image-preview-img');
-    const existingEmpty = document.getElementById('gallery-image-preview-empty');
-    const originalSrc = existingImage ? existingImage.getAttribute('src') : '';
+    const originalSrc = previewContainer.dataset.originalSrc || '';
+    let objectUrl = null;
 
-    const showEmptyState = () => {
-      if (existingImage) {
-        existingImage.remove();
-      }
-      if (!document.getElementById('gallery-image-preview-empty')) {
+    const renderPreview = (src) => {
+      previewContainer.innerHTML = '';
+      if (!src) {
         const empty = document.createElement('span');
         empty.className = 'gallery-image-empty';
         empty.id = 'gallery-image-preview-empty';
         empty.textContent = 'Sin imagen';
         previewContainer.appendChild(empty);
+        return;
+      }
+
+      const image = document.createElement('img');
+      image.id = 'gallery-image-preview-img';
+      image.alt = 'Vista previa de galería';
+      image.src = src;
+      previewContainer.appendChild(image);
+    };
+
+    const clearObjectUrl = () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+        objectUrl = null;
       }
     };
 
     fileInput.addEventListener('change', () => {
       const [file] = fileInput.files || [];
+      clearObjectUrl();
+
       if (!file) {
-        if (originalSrc) {
-          if (!document.getElementById('gallery-image-preview-img')) {
-            const image = document.createElement('img');
-            image.id = 'gallery-image-preview-img';
-            image.alt = 'Vista previa de galería';
-            image.src = originalSrc;
-            const empty = document.getElementById('gallery-image-preview-empty');
-            if (empty) {
-              empty.remove();
-            }
-            previewContainer.appendChild(image);
-          }
-        } else {
-          showEmptyState();
-        }
+        renderPreview(originalSrc);
         return;
       }
 
       if (!file.type.startsWith('image/')) {
-        showEmptyState();
+        renderPreview(originalSrc);
         return;
       }
 
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        let image = document.getElementById('gallery-image-preview-img');
-        const empty = document.getElementById('gallery-image-preview-empty');
-        if (empty) {
-          empty.remove();
-        }
-        if (!image) {
-          image = document.createElement('img');
-          image.id = 'gallery-image-preview-img';
-          image.alt = 'Vista previa de galería';
-          previewContainer.appendChild(image);
-        }
-        image.src = String(event.target?.result || '');
-      };
-      reader.readAsDataURL(file);
+      objectUrl = URL.createObjectURL(file);
+      renderPreview(objectUrl);
     });
 
-    if (!existingImage && !existingEmpty) {
-      showEmptyState();
-    }
+    renderPreview(originalSrc);
   })();
 </script>
 <?php if (!defined('ADMIN_LAYOUT_EMBEDDED')) include __DIR__ . '/includes/footer.php'; ?>

@@ -168,12 +168,14 @@ switch ($seccion) {
     case 'configuracion':
         require_once __DIR__ . '/includes/store_config.php';
         require_once __DIR__ . '/includes/home_gallery.php';
+        require_once __DIR__ . '/includes/payment_methods.php';
         $activeTab = $_GET['tab'] ?? 'correo';
-        if (!in_array($activeTab, ['correo', 'cabecera', 'galeria'], true)) {
+        if (!in_array($activeTab, ['correo', 'cabecera', 'galeria', 'metodos-pago'], true)) {
             $activeTab = 'correo';
         }
 
         home_gallery_ensure_table();
+        payment_methods_ensure_table();
 
         if ($activeTab === 'galeria' && isset($_GET['eliminar_galeria'])) {
             $galleryId = intval($_GET['eliminar_galeria']);
@@ -185,9 +187,29 @@ switch ($seccion) {
             admin_redirect('configuracion', ['tab' => 'galeria']);
         }
 
+        if ($activeTab === 'metodos-pago' && isset($_GET['eliminar_metodo_pago'])) {
+            $paymentId = intval($_GET['eliminar_metodo_pago']);
+            if ($paymentId > 0 && payment_methods_delete($paymentId)) {
+                admin_set_flash('success', 'Método de pago eliminado.');
+            } else {
+                admin_set_flash('error', 'No se pudo eliminar el método de pago.');
+            }
+            admin_redirect('configuracion', ['tab' => 'metodos-pago']);
+        }
+
+        if ($activeTab === 'metodos-pago' && isset($_GET['toggle_metodo_pago'])) {
+            $paymentId = intval($_GET['toggle_metodo_pago']);
+            if ($paymentId > 0 && payment_methods_toggle($paymentId)) {
+                admin_set_flash('success', 'Estado del método de pago actualizado.');
+            } else {
+                admin_set_flash('error', 'No se pudo actualizar el método de pago.');
+            }
+            admin_redirect('configuracion', ['tab' => 'metodos-pago']);
+        }
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $activeTab = $_POST['config_section'] ?? $activeTab;
-            if (!in_array($activeTab, ['correo', 'cabecera', 'galeria'], true)) {
+            if (!in_array($activeTab, ['correo', 'cabecera', 'galeria', 'metodos-pago'], true)) {
                 $activeTab = 'correo';
             }
 
@@ -286,6 +308,35 @@ switch ($seccion) {
                     home_gallery_delete_image_file($newImage);
                 }
                 admin_set_flash('error', 'No se pudo guardar el elemento de galería.');
+            }
+
+            if ($activeTab === 'metodos-pago') {
+                $paymentId = isset($_POST['payment_method_id']) ? intval($_POST['payment_method_id']) : 0;
+                $existingMethod = $paymentId > 0 ? payment_methods_find($paymentId) : null;
+                if ($paymentId > 0 && $existingMethod === null) {
+                    admin_set_flash('error', 'El método de pago que intentas editar no existe.');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'metodos-pago']);
+                }
+
+                $validation = payment_methods_validate_form($_POST);
+                if (!$validation['is_valid']) {
+                    admin_set_flash('error', implode(' ', $validation['errors']));
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    $query = ['tab' => 'metodos-pago'];
+                    if ($paymentId > 0) {
+                        $query['editar_metodo_pago'] = $paymentId;
+                    }
+                    admin_redirect('configuracion', $query);
+                }
+
+                if (payment_methods_save($validation['data'], $paymentId > 0 ? $paymentId : null)) {
+                    admin_set_flash('success', $paymentId > 0 ? 'Método de pago actualizado.' : 'Método de pago creado.');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'metodos-pago']);
+                }
+
+                admin_set_flash('error', 'No se pudo guardar el método de pago.');
             }
 
             define('ADMIN_CONFIG_POST_HANDLED', true);
