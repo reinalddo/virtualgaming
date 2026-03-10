@@ -1,9 +1,9 @@
 <?php
 require_once __DIR__ . "/includes/data.php";
 require_once __DIR__ . "/includes/auth.php";
+require_once __DIR__ . "/includes/store_config.php";
 
-$pageTitle = $brandName . " | Restablecer contraseña";
-$notice = "";
+$pageTitle = store_config_get('nombre_tienda', 'TVirtualGaming') . " | Restablecer contraseña";
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
   $tenantSlug = auth_get_tenant_slug();

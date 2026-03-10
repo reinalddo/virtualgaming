@@ -14,4 +14,7 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('smtp_user', '', 'Usuario SMTP'),
 ('smtp_pass', '', 'Contraseña SMTP'),
 ('smtp_port', '587', 'Puerto SMTP'),
-('smtp_secure', 'tls', 'Tipo de seguridad SMTP');
+('smtp_secure', 'tls', 'Tipo de seguridad SMTP'),
+('nombre_prefijo', 'TIENDA', 'Texto superior del encabezado de la tienda'),
+('nombre_tienda', 'TVirtualGaming', 'Nombre principal visible de la tienda'),
+('logo_tienda', '', 'Ruta del logo visible en el encabezado');

@@ -2,11 +2,28 @@
 if (session_status() !== PHP_SESSION_ACTIVE) {
   session_start();
 }
+require_once __DIR__ . '/store_config.php';
+
+if (!isset($brandPrefix)) {
+  $brandPrefix = store_config_get('nombre_prefijo', 'TIENDA');
+}
 if (!isset($pageTitle)) {
-  $pageTitle = "TVirtualGaming";
+  $pageTitle = store_config_get('nombre_tienda', 'TVirtualGaming');
 }
 if (!isset($brandName)) {
-  $brandName = "TVirtualGaming";
+  $brandName = store_config_get('nombre_tienda', 'TVirtualGaming');
+}
+
+$brandLogo = store_config_get('logo_tienda', '');
+$brandFavicon = '';
+if ($brandLogo !== '') {
+  $brandFavicon = $brandLogo;
+  if (store_config_is_managed_logo_path($brandLogo)) {
+    $brandLogoAbsolutePath = dirname(__DIR__) . str_replace('/', DIRECTORY_SEPARATOR, $brandLogo);
+    if (is_file($brandLogoAbsolutePath)) {
+      $brandFavicon .= '?v=' . rawurlencode((string) filemtime($brandLogoAbsolutePath));
+    }
+  }
 }
 
 if (!function_exists('asset_version')) {
@@ -31,6 +48,11 @@ $mainStylesVersion = asset_version($mainStylesPath);
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
+  <?php if ($brandFavicon !== ''): ?>
+  <link rel="icon" type="image/png" href="<?php echo htmlspecialchars($brandFavicon, ENT_QUOTES, 'UTF-8'); ?>" />
+  <link rel="shortcut icon" href="<?php echo htmlspecialchars($brandFavicon, ENT_QUOTES, 'UTF-8'); ?>" />
+  <link rel="apple-touch-icon" href="<?php echo htmlspecialchars($brandFavicon, ENT_QUOTES, 'UTF-8'); ?>" />
+  <?php endif; ?>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
   <!--<link rel="stylesheet" href="/assets/css/estilos.css" />-->
   <link rel="stylesheet" href="/assets/css/estilos.css?v=<?php echo htmlspecialchars($mainStylesVersion, ENT_QUOTES, 'UTF-8'); ?>" />
@@ -118,9 +140,16 @@ $mainStylesVersion = asset_version($mainStylesPath);
             <path fill-rule="evenodd" d="M2.5 12.5a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1h-10a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1h-10a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1h-10a.5.5 0 0 1-.5-.5z"/>
           </svg>
         </button>
-        <div class="site-brand text-center">
-          <p class="small text-uppercase text-info mb-0" style="letter-spacing:0.3em;">tienda</p>
-          <h1 class="fw-bold" style="font-family:'Oxanium', 'Space Grotesk', sans-serif;font-size:1.25rem;color:#fff;"><?php echo htmlspecialchars($brandName, ENT_QUOTES, "UTF-8"); ?></h1>
+        <div class="site-brand d-flex align-items-center justify-content-center gap-3 flex-grow-1">
+          <?php if ($brandLogo !== ''): ?>
+            <div class="rounded-4 overflow-hidden border border-info glow-ring flex-shrink-0" style="width:52px;height:52px;background:rgba(12,21,34,0.82);">
+              <img src="<?php echo htmlspecialchars($brandLogo, ENT_QUOTES, 'UTF-8'); ?>" alt="Logo de la tienda" class="w-100 h-100 object-fit-cover" />
+            </div>
+          <?php endif; ?>
+          <div class="text-center text-sm-start">
+            <p class="small text-uppercase text-info mb-0" style="letter-spacing:0.3em;"><?php echo htmlspecialchars($brandPrefix, ENT_QUOTES, 'UTF-8'); ?></p>
+            <h1 class="fw-bold mb-0" style="font-family:'Oxanium', 'Space Grotesk', sans-serif;font-size:1.25rem;color:#fff;"><?php echo htmlspecialchars($brandName, ENT_QUOTES, "UTF-8"); ?></h1>
+          </div>
         </div>
         <div id="auth-container" class="site-auth-container position-relative">
           <?php if (!isset($_SESSION['auth_user'])): ?>

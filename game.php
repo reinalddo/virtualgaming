@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . "/includes/db_connect.php";
+require_once __DIR__ . "/includes/store_config.php";
 $game = null;
 if (isset($_GET['slug'])) {
   $slug = strtolower(trim($_GET['slug']));
@@ -27,7 +28,7 @@ if (!$game) {
 if (!$game) {
   die('Juego no encontrado.');
 }
-$pageTitle = "TVirtualGaming | " . ($game["nombre"] ?? "Juego");
+$pageTitle = store_config_get('nombre_tienda', 'TVirtualGaming') . " | " . ($game["nombre"] ?? "Juego");
 include __DIR__ . "/includes/header.php";
 ?>
 

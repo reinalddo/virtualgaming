@@ -166,21 +166,75 @@ switch ($seccion) {
         break;
 
     case 'configuracion':
-        require_once __DIR__ . '/includes/db_connect.php';
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $campos = [
-                'correo_corporativo', 'smtp_host', 'smtp_user', 'smtp_pass', 'smtp_port', 'smtp_secure'
-            ];
-            foreach ($campos as $clave) {
-                $valor = trim($_POST[$clave] ?? '');
-                $stmt = $mysqli->prepare('UPDATE configuracion_general SET valor=? WHERE clave=?');
-                $stmt->bind_param('ss', $valor, $clave);
-                $stmt->execute();
-            }
-            define('ADMIN_CONFIG_POST_HANDLED', true);
-            admin_set_flash('success', 'Configuración actualizada.');
-            admin_redirect('configuracion');
+        require_once __DIR__ . '/includes/store_config.php';
+        $activeTab = $_GET['tab'] ?? 'correo';
+        if (!in_array($activeTab, ['correo', 'cabecera'], true)) {
+            $activeTab = 'correo';
         }
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $activeTab = $_POST['config_section'] ?? $activeTab;
+            if (!in_array($activeTab, ['correo', 'cabecera'], true)) {
+                $activeTab = 'correo';
+            }
+
+            if ($activeTab === 'correo') {
+                $campos = [
+                    'correo_corporativo', 'smtp_host', 'smtp_user', 'smtp_pass', 'smtp_port', 'smtp_secure'
+                ];
+                foreach ($campos as $clave) {
+                    store_config_upsert($clave, trim((string) ($_POST[$clave] ?? '')));
+                }
+                admin_set_flash('success', 'Configuración de correo actualizada.');
+            }
+
+            if ($activeTab === 'cabecera') {
+                $nombrePrefijo = trim((string) ($_POST['nombre_prefijo'] ?? ''));
+                $nombreTienda = trim((string) ($_POST['nombre_tienda'] ?? ''));
+                $currentLogo = store_config_get('logo_tienda', '');
+                $nextLogo = $currentLogo;
+                $hasUpload = isset($_FILES['logo_tienda']) && (($_FILES['logo_tienda']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
+
+                if ($nombrePrefijo === '' || $nombreTienda === '') {
+                    admin_set_flash('error', 'Completa el nombre prefijo y el nombre de la tienda.');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'cabecera']);
+                }
+
+                if ($hasUpload) {
+                    $upload = store_config_store_logo_upload($_FILES['logo_tienda']);
+                    if (!$upload['success']) {
+                        admin_set_flash('error', $upload['message']);
+                        define('ADMIN_CONFIG_POST_HANDLED', true);
+                        admin_redirect('configuracion', ['tab' => 'cabecera']);
+                    }
+                    if (!empty($upload['path'])) {
+                        $nextLogo = $upload['path'];
+                    }
+                } elseif (isset($_POST['eliminar_logo_tienda'])) {
+                    $nextLogo = '';
+                }
+
+                store_config_upsert('nombre_prefijo', $nombrePrefijo);
+                store_config_upsert('nombre_tienda', $nombreTienda);
+                if ($nextLogo === '') {
+                    store_config_delete('logo_tienda');
+                } else {
+                    store_config_upsert('logo_tienda', $nextLogo);
+                }
+
+                if ($currentLogo !== '' && $currentLogo !== $nextLogo) {
+                    store_config_delete_logo_file($currentLogo);
+                }
+
+                admin_set_flash('success', 'Datos de cabecera actualizados.');
+            }
+
+            define('ADMIN_CONFIG_POST_HANDLED', true);
+            admin_redirect('configuracion', ['tab' => $activeTab]);
+        }
+
+        define('ADMIN_CONFIG_ACTIVE_TAB', $activeTab);
         define('ADMIN_CONFIG_POST_HANDLED', true);
         break;
 }
