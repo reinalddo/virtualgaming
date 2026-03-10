@@ -1,5 +1,5 @@
 <?php
-$menuScript = <<<"SCRIPT"
+$menuScript = <<<'SCRIPT'
 <script>
   const menuToggle = document.getElementById("menu-toggle");
   const menuOverlay = document.getElementById("menu-overlay");
@@ -8,64 +8,288 @@ $menuScript = <<<"SCRIPT"
   const authContainer = document.getElementById("auth-container");
   const authTrigger = document.getElementById("auth-trigger");
   const authMenu = document.getElementById("auth-menu");
+  const userTrigger = document.getElementById("user-trigger");
+  const userMenu = document.getElementById("user-menu");
   const authModal = document.getElementById("auth-modal");
   const authLogin = document.getElementById("auth-login");
   const authRegister = document.getElementById("auth-register");
+  const passwordToggles = document.querySelectorAll("[data-password-toggle]");
+  const userOrdersModal = document.getElementById("user-orders-modal");
+  const userProfileModal = document.getElementById("user-profile-modal");
+  const userOrdersList = document.getElementById("user-orders-list");
+  const userOrdersTableBody = document.getElementById("user-orders-table-body");
+  const userOrdersCards = document.getElementById("user-orders-cards");
+  const userOrdersLoading = document.getElementById("user-orders-loading");
+  const userOrdersEmpty = document.getElementById("user-orders-empty");
+  const userOrdersFeedback = document.getElementById("user-orders-feedback");
+  const userProfileForm = document.getElementById("user-profile-form");
+  const userProfileFeedback = document.getElementById("user-profile-feedback");
+  const userTriggerName = document.getElementById("user-trigger-name");
+  const userTriggerInitials = document.getElementById("user-trigger-initials");
+  const userMenuName = document.getElementById("user-menu-name");
+  const userMenuEmail = document.getElementById("user-menu-email");
 
-  const openMenu = () => {
-    menuOverlay.classList.remove("hidden");
-    menuPanel.classList.remove("hidden");
-  };
-
-  const closeMenu = () => {
-    menuOverlay.classList.add("hidden");
-    menuPanel.classList.add("hidden");
-  };
-
-  menuToggle.addEventListener("click", openMenu);
-  menuClose.addEventListener("click", closeMenu);
-  menuOverlay.addEventListener("click", closeMenu);
-
-  const showAuthMenu = () => {
-    if (authMenu) {
-      authMenu.classList.remove("hidden");
+  const showElement = (element, displayClass) => {
+    if (!element) {
+      return;
+    }
+    element.classList.remove("d-none");
+    if (displayClass) {
+      element.classList.add(displayClass);
     }
   };
 
+  const hideElement = (element, displayClass) => {
+    if (!element) {
+      return;
+    }
+    element.classList.add("d-none");
+    if (displayClass) {
+      element.classList.remove(displayClass);
+    }
+  };
+
+  const openMenu = () => {
+    showElement(menuOverlay);
+    showElement(menuPanel);
+  };
+
+  const closeMenu = () => {
+    hideElement(menuOverlay);
+    hideElement(menuPanel);
+  };
+
+  if (menuToggle) {
+    menuToggle.addEventListener("click", openMenu);
+  }
+  if (menuClose) {
+    menuClose.addEventListener("click", closeMenu);
+  }
+  if (menuOverlay) {
+    menuOverlay.addEventListener("click", closeMenu);
+  }
+
+  const showAuthMenu = () => {
+    showElement(authMenu);
+  };
+
   const hideAuthMenu = () => {
-    if (authMenu) {
-      authMenu.classList.add("hidden");
+    hideElement(authMenu);
+  };
+
+  const showUserMenu = () => {
+    showElement(userMenu);
+  };
+
+  const hideUserMenu = () => {
+    hideElement(userMenu);
+  };
+
+  const openUserModal = (modal) => {
+    showElement(modal, "d-flex");
+  };
+
+  const closeUserModal = (modal) => {
+    hideElement(modal, "d-flex");
+  };
+
+  const closeAllUserModals = () => {
+    closeUserModal(userOrdersModal);
+    closeUserModal(userProfileModal);
+  };
+
+  const showFeedback = (element, message, variant) => {
+    if (!element) {
+      return;
+    }
+    element.textContent = message;
+    element.className = `alert mb-3 py-2 alert-${variant}`;
+    element.classList.remove("d-none");
+  };
+
+  const hideFeedback = (element) => {
+    if (!element) {
+      return;
+    }
+    element.classList.add("d-none");
+    element.textContent = "";
+  };
+
+  const escapeHtml = (value) => {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  };
+
+  const statusLabel = (status) => {
+    const labels = {
+      pendiente: "Pendiente",
+      pagado: "Pagado",
+      enviado: "Enviado",
+      cancelado: "Cancelado",
+    };
+    return labels[status] || status || "Pendiente";
+  };
+
+  const getInitials = (name, email) => {
+    const source = (name || email || "US").trim();
+    if (!source) {
+      return "US";
+    }
+    const parts = source.split(/\s+/).filter(Boolean);
+    const initials = parts.slice(0, 2).map((part) => part.charAt(0)).join("");
+    return (initials || source.slice(0, 2) || "US").toUpperCase();
+  };
+
+  const renderOrderCard = (order) => {
+    const amount = order.paquete_cantidad ? ` <span class="text-secondary">(${escapeHtml(order.paquete_cantidad)})</span>` : "";
+    return `
+      <article class="rounded-4 border border-info p-3" style="background:rgba(8,15,24,0.78);box-shadow:0 0 16px rgba(34,211,238,0.08);">
+        <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+          <div>
+            <div class="small text-uppercase text-info" style="letter-spacing:0.14em;">Pedido #${escapeHtml(order.id)}</div>
+            <h4 class="h6 mb-0 text-white">${escapeHtml(order.juego_nombre)}</h4>
+          </div>
+          <span class="badge rounded-pill text-bg-dark border border-info-subtle text-info">${escapeHtml(statusLabel(order.estado))}</span>
+        </div>
+        <div class="small text-secondary mb-2">${escapeHtml(order.creado_en)}</div>
+        <div class="mb-2 text-light"><strong>Paquete:</strong> ${escapeHtml(order.paquete_nombre)}${amount}</div>
+        <div class="mb-2 text-light"><strong>Correo:</strong> ${escapeHtml(order.email)}</div>
+        <div class="fw-bold text-info fs-5">${escapeHtml(order.moneda)} ${escapeHtml(order.precio)}</div>
+      </article>`;
+  };
+
+  const renderOrderRow = (order) => {
+    const amount = order.paquete_cantidad ? ` (${escapeHtml(order.paquete_cantidad)})` : "";
+    return `
+      <tr>
+        <td class="bg-transparent border-bottom border-info-subtle text-info fw-semibold">#${escapeHtml(order.id)}<div class="small text-secondary fw-normal">${escapeHtml(order.creado_en)}</div></td>
+        <td class="bg-transparent border-bottom border-info-subtle text-light fw-semibold">${escapeHtml(order.juego_nombre)}</td>
+        <td class="bg-transparent border-bottom border-info-subtle text-light">${escapeHtml(order.paquete_nombre)}<span class="text-secondary">${amount}</span></td>
+        <td class="bg-transparent border-bottom border-info-subtle text-light">${escapeHtml(order.email)}</td>
+        <td class="bg-transparent border-bottom border-info-subtle"><span class="badge rounded-pill text-bg-dark border border-info-subtle text-info">${escapeHtml(statusLabel(order.estado))}</span></td>
+        <td class="bg-transparent border-bottom border-info-subtle text-info fw-bold text-end">${escapeHtml(order.moneda)} ${escapeHtml(order.precio)}</td>
+      </tr>`;
+  };
+
+  const loadUserOrders = async () => {
+    if (!userOrdersList || !userOrdersLoading || !userOrdersEmpty || !userOrdersTableBody || !userOrdersCards) {
+      return;
+    }
+    hideFeedback(userOrdersFeedback);
+    userOrdersList.innerHTML = "";
+    userOrdersList.innerHTML = `
+                <div class="table-responsive d-none d-md-block rounded-4 border border-info-subtle overflow-hidden" style="background:rgba(8,15,24,0.82);">
+                  <table class="table align-middle mb-0" style="--bs-table-bg:transparent;--bs-table-color:#e5f6ff;">
+                    <thead>
+                      <tr>
+                        <th class="text-info text-uppercase small fw-bold border-bottom border-info-subtle bg-transparent">Pedido</th>
+                        <th class="text-info text-uppercase small fw-bold border-bottom border-info-subtle bg-transparent">Juego</th>
+                        <th class="text-info text-uppercase small fw-bold border-bottom border-info-subtle bg-transparent">Paquete</th>
+                        <th class="text-info text-uppercase small fw-bold border-bottom border-info-subtle bg-transparent">Correo</th>
+                        <th class="text-info text-uppercase small fw-bold border-bottom border-info-subtle bg-transparent">Estado</th>
+                        <th class="text-info text-uppercase small fw-bold border-bottom border-info-subtle bg-transparent text-end">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody id="user-orders-table-body"></tbody>
+                  </table>
+                </div>
+                <div id="user-orders-cards" class="d-grid d-md-none gap-3"></div>`;
+    const tableBody = document.getElementById("user-orders-table-body");
+    const cardsContainer = document.getElementById("user-orders-cards");
+    hideElement(userOrdersList);
+    hideElement(userOrdersEmpty);
+    showElement(userOrdersLoading);
+    userOrdersLoading.textContent = "Cargando pedidos...";
+
+    try {
+      const response = await fetch("/api/account.php?action=orders", {
+        credentials: "same-origin",
+        headers: { "Accept": "application/json" },
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || "No se pudo cargar el historial.");
+      }
+
+      hideElement(userOrdersLoading);
+      if (!Array.isArray(data.orders) || data.orders.length === 0) {
+        showElement(userOrdersEmpty);
+        return;
+      }
+
+      tableBody.innerHTML = data.orders.map(renderOrderRow).join("");
+      cardsContainer.innerHTML = data.orders.map(renderOrderCard).join("");
+      showElement(userOrdersList);
+    } catch (error) {
+      hideElement(userOrdersLoading);
+      showFeedback(userOrdersFeedback, error.message || "No se pudo cargar el historial.", "danger");
+    }
+  };
+
+  const updateUserPresentation = (user) => {
+    if (!user) {
+      return;
+    }
+    if (userTriggerName) {
+      userTriggerName.textContent = user.full_name || user.email || "Usuario";
+    }
+    if (userTriggerInitials) {
+      userTriggerInitials.textContent = getInitials(user.full_name || "", user.email || "");
+    }
+    if (userMenuName) {
+      userMenuName.textContent = user.full_name || user.email || "Usuario";
+    }
+    if (userMenuEmail) {
+      userMenuEmail.textContent = user.email || "";
+    }
+    const orderEmailField = document.querySelector('#order-form input[name="email"]');
+    if (orderEmailField) {
+      orderEmailField.value = user.email || "";
     }
   };
 
   const openAuthModal = (mode) => {
-    console.log("Opening auth modal with mode:", mode);
     if (!authModal || !authLogin || !authRegister) return;
-    authModal.classList.remove("d-none");
-    authModal.classList.add("d-flex");
+    showElement(authModal, "d-flex");
     if (mode === "register") {
-      console.log("Showing registration form");
-      authLogin.classList.add("d-none");
-      authRegister.classList.remove("d-none");
-      authRegister.classList.add("d-grid");
+      hideElement(authLogin, "d-grid");
+      showElement(authRegister, "d-grid");
     } else {
-      console.log("Showing login form");
-      authRegister.classList.add("d-none");
-      authLogin.classList.remove("d-none");
-      authLogin.classList.add("d-grid");
+      hideElement(authRegister, "d-grid");
+      showElement(authLogin, "d-grid");
     }
   };
 
   const closeAuthModal = () => {
     if (!authModal) return;
-    authModal.classList.add("d-none");
-    authModal.classList.remove("d-flex");
+    hideElement(authModal, "d-flex");
   };
+
+  const togglePassword = (inputId, button) => {
+    const input = document.getElementById(inputId);
+    if (!input) {
+      return;
+    }
+    const icon = button ? button.querySelector("svg") : null;
+    const showPassword = input.type === "password";
+    input.type = showPassword ? "text" : "password";
+    if (icon) {
+      icon.classList.toggle("text-neon", showPassword);
+    }
+  };
+
+  window.openAuthModal = openAuthModal;
+  window.togglePassword = togglePassword;
 
   if (authTrigger && authMenu && authContainer) {
     authTrigger.addEventListener("click", (event) => {
       event.stopPropagation();
-      if (authMenu.classList.contains("hidden")) {
+      hideUserMenu();
+      if (authMenu.classList.contains("d-none")) {
         showAuthMenu();
       } else {
         hideAuthMenu();
@@ -75,6 +299,24 @@ $menuScript = <<<"SCRIPT"
     document.addEventListener("click", (event) => {
       if (!authContainer.contains(event.target)) {
         hideAuthMenu();
+      }
+    });
+  }
+
+  if (userTrigger && userMenu && authContainer) {
+    userTrigger.addEventListener("click", (event) => {
+      event.stopPropagation();
+      hideAuthMenu();
+      if (userMenu.classList.contains("d-none")) {
+        showUserMenu();
+      } else {
+        hideUserMenu();
+      }
+    });
+
+    document.addEventListener("click", (event) => {
+      if (!authContainer.contains(event.target)) {
+        hideUserMenu();
       }
     });
   }
@@ -101,6 +343,84 @@ $menuScript = <<<"SCRIPT"
       openAuthModal(button.dataset.authSwitch);
     });
   });
+
+  document.querySelectorAll("[data-user-open]").forEach((button) => {
+    button.addEventListener("click", async (event) => {
+      event.preventDefault();
+      hideUserMenu();
+      const target = button.dataset.userOpen;
+      if (target === "orders") {
+        openUserModal(userOrdersModal);
+        await loadUserOrders();
+        return;
+      }
+      if (target === "profile") {
+        hideFeedback(userProfileFeedback);
+        openUserModal(userProfileModal);
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-user-close]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      closeAllUserModals();
+    });
+  });
+
+  passwordToggles.forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      togglePassword(button.dataset.passwordToggle, button);
+    });
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      hideAuthMenu();
+      hideUserMenu();
+      closeAuthModal();
+      closeAllUserModals();
+      closeMenu();
+    }
+  });
+
+  if (userProfileForm) {
+    userProfileForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      hideFeedback(userProfileFeedback);
+      const submitButton = userProfileForm.querySelector('button[type="submit"]');
+      const formData = new FormData(userProfileForm);
+      formData.append("action", "update_profile");
+
+      if (submitButton) {
+        submitButton.disabled = true;
+      }
+
+      try {
+        const response = await fetch("/api/account.php", {
+          method: "POST",
+          body: formData,
+          credentials: "same-origin",
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.message || "No se pudieron guardar los cambios.");
+        }
+        updateUserPresentation(data.user || null);
+        userProfileForm.reset();
+        userProfileForm.elements.name.value = (data.user && data.user.full_name) || "";
+        userProfileForm.elements.email.value = (data.user && data.user.email) || "";
+        showFeedback(userProfileFeedback, data.message || "Datos guardados.", "success");
+      } catch (error) {
+        showFeedback(userProfileFeedback, error.message || "No se pudieron guardar los cambios.", "danger");
+      } finally {
+        if (submitButton) {
+          submitButton.disabled = false;
+        }
+      }
+    });
+  }
 </script>
 SCRIPT;
 ?>

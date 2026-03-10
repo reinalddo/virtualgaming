@@ -1,28 +1,35 @@
 <?php
-require_once __DIR__ . "/includes/data.php";
 require_once __DIR__ . "/includes/auth.php";
 require_once __DIR__ . "/includes/store_config.php";
+require_once __DIR__ . "/includes/db_connect.php";
+require_once __DIR__ . "/includes/tenant.php";
 
 $pageTitle = store_config_get('nombre_tienda', 'TVirtualGaming') . " | Restablecer contraseña";
 
+function ensure_reset_requested_at_column(mysqli $mysqli): void {
+  $columns = $mysqli->query("SHOW COLUMNS FROM usuarios LIKE 'reset_requested_at'");
+  if ($columns && $columns->num_rows > 0) {
+    return;
+  }
+  $mysqli->query("ALTER TABLE usuarios ADD COLUMN reset_requested_at DATETIME NULL AFTER rol");
+}
+
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
-  $tenantSlug = auth_get_tenant_slug();
   $email = auth_normalize_email($_POST["email"] ?? "");
 
   if ($email !== "") {
-    $users = auth_load_users($tenantSlug);
-    foreach ($users as &$user) {
-      if (!empty($user["email"]) && auth_normalize_email($user["email"]) === $email) {
-        $user["reset_requested_at"] = date("c");
-        break;
-      }
+    ensure_reset_requested_at_column($mysqli);
+    $requestedAt = date('Y-m-d H:i:s');
+    $stmt = $mysqli->prepare("UPDATE usuarios SET reset_requested_at = ? WHERE LOWER(email) = ?");
+    if ($stmt) {
+      $stmt->bind_param('ss', $requestedAt, $email);
+      $stmt->execute();
+      $stmt->close();
     }
-    unset($user);
-    auth_save_users($tenantSlug, $users);
   }
 
   auth_set_flash("success", "Si el correo existe, enviamos instrucciones para restablecer la contraseña.");
-  header("Location: /reset.php?tenant=" . rawurlencode($tenantSlug));
+  header("Location: /reset.php");
   exit;
 }
 
@@ -37,7 +44,6 @@ include __DIR__ . "/includes/header.php";
             <p class="mt-1 text-xs text-slate-400">Ingresa tu correo para recibir instrucciones.</p>
           </div>
           <form action="/reset.php" method="post" class="mt-4 space-y-4" novalidate>
-            <input type="hidden" name="tenant" value="<?php echo htmlspecialchars($tenantData["tenant"]["slug"] ?? "default", ENT_QUOTES, "UTF-8"); ?>" />
             <label class="block text-xs text-slate-400">Correo electrónico</label>
             <input type="email" name="email" autocomplete="email" class="w-full rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400/70" placeholder="nombre@correo.com" />
             <button type="submit" class="w-full rounded-xl border border-sky-400/30 bg-sky-500/80 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-sky-400">Enviar instrucciones</button>

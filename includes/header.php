@@ -3,6 +3,7 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
   session_start();
 }
 require_once __DIR__ . '/store_config.php';
+require_once __DIR__ . '/tenant.php';
 
 if (!isset($brandPrefix)) {
   $brandPrefix = store_config_get('nombre_prefijo', 'TIENDA');
@@ -12,6 +13,28 @@ if (!isset($pageTitle)) {
 }
 if (!isset($brandName)) {
   $brandName = store_config_get('nombre_tienda', 'TVirtualGaming');
+}
+
+$authUser = $_SESSION['auth_user'] ?? null;
+$authUserName = trim((string) (($authUser['full_name'] ?? $authUser['nombre'] ?? $authUser['email'] ?? 'Usuario')));
+$authUserEmail = trim((string) ($authUser['email'] ?? ''));
+$authUserRole = trim((string) ($authUser['rol'] ?? ''));
+$authUserInitials = 'US';
+if ($authUserName !== '') {
+  $nameParts = preg_split('/\s+/', $authUserName);
+  $initials = '';
+  foreach ($nameParts as $part) {
+    if ($part === '') {
+      continue;
+    }
+    $initials .= function_exists('mb_substr') ? mb_substr($part, 0, 1, 'UTF-8') : substr($part, 0, 1);
+    if (strlen($initials) >= 2) {
+      break;
+    }
+  }
+  if ($initials !== '') {
+    $authUserInitials = strtoupper($initials);
+  }
 }
 
 $brandLogo = store_config_get('logo_tienda', '');
@@ -32,7 +55,7 @@ if (!function_exists('asset_version')) {
   }
 }
 
-$tenantSlugAttr = isset($tenantData["tenant"]["slug"]) ? $tenantData["tenant"]["slug"] : "default";
+$tenantSlugAttr = resolve_tenant_slug();
 $mainStylesPath = __DIR__ . '/../assets/css/estilos.css';
 $mainStylesVersion = asset_version($mainStylesPath);
 ?>
@@ -152,7 +175,7 @@ $mainStylesVersion = asset_version($mainStylesPath);
           </div>
         </div>
         <div id="auth-container" class="site-auth-container position-relative">
-          <?php if (!isset($_SESSION['auth_user'])): ?>
+          <?php if (!$authUser): ?>
             <button id="auth-trigger" type="button" class="site-auth-trigger d-flex align-items-center gap-2 neon-btn border border-info bg-dark px-2 py-1 text-uppercase fw-bold text-info shadow-sm" style="font-size:11px;box-shadow:0 0 8px #22d3ee, 0 0 2px #2dd4bf;transition:box-shadow 0.2s;min-width:120px;">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" style="width:18px;height:18px;">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
@@ -161,35 +184,30 @@ $mainStylesVersion = asset_version($mainStylesPath);
               <span class="site-auth-label" style="text-shadow:0 0 4px #22d3ee, 0 0 1px #2dd4bf;">Iniciar Sesión / Registrarse</span>
             </button>
             <div id="auth-menu" class="position-absolute end-0 mt-2 z-3 d-none" style="min-width:160px;max-width:220px;box-shadow:0 0 16px #22d3ee, 0 0 4px #2dd4bf;border-radius:0.75rem;border:1.5px solid #22d3ee;background:#181f2a;padding:0.75rem;">
-              <button type="button" class="btn btn-info neon-btn-info w-100 rounded-3 border mb-2 fw-bold text-uppercase shadow-sm" style="font-size:12px;" onclick="openAuthModal('login');document.getElementById('auth-menu').classList.add('d-none');">Iniciar sesión</button>
-              <button type="button" class="btn btn-warning neon-btn w-100 rounded-3 border fw-bold text-uppercase shadow-sm" style="font-size:12px;" onclick="openAuthModal('register');document.getElementById('auth-menu').classList.add('d-none');">Registrarse</button>
-            </div>
-            <script>
-              document.addEventListener('DOMContentLoaded', function() {
-                var authTrigger = document.getElementById('auth-trigger');
-                var authMenu = document.getElementById('auth-menu');
-                var authContainer = document.getElementById('auth-container');
-                if (authTrigger && authMenu && authContainer) {
-                  authTrigger.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    authMenu.classList.toggle('d-none');
-                  });
-                  document.addEventListener('click', function(e) {
-                    if (!authContainer.contains(e.target)) {
-                      authMenu.classList.add('d-none');
-                    }
-                  });
-                }
-              });
-            </script>
+              <button type="button" class="btn btn-info neon-btn-info w-100 rounded-3 border mb-2 fw-bold text-uppercase shadow-sm" style="font-size:12px;" data-auth-open="login">Iniciar sesión</button>
+              <button type="button" class="btn btn-warning neon-btn w-100 rounded-3 border fw-bold text-uppercase shadow-sm" style="font-size:12px;" data-auth-open="register">Registrarse</button>
             </div>
           <?php else: ?>
-            <div class="d-flex align-items-center gap-2 rounded-pill border border-info bg-dark px-3 py-1 text-info fw-semibold" style="font-size:13px;">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
-                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 20.118a7.5 7.5 0 0115 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.5-1.632z" />
+            <button id="user-trigger" type="button" class="btn btn-admin d-inline-flex align-items-center gap-3 rounded-pill px-3 py-2 shadow-sm border border-info" style="background:linear-gradient(90deg,#22d3ee 0%,#2dd4bf 100%);color:#081018;min-width:210px;box-shadow:0 0 16px rgba(34,211,238,0.28);">
+              <span id="user-trigger-initials" class="d-inline-flex align-items-center justify-content-center rounded-circle fw-bold" style="width:38px;height:38px;background:rgba(8,16,24,0.18);border:1px solid rgba(8,16,24,0.2);font-family:'Oxanium',sans-serif;">
+                <?php echo htmlspecialchars($authUserInitials, ENT_QUOTES, 'UTF-8'); ?>
+              </span>
+              <span class="d-flex flex-column align-items-start text-start lh-sm flex-grow-1 overflow-hidden">
+                <span class="small text-uppercase fw-bold" style="letter-spacing:0.15em;opacity:0.7;">Mi cuenta</span>
+                <span id="user-trigger-name" class="fw-bold text-truncate w-100"><?php echo htmlspecialchars($authUserName, ENT_QUOTES, 'UTF-8'); ?></span>
+              </span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
               </svg>
-              <?php echo htmlspecialchars($_SESSION['auth_user']['nombre'] ?? $_SESSION['auth_user']['full_name'] ?? $_SESSION['auth_user']['email'] ?? 'Usuario', ENT_QUOTES, 'UTF-8'); ?>
+            </button>
+            <div id="user-menu" class="position-absolute end-0 mt-2 z-3 d-none" style="min-width:240px;max-width:280px;box-shadow:0 0 16px #22d3ee, 0 0 4px #2dd4bf;border-radius:1rem;border:1.5px solid #22d3ee;background:#181f2a;padding:0.85rem;">
+              <div class="px-2 pb-2 mb-2 border-bottom border-info-subtle">
+                <div id="user-menu-name" class="fw-bold text-light"><?php echo htmlspecialchars($authUserName, ENT_QUOTES, 'UTF-8'); ?></div>
+                <div id="user-menu-email" class="small text-info text-break"><?php echo htmlspecialchars($authUserEmail, ENT_QUOTES, 'UTF-8'); ?></div>
+              </div>
+              <button type="button" class="btn btn-admin w-100 rounded-3 border mb-2 fw-semibold" data-user-open="orders">Ver Pedidos</button>
+              <button type="button" class="btn btn-outline-info w-100 rounded-3 border mb-2 fw-semibold" data-user-open="profile">Datos Usuario</button>
+              <a href="/logout" class="btn btn-danger w-100 rounded-3 border fw-semibold">Cerrar sesión</a>
             </div>
           <?php endif; ?>
         </div>
@@ -227,8 +245,8 @@ $mainStylesVersion = asset_version($mainStylesPath);
           <a href="/" class="btn btn-dark border rounded-3 px-4 py-3 fw-semibold">Inicio</a>
           <a href="/populares" class="btn btn-dark border rounded-3 px-4 py-3 fw-semibold">Juegos populares</a>
           <a href="/juegos" class="btn btn-dark border rounded-3 px-4 py-3 fw-semibold">Juegos</a>
-          <?php if (isset($_SESSION['auth_user'])): ?>
-            <?php if (($_SESSION['auth_user']['rol'] ?? '') === 'admin'): ?>
+          <?php if ($authUser): ?>
+            <?php if ($authUserRole === 'admin'): ?>
               <hr class="my-2 border-slate-700">
               <a href="/admin/dashboard" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Dashboard</a>
               <a href="/admin/juegos" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Juegos</a>
@@ -259,14 +277,13 @@ $mainStylesVersion = asset_version($mainStylesPath);
               <h2 class="mt-2 text-neon fw-bold" style="font-family:'Oxanium',sans-serif;font-size:2rem;text-shadow:0 0 8px #22d3ee;">Iniciar sesión</h2>
             </div>
             <form action="/login.php" method="post" class="d-grid gap-4" novalidate>
-              <input type="hidden" name="tenant" value="<?php echo htmlspecialchars($tenantSlugAttr, ENT_QUOTES, "UTF-8"); ?>" />
               <div class="d-grid gap-3">
                 <label class="form-label small text-neon">Correo electrónico</label>
                 <input type="email" name="email" autocomplete="email" class="form-control rounded-3 bg-dark text-neon border border-info" placeholder="nombre@correo.com" />
                 <label class="form-label small text-neon">Contraseña</label>
                 <div class="relative">
                   <input type="password" name="password" autocomplete="current-password" class="form-control rounded-3 bg-dark text-neon border border-info pe-5" placeholder="Ingresa tu contraseña" id="login-password" />
-                  <button type="button" tabindex="-1" class="btn btn-link position-absolute end-0 top-50 translate-middle-y text-info" style="padding:0;" onclick="togglePassword('login-password', this)">
+                  <button type="button" tabindex="-1" class="btn btn-link position-absolute end-0 top-50 translate-middle-y text-info" style="padding:0;" data-password-toggle="login-password">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12.001C3.226 16.273 7.322 19.5 12 19.5c1.658 0 3.237-.336 4.677-.947M6.228 6.228A9.956 9.956 0 0112 4.5c4.677 0 8.773 3.227 10.065 7.499a10.523 10.523 0 01-4.293 5.774M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       <path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18" />
@@ -287,7 +304,6 @@ $mainStylesVersion = asset_version($mainStylesPath);
               <p class="mt-1 small text-neon">Regístrate para empezar a operar en <?php echo htmlspecialchars($brandName, ENT_QUOTES, "UTF-8"); ?>.</p>
             </div>
             <form id="registro-form" class="d-grid gap-4" novalidate autocomplete="off">
-              <input type="hidden" id="tenant" value="<?php echo htmlspecialchars($tenantSlugAttr, ENT_QUOTES, 'UTF-8'); ?>" />
               <div class="d-grid gap-3">
                 <label class="form-label small text-neon">Nombre completo</label>
                 <input type="text" id="nombre" autocomplete="name" class="form-control rounded-3 bg-dark text-neon border border-info" placeholder="Ej. Juan Pérez" required />
@@ -298,26 +314,13 @@ $mainStylesVersion = asset_version($mainStylesPath);
                 <label class="form-label small text-neon">Contraseña</label>
                 <div class="relative">
                   <input type="password" id="contrasena" autocomplete="new-password" class="form-control rounded-3 bg-dark text-neon border border-info pe-5" placeholder="Crea una contraseña segura" required />
-                  <button type="button" tabindex="-1" class="btn btn-link position-absolute end-0 top-50 translate-middle-y text-info" style="padding:0;" onclick="togglePassword('contrasena', this)">
+                  <button type="button" tabindex="-1" class="btn btn-link position-absolute end-0 top-50 translate-middle-y text-info" style="padding:0;" data-password-toggle="contrasena">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12.001C3.226 16.273 7.322 19.5 12 19.5c1.658 0 3.237-.336 4.677-.947M6.228 6.228A9.956 9.956 0 0112 4.5c4.677 0 8.773 3.227 10.065 7.499a10.523 10.523 0 01-4.293 5.774M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       <path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18" />
                     </svg>
                   </button>
                 </div>
-                <script>
-                  function togglePassword(inputId, btn) {
-                    const input = document.getElementById(inputId);
-                    if (!input) return;
-                    if (input.type === 'password') {
-                      input.type = 'text';
-                      btn.querySelector('svg').classList.add('text-neon');
-                    } else {
-                      input.type = 'password';
-                      btn.querySelector('svg').classList.remove('text-neon');
-                    }
-                  }
-                </script>
               </div>
               <button type="submit" id="registro-btn" class="btn btn-info neon-btn-info w-100 rounded-3 px-4 py-2 fw-bold text-uppercase shadow">Registrarse ahora</button>
             </form>
@@ -326,3 +329,84 @@ $mainStylesVersion = asset_version($mainStylesPath);
           </div>
         </div>
       </div>
+
+      <?php if ($authUser): ?>
+      <div id="user-orders-modal" class="position-fixed top-0 start-0 w-100 h-100 d-none d-flex align-items-start align-items-md-center justify-content-center px-3 py-3 overflow-auto" style="z-index:13100;">
+        <div class="position-absolute top-0 start-0 w-100 h-100" style="background:rgba(12,21,34,0.88);backdrop-filter:blur(6px);" data-user-close></div>
+        <div class="position-relative w-100" style="max-width:820px;z-index:1;">
+          <div class="rounded-4 border border-info overflow-hidden" style="background:linear-gradient(135deg,rgba(14,23,34,0.98) 80%,rgba(34,211,238,0.08) 100%);box-shadow:0 0 32px rgba(34,211,238,0.22);">
+            <div class="d-flex align-items-center justify-content-between gap-3 px-4 py-3 border-bottom border-info-subtle">
+              <div>
+                <div class="small text-uppercase text-info" style="letter-spacing:0.3em;">Mi cuenta</div>
+                <h3 class="h5 mb-0 text-white">Pedidos realizados</h3>
+              </div>
+              <button type="button" class="btn btn-outline-info rounded-circle d-flex align-items-center justify-content-center" style="width:42px;height:42px;" data-user-close aria-label="Cerrar">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div class="px-4 py-4" style="max-height:calc(100vh - 170px);overflow-y:auto;">
+              <div id="user-orders-feedback" class="d-none alert mb-3 py-2"></div>
+              <div id="user-orders-loading" class="text-center py-5 text-info">Cargando pedidos...</div>
+              <div id="user-orders-empty" class="d-none text-center py-5 text-secondary">Todavía no has realizado pedidos con esta cuenta.</div>
+              <div id="user-orders-list" class="d-none">
+                <div class="table-responsive d-none d-md-block rounded-4 border border-info-subtle overflow-hidden" style="background:rgba(8,15,24,0.82);">
+                  <table class="table align-middle mb-0" style="--bs-table-bg:transparent;--bs-table-color:#e5f6ff;">
+                    <thead>
+                      <tr>
+                        <th class="text-info text-uppercase small fw-bold border-bottom border-info-subtle bg-transparent">Pedido</th>
+                        <th class="text-info text-uppercase small fw-bold border-bottom border-info-subtle bg-transparent">Juego</th>
+                        <th class="text-info text-uppercase small fw-bold border-bottom border-info-subtle bg-transparent">Paquete</th>
+                        <th class="text-info text-uppercase small fw-bold border-bottom border-info-subtle bg-transparent">Correo</th>
+                        <th class="text-info text-uppercase small fw-bold border-bottom border-info-subtle bg-transparent">Estado</th>
+                        <th class="text-info text-uppercase small fw-bold border-bottom border-info-subtle bg-transparent text-end">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody id="user-orders-table-body"></tbody>
+                  </table>
+                </div>
+                <div id="user-orders-cards" class="d-grid d-md-none gap-3"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="user-profile-modal" class="position-fixed top-0 start-0 w-100 h-100 d-none d-flex align-items-center justify-content-center px-3" style="z-index:13100;">
+        <div class="position-absolute top-0 start-0 w-100 h-100" style="background:rgba(12,21,34,0.88);backdrop-filter:blur(6px);" data-user-close></div>
+        <div class="position-relative w-100" style="max-width:560px;z-index:1;">
+          <div class="rounded-4 border border-info overflow-hidden" style="background:linear-gradient(135deg,rgba(14,23,34,0.98) 80%,rgba(34,211,238,0.08) 100%);box-shadow:0 0 32px rgba(34,211,238,0.22);">
+            <div class="d-flex align-items-center justify-content-between gap-3 px-4 py-3 border-bottom border-info-subtle">
+              <div>
+                <div class="small text-uppercase text-info" style="letter-spacing:0.3em;">Mi cuenta</div>
+                <h3 class="h5 mb-0 text-white">Datos de usuario</h3>
+              </div>
+              <button type="button" class="btn btn-outline-info rounded-circle d-flex align-items-center justify-content-center" style="width:42px;height:42px;" data-user-close aria-label="Cerrar">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div class="px-4 py-4">
+              <div id="user-profile-feedback" class="d-none alert mb-3 py-2"></div>
+              <form id="user-profile-form" class="d-grid gap-3" novalidate>
+                <div>
+                  <label class="form-label small text-info">Nombre</label>
+                  <input type="text" name="name" class="form-control bg-dark text-info border-info" value="<?php echo htmlspecialchars($authUserName, ENT_QUOTES, 'UTF-8'); ?>" required />
+                </div>
+                <div>
+                  <label class="form-label small text-info">Correo</label>
+                  <input type="email" name="email" class="form-control bg-dark text-info border-info" value="<?php echo htmlspecialchars($authUserEmail, ENT_QUOTES, 'UTF-8'); ?>" required />
+                </div>
+                <div>
+                  <label class="form-label small text-info">Nueva contraseña</label>
+                  <input type="password" name="password" class="form-control bg-dark text-info border-info" placeholder="Opcional" autocomplete="new-password" />
+                </div>
+                <div>
+                  <label class="form-label small text-info">Confirmar contraseña</label>
+                  <input type="password" name="password_confirm" class="form-control bg-dark text-info border-info" placeholder="Repite la contraseña nueva" autocomplete="new-password" />
+                </div>
+                <button type="submit" class="btn btn-admin w-100 rounded-3 py-2 fw-bold">Guardar cambios</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+      <?php endif; ?>

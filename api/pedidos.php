@@ -21,12 +21,14 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         precio DECIMAL(12,2) NOT NULL DEFAULT 0,
         user_identifier VARCHAR(150) DEFAULT NULL,
         email VARCHAR(180) DEFAULT NULL,
+        cliente_usuario_id INT DEFAULT NULL,
         cupon VARCHAR(60) DEFAULT NULL,
         estado ENUM('pendiente','pagado','enviado','cancelado') NOT NULL DEFAULT 'pendiente',
         creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_estado (estado),
-        INDEX idx_email (email)
+        INDEX idx_email (email),
+        INDEX idx_cliente_usuario_id (cliente_usuario_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
     $mysqli->query($create);
 
@@ -41,7 +43,9 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         'precio' => "ALTER TABLE pedidos ADD COLUMN precio DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER moneda",
         'user_identifier' => "ALTER TABLE pedidos ADD COLUMN user_identifier VARCHAR(150) NULL AFTER precio",
         'email' => "ALTER TABLE pedidos ADD COLUMN email VARCHAR(180) NULL AFTER user_identifier",
-        'cupon' => "ALTER TABLE pedidos ADD COLUMN cupon VARCHAR(60) NULL AFTER email",
+        'cantidad' => "ALTER TABLE pedidos ADD COLUMN cantidad INT NOT NULL DEFAULT 1 AFTER cupon",
+        'cliente_usuario_id' => "ALTER TABLE pedidos ADD COLUMN cliente_usuario_id INT NULL AFTER email",
+        'cupon' => "ALTER TABLE pedidos ADD COLUMN cupon VARCHAR(60) NULL AFTER cliente_usuario_id",
         'estado' => "ALTER TABLE pedidos ADD COLUMN estado ENUM('pendiente','pagado','enviado','cancelado') NOT NULL DEFAULT 'pendiente' AFTER cupon",
         'creado_en' => "ALTER TABLE pedidos ADD COLUMN creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER estado",
         'actualizado_en' => "ALTER TABLE pedidos ADD COLUMN actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER creado_en"
@@ -419,6 +423,7 @@ if ($action === 'create') {
     $email = sanitize_str($_POST['email'] ?? null, 180);
     $cuponInput = sanitize_str($_POST['coupon'] ?? null, 60);
     $cupon = null;
+    $cliente_usuario_id = isset($_SESSION['auth_user']['id']) ? intval($_SESSION['auth_user']['id']) : null;
     if ($cuponInput !== null) {
         if (!is_valid_coupon_code($cuponInput)) {
             json_error('El cupón solo puede contener letras y números, sin espacios ni caracteres especiales.');
@@ -476,11 +481,11 @@ if ($action === 'create') {
         $cupon = null;
     }
 
-    $stmt = $mysqli->prepare("INSERT INTO pedidos (tenant_slug, juego_id, juego_nombre, paquete_nombre, paquete_cantidad, moneda, precio, user_identifier, email, cupon, cantidad, estado) VALUES (?,?,?,?,?,?,?,?,?,?,?, 'pendiente')");
+    $stmt = $mysqli->prepare("INSERT INTO pedidos (tenant_slug, juego_id, juego_nombre, paquete_nombre, paquete_cantidad, moneda, precio, user_identifier, email, cliente_usuario_id, cupon, cantidad, estado) VALUES (?,?,?,?,?,?,?,?,?,?,?,?, 'pendiente')");
     if (!$stmt) {
         json_error('No se pudo preparar el pedido');
     }
-    $stmt->bind_param('sissssdsssi', $tenant_slug, $game_id, $game_name, $pack_name, $pack_amount_text, $currency, $price, $user_identifier, $email, $cupon, $pack_amount_num);
+    $stmt->bind_param('sissssdssisi', $tenant_slug, $game_id, $game_name, $pack_name, $pack_amount_text, $currency, $price, $user_identifier, $email, $cliente_usuario_id, $cupon, $pack_amount_num);
     if (!$stmt->execute()) {
         json_error('No se pudo guardar el pedido');
     }
