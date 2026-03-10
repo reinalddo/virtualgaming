@@ -167,14 +167,27 @@ switch ($seccion) {
 
     case 'configuracion':
         require_once __DIR__ . '/includes/store_config.php';
+        require_once __DIR__ . '/includes/home_gallery.php';
         $activeTab = $_GET['tab'] ?? 'correo';
-        if (!in_array($activeTab, ['correo', 'cabecera'], true)) {
+        if (!in_array($activeTab, ['correo', 'cabecera', 'galeria'], true)) {
             $activeTab = 'correo';
+        }
+
+        home_gallery_ensure_table();
+
+        if ($activeTab === 'galeria' && isset($_GET['eliminar_galeria'])) {
+            $galleryId = intval($_GET['eliminar_galeria']);
+            if ($galleryId > 0 && home_gallery_delete($galleryId)) {
+                admin_set_flash('success', 'Elemento de galería eliminado.');
+            } else {
+                admin_set_flash('error', 'No se pudo eliminar el elemento de galería.');
+            }
+            admin_redirect('configuracion', ['tab' => 'galeria']);
         }
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $activeTab = $_POST['config_section'] ?? $activeTab;
-            if (!in_array($activeTab, ['correo', 'cabecera'], true)) {
+            if (!in_array($activeTab, ['correo', 'cabecera', 'galeria'], true)) {
                 $activeTab = 'correo';
             }
 
@@ -228,6 +241,51 @@ switch ($seccion) {
                 }
 
                 admin_set_flash('success', 'Datos de cabecera actualizados.');
+            }
+
+            if ($activeTab === 'galeria') {
+                $galleryId = isset($_POST['gallery_id']) ? intval($_POST['gallery_id']) : 0;
+                $existingItem = $galleryId > 0 ? home_gallery_find($galleryId) : null;
+                if ($galleryId > 0 && $existingItem === null) {
+                    admin_set_flash('error', 'El elemento de galería que intentas editar no existe.');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'galeria']);
+                }
+
+                $validation = home_gallery_validate_form($_POST, $_FILES, $existingItem);
+                if (!$validation['is_valid']) {
+                    $newImage = (string) ($validation['data']['imagen'] ?? '');
+                    $existingImage = (string) ($existingItem['imagen'] ?? '');
+                    if ($newImage !== '' && $newImage !== $existingImage) {
+                        home_gallery_delete_image_file($newImage);
+                    }
+                    admin_set_flash('error', implode(' ', $validation['errors']));
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    $query = ['tab' => 'galeria'];
+                    if ($galleryId > 0) {
+                        $query['editar_galeria'] = $galleryId;
+                    }
+                    admin_redirect('configuracion', $query);
+                }
+
+                $saved = home_gallery_save($validation['data'], $galleryId > 0 ? $galleryId : null);
+                if ($saved) {
+                    $replacedImage = (string) ($validation['replaced_image'] ?? '');
+                    $newImage = (string) ($validation['data']['imagen'] ?? '');
+                    if ($replacedImage !== '' && $replacedImage !== $newImage) {
+                        home_gallery_delete_image_file($replacedImage);
+                    }
+                    admin_set_flash('success', $galleryId > 0 ? 'Elemento de galería actualizado.' : 'Elemento de galería creado.');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'galeria']);
+                }
+
+                $newImage = (string) ($validation['data']['imagen'] ?? '');
+                $existingImage = (string) ($existingItem['imagen'] ?? '');
+                if ($newImage !== '' && $newImage !== $existingImage) {
+                    home_gallery_delete_image_file($newImage);
+                }
+                admin_set_flash('error', 'No se pudo guardar el elemento de galería.');
             }
 
             define('ADMIN_CONFIG_POST_HANDLED', true);

@@ -1,12 +1,38 @@
 <?php
 require_once __DIR__ . "/includes/db_connect.php";
-$pageTitle = "TVirtualGaming | Tienda de monedas digitales";
+require_once __DIR__ . "/includes/store_config.php";
+require_once __DIR__ . "/includes/home_gallery.php";
+$pageTitle = store_config_get('nombre_tienda', 'TVirtualGaming') . " | Tienda de monedas digitales";
 include __DIR__ . "/includes/header.php";
 
-// Puedes mantener banners y featured desde JSON si lo deseas
 require_once __DIR__ . "/includes/data.php";
-$banners = $tenantData["banners"] ?? [];
-$featured = $tenantData["featured"] ?? [];
+home_gallery_ensure_table();
+$galleryItems = home_gallery_all();
+$galleryFeatured = home_gallery_featured();
+
+$banners = [];
+foreach ($galleryItems as $item) {
+  $banners[] = [
+    'label' => $item['titulo'],
+    'title' => $item['descripcion1'],
+    'subtitle' => $item['descripcion2'],
+    'image' => $item['imagen'],
+    'url' => $item['url'],
+    'open_in_new_tab' => !empty($item['abrir_nueva_pestana']),
+  ];
+}
+
+$featured = [];
+if (!empty($galleryFeatured)) {
+  $featured = [
+    'label' => $galleryFeatured['titulo'],
+    'title' => $galleryFeatured['descripcion1'],
+    'subtitle' => $galleryFeatured['descripcion2'],
+    'image' => $galleryFeatured['imagen'],
+    'url' => $galleryFeatured['url'],
+    'open_in_new_tab' => !empty($galleryFeatured['abrir_nueva_pestana']),
+  ];
+}
 
 $resPop = $mysqli->query("SELECT * FROM juegos WHERE popular=1 ORDER BY id DESC");
 $popularGames = $resPop ? $resPop->fetch_all(MYSQLI_ASSOC) : [];
@@ -24,53 +50,57 @@ $accentMap = [
 ];
 ?>
 
-      <section class="mt-4" style="animation: fadeUp 650ms ease-out both;">
-        <div class="position-relative">
-          <div id="promo-slider" class="d-flex gap-3 overflow-auto rounded-4 border bg-dark p-2" style="scroll-snap-type:x mandatory;">
-            <?php foreach ($banners as $banner): ?>
-              <?php
-                $accent = $banner["accent"] ?? "cyan";
-                $labelClass = $accentMap[$accent]["label"] ?? $accentMap["cyan"]["label"];
-                $gradientClass = $accentMap[$accent]["gradient"] ?? $accentMap["cyan"]["gradient"];
-              ?>
-              <article class="position-relative flex-shrink-0 w-100" style="height:220px;min-width:80%;scroll-snap-align:start;overflow:hidden;border-radius:1.5rem;border:1px solid #334155;">
-                <img src="<?php echo htmlspecialchars($banner["image"], ENT_QUOTES, "UTF-8"); ?>" alt="<?php echo htmlspecialchars($banner["title"], ENT_QUOTES, "UTF-8"); ?>" class="img-fluid w-100 h-100 object-fit-cover" style="opacity:0.85;" />
-                <div class="position-absolute top-0 start-0 w-100 h-100" style="background:linear-gradient(90deg,rgba(12,21,34,0.9),rgba(12,21,34,0.3),transparent);"></div>
-                <div class="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column justify-content-center px-4">
-                  <p class="small text-uppercase text-info mb-0" style="letter-spacing:0.35em;">
-                    <?php echo htmlspecialchars($banner["label"], ENT_QUOTES, "UTF-8"); ?>
-                  </p>
-                  <h2 class="mt-1 fw-bold" style="font-family:'Oxanium',sans-serif;font-size:1.25rem;color:#fff;">
-                    <?php echo htmlspecialchars($banner["title"], ENT_QUOTES, "UTF-8"); ?>
-                  </h2>
-                  <p class="mt-1 small text-secondary">
-                    <?php echo htmlspecialchars($banner["subtitle"], ENT_QUOTES, "UTF-8"); ?>
-                  </p>
-                </div>
-              </article>
-            <?php endforeach; ?>
+      <?php if (!empty($banners)): ?>
+        <section class="mt-4" style="animation: fadeUp 650ms ease-out both;">
+          <div class="position-relative">
+            <div id="promo-slider" class="d-flex gap-3 overflow-auto rounded-4 border bg-dark p-2" style="scroll-snap-type:x mandatory;">
+              <?php foreach ($banners as $banner): ?>
+                <?php
+                  $accent = $banner["accent"] ?? "cyan";
+                  $labelClass = $accentMap[$accent]["label"] ?? $accentMap["cyan"]["label"];
+                  $gradientClass = $accentMap[$accent]["gradient"] ?? $accentMap["cyan"]["gradient"];
+                  $bannerUrl = trim((string) ($banner['url'] ?? ''));
+                  $bannerTarget = !empty($banner['open_in_new_tab']) ? '_blank' : '_self';
+                ?>
+                <<?= $bannerUrl !== '' ? 'a' : 'article' ?> class="position-relative flex-shrink-0 w-100 text-decoration-none" style="height:220px;min-width:80%;scroll-snap-align:start;overflow:hidden;border-radius:1.5rem;border:1px solid #334155;"<?= $bannerUrl !== '' ? ' href="' . htmlspecialchars($bannerUrl, ENT_QUOTES, 'UTF-8') . '" target="' . htmlspecialchars($bannerTarget, ENT_QUOTES, 'UTF-8') . '"' . ($bannerTarget === '_blank' ? ' rel="noopener noreferrer"' : '') : '' ?>>
+                  <img src="<?php echo htmlspecialchars($banner["image"], ENT_QUOTES, "UTF-8"); ?>" alt="<?php echo htmlspecialchars($banner["title"], ENT_QUOTES, "UTF-8"); ?>" class="img-fluid w-100 h-100 object-fit-cover" style="opacity:0.85;" />
+                  <div class="position-absolute top-0 start-0 w-100 h-100" style="background:linear-gradient(90deg,rgba(12,21,34,0.9),rgba(12,21,34,0.3),transparent);"></div>
+                  <div class="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column justify-content-center px-4">
+                    <p class="small text-uppercase text-info mb-0" style="letter-spacing:0.35em;">
+                      <?php echo htmlspecialchars($banner["label"], ENT_QUOTES, "UTF-8"); ?>
+                    </p>
+                    <h2 class="mt-1 fw-bold" style="font-family:'Oxanium',sans-serif;font-size:1.25rem;color:#fff;">
+                      <?php echo htmlspecialchars($banner["title"], ENT_QUOTES, "UTF-8"); ?>
+                    </h2>
+                    <p class="mt-1 small text-secondary">
+                      <?php echo htmlspecialchars($banner["subtitle"], ENT_QUOTES, "UTF-8"); ?>
+                    </p>
+                  </div>
+                </<?= $bannerUrl !== '' ? 'a' : 'article' ?>>
+              <?php endforeach; ?>
+            </div>
+            <div id="promo-dots" class="mt-3 d-flex align-items-center gap-2">
+              <?php foreach ($banners as $index => $banner): ?>
+                <?php $isActive = $index === 0; ?>
+                <button type="button" class="btn p-0" style="height:6px;width:<?php echo $isActive ? '24px' : '16px'; ?>;background:<?php echo $isActive ? '#22d3ee' : '#334155'; ?>;border-radius:1rem;transition:all 0.2s;" data-index="<?php echo $index; ?>" aria-label="Banner <?php echo $index + 1; ?>"></button>
+              <?php endforeach; ?>
+            </div>
+            <div class="position-absolute top-0 start-0 end-0 h-100 d-none d-md-flex align-items-center justify-content-between" style="pointer-events:none;">
+              <button type="button" class="btn btn-outline-info rounded-circle d-flex align-items-center justify-content-center" style="width:40px;height:40px;pointer-events:auto;background:rgba(34,211,238,0.15);border:2px solid #22d3ee;color:#22d3ee;position:relative;z-index:2;" data-action="prev" aria-label="Anterior">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16">
+                  <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
+                </svg>
+              </button>
+              <button type="button" class="btn btn-outline-info rounded-circle d-flex align-items-center justify-content-center" style="width:40px;height:40px;pointer-events:auto;background:rgba(34,211,238,0.15);border:2px solid #22d3ee;color:#22d3ee;position:relative;z-index:2;" data-action="next" aria-label="Siguiente">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
+                  <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+                </svg>
+              </button>
+            </div>
+            <p class="mt-2 small text-secondary">Desliza para ver más promociones</p>
           </div>
-          <div id="promo-dots" class="mt-3 d-flex align-items-center gap-2">
-            <?php foreach ($banners as $index => $banner): ?>
-              <?php $isActive = $index === 0; ?>
-              <button type="button" class="btn p-0" style="height:6px;width:<?php echo $isActive ? '24px' : '16px'; ?>;background:<?php echo $isActive ? '#22d3ee' : '#334155'; ?>;border-radius:1rem;transition:all 0.2s;" data-index="<?php echo $index; ?>" aria-label="Banner <?php echo $index + 1; ?>"></button>
-            <?php endforeach; ?>
-          </div>
-          <div class="position-absolute top-0 start-0 end-0 h-100 d-none d-md-flex align-items-center justify-content-between" style="pointer-events:none;">
-            <button type="button" class="btn btn-outline-info rounded-circle d-flex align-items-center justify-content-center" style="width:40px;height:40px;pointer-events:auto;background:rgba(34,211,238,0.15);border:2px solid #22d3ee;color:#22d3ee;position:relative;z-index:2;" data-action="prev" aria-label="Anterior">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16">
-                <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
-              </svg>
-            </button>
-            <button type="button" class="btn btn-outline-info rounded-circle d-flex align-items-center justify-content-center" style="width:40px;height:40px;pointer-events:auto;background:rgba(34,211,238,0.15);border:2px solid #22d3ee;color:#22d3ee;position:relative;z-index:2;" data-action="next" aria-label="Siguiente">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
-                <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
-              </svg>
-            </button>
-          </div>
-          <p class="mt-2 small text-secondary">Desliza para ver más promociones</p>
-        </div>
-      </section>
+        </section>
+      <?php endif; ?>
 
       <section class="mt-5">
         <div class="d-flex align-items-center justify-content-between">
@@ -126,7 +156,11 @@ $accentMap = [
 
       <?php if (!empty($featured)): ?>
         <section class="mt-5">
-          <div class="position-relative overflow-hidden rounded-4 border bg-dark">
+          <?php
+            $featuredUrl = trim((string) ($featured['url'] ?? ''));
+            $featuredTarget = !empty($featured['open_in_new_tab']) ? '_blank' : '_self';
+          ?>
+          <<?= $featuredUrl !== '' ? 'a' : 'div' ?> class="position-relative overflow-hidden rounded-4 border bg-dark d-block text-decoration-none"<?= $featuredUrl !== '' ? ' href="' . htmlspecialchars($featuredUrl, ENT_QUOTES, 'UTF-8') . '" target="' . htmlspecialchars($featuredTarget, ENT_QUOTES, 'UTF-8') . '"' . ($featuredTarget === '_blank' ? ' rel="noopener noreferrer"' : '') : '' ?>>
             <img src="<?php echo htmlspecialchars($featured["image"], ENT_QUOTES, "UTF-8"); ?>" alt="<?php echo htmlspecialchars($featured["title"], ENT_QUOTES, "UTF-8"); ?>" class="img-fluid w-100" style="height:140px;object-fit:cover;opacity:0.85;" />
             <div class="position-absolute top-0 start-0 w-100 h-100" style="background:linear-gradient(90deg,rgba(12,21,34,0.85),rgba(12,21,34,0.4),transparent);"></div>
             <div class="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column justify-content-center px-4">
@@ -134,7 +168,7 @@ $accentMap = [
               <h3 class="mt-1 fw-bold" style="font-family:'Oxanium',sans-serif;font-size:1.25rem;"><?php echo htmlspecialchars($featured["title"], ENT_QUOTES, "UTF-8"); ?></h3>
               <p class="mt-1 small text-secondary"><?php echo htmlspecialchars($featured["subtitle"], ENT_QUOTES, "UTF-8"); ?></p>
             </div>
-          </div>
+          </<?= $featuredUrl !== '' ? 'a' : 'div' ?>>
         </section>
       <?php endif; ?>
 
@@ -195,9 +229,16 @@ $accentMap = [
 $pageScripts = [
   <<<'SCRIPT'
 <script>
+  (() => {
   const slider = document.getElementById("promo-slider");
+  if (!slider) {
+    return;
+  }
   const dots = Array.from(document.querySelectorAll("#promo-dots [data-index]"));
-  const slides = Array.from(slider.querySelectorAll("article"));
+  const slides = Array.from(slider.children);
+  if (!slides.length) {
+    return;
+  }
 
   const setActiveDot = (index) => {
     dots.forEach((dot, idx) => {
@@ -296,8 +337,11 @@ $pageScripts = [
     isPaused = false;
   });
 
-  setActiveDot(0);
+  if (dots.length) {
+    setActiveDot(0);
+  }
   startAutoplay();
+  })();
 </script>
 SCRIPT
 ];
