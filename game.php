@@ -112,23 +112,26 @@ include __DIR__ . "/includes/header.php";
           data-cantidad="<?= htmlspecialchars($pack['cantidad'], ENT_QUOTES, 'UTF-8') ?>"
           data-price="<?= number_format($precio_mostrar, 2, '.', '') ?>"
           data-moneda="<?= htmlspecialchars($clave_moneda) ?>">
-          <div class="card-body p-2 d-flex flex-column align-items-center">
+          <div class="card-body p-0 d-flex flex-column">
             <?php 
               $img_paquete = !empty($pack['imagen_icono']) ? $pack['imagen_icono'] : (!empty($game['imagen_paquete']) ? $game['imagen_paquete'] : null);
             ?>
-            <div class="pack-card-media mb-2">
+            <div class="pack-card-media">
               <?php if ($img_paquete): ?>
                 <img src="/<?= htmlspecialchars($img_paquete, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?>" class="pack-card-image" />
               <?php else: ?>
                 <span class="pack-card-placeholder">PK</span>
               <?php endif; ?>
+              <div class="pack-card-glow"></div>
             </div>
-            <p class="pack-card-name mb-2 fw-semibold text-white small"><?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?></p>
-            <div class="d-flex justify-content-between align-items-end w-100 mt-auto">
-              <span class="moneda-label text-info small"><?= htmlspecialchars($clave_moneda) ?></span>
-              <span class="precio-label text-info small ms-2">
-                <?= number_format($precio_mostrar, 2, '.', ',') ?>
-              </span>
+            <div class="pack-card-content">
+              <p class="pack-card-name mb-0 fw-semibold text-white"><?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?></p>
+              <div class="pack-card-footer">
+                <span class="moneda-label text-info"><?= htmlspecialchars($clave_moneda) ?></span>
+                <span class="precio-label text-info">
+                  <?= number_format($precio_mostrar, 2, '.', ',') ?>
+                </span>
+              </div>
             </div>
           </div>
         </button>
@@ -284,8 +287,19 @@ include __DIR__ . "/includes/header.php";
   }
 
   .pack-card {
-    min-height: 12.5rem;
+    min-height: 15rem;
     border-width: 1px;
+    border-radius: 1.1rem;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at top, rgba(34, 211, 238, 0.18), transparent 45%),
+      linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(10, 15, 24, 0.98));
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+
+  .pack-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 1rem 2rem rgba(8, 145, 178, 0.2);
   }
 
   .pack-card .card-body {
@@ -293,16 +307,14 @@ include __DIR__ . "/includes/header.php";
   }
 
   .pack-card-media {
-    width: 3.5rem;
-    height: 3.5rem;
+    width: 100%;
+    min-height: 8.5rem;
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative;
     overflow: hidden;
-    border: 2px solid #22d3ee;
-    border-radius: 0.85rem;
-    background: #111827;
-    box-shadow: 0 0 10px rgba(34, 211, 238, 0.4);
+    background: linear-gradient(180deg, rgba(10, 15, 24, 0.45), rgba(10, 15, 24, 0.05));
     flex-shrink: 0;
   }
 
@@ -311,23 +323,65 @@ include __DIR__ . "/includes/header.php";
     height: 100%;
     object-fit: cover;
     display: block;
+    transform: scale(1.02);
+  }
+
+  .pack-card-glow {
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 55%;
+    background: linear-gradient(180deg, rgba(3, 7, 18, 0) 0%, rgba(3, 7, 18, 0.8) 78%, rgba(3, 7, 18, 0.98) 100%);
   }
 
   .pack-card-placeholder {
     color: #22d3ee;
-    font-size: 0.75rem;
+    font-size: 1rem;
     font-weight: 700;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.18em;
+  }
+
+  .pack-card-content {
+    display: grid;
+    gap: 0.75rem;
+    padding: 0.9rem 0.95rem 1rem;
+    margin-top: auto;
   }
 
   .pack-card-name {
-    min-height: 2.75rem;
+    min-height: 2.4rem;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    line-height: 1.25;
+    align-items: flex-start;
+    justify-content: flex-start;
+    text-align: left;
+    line-height: 1.15;
     width: 100%;
+    font-size: 0.98rem;
+    letter-spacing: 0.01em;
+    text-shadow: 0 0 10px rgba(34, 211, 238, 0.18);
+  }
+
+  .pack-card-footer {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 0.65rem;
+    border-top: 1px solid rgba(34, 211, 238, 0.18);
+    padding-top: 0.65rem;
+  }
+
+  .moneda-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    opacity: 0.92;
+  }
+
+  .precio-label {
+    font-size: 1.1rem;
+    font-weight: 800;
+    line-height: 1;
+    text-shadow: 0 0 12px rgba(34, 211, 238, 0.28);
   }
 
   .neon-selected {
@@ -336,6 +390,34 @@ include __DIR__ . "/includes/header.php";
     background: #181f2a !important;
     transition: box-shadow 0.2s, border-color 0.2s;
     z-index: 2;
+  }
+
+  .neon-selected .pack-card-footer {
+    border-top-color: rgba(52, 211, 153, 0.48);
+  }
+
+  @media (max-width: 575.98px) {
+    .pack-card {
+      min-height: 13.75rem;
+    }
+
+    .pack-card-media {
+      min-height: 7.3rem;
+    }
+
+    .pack-card-content {
+      padding: 0.8rem 0.8rem 0.9rem;
+      gap: 0.55rem;
+    }
+
+    .pack-card-name {
+      font-size: 0.9rem;
+      min-height: 2.1rem;
+    }
+
+    .precio-label {
+      font-size: 1rem;
+    }
   }
 </style>
 <script>
