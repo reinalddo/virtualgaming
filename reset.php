@@ -21,7 +21,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     auth_save_users($tenantSlug, $users);
   }
 
-  $notice = "Si el correo existe, enviamos instrucciones para restablecer la contraseña.";
+  auth_set_flash("success", "Si el correo existe, enviamos instrucciones para restablecer la contraseña.");
+  header("Location: /reset.php?tenant=" . rawurlencode($tenantSlug));
+  exit;
 }
 
 include __DIR__ . "/includes/header.php";
@@ -34,11 +36,6 @@ include __DIR__ . "/includes/header.php";
             <h2 class="mt-2 font-oxanium text-2xl font-semibold">Restablecer contraseña</h2>
             <p class="mt-1 text-xs text-slate-400">Ingresa tu correo para recibir instrucciones.</p>
           </div>
-          <?php if ($notice !== ""): ?>
-            <div class="mt-4 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
-              <?php echo htmlspecialchars($notice, ENT_QUOTES, "UTF-8"); ?>
-            </div>
-          <?php endif; ?>
           <form action="/reset.php" method="post" class="mt-4 space-y-4" novalidate>
             <input type="hidden" name="tenant" value="<?php echo htmlspecialchars($tenantData["tenant"]["slug"] ?? "default", ENT_QUOTES, "UTF-8"); ?>" />
             <label class="block text-xs text-slate-400">Correo electrónico</label>

@@ -23,6 +23,170 @@ function is_valid_coupon_code(string $value): bool {
     return $value !== '' && preg_match('/^[A-Za-z0-9]+$/', $value) === 1;
 }
 
+function admin_set_flash(string $type, string $message): void {
+    $_SESSION['auth_flash'] = [
+        'type' => $type,
+        'message' => $message,
+    ];
+}
+
+function admin_redirect(string $section, array $query = []): void {
+    $target = '/admin/' . $section;
+    if (!empty($query)) {
+        $target .= '?' . http_build_query($query);
+    }
+    header('Location: ' . $target);
+    exit();
+}
+
+switch ($seccion) {
+    case 'usuarios':
+        require_once __DIR__ . '/includes/db.php';
+        if (isset($_GET['borrar_usuario'])) {
+            $id = intval($_GET['borrar_usuario']);
+            if ($id === 1) {
+                admin_set_flash('error', 'No puedes eliminar el admin principal.');
+            } else {
+                $pdo->prepare('DELETE FROM usuarios WHERE id = ?')->execute([$id]);
+                admin_set_flash('success', 'Usuario eliminado.');
+            }
+            admin_redirect('usuarios');
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['editar_usuario'])) {
+            $id = intval($_POST['id']);
+            $nombre = trim($_POST['nombre'] ?? '');
+            $rol = $_POST['rol'] ?? 'usuario';
+            if ($id && $nombre && in_array($rol, ['usuario', 'admin'], true)) {
+                $pdo->prepare('UPDATE usuarios SET nombre = ?, rol = ? WHERE id = ?')->execute([$nombre, $rol, $id]);
+                admin_set_flash('success', 'Usuario actualizado.');
+            } else {
+                admin_set_flash('error', 'Datos inválidos para actualizar el usuario.');
+            }
+            admin_redirect('usuarios');
+        }
+        break;
+
+    case 'juegos':
+        if (file_exists(__DIR__ . '/includes/db.php')) {
+            require_once __DIR__ . '/includes/db.php';
+        }
+        if (isset($pdo)) {
+            if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nuevo_juego'])) {
+                $nombre = $_POST['nombre'] ?? '';
+                $descripcion = $_POST['descripcion'] ?? '';
+                $precio = $_POST['precio'] ?? 0;
+                $imagen = $_POST['imagen'] ?? '';
+                $stmt = $pdo->prepare('INSERT INTO juegos (nombre, descripcion, precio, imagen) VALUES (?, ?, ?, ?)');
+                $stmt->execute([$nombre, $descripcion, $precio, $imagen]);
+                admin_set_flash('success', 'Juego agregado correctamente.');
+                admin_redirect('juegos');
+            }
+
+            if (isset($_GET['borrar_juego'])) {
+                $id = intval($_GET['borrar_juego']);
+                $pdo->prepare('DELETE FROM juegos WHERE id = ?')->execute([$id]);
+                admin_set_flash('success', 'Juego eliminado.');
+                admin_redirect('juegos');
+            }
+        }
+        break;
+
+    case 'cupones':
+        require_once __DIR__ . '/includes/db.php';
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nuevo_cupon'])) {
+            $codigoInput = trim($_POST['codigo'] ?? '');
+            $codigo = normalize_coupon_code($codigoInput);
+            $tipo_descuento = $_POST['tipo_descuento'] ?? 'porcentaje';
+            $valor_descuento = floatval($_POST['valor_descuento'] ?? 0);
+            $fecha_expiracion = $_POST['fecha_expiracion'] ?? null;
+            $limite_usos = ($_POST['limite_usos'] ?? '') !== '' ? intval($_POST['limite_usos']) : null;
+            $activo = isset($_POST['activo']) ? 1 : 0;
+
+            if (!is_valid_coupon_code($codigoInput)) {
+                admin_set_flash('error', 'El código del cupón solo puede contener letras y números, sin espacios, acentos ni caracteres especiales.');
+            } else {
+                $stmt_check = $pdo->prepare('SELECT 1 FROM cupones WHERE codigo = ? LIMIT 1');
+                $stmt_check->execute([$codigo]);
+                if ($stmt_check->fetch()) {
+                    admin_set_flash('error', 'Ya existe un cupón con ese código.');
+                } elseif ($codigo && $valor_descuento > 0 && in_array($tipo_descuento, ['porcentaje', 'fijo'], true)) {
+                    $stmt = $pdo->prepare('INSERT INTO cupones (codigo, tipo_descuento, valor_descuento, fecha_expiracion, limite_usos, activo) VALUES (?, ?, ?, ?, ?, ?)');
+                    $stmt->execute([$codigo, $tipo_descuento, $valor_descuento, $fecha_expiracion !== '' ? $fecha_expiracion : null, $limite_usos, $activo]);
+                    admin_set_flash('success', 'Cupón creado correctamente.');
+                } else {
+                    admin_set_flash('error', 'Datos inválidos para el cupón.');
+                }
+            }
+            admin_redirect('cupones');
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['editar_cupon'])) {
+            $id = intval($_POST['id'] ?? 0);
+            $codigoInput = trim($_POST['codigo'] ?? '');
+            $codigo = normalize_coupon_code($codigoInput);
+            $tipo_descuento = $_POST['tipo_descuento'] ?? 'porcentaje';
+            $valor_descuento = floatval($_POST['valor_descuento'] ?? 0);
+            $fecha_expiracion = $_POST['fecha_expiracion'] ?? null;
+            $limite_usos = ($_POST['limite_usos'] ?? '') !== '' ? intval($_POST['limite_usos']) : null;
+            $activo = isset($_POST['activo']) ? 1 : 0;
+
+            if (!is_valid_coupon_code($codigoInput)) {
+                admin_set_flash('error', 'El código del cupón solo puede contener letras y números, sin espacios, acentos ni caracteres especiales.');
+            } else {
+                $stmt_check = $pdo->prepare('SELECT 1 FROM cupones WHERE codigo = ? AND id <> ? LIMIT 1');
+                $stmt_check->execute([$codigo, $id]);
+                if ($stmt_check->fetch()) {
+                    admin_set_flash('error', 'Ya existe un cupón con ese código.');
+                } elseif ($id && $codigo && $valor_descuento > 0 && in_array($tipo_descuento, ['porcentaje', 'fijo'], true)) {
+                    $stmt = $pdo->prepare('UPDATE cupones SET codigo=?, tipo_descuento=?, valor_descuento=?, fecha_expiracion=?, limite_usos=?, activo=? WHERE id=?');
+                    $stmt->execute([$codigo, $tipo_descuento, $valor_descuento, $fecha_expiracion !== '' ? $fecha_expiracion : null, $limite_usos, $activo, $id]);
+                    admin_set_flash('success', 'Cupón actualizado correctamente.');
+                } else {
+                    admin_set_flash('error', 'Datos inválidos para el cupón.');
+                }
+            }
+            admin_redirect('cupones', ['editar_cupon' => $id]);
+        }
+
+        if (isset($_GET['borrar_cupon'])) {
+            $id = intval($_GET['borrar_cupon']);
+            $pdo->prepare('DELETE FROM cupones WHERE id = ?')->execute([$id]);
+            admin_set_flash('success', 'Cupón eliminado.');
+            admin_redirect('cupones');
+        }
+
+        if (isset($_GET['toggle_cupon'])) {
+            $id = intval($_GET['toggle_cupon']);
+            $pdo->prepare('UPDATE cupones SET activo = NOT activo WHERE id = ?')->execute([$id]);
+            admin_set_flash('success', 'Estado del cupón actualizado.');
+            admin_redirect('cupones');
+        }
+        break;
+
+    case 'configuracion':
+        require_once __DIR__ . '/includes/db_connect.php';
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $campos = [
+                'correo_corporativo', 'smtp_host', 'smtp_user', 'smtp_pass', 'smtp_port', 'smtp_secure'
+            ];
+            foreach ($campos as $clave) {
+                $valor = trim($_POST[$clave] ?? '');
+                $stmt = $mysqli->prepare('UPDATE configuracion_general SET valor=? WHERE clave=?');
+                $stmt->bind_param('ss', $valor, $clave);
+                $stmt->execute();
+            }
+            define('ADMIN_CONFIG_POST_HANDLED', true);
+            admin_set_flash('success', 'Configuración actualizada.');
+            admin_redirect('configuracion');
+        }
+        define('ADMIN_CONFIG_POST_HANDLED', true);
+        break;
+}
+
+define('ADMIN_LAYOUT_EMBEDDED', true);
+
 // Header y menú igual al inicio
 require_once __DIR__ . '/includes/header.php';
 ?>

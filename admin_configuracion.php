@@ -1,8 +1,12 @@
 <?php
+if (session_status() !== PHP_SESSION_ACTIVE) {
+  session_start();
+}
+
 require_once __DIR__ . '/includes/db_connect.php';
 
 // Guardar cambios en la tabla general
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !defined('ADMIN_CONFIG_POST_HANDLED')) {
     $campos = [
         'correo_corporativo', 'smtp_host', 'smtp_user', 'smtp_pass', 'smtp_port', 'smtp_secure'
     ];
@@ -12,6 +16,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->bind_param('ss', $valor, $clave);
         $stmt->execute();
     }
+
+      $_SESSION['auth_flash'] = [
+        'type' => 'success',
+        'message' => 'Configuración actualizada.',
+      ];
+      header('Location: /admin/configuracion');
+      exit;
 }
 
 // Leer valores actuales
@@ -109,15 +120,10 @@ while ($row = $res->fetch_assoc()) {
                         <button type="submit" class="neon-btn w-100 py-3">
                           Guardar
                         </button>
-                        <?php if ($_SERVER['REQUEST_METHOD'] === 'POST'): ?>
-                          <div class="neon-success text-center mt-4">
-                            ¡Configuración actualizada!
-                          </div>
-                        <?php endif; ?>
                     </form>
                 </div>
             </div>
         </div>
     </div>
 </div>
-<?php include __DIR__ . '/includes/footer.php'; ?>
+<?php if (!defined('ADMIN_LAYOUT_EMBEDDED')) include __DIR__ . '/includes/footer.php'; ?>
