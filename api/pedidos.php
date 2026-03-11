@@ -888,8 +888,9 @@ if ($action === 'create') {
     if (!$stmt->execute()) {
         json_error('No se pudo guardar el pedido');
     }
-    sync_coupon_usage_counts_mysqli($mysqli);
     $order_id = $mysqli->insert_id;
+    $stmt->close();
+    sync_coupon_usage_counts_mysqli($mysqli);
     $storedOrder = fetch_order_by_id($mysqli, $order_id);
     if ($storedOrder === null) {
         json_error('No se pudo recuperar el pedido recién creado.', 500);
