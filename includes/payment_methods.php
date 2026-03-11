@@ -244,3 +244,38 @@ function payment_methods_toggle(int $id): bool {
 
     return $ok;
 }
+
+function payment_methods_active_by_currency(): array {
+    payment_methods_ensure_table();
+
+    $mysqli = payment_methods_db();
+    $items = [];
+    $res = $mysqli->query("SELECT pm.id, pm.nombre, pm.datos, pm.moneda_id, pm.referencia_digitos,
+        m.nombre AS moneda_nombre, m.clave AS moneda_clave
+        FROM payment_methods pm
+        INNER JOIN monedas m ON m.id = pm.moneda_id
+        WHERE pm.activo = 1
+        ORDER BY m.nombre ASC, pm.nombre ASC, pm.id ASC");
+    if ($res instanceof mysqli_result) {
+        while ($row = $res->fetch_assoc()) {
+            $currencyKey = strtoupper(trim((string) ($row['moneda_clave'] ?? '')));
+            if ($currencyKey === '') {
+                continue;
+            }
+            if (!isset($items[$currencyKey])) {
+                $items[$currencyKey] = [];
+            }
+            $items[$currencyKey][] = [
+                'id' => (int) ($row['id'] ?? 0),
+                'nombre' => (string) ($row['nombre'] ?? ''),
+                'datos' => (string) ($row['datos'] ?? ''),
+                'moneda_id' => (int) ($row['moneda_id'] ?? 0),
+                'moneda_nombre' => (string) ($row['moneda_nombre'] ?? ''),
+                'moneda_clave' => (string) ($row['moneda_clave'] ?? ''),
+                'referencia_digitos' => max(0, (int) ($row['referencia_digitos'] ?? 0)),
+            ];
+        }
+    }
+
+    return $items;
+}

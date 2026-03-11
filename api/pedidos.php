@@ -8,6 +8,9 @@ header('Content-Type: application/json');
 error_reporting(E_ALL);
 
 require_once __DIR__ . '/../includes/db_connect.php';
+require_once __DIR__ . '/../includes/payment_methods.php';
+require_once __DIR__ . '/../includes/store_config.php';
+payment_methods_ensure_table();
 
 function ensure_pedidos_table(mysqli $mysqli): void {
     $create = "CREATE TABLE IF NOT EXISTS pedidos (
@@ -22,6 +25,8 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         user_identifier VARCHAR(150) DEFAULT NULL,
         email VARCHAR(180) DEFAULT NULL,
         cliente_usuario_id INT DEFAULT NULL,
+        numero_referencia VARCHAR(120) DEFAULT NULL,
+        telefono_contacto VARCHAR(40) DEFAULT NULL,
         cupon VARCHAR(60) DEFAULT NULL,
         estado ENUM('pendiente','pagado','enviado','cancelado') NOT NULL DEFAULT 'pendiente',
         creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -45,7 +50,9 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         'email' => "ALTER TABLE pedidos ADD COLUMN email VARCHAR(180) NULL AFTER user_identifier",
         'cantidad' => "ALTER TABLE pedidos ADD COLUMN cantidad INT NOT NULL DEFAULT 1 AFTER cupon",
         'cliente_usuario_id' => "ALTER TABLE pedidos ADD COLUMN cliente_usuario_id INT NULL AFTER email",
-        'cupon' => "ALTER TABLE pedidos ADD COLUMN cupon VARCHAR(60) NULL AFTER cliente_usuario_id",
+        'numero_referencia' => "ALTER TABLE pedidos ADD COLUMN numero_referencia VARCHAR(120) NULL AFTER cliente_usuario_id",
+        'telefono_contacto' => "ALTER TABLE pedidos ADD COLUMN telefono_contacto VARCHAR(40) NULL AFTER numero_referencia",
+        'cupon' => "ALTER TABLE pedidos ADD COLUMN cupon VARCHAR(60) NULL AFTER telefono_contacto",
         'estado' => "ALTER TABLE pedidos ADD COLUMN estado ENUM('pendiente','pagado','enviado','cancelado') NOT NULL DEFAULT 'pendiente' AFTER cupon",
         'creado_en' => "ALTER TABLE pedidos ADD COLUMN creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER estado",
         'actualizado_en' => "ALTER TABLE pedidos ADD COLUMN actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER creado_en"
@@ -181,7 +188,28 @@ function json_error(string $message, int $code = 400): void {
     exit;
 }
 
-function send_app_mail(string $to, string $subject, string $html, ?string $from = null): void {
+function inline_embedded_images_for_html(string $html, array $embeddedImages): string {
+    foreach ($embeddedImages as $image) {
+        $cid = trim((string) ($image['cid'] ?? ''));
+        $path = (string) ($image['path'] ?? '');
+        $mime = trim((string) ($image['mime'] ?? ''));
+        if ($cid === '' || $path === '' || !is_file($path) || !is_readable($path)) {
+            continue;
+        }
+
+        $binary = @file_get_contents($path);
+        if ($binary === false) {
+            continue;
+        }
+
+        $detectedMime = $mime !== '' ? $mime : detect_local_file_mime_type($path);
+        $html = str_replace('cid:' . $cid, 'data:' . $detectedMime . ';base64,' . base64_encode($binary), $html);
+    }
+
+    return $html;
+}
+
+function send_app_mail(string $to, string $subject, string $html, ?string $from = null, array $embeddedImages = []): void {
     global $mysqli;
     $settings = isset($mysqli) && $mysqli instanceof mysqli
         ? load_mail_settings($mysqli)
@@ -208,6 +236,8 @@ function send_app_mail(string $to, string $subject, string $html, ?string $from 
         $smtp_pass = $settings['smtp_pass'];
         $smtp_port = $settings['smtp_port'];
         $smtp_secure = $settings['smtp_secure'];
+        $branding = email_branding();
+        $senderName = trim((string) ($branding['name'] ?? 'TVirtualGaming')) ?: 'TVirtualGaming';
 
         $mail->isSMTP();
         $mail->Host = $smtp_host;
@@ -216,8 +246,16 @@ function send_app_mail(string $to, string $subject, string $html, ?string $from 
         $mail->Password = $smtp_pass;
         $mail->SMTPSecure = $smtp_secure;
         $mail->Port = $smtp_port;
-        $mail->setFrom($fromAddr, 'TVirtualGaming');
+        $mail->setFrom($fromAddr, $senderName);
         $mail->addAddress($to);
+        foreach ($embeddedImages as $image) {
+            $path = (string) ($image['path'] ?? '');
+            $cid = trim((string) ($image['cid'] ?? ''));
+            if ($path === '' || $cid === '' || !is_file($path)) {
+                continue;
+            }
+            $mail->addEmbeddedImage($path, $cid, basename($path), 'base64', detect_local_file_mime_type($path));
+        }
         $mail->isHTML(true);
         $mail->Subject = $subject;
         $mail->Body = $html;
@@ -225,7 +263,9 @@ function send_app_mail(string $to, string $subject, string $html, ?string $from 
     } catch (Throwable $e) {
         error_log('TVG mail error: ' . $e->getMessage());
         try {
-            send_app_mail_via_smtp_socket($to, $subject, $html, $fromAddr, $settings);
+            $branding = email_branding();
+            $senderName = trim((string) ($branding['name'] ?? 'TVirtualGaming')) ?: 'TVirtualGaming';
+            send_app_mail_via_smtp_socket($to, $subject, inline_embedded_images_for_html($html, $embeddedImages), $fromAddr, $settings, $senderName);
         } catch (Throwable $smtpError) {
             error_log('TVG SMTP fallback error: ' . $smtpError->getMessage());
         }
@@ -261,7 +301,7 @@ function smtp_send_command($socket, string $command, array $allowedCodes, string
     return smtp_expect_ok($socket, $allowedCodes, $context);
 }
 
-function send_app_mail_via_smtp_socket(string $to, string $subject, string $html, string $fromAddr, array $settings): void {
+function send_app_mail_via_smtp_socket(string $to, string $subject, string $html, string $fromAddr, array $settings, string $senderName = 'TVirtualGaming'): void {
     $host = (string) ($settings['smtp_host'] ?? '');
     $port = (int) ($settings['smtp_port'] ?? 587);
     $secure = strtolower((string) ($settings['smtp_secure'] ?? 'tls'));
@@ -310,7 +350,7 @@ function send_app_mail_via_smtp_socket(string $to, string $subject, string $html
         $encodedSubject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
         $headers = [
             'Date: ' . date(DATE_RFC2822),
-            'From: TVirtualGaming <' . $fromAddr . '>',
+            'From: ' . str_replace(["\r", "\n"], '', $senderName) . ' <' . $fromAddr . '>',
             'To: <' . $to . '>',
             'Subject: ' . $encodedSubject,
             'MIME-Version: 1.0',
@@ -339,7 +379,126 @@ function email_escape(?string $value): string {
     return htmlspecialchars((string) ($value ?? ''), ENT_QUOTES, 'UTF-8');
 }
 
+function app_base_url(): string {
+    $https = $_SERVER['HTTPS'] ?? '';
+    $scheme = (!empty($https) && $https !== 'off') ? 'https' : 'http';
+    $host = trim((string) ($_SERVER['HTTP_HOST'] ?? 'localhost'));
+    return $scheme . '://' . $host;
+}
+
+function detect_local_file_mime_type(string $filePath): string {
+    if (function_exists('mime_content_type')) {
+        $mime = @mime_content_type($filePath);
+        if (is_string($mime) && $mime !== '') {
+            return $mime;
+        }
+    }
+
+    $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+    return match ($extension) {
+        'jpg', 'jpeg' => 'image/jpeg',
+        'gif' => 'image/gif',
+        'webp' => 'image/webp',
+        'svg' => 'image/svg+xml',
+        default => 'image/png',
+    };
+}
+
+function resolve_store_logo_file_path(string $brandLogo): ?string {
+    $brandLogo = trim($brandLogo);
+    if ($brandLogo === '' || preg_match('#^https?://#i', $brandLogo) === 1) {
+        return null;
+    }
+
+    $logoPath = $brandLogo;
+    $urlPath = parse_url($brandLogo, PHP_URL_PATH);
+    if (is_string($urlPath) && $urlPath !== '') {
+        $logoPath = $urlPath;
+    }
+
+    $relativePath = ltrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $logoPath), DIRECTORY_SEPARATOR);
+    if ($relativePath === '') {
+        return null;
+    }
+
+    $absolutePath = dirname(__DIR__) . DIRECTORY_SEPARATOR . $relativePath;
+    return is_file($absolutePath) ? $absolutePath : null;
+}
+
+function email_branding(): array {
+    $brandPrefix = trim(store_config_get('nombre_prefijo', 'TIENDA'));
+    $brandName = trim(store_config_get('nombre_tienda', 'TVirtualGaming'));
+    $brandLogo = trim(store_config_get('logo_tienda', ''));
+    $logoUrl = '';
+    $logoPath = resolve_store_logo_file_path($brandLogo);
+
+    if ($brandLogo !== '') {
+        if (preg_match('#^https?://#i', $brandLogo) === 1) {
+            $logoUrl = $brandLogo;
+        } elseif (str_starts_with($brandLogo, '/')) {
+            $logoUrl = app_base_url() . $brandLogo;
+        }
+    }
+
+    return [
+        'prefix' => $brandPrefix !== '' ? $brandPrefix : 'TIENDA',
+        'name' => $brandName !== '' ? $brandName : 'TVirtualGaming',
+        'logo_url' => $logoUrl,
+        'logo_path' => $logoPath,
+        'logo_mime' => $logoPath !== null ? detect_local_file_mime_type($logoPath) : '',
+    ];
+}
+
+function email_branding_embedded_images(): array {
+    $branding = email_branding();
+    $logoPath = $branding['logo_path'] ?? null;
+    if (!is_string($logoPath) || $logoPath === '' || !is_file($logoPath)) {
+        return [];
+    }
+
+    return [[
+        'path' => $logoPath,
+        'cid' => 'store-logo',
+        'mime' => $branding['logo_mime'] ?? '',
+    ]];
+}
+
+function default_payment_method_for_currency(string $currencyCode): ?array {
+    $currencyCode = strtoupper(trim($currencyCode));
+    if ($currencyCode === '') {
+        return null;
+    }
+
+    $methodsByCurrency = payment_methods_active_by_currency();
+    $methods = $methodsByCurrency[$currencyCode] ?? [];
+    if (!is_array($methods) || empty($methods)) {
+        return null;
+    }
+
+    $method = $methods[0];
+    return is_array($method) ? $method : null;
+}
+
+function payment_method_details_html(?array $method): string {
+    if (!$method) {
+        return '<p style="margin:14px 0 0;color:#fca5a5;">Aún no hay un método de pago activo configurado para esta moneda. Nuestro equipo revisará tu pedido para indicarte cómo completar el pago.</p>';
+    }
+
+    $name = email_escape($method['nombre'] ?? 'Método de pago');
+    $details = trim((string) ($method['datos'] ?? ''));
+    $formattedDetails = $details !== ''
+        ? nl2br(email_escape($details), false)
+        : 'Sin detalles adicionales.';
+
+    return '<div style="margin-top:16px;padding:18px 20px;background:#0f172a;border:1px solid #1e293b;border-radius:16px;">'
+        . '<div style="color:#67e8f9;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">Método de pago disponible</div>'
+        . '<div style="color:#f8fafc;font-size:18px;font-weight:700;margin-bottom:10px;">' . $name . '</div>'
+        . '<div style="color:#cbd5e1;font-size:14px;line-height:1.7;">' . $formattedDetails . '</div>'
+        . '</div>';
+}
+
 function render_order_email(string $title, string $eyebrow, string $messageHtml, array $orderData, string $accent = '#22d3ee'): string {
+    $branding = email_branding();
     $orderId = email_escape((string) ($orderData['order_id'] ?? ''));
     $gameName = email_escape($orderData['game_name'] ?? '');
     $packName = email_escape($orderData['pack_name'] ?? '');
@@ -348,6 +507,9 @@ function render_order_email(string $title, string $eyebrow, string $messageHtml,
     $price = email_escape($orderData['price'] ?? '');
     $userIdentifier = email_escape($orderData['user_identifier'] ?? '');
     $email = email_escape($orderData['email'] ?? '');
+    $paymentMethod = email_escape($orderData['payment_method'] ?? '');
+    $referenceNumber = email_escape($orderData['reference_number'] ?? '');
+    $phoneNumber = email_escape($orderData['phone'] ?? '');
     $coupon = trim((string) ($orderData['coupon'] ?? ''));
     $status = email_escape($orderData['status'] ?? '');
     $couponRow = $coupon !== ''
@@ -356,6 +518,23 @@ function render_order_email(string $title, string $eyebrow, string $messageHtml,
     $statusRow = $status !== ''
         ? '<tr><td style="padding:10px 0;color:#94a3b8;font-size:14px;border-bottom:1px solid #1e293b;">Estado</td><td style="padding:10px 0;color:#e2e8f0;font-size:14px;text-align:right;border-bottom:1px solid #1e293b;">' . $status . '</td></tr>'
         : '';
+    $paymentMethodRow = $paymentMethod !== ''
+        ? '<tr><td style="padding:10px 0;color:#94a3b8;font-size:14px;border-bottom:1px solid #1e293b;">Método de pago</td><td style="padding:10px 0;color:#e2e8f0;font-size:14px;text-align:right;border-bottom:1px solid #1e293b;">' . $paymentMethod . '</td></tr>'
+        : '';
+    $referenceRow = $referenceNumber !== ''
+        ? '<tr><td style="padding:10px 0;color:#94a3b8;font-size:14px;border-bottom:1px solid #1e293b;">Referencia</td><td style="padding:10px 0;color:#e2e8f0;font-size:14px;text-align:right;border-bottom:1px solid #1e293b;">' . $referenceNumber . '</td></tr>'
+        : '';
+    $phoneRow = $phoneNumber !== ''
+        ? '<tr><td style="padding:10px 0;color:#94a3b8;font-size:14px;border-bottom:1px solid #1e293b;">Teléfono</td><td style="padding:10px 0;color:#e2e8f0;font-size:14px;text-align:right;border-bottom:1px solid #1e293b;">' . $phoneNumber . '</td></tr>'
+        : '';
+    $brandingLogo = trim((string) (($branding['logo_path'] ?? '') !== '' ? 'cid:store-logo' : ($branding['logo_url'] ?? '')));
+    $brandingLogoHtml = $brandingLogo !== ''
+        ? '<div style="margin:0 auto 16px;width:72px;height:72px;border-radius:18px;overflow:hidden;border:1px solid rgba(103,232,249,0.65);box-shadow:0 0 18px rgba(34,211,238,0.18);background:rgba(8,15,24,0.65);">'
+            . '<img src="' . email_escape($brandingLogo) . '" alt="Logo de la tienda" style="display:block;width:100%;height:100%;object-fit:cover;">'
+            . '</div>'
+        : '';
+    $brandingPrefix = email_escape($branding['prefix'] ?? 'TIENDA');
+    $brandingName = email_escape($branding['name'] ?? 'TVirtualGaming');
 
     return '<!doctype html>'
         . '<html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>' . email_escape($title) . '</title></head>'
@@ -364,9 +543,11 @@ function render_order_email(string $title, string $eyebrow, string $messageHtml,
         . '<tr><td align="center">'
         . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:#111827;border:1px solid #164e63;border-radius:20px;overflow:hidden;box-shadow:0 0 0 1px rgba(34,211,238,0.08),0 20px 40px rgba(0,0,0,0.35);">'
         . '<tr><td style="padding:28px 32px;background:linear-gradient(135deg,#0b1220 0%,#102133 55%,#0f3b46 100%);text-align:center;">'
-        . '<div style="color:#67e8f9;font-size:12px;letter-spacing:4px;text-transform:uppercase;margin-bottom:10px;">' . email_escape($eyebrow) . '</div>'
-        . '<div style="color:#ffffff;font-size:32px;line-height:1.2;font-weight:700;margin-bottom:8px;">TVirtualGaming</div>'
+        . $brandingLogoHtml
+        . '<div style="color:#67e8f9;font-size:12px;letter-spacing:4px;text-transform:uppercase;margin-bottom:10px;">' . $brandingPrefix . '</div>'
+        . '<div style="color:#ffffff;font-size:32px;line-height:1.2;font-weight:700;margin-bottom:8px;">' . $brandingName . '</div>'
         . '<div style="display:inline-block;padding:6px 14px;border:1px solid ' . $accent . ';border-radius:999px;color:' . $accent . ';font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">Notificación de pedido</div>'
+        . '<div style="color:#cbd5e1;font-size:12px;letter-spacing:4px;text-transform:uppercase;margin-top:12px;">' . email_escape($eyebrow) . '</div>'
         . '</td></tr>'
         . '<tr><td style="padding:32px;">'
         . '<h1 style="margin:0 0 14px;color:#f8fafc;font-size:28px;line-height:1.2;">' . email_escape($title) . '</h1>'
@@ -378,11 +559,14 @@ function render_order_email(string $title, string $eyebrow, string $messageHtml,
         . '<tr><td style="padding:10px 0 10px 20px;color:#94a3b8;font-size:14px;border-bottom:1px solid #1e293b;">Total</td><td style="padding:10px 20px 10px 0;color:' . $accent . ';font-size:18px;font-weight:700;text-align:right;border-bottom:1px solid #1e293b;">' . $currency . ' ' . $price . '</td></tr>'
         . '<tr><td style="padding:10px 0 10px 20px;color:#94a3b8;font-size:14px;border-bottom:1px solid #1e293b;">Cliente</td><td style="padding:10px 20px 10px 0;color:#e2e8f0;font-size:14px;text-align:right;border-bottom:1px solid #1e293b;">' . $userIdentifier . '</td></tr>'
         . '<tr><td style="padding:10px 0 10px 20px;color:#94a3b8;font-size:14px;border-bottom:1px solid #1e293b;">Correo</td><td style="padding:10px 20px 10px 0;color:#e2e8f0;font-size:14px;text-align:right;border-bottom:1px solid #1e293b;">' . $email . '</td></tr>'
+        . $paymentMethodRow
+        . $referenceRow
+        . $phoneRow
         . $couponRow
         . $statusRow
         . '</table>'
         . '<div style="margin-top:24px;padding:16px 18px;background:#0b1220;border:1px solid #1e293b;border-radius:14px;color:#94a3b8;font-size:13px;line-height:1.6;">'
-        . 'Este correo fue generado automáticamente por TVirtualGaming. Si necesitas revisar el pedido, ingresa al panel o responde desde los canales de soporte configurados.'
+        . 'Este correo fue generado automáticamente por ' . $brandingName . '. Si necesitas revisar el pedido, ingresa al panel o responde desde los canales de soporte configurados.'
         . '</div>'
         . '</td></tr>'
         . '</table>'
@@ -397,6 +581,125 @@ function normalize_coupon_code(string $value): string {
 
 function is_valid_coupon_code(string $value): bool {
     return $value !== '' && preg_match('/^[A-Za-z0-9]+$/', $value) === 1;
+}
+
+function order_expiration_seconds(): int {
+    return 1800;
+}
+
+function order_expiration_timestamp(array $order): int {
+    $createdAt = isset($order['creado_en_ts']) ? (int) $order['creado_en_ts'] : 0;
+    if ($createdAt <= 0) {
+        $createdAt = strtotime((string) ($order['creado_en'] ?? ''));
+        if ($createdAt === false) {
+            $createdAt = time();
+        }
+    }
+    return $createdAt + order_expiration_seconds();
+}
+
+function order_is_expired(array $order): bool {
+    return time() >= order_expiration_timestamp($order);
+}
+
+function order_expiration_iso(array $order): string {
+    return date(DATE_ATOM, order_expiration_timestamp($order));
+}
+
+function fetch_order_by_id(mysqli $mysqli, int $orderId): ?array {
+    $stmt = $mysqli->prepare('SELECT pedidos.*, UNIX_TIMESTAMP(creado_en) AS creado_en_ts FROM pedidos WHERE id = ? LIMIT 1');
+    if (!$stmt) {
+        return null;
+    }
+    $stmt->bind_param('i', $orderId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $order = $res ? $res->fetch_assoc() : null;
+    $stmt->close();
+    return $order ?: null;
+}
+
+function fetch_active_payment_method(mysqli $mysqli, int $methodId): ?array {
+    $stmt = $mysqli->prepare("SELECT pm.*, m.nombre AS moneda_nombre, m.clave AS moneda_clave
+        FROM payment_methods pm
+        INNER JOIN monedas m ON m.id = pm.moneda_id
+        WHERE pm.id = ? AND pm.activo = 1
+        LIMIT 1");
+    if (!$stmt) {
+        return null;
+    }
+    $stmt->bind_param('i', $methodId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $method = $res ? $res->fetch_assoc() : null;
+    $stmt->close();
+    return $method ?: null;
+}
+
+function cancel_expired_order(mysqli $mysqli, array $order): array {
+    $orderId = (int) ($order['id'] ?? 0);
+    if ($orderId <= 0) {
+        return ['changed' => false, 'message' => 'Pedido inválido.'];
+    }
+    if (($order['estado'] ?? '') !== 'pendiente') {
+        return ['changed' => false, 'message' => 'El pedido ya no está pendiente.'];
+    }
+    if (!order_is_expired($order)) {
+        return ['changed' => false, 'message' => 'El pedido aún no ha expirado.'];
+    }
+
+    $stmt = $mysqli->prepare("UPDATE pedidos SET estado = 'cancelado' WHERE id = ? AND estado = 'pendiente'");
+    if (!$stmt) {
+        return ['changed' => false, 'message' => 'No se pudo actualizar el pedido.'];
+    }
+    $stmt->bind_param('i', $orderId);
+    $stmt->execute();
+    $changed = $stmt->affected_rows > 0;
+    $stmt->close();
+
+    if (!$changed) {
+        return ['changed' => false, 'message' => 'El pedido ya fue actualizado.'];
+    }
+
+    $adminEmail = resolve_admin_email($mysqli);
+    $customerMessage = '<p style="margin:0 0 10px;">La orden superó el tiempo límite de 30 minutos sin confirmación de pago.</p>'
+        . '<p style="margin:0;">El pedido fue cancelado automáticamente y deberás generar uno nuevo si deseas continuar con la compra.</p>';
+    $adminMessage = '<p style="margin:0 0 10px;">Una orden pendiente superó el tiempo límite de 30 minutos sin confirmación de pago.</p>'
+        . '<p style="margin:0;">El pedido fue cancelado automáticamente por vencimiento.</p>';
+    $customerHtml = render_order_email('Orden vencida', 'Cliente', $customerMessage, [
+        'order_id' => $orderId,
+        'game_name' => $order['juego_nombre'] ?? '',
+        'pack_name' => $order['paquete_nombre'] ?? '',
+        'pack_amount' => $order['paquete_cantidad'] ?? '',
+        'currency' => $order['moneda'] ?? '',
+        'price' => number_format((float) ($order['precio'] ?? 0), 2, '.', ','),
+        'user_identifier' => $order['user_identifier'] ?? '',
+        'email' => $order['email'] ?? '',
+        'coupon' => $order['cupon'] ?? null,
+        'status' => 'Cancelado por tiempo',
+    ], '#f87171');
+    $adminHtml = render_order_email('Orden vencida', 'Administrador', $adminMessage, [
+        'order_id' => $orderId,
+        'game_name' => $order['juego_nombre'] ?? '',
+        'pack_name' => $order['paquete_nombre'] ?? '',
+        'pack_amount' => $order['paquete_cantidad'] ?? '',
+        'currency' => $order['moneda'] ?? '',
+        'price' => number_format((float) ($order['precio'] ?? 0), 2, '.', ','),
+        'user_identifier' => $order['user_identifier'] ?? '',
+        'email' => $order['email'] ?? '',
+        'coupon' => $order['cupon'] ?? null,
+        'status' => 'Cancelado por tiempo',
+    ], '#f87171');
+
+    $brandingImages = email_branding_embedded_images();
+    if (!empty($order['email']) && filter_var($order['email'], FILTER_VALIDATE_EMAIL)) {
+            send_app_mail((string) $order['email'], "Orden vencida #{$orderId}", $customerHtml, null, $brandingImages);
+    }
+    if ($adminEmail !== null) {
+            send_app_mail($adminEmail, "Orden vencida #{$orderId}", $adminHtml, null, $brandingImages);
+    }
+
+    return ['changed' => true, 'message' => 'La orden expiró y fue cancelada automáticamente.'];
 }
 
 $action = $_POST['action'] ?? $_GET['action'] ?? null;
@@ -490,13 +793,19 @@ if ($action === 'create') {
         json_error('No se pudo guardar el pedido');
     }
     $order_id = $mysqli->insert_id;
+    $storedOrder = fetch_order_by_id($mysqli, $order_id);
+    if ($storedOrder === null) {
+        json_error('No se pudo recuperar el pedido recién creado.', 500);
+    }
     $adminEmail = resolve_admin_email($mysqli);
+    $defaultPaymentMethod = default_payment_method_for_currency($currency ?? '');
 
-    $customerMessage = '<p style="margin:0 0 10px;">Hemos recibido tu pedido correctamente y ya quedó registrado en el sistema.</p>'
-        . '<p style="margin:0;">Te notificaremos cuando el estado cambie o cuando el equipo procese la entrega.</p>';
+    $customerMessage = '<p style="margin:0 0 10px;">Tu pedido fue creado correctamente y quedó pendiente de pago.</p>'
+        . '<p style="margin:0;">Debes realizar el pago usando el método disponible para la moneda seleccionada y luego enviar tu referencia desde la pantalla de pago para que el administrador pueda revisarla.</p>'
+        . payment_method_details_html($defaultPaymentMethod);
     $adminMessage = '<p style="margin:0 0 10px;">Se generó un nuevo pedido y ya está disponible para revisión en el panel administrativo.</p>'
         . '<p style="margin:0;">Valida los datos del cliente y procede con la gestión correspondiente.</p>';
-    $customerHtml = render_order_email('Pedido recibido', 'Cliente', $customerMessage, [
+    $customerHtml = render_order_email('Pedido creado, pendiente de pago', 'Cliente', $customerMessage, [
         'order_id' => $order_id,
         'game_name' => $game_name,
         'pack_name' => $pack_name,
@@ -506,7 +815,8 @@ if ($action === 'create') {
         'user_identifier' => $user_identifier,
         'email' => $email,
         'coupon' => $cupon,
-        'status' => 'Pendiente',
+        'payment_method' => $defaultPaymentMethod['nombre'] ?? '',
+        'status' => 'Pendiente de pago',
     ]);
     $adminHtml = render_order_email('Nuevo pedido', 'Administrador', $adminMessage, [
         'order_id' => $order_id,
@@ -520,16 +830,178 @@ if ($action === 'create') {
         'coupon' => $cupon,
         'status' => 'Pendiente',
     ], '#34d399');
-    send_app_mail($email, "Pedido recibido #{$order_id}", $customerHtml);
+    $brandingImages = email_branding_embedded_images();
+    send_app_mail($email, "Pedido creado #{$order_id} - pendiente de pago", $customerHtml, null, $brandingImages);
     if ($adminEmail !== null) {
-        send_app_mail($adminEmail, "Nuevo pedido #{$order_id}", $adminHtml);
+        send_app_mail($adminEmail, "Nuevo pedido #{$order_id}", $adminHtml, null, $brandingImages);
     }
 
     echo json_encode([
         'ok' => true,
         'message' => 'Pedido registrado',
         'order_id' => $order_id,
+        'estado' => 'pendiente',
+        'created_at' => date(DATE_ATOM, isset($storedOrder['creado_en_ts']) ? (int) $storedOrder['creado_en_ts'] : time()),
+        'expires_at' => order_expiration_iso($storedOrder),
+        'remaining_seconds' => max(0, order_expiration_timestamp($storedOrder) - time())
+    ]);
+    exit;
+}
+
+if ($action === 'submit_payment') {
+    $orderId = intval($_POST['order_id'] ?? 0);
+    $paymentMethodId = intval($_POST['payment_method_id'] ?? 0);
+    $referenceNumberRaw = trim((string) ($_POST['reference_number'] ?? ''));
+    $phoneRaw = trim((string) ($_POST['phone'] ?? ''));
+
+    if ($orderId <= 0) {
+        json_error('Pedido inválido.');
+    }
+    if ($paymentMethodId <= 0) {
+        json_error('Debes seleccionar un método de pago.');
+    }
+    if ($referenceNumberRaw === '') {
+        json_error('Debes ingresar el número de referencia.');
+    }
+    if ($phoneRaw === '') {
+        json_error('Debes ingresar un número de teléfono.');
+    }
+    if (preg_match('/^\d+$/', $referenceNumberRaw) !== 1) {
+        json_error('El número de referencia solo puede contener dígitos.');
+    }
+
+    $order = fetch_order_by_id($mysqli, $orderId);
+    if (!$order) {
+        json_error('Pedido no encontrado.', 404);
+    }
+    if (($order['estado'] ?? '') !== 'pendiente') {
+        json_error('El pedido ya no admite confirmación de pago.', 409);
+    }
+    if (order_is_expired($order)) {
+        $expiration = cancel_expired_order($mysqli, $order);
+        json_error($expiration['message'] ?: 'La orden ya expiró.', 409);
+    }
+
+    $method = fetch_active_payment_method($mysqli, $paymentMethodId);
+    if (!$method) {
+        json_error('El método de pago seleccionado no está disponible.');
+    }
+    if (strcasecmp((string) ($method['moneda_clave'] ?? ''), (string) ($order['moneda'] ?? '')) !== 0) {
+        json_error('El método de pago no corresponde a la moneda del pedido.');
+    }
+
+    $referenceDigitsLimit = max(0, (int) ($method['referencia_digitos'] ?? 0));
+    if ($referenceDigitsLimit > 0 && strlen($referenceNumberRaw) !== $referenceDigitsLimit) {
+        json_error('La referencia debe contener exactamente ' . $referenceDigitsLimit . ' dígitos.');
+    }
+
+    $phone = substr($phoneRaw, 0, 40);
+    $referenceNumber = substr($referenceNumberRaw, 0, 120);
+
+    $stmt = $mysqli->prepare('UPDATE pedidos SET numero_referencia = ?, telefono_contacto = ? WHERE id = ? AND estado = ?');
+    if (!$stmt) {
+        json_error('No se pudo actualizar el pedido.', 500);
+    }
+    $expectedStatus = 'pendiente';
+    $stmt->bind_param('ssis', $referenceNumber, $phone, $orderId, $expectedStatus);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        json_error('No se pudieron guardar los datos del pago.', 500);
+    }
+    $stmt->close();
+
+    $updatedOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
+    $adminEmail = resolve_admin_email($mysqli);
+    $paymentMethodName = (string) ($method['nombre'] ?? 'Método de pago');
+    $brandingImages = email_branding_embedded_images();
+
+    $customerMessage = '<p style="margin:0 0 10px;">Recibimos tu pago reportado y ya quedó enviado al equipo administrativo para validación.</p>'
+        . '<p style="margin:0;">Cuando el administrador lo revise y apruebe, te notificaremos el siguiente cambio de estado.</p>';
+    $adminMessage = '<p style="margin:0 0 10px;">El cliente reportó el pago de este pedido y quedó pendiente de aprobación administrativa.</p>'
+        . '<p style="margin:0;">Valida la referencia y el teléfono de contacto antes de aprobar la orden.</p>';
+
+    $customerHtml = render_order_email('Pago reportado', 'Cliente', $customerMessage, [
+        'order_id' => $orderId,
+        'game_name' => $updatedOrder['juego_nombre'] ?? '',
+        'pack_name' => $updatedOrder['paquete_nombre'] ?? '',
+        'pack_amount' => $updatedOrder['paquete_cantidad'] ?? '',
+        'currency' => $updatedOrder['moneda'] ?? '',
+        'price' => number_format((float) ($updatedOrder['precio'] ?? 0), 2, '.', ','),
+        'user_identifier' => $updatedOrder['user_identifier'] ?? '',
+        'email' => $updatedOrder['email'] ?? '',
+        'coupon' => $updatedOrder['cupon'] ?? null,
+        'payment_method' => $paymentMethodName,
+        'reference_number' => $referenceNumber,
+        'phone' => $phone,
+        'status' => 'Pago enviado para revisión',
+    ], '#f59e0b');
+    $adminHtml = render_order_email('Pago recibido para revisión', 'Administrador', $adminMessage, [
+        'order_id' => $orderId,
+        'game_name' => $updatedOrder['juego_nombre'] ?? '',
+        'pack_name' => $updatedOrder['paquete_nombre'] ?? '',
+        'pack_amount' => $updatedOrder['paquete_cantidad'] ?? '',
+        'currency' => $updatedOrder['moneda'] ?? '',
+        'price' => number_format((float) ($updatedOrder['precio'] ?? 0), 2, '.', ','),
+        'user_identifier' => $updatedOrder['user_identifier'] ?? '',
+        'email' => $updatedOrder['email'] ?? '',
+        'coupon' => $updatedOrder['cupon'] ?? null,
+        'payment_method' => $paymentMethodName,
+        'reference_number' => $referenceNumber,
+        'phone' => $phone,
+        'status' => 'Pago pendiente de aprobación',
+    ], '#f59e0b');
+
+    if (!empty($updatedOrder['email']) && filter_var($updatedOrder['email'], FILTER_VALIDATE_EMAIL)) {
+        send_app_mail((string) $updatedOrder['email'], "Pago reportado #{$orderId}", $customerHtml, null, $brandingImages);
+    }
+    if ($adminEmail !== null) {
+        send_app_mail($adminEmail, "Pago reportado #{$orderId}", $adminHtml, null, $brandingImages);
+    }
+
+    echo json_encode([
+        'ok' => true,
+        'message' => 'Datos de pago enviados correctamente. Tu pedido sigue pendiente de verificación.',
+        'order_id' => $orderId,
         'estado' => 'pendiente'
+    ]);
+    exit;
+}
+
+if ($action === 'expire_order') {
+    $orderId = intval($_POST['order_id'] ?? 0);
+    if ($orderId <= 0) {
+        json_error('Pedido inválido.');
+    }
+    $order = fetch_order_by_id($mysqli, $orderId);
+    if (!$order) {
+        json_error('Pedido no encontrado.', 404);
+    }
+
+    if (($order['estado'] ?? '') !== 'pendiente') {
+        echo json_encode([
+            'ok' => true,
+            'expired' => ($order['estado'] ?? '') === 'cancelado',
+            'message' => 'El pedido ya fue procesado previamente.',
+            'estado' => $order['estado'] ?? ''
+        ]);
+        exit;
+    }
+
+    if (!order_is_expired($order)) {
+        echo json_encode([
+            'ok' => true,
+            'expired' => false,
+            'message' => 'La orden aún sigue activa.',
+            'remaining_seconds' => max(0, order_expiration_timestamp($order) - time())
+        ]);
+        exit;
+    }
+
+    $result = cancel_expired_order($mysqli, $order);
+    echo json_encode([
+        'ok' => true,
+        'expired' => true,
+        'message' => $result['message']
     ]);
     exit;
 }
@@ -586,9 +1058,10 @@ if ($action === 'update_status') {
         'coupon' => null,
         'status' => $statusLabel,
     ], '#34d399');
-    send_app_mail($order['email'], "Estado actualizado #{$order_id}", $customerStatusHtml);
+    $brandingImages = email_branding_embedded_images();
+    send_app_mail($order['email'], "Estado actualizado #{$order_id}", $customerStatusHtml, null, $brandingImages);
     if ($adminEmail !== null) {
-        send_app_mail($adminEmail, "Pedido #{$order_id} cambiado a {$new_status}", $adminStatusHtml);
+        send_app_mail($adminEmail, "Pedido #{$order_id} cambiado a {$new_status}", $adminStatusHtml, null, $brandingImages);
     }
 
     if (ob_get_length()) {

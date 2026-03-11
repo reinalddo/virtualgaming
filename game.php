@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . "/includes/db_connect.php";
 require_once __DIR__ . "/includes/store_config.php";
+require_once __DIR__ . "/includes/payment_methods.php";
 $loggedUserEmail = '';
 if (session_status() !== PHP_SESSION_ACTIVE) {
   session_start();
@@ -8,6 +9,8 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 if (!empty($_SESSION['auth_user']['email'])) {
   $loggedUserEmail = (string) $_SESSION['auth_user']['email'];
 }
+payment_methods_ensure_table();
+$paymentMethodsByCurrency = payment_methods_active_by_currency();
 $game = null;
 if (isset($_GET['slug'])) {
   $slug = strtolower(trim($_GET['slug']));
@@ -248,7 +251,8 @@ include __DIR__ . "/includes/header.php";
             </circle>
           </svg>
         </div>
-        <h4 class="fw-bold text-info mb-2">Procesando pedido...</h4>
+        <h4 id="loading-modal-title" class="fw-bold text-info mb-2">Procesando pedido...</h4>
+        <p id="loading-modal-message" class="text-light mb-0 small">Espera un momento mientras completamos la operación.</p>
       </div>
     </div>
   </div>
@@ -262,6 +266,46 @@ include __DIR__ . "/includes/header.php";
           <button type="button" id="modal-no" class="btn btn-info">No</button>
           <button type="button" id="modal-cancel" class="btn btn-secondary">Cancelar</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="payment-modal" class="modal fade app-overlay-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered payment-modal-dialog">
+      <div class="modal-content payment-modal-content text-light border-info">
+        <button type="button" id="payment-modal-close" class="btn btn-outline-info rounded-circle position-absolute top-0 end-0 m-3 d-flex align-items-center justify-content-center" style="width:42px;height:42px;z-index:2;" aria-label="Cerrar">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+        <div class="payment-expiration-banner" id="payment-expiration-banner">
+          <span>La orden expira en:</span>
+          <strong id="payment-timer-value">30:00</strong>
+        </div>
+        <div id="payment-modal-alert" class="d-none alert mb-3"></div>
+        <div class="payment-summary-card mb-4">
+          <h3 class="h5 fw-bold text-white mb-3">Resumen de Pago</h3>
+          <div class="payment-summary-row"><span>ID Jugador:</span><strong id="payment-summary-user">-</strong></div>
+          <div class="payment-summary-row"><span>Producto:</span><strong id="payment-summary-product">-</strong></div>
+          <div class="payment-summary-row payment-summary-total"><span>Total a pagar:</span><strong id="payment-summary-total">-</strong></div>
+        </div>
+        <div class="payment-method-card mb-4">
+          <div id="payment-method-select-wrap" class="mb-3 d-none">
+            <label for="payment-method-select" class="form-label text-info">Método de pago</label>
+            <select id="payment-method-select" class="form-select bg-dark text-info border-info"></select>
+          </div>
+          <h4 id="payment-method-title" class="h6 fw-bold text-white mb-2">Datos de pago</h4>
+          <div id="payment-method-currency" class="small text-info mb-2"></div>
+          <div id="payment-method-details" class="small text-light payment-method-details"></div>
+        </div>
+        <div class="mb-3">
+          <label for="payment-reference-input" class="form-label text-info">Número de Referencia</label>
+          <input type="text" id="payment-reference-input" class="form-control bg-dark text-info border-info" inputmode="numeric" autocomplete="off" placeholder="Inserte su número de referencia para comprobar el pago">
+          <div id="payment-reference-help" class="form-text text-secondary">Inserte su número de referencia para comprobar el pago.</div>
+        </div>
+        <div class="mb-4">
+          <label for="payment-phone-input" class="form-label text-info">Número de teléfono real para contactarte</label>
+          <input type="tel" id="payment-phone-input" class="form-control bg-dark text-info border-info" autocomplete="tel" placeholder="Ej: 04121234567">
+        </div>
+        <button type="button" id="payment-submit-btn" class="btn btn-info w-100 fw-bold text-uppercase py-3">Pagado / Enviar orden</button>
       </div>
     </div>
   </div>
@@ -285,9 +329,90 @@ include __DIR__ . "/includes/header.php";
     opacity: 1 !important;
   }
 
+  #loading-modal {
+    z-index: 1105;
+  }
+
   .app-overlay-modal .modal-dialog {
     width: min(92vw, 28rem);
     margin: 0;
+  }
+
+  .payment-modal-dialog {
+    width: min(94vw, 34rem) !important;
+  }
+
+  .payment-modal-content {
+    position: relative;
+    padding: 1.25rem;
+    border-radius: 1.5rem;
+    background: linear-gradient(180deg, rgba(31, 41, 55, 0.98), rgba(17, 24, 39, 0.98));
+    box-shadow: 0 0 28px rgba(34, 211, 238, 0.16);
+  }
+
+  .payment-expiration-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 3.4rem;
+    margin-bottom: 1rem;
+    border: 1px solid rgba(248, 113, 113, 0.45);
+    border-radius: 1rem;
+    background: rgba(127, 29, 29, 0.12);
+    color: #f87171;
+    font-weight: 700;
+  }
+
+  .payment-summary-card,
+  .payment-method-card {
+    padding: 1rem;
+    border-radius: 1rem;
+    background: rgba(8, 15, 24, 0.74);
+    border: 1px solid rgba(34, 211, 238, 0.15);
+  }
+
+  .payment-summary-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+    color: #cbd5e1;
+  }
+
+  .payment-summary-row strong {
+    color: #f8fafc;
+    text-align: right;
+  }
+
+  .payment-summary-total {
+    margin-top: 0.8rem;
+    padding-top: 0.8rem;
+    border-top: 1px solid rgba(148, 163, 184, 0.18);
+  }
+
+  .payment-summary-total strong {
+    color: #22d3ee;
+    font-size: 1.2rem;
+  }
+
+  .payment-method-details {
+    white-space: pre-line;
+    line-height: 1.7;
+  }
+
+  .payment-modal-content .form-control::placeholder {
+    color: rgba(148, 163, 184, 0.7) !important;
+  }
+
+  @media (max-width: 575.98px) {
+    .payment-modal-content {
+      padding: 1rem;
+    }
+
+    .payment-expiration-banner {
+      font-size: 0.92rem;
+    }
   }
 
   body.overlay-open {
@@ -430,6 +555,8 @@ include __DIR__ . "/includes/header.php";
 </style>
 <script>
   // Todas las variables y lógica JS en un solo bloque
+  const defaultOrderEmail = <?= json_encode($loggedUserEmail, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+  const paymentMethodsByCurrency = <?= json_encode($paymentMethodsByCurrency, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const packCards2 = Array.from(document.querySelectorAll('.pack-card'));
   const selectedPack = document.getElementById("selected-pack");
   const selectedPrice = document.getElementById("selected-price");
@@ -438,15 +565,35 @@ include __DIR__ . "/includes/header.php";
   const couponInput = document.getElementById('coupon-input');
   const couponModal = document.getElementById('coupon-modal');
   const loadingModal = document.getElementById('loading-modal');
+  const loadingModalTitle = document.getElementById('loading-modal-title');
+  const loadingModalMessage = document.getElementById('loading-modal-message');
   const modalCouponName = document.getElementById('modal-coupon-name');
   const modalYes = document.getElementById('modal-yes');
   const modalNo = document.getElementById('modal-no');
   const modalCancel = document.getElementById('modal-cancel');
   const applyCouponButton = document.getElementById('apply-coupon-btn');
+  const paymentModal = document.getElementById('payment-modal');
+  const paymentModalClose = document.getElementById('payment-modal-close');
+  const paymentModalAlert = document.getElementById('payment-modal-alert');
+  const paymentTimerValue = document.getElementById('payment-timer-value');
+  const paymentSummaryUser = document.getElementById('payment-summary-user');
+  const paymentSummaryProduct = document.getElementById('payment-summary-product');
+  const paymentSummaryTotal = document.getElementById('payment-summary-total');
+  const paymentMethodSelectWrap = document.getElementById('payment-method-select-wrap');
+  const paymentMethodSelect = document.getElementById('payment-method-select');
+  const paymentMethodTitle = document.getElementById('payment-method-title');
+  const paymentMethodCurrency = document.getElementById('payment-method-currency');
+  const paymentMethodDetails = document.getElementById('payment-method-details');
+  const paymentReferenceInput = document.getElementById('payment-reference-input');
+  const paymentReferenceHelp = document.getElementById('payment-reference-help');
+  const paymentPhoneInput = document.getElementById('payment-phone-input');
+  const paymentSubmitButton = document.getElementById('payment-submit-btn');
   let lastFocusedElement = null;
   let activePack = null;
   let couponApplied = false;
   let couponValue = '';
+  let activePaymentOrder = null;
+  let paymentTimerInterval = null;
 
   function syncOverlayState() {
     document.body.classList.toggle('overlay-open', Boolean(document.querySelector('.app-overlay-modal.is-visible')));
@@ -471,7 +618,13 @@ include __DIR__ . "/includes/header.php";
         setTimeout(() => autofocusTarget.focus(), 0);
       }
     } else if (lastFocusedElement instanceof HTMLElement && document.body.contains(lastFocusedElement)) {
-      setTimeout(() => lastFocusedElement.focus(), 0);
+      setTimeout(() => {
+        if (lastFocusedElement instanceof HTMLElement && document.body.contains(lastFocusedElement)) {
+          lastFocusedElement.focus();
+        }
+        lastFocusedElement = null;
+      }, 0);
+    } else {
       lastFocusedElement = null;
     }
   }
@@ -481,6 +634,229 @@ include __DIR__ . "/includes/header.php";
     if (spinner) {
       spinner.remove();
     }
+  }
+
+  function setLoadingModalContent(title, message) {
+    if (loadingModalTitle) {
+      loadingModalTitle.textContent = title || 'Procesando pedido...';
+    }
+    if (loadingModalMessage) {
+      loadingModalMessage.textContent = message || 'Espera un momento mientras completamos la operación.';
+    }
+  }
+
+  function showToast(msg, type) {
+    const toast = document.createElement('div');
+    toast.textContent = msg;
+    toast.style.position = 'fixed';
+    toast.style.top = '30px';
+    toast.style.left = '50%';
+    toast.style.transform = 'translateX(-50%)';
+    toast.style.background = type === 'error' ? '#f87171' : '#34d399';
+    toast.style.color = '#222';
+    toast.style.padding = '12px 24px';
+    toast.style.borderRadius = '8px';
+    toast.style.fontWeight = 'bold';
+    toast.style.zIndex = '9999';
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 2500);
+  }
+
+  function clearPaymentTimer() {
+    if (paymentTimerInterval) {
+      clearInterval(paymentTimerInterval);
+      paymentTimerInterval = null;
+    }
+  }
+
+  function escapePaymentHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function paymentReferencePlaceholder(method) {
+    const digits = Number(method && method.referencia_digitos ? method.referencia_digitos : 0);
+    if (digits > 0) {
+      return `Inserte los últimos ${digits} dígitos de su referencia`;
+    }
+    return 'Inserte su número de referencia para comprobar el pago';
+  }
+
+  function paymentReferenceHelpText(method) {
+    const digits = Number(method && method.referencia_digitos ? method.referencia_digitos : 0);
+    if (digits > 0) {
+      return `Solo debes escribir los últimos ${digits} dígitos de la referencia bancaria.`;
+    }
+    return 'Inserte su número de referencia para comprobar el pago.';
+  }
+
+  function getPaymentMethodsForCurrency(currencyCode) {
+    return paymentMethodsByCurrency[String(currencyCode || '').toUpperCase()] || [];
+  }
+
+  function setPaymentAlert(message, type) {
+    if (!paymentModalAlert) {
+      return;
+    }
+    if (!message) {
+      paymentModalAlert.className = 'd-none alert mb-3';
+      paymentModalAlert.textContent = '';
+      return;
+    }
+    paymentModalAlert.textContent = message;
+    paymentModalAlert.className = `alert mb-3 alert-${type || 'info'}`;
+  }
+
+  function setPaymentFormDisabled(disabled) {
+    [paymentMethodSelect, paymentReferenceInput, paymentPhoneInput, paymentSubmitButton].forEach((field) => {
+      if (field) {
+        field.disabled = disabled;
+      }
+    });
+  }
+
+  function renderPaymentMethodDetails(method) {
+    if (!method) {
+      paymentMethodTitle.textContent = 'Datos de pago';
+      paymentMethodCurrency.textContent = '';
+      paymentMethodDetails.innerHTML = 'No hay datos de pago disponibles.';
+      paymentReferenceInput.placeholder = paymentReferencePlaceholder(null);
+      paymentReferenceHelp.textContent = paymentReferenceHelpText(null);
+      paymentReferenceInput.maxLength = 120;
+      return;
+    }
+
+    const currencyLabel = `${method.moneda_nombre || ''}${method.moneda_clave ? ` (${method.moneda_clave})` : ''}`.trim();
+    paymentMethodTitle.textContent = `Datos para ${method.nombre || 'el pago'}`;
+    paymentMethodCurrency.textContent = currencyLabel;
+    paymentMethodDetails.innerHTML = escapePaymentHtml(method.datos || '').replace(/\n/g, '<br>');
+    const digits = Number(method.referencia_digitos || 0);
+    paymentReferenceInput.placeholder = paymentReferencePlaceholder(method);
+    paymentReferenceHelp.textContent = paymentReferenceHelpText(method);
+    paymentReferenceInput.maxLength = digits > 0 ? digits : 120;
+    paymentReferenceInput.dataset.requiredDigits = String(digits > 0 ? digits : 0);
+  }
+
+  function renderPaymentMethodsByCurrency(currencyCode) {
+    const methods = getPaymentMethodsForCurrency(currencyCode);
+    if (!methods.length) {
+      paymentMethodSelectWrap.classList.add('d-none');
+      renderPaymentMethodDetails(null);
+      return null;
+    }
+
+    if (methods.length === 1) {
+      paymentMethodSelectWrap.classList.add('d-none');
+      paymentMethodSelect.innerHTML = `<option value="${methods[0].id}">${escapePaymentHtml(methods[0].nombre || 'Método')}</option>`;
+      renderPaymentMethodDetails(methods[0]);
+      return methods[0];
+    }
+
+    paymentMethodSelectWrap.classList.remove('d-none');
+    paymentMethodSelect.innerHTML = methods.map((method) => `<option value="${method.id}">${escapePaymentHtml(method.nombre || 'Método')}</option>`).join('');
+    renderPaymentMethodDetails(methods[0]);
+    return methods[0];
+  }
+
+  function resetCheckoutState() {
+    orderForm.reset();
+    orderForm.email.value = defaultOrderEmail || '';
+    couponInput.value = '';
+    couponInput.disabled = false;
+    if (applyCouponButton) {
+      applyCouponButton.disabled = false;
+    }
+    couponApplied = false;
+    couponValue = '';
+    activePack = null;
+    packCards2.forEach((item) => item.classList.remove('neon-selected'));
+    updateResumenCompra(null);
+    updateButtonState();
+  }
+
+  function closePaymentModal(resetState) {
+    clearPaymentTimer();
+    setOverlayVisible(paymentModal, false);
+    setPaymentAlert('', 'info');
+    if (resetState) {
+      activePaymentOrder = null;
+      paymentReferenceInput.value = '';
+      paymentPhoneInput.value = '';
+    }
+  }
+
+  async function expireActiveOrder() {
+    if (!activePaymentOrder || activePaymentOrder.expiring) {
+      return;
+    }
+    activePaymentOrder.expiring = true;
+    clearPaymentTimer();
+    setPaymentFormDisabled(true);
+    setPaymentAlert('La orden expiró. Estamos cancelando el pedido y notificando por correo.', 'danger');
+    try {
+      const response = await fetch('/api/pedidos.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `action=expire_order&order_id=${encodeURIComponent(activePaymentOrder.orderId)}`
+      });
+      const data = await response.json();
+      showToast((data && data.message) ? data.message : 'La orden expiró.', data && data.expired ? 'error' : 'info');
+      setPaymentAlert((data && data.message) ? data.message : 'La orden expiró y fue cancelada automáticamente.', 'danger');
+    } catch (error) {
+      setPaymentAlert('La orden expiró. Si el estado no cambió todavía, vuelve a intentarlo.', 'danger');
+    }
+  }
+
+  function updatePaymentTimer() {
+    if (!activePaymentOrder) {
+      paymentTimerValue.textContent = '30:00';
+      return;
+    }
+    const remainingMs = activePaymentOrder.expiresAtMs - Date.now();
+    if (remainingMs <= 0) {
+      paymentTimerValue.textContent = '00:00';
+      expireActiveOrder();
+      return;
+    }
+    const totalSeconds = Math.floor(remainingMs / 1000);
+    const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+    const seconds = String(totalSeconds % 60).padStart(2, '0');
+    paymentTimerValue.textContent = `${minutes}:${seconds}`;
+  }
+
+  function openPaymentModal(orderId, expiresAt, remainingSeconds, pack, userId, totalText) {
+    const currentMethod = renderPaymentMethodsByCurrency(pack.moneda || '');
+    if (!currentMethod) {
+      showToast(`No hay métodos de pago activos para la moneda ${pack.moneda || ''}.`, 'error');
+      return false;
+    }
+
+    const safeRemainingSeconds = Number.isFinite(Number(remainingSeconds)) ? Math.max(0, Number(remainingSeconds)) : 1800;
+
+    activePaymentOrder = {
+      orderId,
+      expiresAtMs: Date.now() + (safeRemainingSeconds * 1000),
+      expiresAt,
+      currency: pack.moneda || '',
+      expiring: false,
+    };
+
+    paymentSummaryUser.textContent = userId;
+    paymentSummaryProduct.textContent = pack.name || 'Producto';
+    paymentSummaryTotal.textContent = totalText;
+    paymentReferenceInput.value = '';
+    paymentPhoneInput.value = '';
+    setPaymentFormDisabled(false);
+    setPaymentAlert('', 'info');
+    setOverlayVisible(paymentModal, true);
+    clearPaymentTimer();
+    updatePaymentTimer();
+    paymentTimerInterval = setInterval(updatePaymentTimer, 1000);
+    return true;
   }
 
   function updatePackPrices() {
@@ -542,24 +918,6 @@ include __DIR__ . "/includes/header.php";
     // Ya no se selecciona automáticamente ningún paquete al cargar
   }
               if (couponInput) {
-              // Función simple para mostrar mensajes tipo toast
-              function showToast(msg, type) {
-                const toast = document.createElement('div');
-                toast.textContent = msg;
-                toast.style.position = 'fixed';
-                toast.style.top = '30px';
-                toast.style.left = '50%';
-                toast.style.transform = 'translateX(-50%)';
-                toast.style.background = type === 'error' ? '#f87171' : '#34d399';
-                toast.style.color = '#222';
-                toast.style.padding = '12px 24px';
-                toast.style.borderRadius = '8px';
-                toast.style.fontWeight = 'bold';
-                toast.style.zIndex = '9999';
-                document.body.appendChild(toast);
-                setTimeout(() => toast.remove(), 2500);
-              }
-
               function normalizeCouponCode(value) {
                 return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
               }
@@ -571,6 +929,95 @@ include __DIR__ . "/includes/header.php";
                 if (applyCouponButton) {
                   applyCouponButton.disabled = false;
                 }
+              }
+
+              if (paymentMethodSelect) {
+                paymentMethodSelect.addEventListener('change', function() {
+                  const methods = getPaymentMethodsForCurrency(activePaymentOrder ? activePaymentOrder.currency : (activePack ? activePack.moneda : ''));
+                  const selectedMethod = methods.find((method) => String(method.id) === String(paymentMethodSelect.value)) || methods[0] || null;
+                  renderPaymentMethodDetails(selectedMethod);
+                });
+              }
+
+              if (paymentReferenceInput) {
+                paymentReferenceInput.addEventListener('input', function() {
+                  const digitsOnly = paymentReferenceInput.value.replace(/\D+/g, '');
+                  const requiredDigits = Number(paymentReferenceInput.dataset.requiredDigits || '0');
+                  paymentReferenceInput.value = requiredDigits > 0 ? digitsOnly.slice(0, requiredDigits) : digitsOnly.slice(0, 120);
+                });
+              }
+
+              if (paymentModalClose) {
+                paymentModalClose.addEventListener('click', function() {
+                  setOverlayVisible(paymentModal, false);
+                });
+              }
+
+              if (paymentSubmitButton) {
+                paymentSubmitButton.addEventListener('click', function() {
+                  if (!activePaymentOrder) {
+                    showToast('No hay una orden pendiente para confirmar.', 'error');
+                    return;
+                  }
+
+                  const methods = getPaymentMethodsForCurrency(activePaymentOrder.currency);
+                  const selectedMethod = methods.find((method) => String(method.id) === String(paymentMethodSelect.value)) || methods[0] || null;
+                  if (!selectedMethod) {
+                    setPaymentAlert('No hay un método de pago disponible para esta orden.', 'danger');
+                    return;
+                  }
+
+                  const reference = paymentReferenceInput.value.trim();
+                  const phone = paymentPhoneInput.value.trim();
+                  const requiredDigits = Number(selectedMethod.referencia_digitos || 0);
+
+                  if (!reference) {
+                    setPaymentAlert('Debes ingresar el número de referencia.', 'danger');
+                    return;
+                  }
+                  if (requiredDigits > 0 && reference.length !== requiredDigits) {
+                    setPaymentAlert(`La referencia debe contener exactamente ${requiredDigits} dígitos.`, 'danger');
+                    return;
+                  }
+                  if (!phone) {
+                    setPaymentAlert('Debes ingresar un número de teléfono para contactarte.', 'danger');
+                    return;
+                  }
+
+                  setPaymentFormDisabled(true);
+                  setPaymentAlert('', 'info');
+                  setLoadingModalContent('Enviando orden...', 'Estamos validando y enviando tu comprobante. No cierres esta ventana.');
+                  setOverlayVisible(loadingModal, true);
+                  fetch('/api/pedidos.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: [
+                      'action=submit_payment',
+                      `order_id=${encodeURIComponent(activePaymentOrder.orderId)}`,
+                      `payment_method_id=${encodeURIComponent(selectedMethod.id)}`,
+                      `reference_number=${encodeURIComponent(reference)}`,
+                      `phone=${encodeURIComponent(phone)}`
+                    ].join('&')
+                  })
+                  .then(async (response) => {
+                    const data = await response.json();
+                    if (!response.ok || !data.ok) {
+                      throw new Error((data && data.message) ? data.message : 'No se pudieron guardar los datos del pago.');
+                    }
+                    setOverlayVisible(loadingModal, false);
+                    showToast(data.message || 'Datos de pago enviados correctamente.', 'success');
+                    closePaymentModal(true);
+                    resetCheckoutState();
+                  })
+                  .catch((error) => {
+                    setOverlayVisible(loadingModal, false);
+                    setPaymentAlert(error.message || 'No se pudieron guardar los datos del pago.', 'danger');
+                    setPaymentFormDisabled(false);
+                    if (activePaymentOrder && activePaymentOrder.expiresAtMs <= Date.now()) {
+                      expireActiveOrder();
+                    }
+                  });
+                });
               }
 
               if (monedaSelect) {
@@ -670,6 +1117,11 @@ include __DIR__ . "/includes/header.php";
                   showToast('Debes seleccionar un paquete.', 'error');
                   return;
                 }
+                const paymentMethods = getPaymentMethodsForCurrency(pack.moneda || '');
+                if (!paymentMethods.length) {
+                  showToast(`No hay métodos de pago activos para la moneda ${pack.moneda || ''}.`, 'error');
+                  return;
+                }
                 // Validar campos obligatorios solo al intentar comprar
                 const requiredFields = Array.from(orderForm.querySelectorAll('[required]'));
                 let requiredFilled = true;
@@ -747,6 +1199,7 @@ include __DIR__ . "/includes/header.php";
                 };
                 console.log('Datos enviados a pedidos.php:', pedidoData);
                 btn.disabled = true;
+                setLoadingModalContent('Procesando pedido...', 'Estamos registrando tu pedido para abrir el formulario de pago.');
                 setOverlayVisible(loadingModal, true);
                 fetch('/api/pedidos.php', {
                   method: 'POST',
@@ -774,13 +1227,10 @@ include __DIR__ . "/includes/header.php";
                     }
                   }
                   if (data && data.ok) {
-                    showToast('Pedido registrado correctamente', 'success');
-                    orderForm.reset();
-                    couponInput.disabled = false;
-                    applyCouponButton.disabled = false;
-                    couponApplied = false;
-                    selectedPack.textContent = 'Ninguno';
-                    selectedPrice.textContent = `${monedaActualClave} 0.00`;
+                    const opened = openPaymentModal(data.order_id, data.expires_at, data.remaining_seconds, pack, userId, selectedPrice.textContent);
+                    if (opened) {
+                      showToast('Pedido registrado. Completa ahora los datos del pago.', 'success');
+                    }
                   } else {
                     showToast((data && data.message) ? data.message : 'Error al registrar pedido', 'error');
                   }
