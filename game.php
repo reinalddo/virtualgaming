@@ -595,6 +595,16 @@ include __DIR__ . "/includes/header.php";
   let activePaymentOrder = null;
   let paymentTimerInterval = null;
 
+  function scrollToOrderForm() {
+    if (!orderForm) {
+      return;
+    }
+
+    window.setTimeout(() => {
+      orderForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+  }
+
   function syncOverlayState() {
     document.body.classList.toggle('overlay-open', Boolean(document.querySelector('.app-overlay-modal.is-visible')));
   }
@@ -912,6 +922,7 @@ include __DIR__ . "/includes/header.php";
       };
       updateResumenCompra(activePack);
       updateButtonState();
+      scrollToOrderForm();
     });
   });
   if (packCards2.length) {
