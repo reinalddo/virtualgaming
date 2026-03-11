@@ -17,6 +17,7 @@ payment_methods_ensure_table();
 $cfg = store_config_all();
 $logoTienda = trim((string) ($cfg['logo_tienda'] ?? ''));
 $galleryItems = home_gallery_all();
+$paymentCurrencies = payment_methods_currency_options();
 $galleryEditId = isset($_GET['editar_galeria']) ? intval($_GET['editar_galeria']) : 0;
 $galleryEditItem = $galleryEditId > 0 ? home_gallery_find($galleryEditId) : null;
 $galleryForm = [
@@ -34,6 +35,8 @@ $galleryForm = [
   $paymentMethodForm = [
     'nombre' => $paymentMethodEditItem['nombre'] ?? '',
     'datos' => $paymentMethodEditItem['datos'] ?? '',
+    'moneda_id' => isset($paymentMethodEditItem['moneda_id']) ? (int) $paymentMethodEditItem['moneda_id'] : 0,
+    'referencia_digitos' => isset($paymentMethodEditItem['referencia_digitos']) ? max(0, (int) $paymentMethodEditItem['referencia_digitos']) : 0,
     'activo' => !array_key_exists('activo', $paymentMethodEditItem ?? []) ? true : !empty($paymentMethodEditItem['activo']),
   ];
 ?>
@@ -472,6 +475,20 @@ $galleryForm = [
                       <label class="form-label">Datos Método de Pago</label>
                       <textarea name="datos_metodo_pago" rows="6" required class="form-control" placeholder="Titular, número de cuenta, correo, teléfono o cualquier dato necesario para transferir."><?= htmlspecialchars($paymentMethodForm['datos'], ENT_QUOTES, 'UTF-8') ?></textarea>
                     </div>
+                    <div class="col-md-6">
+                      <label class="form-label">Moneda del Método</label>
+                      <select name="moneda_metodo_pago" required class="form-select">
+                        <option value="">Selecciona una moneda</option>
+                        <?php foreach ($paymentCurrencies as $currency): ?>
+                          <option value="<?= (int) $currency['id'] ?>" <?= (int) $paymentMethodForm['moneda_id'] === (int) $currency['id'] ? 'selected' : '' ?>><?= htmlspecialchars($currency['nombre'] . ' (' . $currency['clave'] . ')', ENT_QUOTES, 'UTF-8') ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label">Dígitos de referencia permitidos</label>
+                      <input type="number" name="referencia_digitos_metodo_pago" min="0" step="1" value="<?= (int) $paymentMethodForm['referencia_digitos'] ?>" class="form-control" placeholder="0 = sin límite">
+                      <div class="form-text">Si colocas `0` o lo dejas vacío, el número de referencia será sin límite. Si colocas `5`, se validarán 5 dígitos; si colocas `7`, se validarán 7, y así sucesivamente.</div>
+                    </div>
                     <div class="col-12">
                       <div class="form-check">
                         <input class="form-check-input" type="checkbox" value="1" id="activoMetodoPago" name="activo_metodo_pago" <?= $paymentMethodForm['activo'] ? 'checked' : '' ?>>
@@ -506,6 +523,8 @@ $galleryForm = [
                       <thead>
                         <tr>
                           <th>Nombre</th>
+                          <th>Moneda</th>
+                          <th>Dígitos Ref.</th>
                           <th>Datos</th>
                           <th>Estado</th>
                           <th class="text-end">Acciones</th>
@@ -515,6 +534,8 @@ $galleryForm = [
                         <?php foreach ($paymentMethods as $method): ?>
                           <tr>
                             <td class="fw-bold"><?= htmlspecialchars($method['nombre'], ENT_QUOTES, 'UTF-8') ?></td>
+                            <td><?= htmlspecialchars(trim((string) (($method['moneda_nombre'] ?? '') . ' ' . (!empty($method['moneda_clave']) ? '(' . $method['moneda_clave'] . ')' : ''))) ?: 'Sin moneda', ENT_QUOTES, 'UTF-8') ?></td>
+                            <td><?= !empty($method['referencia_digitos']) ? (int) $method['referencia_digitos'] : 'Sin límite' ?></td>
                             <td style="white-space: pre-line;"><?= htmlspecialchars($method['datos'], ENT_QUOTES, 'UTF-8') ?></td>
                             <td><?= !empty($method['activo']) ? '<span class="gallery-badge-neon">Activo</span>' : '<span class="text-secondary">Inactivo</span>' ?></td>
                             <td class="text-end">
@@ -537,6 +558,8 @@ $galleryForm = [
                         <h4 class="h6 fw-bold mb-1 text-info"><?= htmlspecialchars($method['nombre'], ENT_QUOTES, 'UTF-8') ?></h4>
                         <?= !empty($method['activo']) ? '<span class="gallery-badge-neon">Activo</span>' : '<span class="text-secondary small">Inactivo</span>' ?>
                       </div>
+                      <div class="small text-info-emphasis mt-2"><?= htmlspecialchars(trim((string) (($method['moneda_nombre'] ?? '') . ' ' . (!empty($method['moneda_clave']) ? '(' . $method['moneda_clave'] . ')' : ''))) ?: 'Sin moneda', ENT_QUOTES, 'UTF-8') ?></div>
+                      <div class="small text-secondary mt-1">Dígitos de referencia: <?= !empty($method['referencia_digitos']) ? (int) $method['referencia_digitos'] : 'Sin límite' ?></div>
                       <div class="small text-light mt-2" style="white-space: pre-line;"><?= htmlspecialchars($method['datos'], ENT_QUOTES, 'UTF-8') ?></div>
                       <div class="d-flex gap-2 mt-3 flex-wrap">
                         <a href="/admin/configuracion?tab=metodos-pago&editar_metodo_pago=<?= (int) $method['id'] ?>" class="btn btn-outline-info btn-sm rounded-4 flex-fill">Editar</a>
