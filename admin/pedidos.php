@@ -25,6 +25,31 @@ if ($ordersRes) {
 function format_money($amount): string {
     return number_format((float)$amount, 2, '.', ',');
 }
+
+function order_meta_value($value): string {
+  $text = trim((string) $value);
+  return $text !== '' ? $text : '—';
+}
+
+function order_search_index(array $order): string {
+  $parts = [
+    '#' . ($order['id'] ?? ''),
+    $order['creado_en'] ?? '',
+    $order['user_identifier'] ?? '',
+    $order['email'] ?? '',
+    $order['numero_referencia'] ?? '',
+    $order['telefono_contacto'] ?? '',
+    $order['juego_nombre'] ?? '',
+    $order['paquete_nombre'] ?? '',
+    $order['paquete_cantidad'] ?? '',
+    $order['moneda'] ?? '',
+    $order['precio'] ?? '',
+    $order['cupon'] ?? '',
+    $order['estado'] ?? '',
+  ];
+
+  return strtolower(trim(implode(' ', array_map(static fn ($value) => trim((string) $value), $parts))));
+}
 ?>
 <main class="container-lg mt-5 mb-5 px-2">
   <style>
@@ -103,6 +128,10 @@ function format_money($amount): string {
           <label class="form-label mb-0" style="color:#00fff7;">Hasta:</label>
           <input type="date" id="date-to" name="date_to" class="form-control form-control-sm" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
         </div>
+        <div class="col-auto">
+          <label class="form-label mb-0" style="color:#00fff7;">Buscar pedido:</label>
+          <input type="search" id="order-search" name="order_search" class="form-control form-control-sm" placeholder="ID, cliente, email, referencia..." style="min-width:260px; background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
+        </div>
         <div class="col-auto d-flex align-items-end gap-2">
           <button type="submit" class="btn btn-info btn-sm fw-bold" style="background:#00fff7; color:#222c3a; border:none; box-shadow:0 0 8px #00fff7;">Filtrar</button>
           <button type="button" id="clear-date-filter" class="btn btn-outline-info btn-sm fw-bold" style="border:1px solid #00fff7; color:#00fff7; background:#181f2a; box-shadow:0 0 8px #00fff7; display:flex; align-items:center; gap:4px;">
@@ -133,12 +162,11 @@ function format_money($amount): string {
             <table class="table align-middle" style="background:#181f2a; color:#00fff7; border-radius:12px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733;">
               <thead style="background:#181f2a; color:#00fff7; border-bottom:2px solid #00fff7;">
                 <tr>
-                  <th style="color:#00fff7; background:#181f2a;">#</th>
-                  <th style="color:#00fff7; background:#181f2a;">Fecha</th>
-                  <th style="color:#00fff7; background:#181f2a;">Cliente</th>
-                  <th style="color:#00fff7; background:#181f2a;">Email</th>
-                  <th style="color:#00fff7; background:#181f2a;">Juego</th>
-                  <th style="color:#00fff7; background:#181f2a;">Paquete</th>
+                  <th style="color:#00fff7; background:#181f2a; min-width:150px;">Pedido / Fecha</th>
+                  <th style="color:#00fff7; background:#181f2a; min-width:240px;">Cliente / Email</th>
+                  <th style="color:#00fff7; background:#181f2a;">Referencia</th>
+                  <th style="color:#00fff7; background:#181f2a;">Teléfono</th>
+                  <th style="color:#00fff7; background:#181f2a; min-width:210px;">Juego / Paquete</th>
                   <th style="color:#00fff7; background:#181f2a;">Total</th>
                   <th style="color:#00fff7; background:#181f2a;">Cupón</th>
                   <th style="color:#00fff7; background:#181f2a;">Estado</th>
@@ -146,20 +174,28 @@ function format_money($amount): string {
               </thead>
               <tbody id="table-body-<?= $st ?>">
                 <?php foreach ($list as $order): ?>
-                  <tr data-order-row="<?= $order['id'] ?>" data-status="<?= $st ?>" style="background:#181f2a; color:#fff;">
-                    <td style="background:#181f2a; color:#00fff7; font-weight:bold;">#<?= $order['id'] ?></td>
-                    <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars($order['creado_en']) ?></td>
-                    <td style="background:#181f2a; color:#00fff7; font-weight:bold;"><?= htmlspecialchars($order['user_identifier']) ?></td>
-                    <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars($order['email']) ?></td>
-                    <td style="background:#181f2a; color:#00fff7; font-weight:bold;">
-                      <?php
-                        $juegoTexto = htmlspecialchars($order['juego_nombre']);
-                        if ($juegoTexto === '' || str_contains($order['juego_nombre'], '<?')) {
-                          $juegoTexto = 'Juego #' . htmlspecialchars((string)($order['juego_id'] ?? '')); }
-                        echo $juegoTexto;
-                      ?>
+                  <tr data-order-row="<?= $order['id'] ?>" data-status="<?= $st ?>" data-created-date="<?= htmlspecialchars(substr((string) ($order['creado_en'] ?? ''), 0, 10)) ?>" data-search-text="<?= htmlspecialchars(order_search_index($order)) ?>" style="background:#181f2a; color:#fff;">
+                    <td style="background:#181f2a; color:#00fff7;">
+                      <div style="font-weight:bold;">#<?= $order['id'] ?></div>
+                      <div style="color:#b2f6ff; margin-top:0.2rem;"><?= htmlspecialchars($order['creado_en']) ?></div>
                     </td>
-                    <td style="background:#181f2a; color:#00fff7; font-weight:bold;"><?= htmlspecialchars($order['paquete_nombre'] ?? '') ?> <span style="color:#b2f6ff; font-size:0.9em;"></span></td>
+                    <td style="background:#181f2a; color:#00fff7;">
+                      <div style="font-weight:bold;"><?= htmlspecialchars($order['user_identifier']) ?></div>
+                      <div style="color:#b2f6ff; margin-top:0.2rem;"><?= htmlspecialchars($order['email']) ?></div>
+                    </td>
+                    <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars(order_meta_value($order['numero_referencia'] ?? '')) ?></td>
+                    <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars(order_meta_value($order['telefono_contacto'] ?? '')) ?></td>
+                    <td style="background:#181f2a; color:#00fff7;">
+                      <div style="font-weight:bold;">
+                        <?php
+                          $juegoTexto = htmlspecialchars($order['juego_nombre']);
+                          if ($juegoTexto === '' || str_contains($order['juego_nombre'], '<?')) {
+                            $juegoTexto = 'Juego #' . htmlspecialchars((string)($order['juego_id'] ?? '')); }
+                          echo $juegoTexto;
+                        ?>
+                      </div>
+                      <div style="color:#b2f6ff; margin-top:0.2rem;"><?= htmlspecialchars($order['paquete_nombre'] ?? '') ?></div>
+                    </td>
                     <td style="background:#181f2a; color:#00ffb3; font-weight:bold;"><?= htmlspecialchars($order['moneda'] ?? '') ?> <?= format_money($order['precio']) ?></td>
                     <td style="background:#181f2a; color:#b2f6ff;">
                       <?= !empty($order['cupon']) ? htmlspecialchars($order['cupon']) : '—' ?>
@@ -180,13 +216,15 @@ function format_money($amount): string {
           <!-- Mobile Cards -->
           <div id="cards-<?= $st ?>" class="d-block d-md-none" style="margin-top:1.5rem;">
             <?php foreach ($list as $order): ?>
-              <div data-order-card="<?= $order['id'] ?>" data-status="<?= $st ?>" style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:1rem; color:#00fff7; margin-bottom:1.5rem;">
+              <div data-order-card="<?= $order['id'] ?>" data-status="<?= $st ?>" data-created-date="<?= htmlspecialchars(substr((string) ($order['creado_en'] ?? ''), 0, 10)) ?>" data-search-text="<?= htmlspecialchars(order_search_index($order)) ?>" style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:1rem; color:#00fff7; margin-bottom:1.5rem;">
                 <div style="display:flex; align-items:center; justify-content:space-between;">
                   <div style="font-weight:bold; font-size:1.1em; color:#00fff7;">#<?= $order['id'] ?></div>
                   <div style="font-size:0.95em; color:#b2f6ff;"><?= htmlspecialchars($order['creado_en']) ?></div>
                 </div>
                 <div style="margin-top:0.5em; color:#00fff7; font-size:1em;">Cliente: <span style="color:#b2f6ff; font-weight:bold;"><?= htmlspecialchars($order['user_identifier']) ?></span></div>
                 <div style="color:#b2f6ff; font-size:1em;">Email: <?= htmlspecialchars($order['email']) ?></div>
+                <div style="color:#b2f6ff; font-size:1em;">Referencia: <?= htmlspecialchars(order_meta_value($order['numero_referencia'] ?? '')) ?></div>
+                <div style="color:#b2f6ff; font-size:1em;">Teléfono: <?= htmlspecialchars(order_meta_value($order['telefono_contacto'] ?? '')) ?></div>
                 <div style="margin-top:0.5em; color:#00fff7; font-size:1em;">Juego: <span style="color:#b2f6ff; font-weight:bold;">
                   <?php
                     $juegoTexto = htmlspecialchars($order['juego_nombre']);
@@ -195,7 +233,7 @@ function format_money($amount): string {
                     echo $juegoTexto;
                   ?>
                 </span></div>
-                <div style="color:#b2f6ff; font-size:1em;">Paquete: <span style="color:#00fff7; font-weight:bold;"><?= htmlspecialchars($order['paquete_nombre'] ?? '') ?> (<?= htmlspecialchars($order['paquete_cantidad'] ?? '') ?>)</span></div>
+                <div style="color:#b2f6ff; font-size:1em;">Paquete: <span style="color:#00fff7; font-weight:bold;"><?= htmlspecialchars($order['paquete_nombre'] ?? '') ?></span></div>
                 <div style="color:#00ffb3; font-weight:bold; margin-top:0.5em;">Total: <?= htmlspecialchars($order['moneda'] ?? '') ?> <?= format_money($order['precio']) ?></div>
                 <div style="color:#b2f6ff; font-size:0.95em; margin-top:0.5em;">Cupón: <?= !empty($order['cupon']) ? htmlspecialchars($order['cupon']) : '—' ?></div>
                 <div style="margin-top:1em;">
@@ -232,6 +270,7 @@ function format_money($amount): string {
   const dateForm = document.getElementById('date-filter-form');
   const dateFrom = document.getElementById('date-from');
   const dateTo = document.getElementById('date-to');
+  const orderSearch = document.getElementById('order-search');
   const clearBtn = document.getElementById('clear-date-filter');
   const calendarFromBtn = document.getElementById('calendar-from-btn');
   const calendarToBtn = document.getElementById('calendar-to-btn');
@@ -271,43 +310,49 @@ function format_money($amount): string {
   window.addEventListener('resize', adjustDateFilterResponsive);
   adjustDateFilterResponsive();
 
-  dateForm.addEventListener('submit', function(e){
-    e.preventDefault();
+  function applyFilters(){
     const from = dateFrom.value;
     const to = dateTo.value;
+    const query = (orderSearch?.value || '').trim().toLowerCase();
+
     document.querySelectorAll('.tab-panel').forEach(panel => {
-      panel.querySelectorAll('tbody tr').forEach(row => {
-        const fecha = row.querySelector('td:nth-child(2)')?.textContent.trim();
-        if (!fecha) { row.style.display = ''; return; }
-        let mostrar = true;
-        if (from && fecha < from) mostrar = false;
-        if (to && fecha > to) mostrar = false;
-        row.style.display = mostrar ? '' : 'none';
+      panel.querySelectorAll('[data-order-row], [data-order-card]').forEach(item => {
+        const createdDate = item.dataset.createdDate || '';
+        const searchText = item.dataset.searchText || '';
+        let visible = true;
+
+        if (from && createdDate && createdDate < from) {
+          visible = false;
+        }
+        if (to && createdDate && createdDate > to) {
+          visible = false;
+        }
+        if (query && !searchText.includes(query)) {
+          visible = false;
+        }
+
+        item.style.display = visible ? '' : 'none';
       });
-      // Corregido: buscar los cards correctamente
-      const cardsContainer = panel.querySelector('[id^="cards-"]');
-      if (cardsContainer) {
-        cardsContainer.querySelectorAll('div[data-order-card]').forEach(card => {
-          const fecha = card.querySelector('p.text-xs.text-slate-400')?.textContent.trim().split(' ')[0];
-          let mostrar = true;
-          if (from && fecha < from) mostrar = false;
-          if (to && fecha > to) mostrar = false;
-          card.style.display = mostrar ? '' : 'none';
-        });
-      }
     });
+  }
+
+  dateForm.addEventListener('submit', function(e){
+    e.preventDefault();
+    applyFilters();
   });
+
+  if (orderSearch) {
+    orderSearch.addEventListener('input', applyFilters);
+    orderSearch.addEventListener('search', applyFilters);
+  }
 
   clearBtn.addEventListener('click', function(){
     dateFrom.value = '';
     dateTo.value = '';
-    document.querySelectorAll('.tab-panel').forEach(panel => {
-      panel.querySelectorAll('tbody tr').forEach(row => { row.style.display = ''; });
-      const cardsContainer = panel.querySelector('[id^="cards-"]');
-      if (cardsContainer) {
-        cardsContainer.querySelectorAll('div[data-order-card]').forEach(card => { card.style.display = ''; });
-      }
-    });
+    if (orderSearch) {
+      orderSearch.value = '';
+    }
+    applyFilters();
   });
   const tabs = Array.from(document.querySelectorAll('.tab-btn'));
   const panels = Array.from(document.querySelectorAll('.tab-panel'));
