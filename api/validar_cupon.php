@@ -86,22 +86,6 @@ if ($cupon['tipo_descuento'] === 'porcentaje') {
 
 $nuevo_total = max(0, $pack_price - $descuento);
 
-// Actualizar usos_actuales si el cupón tiene límite de usos
-if (!is_null($cupon['limite_usos']) && $cupon['limite_usos'] > 0) {
-    $updateStmt = $mysqli->prepare('UPDATE cupones SET usos_actuales = usos_actuales + 1 WHERE id = ?');
-    if ($updateStmt) {
-        $updateStmt->bind_param('i', $cupon['id']);
-        if (!$updateStmt->execute()) {
-            $errorMsg = date('Y-m-d H:i:s') . " | ERROR SQL: " . $updateStmt->error . "\n";
-            file_put_contents(__DIR__ . '/log_cupon.txt', $errorMsg, FILE_APPEND);
-        }
-        $updateStmt->close();
-    } else {
-        $errorMsg = date('Y-m-d H:i:s') . " | ERROR PREPARE SQL: " . $mysqli->error . "\n";
-        file_put_contents(__DIR__ . '/log_cupon.txt', $errorMsg, FILE_APPEND);
-    }
-}
-
 echo json_encode([
     'success' => true,
     'message' => 'Cupón aplicado correctamente.',

@@ -8,6 +8,7 @@ header('Content-Type: application/json');
 error_reporting(E_ALL);
 
 require_once __DIR__ . '/../includes/db_connect.php';
+require_once __DIR__ . '/../includes/influencer_coupons.php';
 require_once __DIR__ . '/../includes/payment_methods.php';
 require_once __DIR__ . '/../includes/store_config.php';
 payment_methods_ensure_table();
@@ -53,6 +54,7 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         'numero_referencia' => "ALTER TABLE pedidos ADD COLUMN numero_referencia VARCHAR(120) NULL AFTER cliente_usuario_id",
         'telefono_contacto' => "ALTER TABLE pedidos ADD COLUMN telefono_contacto VARCHAR(40) NULL AFTER numero_referencia",
         'cupon' => "ALTER TABLE pedidos ADD COLUMN cupon VARCHAR(60) NULL AFTER telefono_contacto",
+        'estado_pago_influencer' => "ALTER TABLE pedidos ADD COLUMN estado_pago_influencer ENUM('pendiente','pagado') NOT NULL DEFAULT 'pendiente' AFTER cupon",
         'estado' => "ALTER TABLE pedidos ADD COLUMN estado ENUM('pendiente','pagado','enviado','cancelado') NOT NULL DEFAULT 'pendiente' AFTER cupon",
         'creado_en' => "ALTER TABLE pedidos ADD COLUMN creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER estado",
         'actualizado_en' => "ALTER TABLE pedidos ADD COLUMN actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER creado_en"
@@ -164,6 +166,98 @@ function fetch_valid_coupon(mysqli $mysqli, string $code): ?array {
     if (!empty($coupon['fecha_expiracion']) && strtotime($coupon['fecha_expiracion']) < time()) return null;
     if (!empty($coupon['limite_usos']) && isset($coupon['usos_actuales']) && $coupon['usos_actuales'] >= $coupon['limite_usos']) return null;
     return $coupon;
+}
+
+function fetch_coupon_by_code(mysqli $mysqli, string $code): ?array {
+    if ($code === '') {
+        return null;
+    }
+
+    $stmt = $mysqli->prepare('SELECT * FROM cupones WHERE codigo = ? LIMIT 1');
+    if (!$stmt) {
+        return null;
+    }
+
+    $stmt->bind_param('s', $code);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $coupon = $res ? $res->fetch_assoc() : null;
+    $stmt->close();
+
+    return $coupon ?: null;
+}
+
+function register_influencer_coupon_sale(mysqli $mysqli, array $order): void {
+    $orderId = (int) ($order['id'] ?? 0);
+    $couponCode = normalize_coupon_code((string) ($order['cupon'] ?? ''));
+    if ($orderId <= 0 || $couponCode === '') {
+        return;
+    }
+
+    $coupon = fetch_coupon_by_code($mysqli, $couponCode);
+    if (!$coupon || !influencer_coupon_has_owner($coupon)) {
+        return;
+    }
+
+    influencer_coupon_ensure_sales_table_mysqli($mysqli);
+
+    $existsStmt = $mysqli->prepare('SELECT id FROM cupones_influencer_ventas WHERE pedido_id = ? LIMIT 1');
+    if (!$existsStmt) {
+        return;
+    }
+    $existsStmt->bind_param('i', $orderId);
+    $existsStmt->execute();
+    $existing = $existsStmt->get_result();
+    $alreadyExists = $existing && $existing->fetch_assoc();
+    $existsStmt->close();
+    if ($alreadyExists) {
+        return;
+    }
+
+    $couponId = (int) ($coupon['id'] ?? 0);
+    if ($couponId <= 0) {
+        return;
+    }
+
+    $influencerName = influencer_coupon_clean_text($coupon['nombre_influencer'] ?? null, 100);
+    $phone = influencer_coupon_clean_text($coupon['telefono_influencer'] ?? null, 50);
+    $email = influencer_coupon_clean_text($coupon['email_influencer'] ?? null, 100);
+    $commissionPercent = influencer_coupon_commission_percent($coupon['comision_influencer'] ?? 0);
+    $packageName = influencer_coupon_clean_text($order['paquete_nombre'] ?? null, 180);
+    $currency = influencer_coupon_clean_text($order['moneda'] ?? null, 20);
+    $totalSale = round((float) ($order['precio'] ?? 0), 2);
+    $commissionTotal = influencer_coupon_commission_total($totalSale, $commissionPercent);
+    $paymentState = 'pendiente';
+
+    $insert = $mysqli->prepare('INSERT INTO cupones_influencer_ventas (cupon_id, pedido_id, nombre_influencer, codigo_cupon, telefono_influencer, email_influencer, comision_porcentaje, paquete_vendido, moneda, total_pedido, total_comision, estado_pago) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    if (!$insert) {
+        return;
+    }
+
+    $insert->bind_param(
+        'iissssdssdds',
+        $couponId,
+        $orderId,
+        $influencerName,
+        $couponCode,
+        $phone,
+        $email,
+        $commissionPercent,
+        $packageName,
+        $currency,
+        $totalSale,
+        $commissionTotal,
+        $paymentState
+    );
+    $insert->execute();
+    $insert->close();
+
+    $updateOrder = $mysqli->prepare("UPDATE pedidos SET estado_pago_influencer = CASE WHEN estado_pago_influencer = 'pagado' THEN 'pagado' ELSE 'pendiente' END WHERE id = ?");
+    if ($updateOrder) {
+        $updateOrder->bind_param('i', $orderId);
+        $updateOrder->execute();
+        $updateOrder->close();
+    }
 }
 
 function apply_coupon_to_price(float $price, array $coupon): float {
@@ -708,6 +802,8 @@ if (!$action) {
 }
 
 ensure_pedidos_table($mysqli);
+influencer_coupon_ensure_sales_table_mysqli($mysqli);
+sync_coupon_usage_counts_mysqli($mysqli);
 
 if ($action === 'create') {
     $game_id = isset($_POST['game_id']) ? intval($_POST['game_id']) : null;
@@ -792,6 +888,7 @@ if ($action === 'create') {
     if (!$stmt->execute()) {
         json_error('No se pudo guardar el pedido');
     }
+    sync_coupon_usage_counts_mysqli($mysqli);
     $order_id = $mysqli->insert_id;
     $storedOrder = fetch_order_by_id($mysqli, $order_id);
     if ($storedOrder === null) {
@@ -911,6 +1008,7 @@ if ($action === 'submit_payment') {
     $stmt->close();
 
     $updatedOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
+    register_influencer_coupon_sale($mysqli, $updatedOrder);
     $adminEmail = resolve_admin_email($mysqli);
     $paymentMethodName = (string) ($method['nombre'] ?? 'Método de pago');
     $brandingImages = email_branding_embedded_images();
@@ -1017,7 +1115,7 @@ if ($action === 'update_status') {
         json_error('Datos de estado inválidos');
     }
 
-    $res = $mysqli->prepare('SELECT id, email, user_identifier, juego_nombre, paquete_nombre, paquete_cantidad, moneda, precio, estado FROM pedidos WHERE id=? LIMIT 1');
+    $res = $mysqli->prepare('SELECT id, email, user_identifier, juego_nombre, paquete_nombre, paquete_cantidad, moneda, precio, estado, cupon FROM pedidos WHERE id=? LIMIT 1');
     $res->bind_param('i', $order_id);
     $res->execute();
     $order = $res->get_result()->fetch_assoc();
@@ -1028,6 +1126,16 @@ if ($action === 'update_status') {
     $stmt = $mysqli->prepare('UPDATE pedidos SET estado=? WHERE id=?');
     $stmt->bind_param('si', $new_status, $order_id);
     $stmt->execute();
+
+    if (in_array($new_status, ['pagado', 'enviado'], true) && !in_array((string) ($order['estado'] ?? ''), ['pagado', 'enviado'], true)) {
+        register_influencer_coupon_sale($mysqli, [
+            'id' => $order_id,
+            'cupon' => $order['cupon'] ?? null,
+            'paquete_nombre' => $order['paquete_nombre'] ?? null,
+            'moneda' => $order['moneda'] ?? null,
+            'precio' => $order['precio'] ?? 0,
+        ]);
+    }
 
     $adminEmail = resolve_admin_email($mysqli);
     $statusLabel = ucfirst($new_status);

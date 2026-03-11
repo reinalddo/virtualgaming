@@ -39,6 +39,27 @@ function admin_redirect(string $section, array $query = []): void {
     exit();
 }
 
+function admin_display_value($value, string $fallback = '—'): string {
+    $text = trim((string) $value);
+    return $text !== '' ? $text : $fallback;
+}
+
+function admin_format_money($amount): string {
+    return number_format((float) $amount, 2, '.', ',');
+}
+
+function admin_normalize_influencer_payment_filter($value): string {
+    $filter = trim((string) $value);
+    return in_array($filter, ['pendiente', 'pagado', 'todos'], true) ? $filter : 'pendiente';
+}
+
+function admin_normalize_date_filter($value): ?string {
+    $date = trim((string) $value);
+    return preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) === 1 ? $date : null;
+}
+
+require_once __DIR__ . '/includes/influencer_coupons.php';
+
 switch ($seccion) {
     case 'usuarios':
         require_once __DIR__ . '/includes/db.php';
@@ -94,6 +115,31 @@ switch ($seccion) {
 
     case 'cupones':
         require_once __DIR__ . '/includes/db.php';
+        influencer_coupon_ensure_sales_table_pdo($pdo);
+        ensure_influencer_payment_status_column_pdo($pdo);
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['actualizar_estado_pago_influencer'])) {
+            $pedidoId = intval($_POST['pedido_id'] ?? 0);
+            $nuevoEstadoPago = trim((string) ($_POST['estado_pago_influencer'] ?? 'pendiente')) === 'pagado' ? 'pagado' : 'pendiente';
+            $redirectFilter = admin_normalize_influencer_payment_filter($_POST['filtro_estado_pago'] ?? 'pendiente');
+            $redirectDateFrom = admin_normalize_date_filter($_POST['fecha_desde'] ?? null);
+            $redirectDateTo = admin_normalize_date_filter($_POST['fecha_hasta'] ?? null);
+            if ($pedidoId > 0) {
+                $stmt = $pdo->prepare('UPDATE pedidos SET estado_pago_influencer = ? WHERE id = ?');
+                $stmt->execute([$nuevoEstadoPago, $pedidoId]);
+                admin_set_flash('success', 'Estado de comisión actualizado.');
+            } else {
+                admin_set_flash('error', 'Pedido inválido para actualizar la comisión.');
+            }
+            $redirectQuery = ['tab' => 'influencers', 'filtro_estado_pago' => $redirectFilter];
+            if ($redirectDateFrom !== null) {
+                $redirectQuery['fecha_desde'] = $redirectDateFrom;
+            }
+            if ($redirectDateTo !== null) {
+                $redirectQuery['fecha_hasta'] = $redirectDateTo;
+            }
+            admin_redirect('cupones', $redirectQuery);
+        }
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nuevo_cupon'])) {
             $codigoInput = trim($_POST['codigo'] ?? '');
@@ -103,17 +149,32 @@ switch ($seccion) {
             $fecha_expiracion = $_POST['fecha_expiracion'] ?? null;
             $limite_usos = ($_POST['limite_usos'] ?? '') !== '' ? intval($_POST['limite_usos']) : null;
             $activo = isset($_POST['activo']) ? 1 : 0;
+            $influencerPayload = influencer_coupon_payload_from_input($_POST);
+            $influencerErrors = influencer_coupon_validate_payload($influencerPayload);
 
             if (!is_valid_coupon_code($codigoInput)) {
                 admin_set_flash('error', 'El código del cupón solo puede contener letras y números, sin espacios, acentos ni caracteres especiales.');
+            } elseif (!empty($influencerErrors)) {
+                admin_set_flash('error', implode(' ', $influencerErrors));
             } else {
                 $stmt_check = $pdo->prepare('SELECT 1 FROM cupones WHERE codigo = ? LIMIT 1');
                 $stmt_check->execute([$codigo]);
                 if ($stmt_check->fetch()) {
                     admin_set_flash('error', 'Ya existe un cupón con ese código.');
                 } elseif ($codigo && $valor_descuento > 0 && in_array($tipo_descuento, ['porcentaje', 'fijo'], true)) {
-                    $stmt = $pdo->prepare('INSERT INTO cupones (codigo, tipo_descuento, valor_descuento, fecha_expiracion, limite_usos, activo) VALUES (?, ?, ?, ?, ?, ?)');
-                    $stmt->execute([$codigo, $tipo_descuento, $valor_descuento, $fecha_expiracion !== '' ? $fecha_expiracion : null, $limite_usos, $activo]);
+                    $stmt = $pdo->prepare('INSERT INTO cupones (codigo, tipo_descuento, valor_descuento, fecha_expiracion, limite_usos, activo, nombre_influencer, telefono_influencer, email_influencer, comision_influencer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                    $stmt->execute([
+                        $codigo,
+                        $tipo_descuento,
+                        $valor_descuento,
+                        $fecha_expiracion !== '' ? $fecha_expiracion : null,
+                        $limite_usos,
+                        $activo,
+                        $influencerPayload['nombre_influencer'],
+                        $influencerPayload['telefono_influencer'],
+                        $influencerPayload['email_influencer'],
+                        $influencerPayload['comision_influencer'],
+                    ]);
                     admin_set_flash('success', 'Cupón creado correctamente.');
                 } else {
                     admin_set_flash('error', 'Datos inválidos para el cupón.');
@@ -131,17 +192,33 @@ switch ($seccion) {
             $fecha_expiracion = $_POST['fecha_expiracion'] ?? null;
             $limite_usos = ($_POST['limite_usos'] ?? '') !== '' ? intval($_POST['limite_usos']) : null;
             $activo = isset($_POST['activo']) ? 1 : 0;
+            $influencerPayload = influencer_coupon_payload_from_input($_POST);
+            $influencerErrors = influencer_coupon_validate_payload($influencerPayload);
 
             if (!is_valid_coupon_code($codigoInput)) {
                 admin_set_flash('error', 'El código del cupón solo puede contener letras y números, sin espacios, acentos ni caracteres especiales.');
+            } elseif (!empty($influencerErrors)) {
+                admin_set_flash('error', implode(' ', $influencerErrors));
             } else {
                 $stmt_check = $pdo->prepare('SELECT 1 FROM cupones WHERE codigo = ? AND id <> ? LIMIT 1');
                 $stmt_check->execute([$codigo, $id]);
                 if ($stmt_check->fetch()) {
                     admin_set_flash('error', 'Ya existe un cupón con ese código.');
                 } elseif ($id && $codigo && $valor_descuento > 0 && in_array($tipo_descuento, ['porcentaje', 'fijo'], true)) {
-                    $stmt = $pdo->prepare('UPDATE cupones SET codigo=?, tipo_descuento=?, valor_descuento=?, fecha_expiracion=?, limite_usos=?, activo=? WHERE id=?');
-                    $stmt->execute([$codigo, $tipo_descuento, $valor_descuento, $fecha_expiracion !== '' ? $fecha_expiracion : null, $limite_usos, $activo, $id]);
+                    $stmt = $pdo->prepare('UPDATE cupones SET codigo=?, tipo_descuento=?, valor_descuento=?, fecha_expiracion=?, limite_usos=?, activo=?, nombre_influencer=?, telefono_influencer=?, email_influencer=?, comision_influencer=? WHERE id=?');
+                    $stmt->execute([
+                        $codigo,
+                        $tipo_descuento,
+                        $valor_descuento,
+                        $fecha_expiracion !== '' ? $fecha_expiracion : null,
+                        $limite_usos,
+                        $activo,
+                        $influencerPayload['nombre_influencer'],
+                        $influencerPayload['telefono_influencer'],
+                        $influencerPayload['email_influencer'],
+                        $influencerPayload['comision_influencer'],
+                        $id,
+                    ]);
                     admin_set_flash('success', 'Cupón actualizado correctamente.');
                 } else {
                     admin_set_flash('error', 'Datos inválidos para el cupón.');
@@ -639,174 +716,305 @@ require_once __DIR__ . '/includes/header.php';
                 break;
             case 'cupones':
                 require_once __DIR__ . '/includes/db.php';
-                echo '<h2 class="text-center mb-4" style="color:#00fff7;">Gestión de Cupones</h2>';
-                // Alta y edición de cupón
+                influencer_coupon_ensure_sales_table_pdo($pdo);
+                sync_coupon_usage_counts_pdo($pdo);
+                backfill_influencer_sales_pdo($pdo);
+                backfill_influencer_order_payment_status_pdo($pdo);
+                $couponAdminTab = $_GET['tab'] ?? 'cupones';
+                if (!in_array($couponAdminTab, ['cupones', 'influencers'], true)) {
+                    $couponAdminTab = 'cupones';
+                }
+                $influencerPaymentFilter = admin_normalize_influencer_payment_filter($_GET['filtro_estado_pago'] ?? 'pendiente');
+                $influencerDateFrom = admin_normalize_date_filter($_GET['fecha_desde'] ?? null);
+                $influencerDateTo = admin_normalize_date_filter($_GET['fecha_hasta'] ?? null);
+                $cupones = $pdo->query('SELECT * FROM cupones ORDER BY id DESC')->fetchAll(PDO::FETCH_ASSOC);
+                $influencerSalesSql = "SELECT s.*, p.estado_pago_influencer, p.juego_nombre
+                    FROM cupones_influencer_ventas s
+                    INNER JOIN pedidos p ON p.id = s.pedido_id
+                    WHERE 1=1";
+                $influencerSalesParams = [];
+                if ($influencerPaymentFilter !== 'todos') {
+                    $influencerSalesSql .= ' AND p.estado_pago_influencer = ?';
+                    $influencerSalesParams[] = $influencerPaymentFilter;
+                }
+                if ($influencerDateFrom !== null) {
+                    $influencerSalesSql .= ' AND DATE(s.creado_en) >= ?';
+                    $influencerSalesParams[] = $influencerDateFrom;
+                }
+                if ($influencerDateTo !== null) {
+                    $influencerSalesSql .= ' AND DATE(s.creado_en) <= ?';
+                    $influencerSalesParams[] = $influencerDateTo;
+                }
+                $influencerSalesSql .= ' ORDER BY s.creado_en DESC';
+                $influencerSalesStmt = $pdo->prepare($influencerSalesSql);
+                $influencerSalesStmt->execute($influencerSalesParams);
+                $influencerSales = $influencerSalesStmt->fetchAll(PDO::FETCH_ASSOC);
                 $edit_cupon = null;
                 if (isset($_GET['editar_cupon'])) {
                     $edit_id = intval($_GET['editar_cupon']);
-                    $cupones = $pdo->query('SELECT * FROM cupones ORDER BY id DESC')->fetchAll(PDO::FETCH_ASSOC);
                     foreach ($cupones as $cupon) {
-                        if ($cupon['id'] == $edit_id) {
+                        if ((int) $cupon['id'] === $edit_id) {
                             $edit_cupon = $cupon;
                             break;
                         }
                     }
+                    $couponAdminTab = 'cupones';
                 }
-                // Formulario
-                echo '<form method="POST" action="" class="row g-3 mb-4" style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:2rem;">';
-                if ($edit_cupon) {
-                    echo '<input type="hidden" name="editar_cupon" value="1">';
-                    echo '<input type="hidden" name="id" value="' . htmlspecialchars($edit_cupon['id']) . '">';
-                } else {
-                    echo '<input type="hidden" name="nuevo_cupon" value="1">';
-                }
-                echo '<div class="col-md-4">';
-                echo '<label class="form-label" style="color:#00fff7;">Código del cupón</label>';
-                echo '<input type="text" name="codigo" value="' . ($edit_cupon ? htmlspecialchars($edit_cupon['codigo']) : '') . '" required pattern="[A-Za-z0-9]+" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" oninput="this.value=this.value.replace(/[^A-Za-z0-9]/g,\'\').toUpperCase()" title="Solo letras y números, sin espacios ni caracteres especiales." class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">';
-                echo '</div>';
-                echo '<div class="col-md-4">';
-                echo '<label class="form-label" style="color:#00fff7;">Tipo de descuento</label>';
-                echo '<select name="tipo_descuento" class="form-select" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">';
-                echo '<option value="porcentaje"' . ($edit_cupon && $edit_cupon['tipo_descuento']=='porcentaje' ? ' selected' : '') . '>Porcentaje (%)</option>';
-                echo '<option value="fijo"' . ($edit_cupon && $edit_cupon['tipo_descuento']=='fijo' ? ' selected' : '') . '>Monto fijo</option>';
-                echo '</select>';
-                echo '</div>';
-                echo '<div class="col-md-4">';
-                echo '<label class="form-label" style="color:#00fff7;">Valor del descuento</label>';
-                echo '<input type="number" name="valor_descuento" step="0.01" min="0.01" value="' . ($edit_cupon ? htmlspecialchars($edit_cupon['valor_descuento']) : '') . '" required class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">';
-                echo '</div>';
-                echo '<div class="col-md-4">';
-                echo '<label class="form-label" style="color:#00fff7;">Fecha expiración</label>';
-                echo '<input type="datetime-local" name="fecha_expiracion" value="' . ($edit_cupon && $edit_cupon['fecha_expiracion'] ? date('Y-m-d\TH:i', strtotime($edit_cupon['fecha_expiracion'])) : '') . '" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">';
-                echo '</div>';
-                echo '<div class="col-md-4">';
-                echo '<label class="form-label" style="color:#00fff7;">Límite de usos</label>';
-                echo '<input type="number" name="limite_usos" min="0" value="' . ($edit_cupon ? htmlspecialchars($edit_cupon['limite_usos']) : '') . '" placeholder="0 = ilimitado" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">';
-                echo '</div>';
-                echo '<div class="col-md-4 d-flex align-items-end">';
-                echo '<div class="form-check">';
-                echo '<input type="checkbox" name="activo" class="form-check-input" id="activoCheck"' . ($edit_cupon && $edit_cupon['activo'] ? ' checked' : (!$edit_cupon ? ' checked' : '')) . '>';
-                echo '<label class="form-check-label" for="activoCheck" style="color:#00fff7;">Cupón activo</label>';
-                echo '</div>';
-                echo '</div>';
-                echo '<div class="col-12">';
-                echo '<button type="submit" class="btn btn-info w-100" style="background:#00fff7; color:#222; border:none; box-shadow:0 0 8px #00fff7;">' . ($edit_cupon ? 'Guardar cambios' : 'Crear cupón') . '</button>';
-                if ($edit_cupon) echo '<a href="?seccion=cupones" class="btn btn-secondary ms-2">Cancelar</a>';
-                echo '</div>';
-                echo '</form>';
-                // Procesar alta/edición/borrado/activación
-                if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nuevo_cupon'])) {
-                    $codigoInput = trim($_POST['codigo'] ?? '');
-                    $codigo = normalize_coupon_code($codigoInput);
-                    $tipo_descuento = $_POST['tipo_descuento'] ?? 'porcentaje';
-                    $valor_descuento = floatval($_POST['valor_descuento'] ?? 0);
-                    $fecha_expiracion = $_POST['fecha_expiracion'] ?? null;
-                    $limite_usos = $_POST['limite_usos'] !== '' ? intval($_POST['limite_usos']) : null;
-                    $activo = isset($_POST['activo']) ? 1 : 0;
-                    if (!is_valid_coupon_code($codigoInput)) {
-                        echo '<div class="text-red-400 mb-2">El código del cupón solo puede contener letras y números, sin espacios, acentos ni caracteres especiales.</div>';
-                    } else {
-                        $stmt_check = $pdo->prepare("SELECT 1 FROM cupones WHERE codigo = ? LIMIT 1");
-                        $stmt_check->execute([$codigo]);
-                        if ($stmt_check->fetch()) {
-                            echo '<div class="text-red-400 mb-2">Ya existe un cupón con ese código.</div>';
-                        } elseif ($codigo && $valor_descuento > 0 && in_array($tipo_descuento, ['porcentaje','fijo'])) {
-                            $stmt = $pdo->prepare("INSERT INTO cupones (codigo, tipo_descuento, valor_descuento, fecha_expiracion, limite_usos, activo) VALUES (?, ?, ?, ?, ?, ?)");
-                            $stmt->execute([$codigo, $tipo_descuento, $valor_descuento, $fecha_expiracion !== '' ? $fecha_expiracion : null, $limite_usos, $activo]);
-                            echo '<div class="text-green-400 mb-2">Cupón creado correctamente.</div>';
-                        } else {
-                            echo '<div class="text-red-400 mb-2">Datos inválidos para el cupón.</div>';
-                        }
-                    }
-                }
-                if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['editar_cupon'])) {
-                    $id = intval($_POST['id'] ?? 0);
-                    $codigoInput = trim($_POST['codigo'] ?? '');
-                    $codigo = normalize_coupon_code($codigoInput);
-                    $tipo_descuento = $_POST['tipo_descuento'] ?? 'porcentaje';
-                    $valor_descuento = floatval($_POST['valor_descuento'] ?? 0);
-                    $fecha_expiracion = $_POST['fecha_expiracion'] ?? null;
-                    $limite_usos = $_POST['limite_usos'] !== '' ? intval($_POST['limite_usos']) : null;
-                    $activo = isset($_POST['activo']) ? 1 : 0;
-                    if (!is_valid_coupon_code($codigoInput)) {
-                        echo '<div class="text-red-400 mb-2">El código del cupón solo puede contener letras y números, sin espacios, acentos ni caracteres especiales.</div>';
-                    } else {
-                        $stmt_check = $pdo->prepare("SELECT 1 FROM cupones WHERE codigo = ? AND id <> ? LIMIT 1");
-                        $stmt_check->execute([$codigo, $id]);
-                        if ($stmt_check->fetch()) {
-                            echo '<div class="text-red-400 mb-2">Ya existe un cupón con ese código.</div>';
-                        } elseif ($id && $codigo && $valor_descuento > 0 && in_array($tipo_descuento, ['porcentaje','fijo'])) {
-                            $stmt = $pdo->prepare("UPDATE cupones SET codigo=?, tipo_descuento=?, valor_descuento=?, fecha_expiracion=?, limite_usos=?, activo=? WHERE id=?");
-                            $stmt->execute([$codigo, $tipo_descuento, $valor_descuento, $fecha_expiracion !== '' ? $fecha_expiracion : null, $limite_usos, $activo, $id]);
-                            echo '<div class="text-green-400 mb-2">Cupón actualizado correctamente.</div>';
-                        } else {
-                            echo '<div class="text-red-400 mb-2">Datos inválidos para el cupón.</div>';
-                        }
-                    }
-                }
-                if (isset($_GET['borrar_cupon'])) {
-                    $id = intval($_GET['borrar_cupon']);
-                    $pdo->prepare('DELETE FROM cupones WHERE id = ?')->execute([$id]);
-                    echo '<div class="text-green-400 mb-2">Cupón eliminado.</div>';
-                }
-                if (isset($_GET['toggle_cupon'])) {
-                    $id = intval($_GET['toggle_cupon']);
-                    $pdo->prepare('UPDATE cupones SET activo = NOT activo WHERE id = ?')->execute([$id]);
-                }
-                $cupones = $pdo->query('SELECT * FROM cupones ORDER BY id DESC')->fetchAll(PDO::FETCH_ASSOC);
-                echo '<h3 class="text-info mt-5 mb-3">Cupones existentes</h3>';
-                echo '<div class="table-responsive d-none d-md-block">';
-                echo '<table class="table align-middle" style="background:#181f2a; color:#00fff7; border-radius:12px;">';
-                echo '<thead style="background:#181f2a; color:#00fff7; border-bottom:2px solid #00fff7;">';
-                echo '<tr>';
-                echo '<th style="color:#00fff7; background:#181f2a;">ID</th>';
-                echo '<th style="color:#00fff7; background:#181f2a;">Código</th>';
-                echo '<th style="color:#00fff7; background:#181f2a;">Tipo</th>';
-                echo '<th style="color:#00fff7; background:#181f2a;">Valor</th>';
-                echo '<th style="color:#00fff7; background:#181f2a;">Expira</th>';
-                echo '<th style="color:#00fff7; background:#181f2a;">Límite usos</th>';
-                echo '<th style="color:#00fff7; background:#181f2a;">Usos actuales</th>';
-                echo '<th style="color:#00fff7; background:#181f2a;">Activo</th>';
-                echo '<th style="color:#00fff7; background:#181f2a;">Acciones</th>';
-                echo '</tr>';
-                echo '</thead>';
-                echo '<tbody>';
-                foreach ($cupones as $c) {
-                    echo '<tr style="background:#181f2a; color:#fff;">';
-                    echo '<td style="background:#181f2a; color:#00fff7;">' . $c['id'] . '</td>';
-                    echo '<td style="background:#181f2a; color:#00fff7;">' . htmlspecialchars($c['codigo']) . '</td>';
-                    echo '<td style="background:#181f2a; color:#00fff7;">' . htmlspecialchars($c['tipo_descuento']) . '</td>';
-                    echo '<td style="background:#181f2a; color:#00fff7;">' . htmlspecialchars($c['valor_descuento']) . '</td>';
-                    echo '<td style="background:#181f2a; color:#00fff7;">' . ($c['fecha_expiracion'] ? htmlspecialchars($c['fecha_expiracion']) : '-') . '</td>';
-                    echo '<td style="background:#181f2a; color:#00fff7;">' . ($c['limite_usos'] ?? '-') . '</td>';
-                    echo '<td style="background:#181f2a; color:#00fff7;">' . $c['usos_actuales'] . '</td>';
-                    echo '<td style="background:#181f2a; color:#00fff7;">' . ($c['activo'] ? 'Sí' : 'No') . '</td>';
-                    echo '<td style="background:#181f2a;">';
-                    echo '<a href="?seccion=cupones&editar_cupon=' . $c['id'] . '" style="color:#00fff7; text-decoration:underline; margin-right:1em;">Editar</a>';
-                    echo ($c['activo'] ? '<a href="?seccion=cupones&toggle_cupon=' . $c['id'] . '" style="color:#00fff7; text-decoration:underline; margin-right:1em;">Desactivar</a>' : '<a href="?seccion=cupones&toggle_cupon=' . $c['id'] . '" style="color:#00fff7; text-decoration:underline; margin-right:1em;">Activar</a>');
-                    echo '<a href="?seccion=cupones&borrar_cupon=' . $c['id'] . '" style="color:#ff0059; text-decoration:underline;" onclick="return confirm(\'¿Eliminar este cupón?\')">Eliminar</a>';
-                    echo '</td>';
-                    echo '</tr>';
-                }
-                echo '</tbody></table>';
-                echo '</div>';
-                // Mobile Cards
-                echo '<div class="d-block d-md-none space-y-4">';
-                foreach ($cupones as $c) {
-                    echo '<div style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:1rem; color:#00fff7; margin-bottom:1.2rem;">';
-                    echo '<div style="font-weight:bold; font-size:1.2em; color:#00fff7; display:flex; align-items:center;">' . htmlspecialchars($c['codigo']) . '<span style="font-size:0.9em; color:#b2f6ff; margin-left:0.5em;">ID: ' . $c['id'] . '</span></div>';
-                    echo '<div style="margin-top:0.5em; color:#fff;"><span style="color:#00fff7; font-weight:bold;">Tipo:</span> ' . htmlspecialchars($c['tipo_descuento']) . ' | <span style="color:#00fff7; font-weight:bold;">Valor:</span> ' . htmlspecialchars($c['valor_descuento']) . '</div>';
-                    echo '<div style="margin-top:0.5em; color:#fff;"><span style="color:#00fff7; font-weight:bold;">Expira:</span> ' . ($c['fecha_expiracion'] ? htmlspecialchars($c['fecha_expiracion']) : '-') . '</div>';
-                    echo '<div style="margin-top:0.5em; color:#fff;"><span style="color:#00fff7; font-weight:bold;">Límite usos:</span> ' . ($c['limite_usos'] ?? '-') . ' | <span style="color:#00fff7; font-weight:bold;">Usos actuales:</span> ' . $c['usos_actuales'] . '</div>';
-                    echo '<div style="margin-top:0.5em; color:#fff;"><span style="color:#00fff7; font-weight:bold;">Activo:</span> ' . ($c['activo'] ? 'Sí' : 'No') . '</div>';
-                    echo '<div style="display:flex; gap:1rem; margin-top:1rem;">';
-                    echo '<a href="?seccion=cupones&editar_cupon=' . $c['id'] . '" style="color:#00fff7; text-decoration:underline; font-weight:bold;">Editar</a>';
-                    echo ($c['activo'] ? '<a href="?seccion=cupones&toggle_cupon=' . $c['id'] . '" style="color:#00fff7; text-decoration:underline; font-weight:bold;">Desactivar</a>' : '<a href="?seccion=cupones&toggle_cupon=' . $c['id'] . '" style="color:#00fff7; text-decoration:underline; font-weight:bold;">Activar</a>');
-                    echo '<a href="?seccion=cupones&borrar_cupon=' . $c['id'] . '" style="color:#ff0059; text-decoration:underline; font-weight:bold;" onclick="return confirm(\'¿Eliminar este cupón?\')">Eliminar</a>';
-                    echo '</div>';
-                    echo '</div>';
-                }
-                echo '</div>';
+                $couponTabLink = '?seccion=cupones&tab=cupones';
+                $influencerTabLink = '?seccion=cupones&tab=influencers';
+                ?>
+                <h2 class="text-center mb-4" style="color:#00fff7;">Gestión de Cupones</h2>
+
+                <div class="d-flex flex-wrap justify-content-center gap-2 mb-4">
+                    <a href="<?= htmlspecialchars($couponTabLink) ?>" class="btn rounded-pill px-4 py-2 fw-semibold <?= $couponAdminTab === 'cupones' ? 'btn-info' : 'btn-outline-info' ?>" style="<?= $couponAdminTab === 'cupones' ? 'background:#00fff7;color:#181f2a;border:2px solid #00fff7;box-shadow:0 0 12px #00fff7;' : 'border:2px solid #00fff7;color:#00fff7;background:#181f2a;' ?>">Cupones</a>
+                    <a href="<?= htmlspecialchars($influencerTabLink) ?>" class="btn rounded-pill px-4 py-2 fw-semibold <?= $couponAdminTab === 'influencers' ? 'btn-info' : 'btn-outline-info' ?>" style="<?= $couponAdminTab === 'influencers' ? 'background:#00fff7;color:#181f2a;border:2px solid #00fff7;box-shadow:0 0 12px #00fff7;' : 'border:2px solid #00fff7;color:#00fff7;background:#181f2a;' ?>">Cupones de Influencers</a>
+                </div>
+
+                <?php if ($couponAdminTab === 'cupones'): ?>
+                    <form method="POST" action="" class="row g-3 mb-4" style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:2rem;">
+                        <?php if ($edit_cupon): ?>
+                            <input type="hidden" name="editar_cupon" value="1">
+                            <input type="hidden" name="id" value="<?= htmlspecialchars((string) $edit_cupon['id']) ?>">
+                        <?php else: ?>
+                            <input type="hidden" name="nuevo_cupon" value="1">
+                        <?php endif; ?>
+                        <div class="col-12">
+                            <h3 class="h5 mb-0" style="color:#00fff7;"><?= $edit_cupon ? 'Editar cupón' : 'Crear cupón' ?></h3>
+                            <p class="mb-0 mt-2" style="color:#b2f6ff;">Si completas el bloque del influencer, el cupón generará registros de comisión cuando el pedido pase a pagado o enviado.</p>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" style="color:#00fff7;">Código del cupón</label>
+                            <input type="text" name="codigo" value="<?= $edit_cupon ? htmlspecialchars((string) $edit_cupon['codigo']) : '' ?>" required pattern="[A-Za-z0-9]+" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" oninput="this.value=this.value.replace(/[^A-Za-z0-9]/g,'').toUpperCase()" title="Solo letras y números, sin espacios, acentos ni caracteres especiales." class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" style="color:#00fff7;">Tipo de descuento</label>
+                            <select name="tipo_descuento" class="form-select" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
+                                <option value="porcentaje" <?= $edit_cupon && ($edit_cupon['tipo_descuento'] ?? '') === 'porcentaje' ? 'selected' : '' ?>>Porcentaje (%)</option>
+                                <option value="fijo" <?= $edit_cupon && ($edit_cupon['tipo_descuento'] ?? '') === 'fijo' ? 'selected' : '' ?>>Monto fijo</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" style="color:#00fff7;">Valor del descuento</label>
+                            <input type="number" name="valor_descuento" step="0.01" min="0.01" value="<?= $edit_cupon ? htmlspecialchars((string) $edit_cupon['valor_descuento']) : '' ?>" required class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" style="color:#00fff7;">Fecha expiración</label>
+                            <input type="datetime-local" name="fecha_expiracion" value="<?= $edit_cupon && !empty($edit_cupon['fecha_expiracion']) ? htmlspecialchars(date('Y-m-d\TH:i', strtotime((string) $edit_cupon['fecha_expiracion']))) : '' ?>" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" style="color:#00fff7;">Límite de usos</label>
+                            <input type="number" name="limite_usos" min="0" value="<?= $edit_cupon ? htmlspecialchars((string) ($edit_cupon['limite_usos'] ?? '')) : '' ?>" placeholder="0 = ilimitado" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="form-check">
+                                <input type="checkbox" name="activo" class="form-check-input" id="activoCheck" <?= $edit_cupon ? (!empty($edit_cupon['activo']) ? 'checked' : '') : 'checked' ?>>
+                                <label class="form-check-label" for="activoCheck" style="color:#00fff7;">Cupón activo</label>
+                            </div>
+                        </div>
+                        <div class="col-12 mt-2">
+                            <div style="background:#0f172a; border:1px solid rgba(0,255,247,0.3); border-radius:16px; padding:1.25rem;">
+                                <h4 class="h6 mb-3" style="color:#00fff7;">Configuración del influencer</h4>
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label" style="color:#00fff7;">Nombre influencer</label>
+                                        <input type="text" name="nombre_influencer" value="<?= $edit_cupon ? htmlspecialchars((string) ($edit_cupon['nombre_influencer'] ?? '')) : '' ?>" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label" style="color:#00fff7;">Teléfono influencer</label>
+                                        <input type="text" name="telefono_influencer" value="<?= $edit_cupon ? htmlspecialchars((string) ($edit_cupon['telefono_influencer'] ?? '')) : '' ?>" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label" style="color:#00fff7;">Correo influencer</label>
+                                        <input type="email" name="email_influencer" value="<?= $edit_cupon ? htmlspecialchars((string) ($edit_cupon['email_influencer'] ?? '')) : '' ?>" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label" style="color:#00fff7;">Comisión influencer (%)</label>
+                                        <input type="number" name="comision_influencer" step="0.01" min="0" max="100" value="<?= $edit_cupon ? htmlspecialchars((string) ($edit_cupon['comision_influencer'] ?? '0')) : '0' ?>" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 d-flex flex-column flex-md-row gap-2">
+                            <button type="submit" class="btn btn-info flex-fill" style="background:#00fff7; color:#222; border:none; box-shadow:0 0 8px #00fff7;"><?= $edit_cupon ? 'Guardar cambios' : 'Crear cupón' ?></button>
+                            <?php if ($edit_cupon): ?>
+                                <a href="<?= htmlspecialchars($couponTabLink) ?>" class="btn btn-outline-light flex-fill">Cancelar edición</a>
+                            <?php endif; ?>
+                        </div>
+                    </form>
+
+                    <h3 class="text-info mt-5 mb-3">Cupones existentes</h3>
+                    <div class="table-responsive d-none d-md-block">
+                        <table class="table align-middle" style="background:#181f2a; color:#00fff7; border-radius:12px;">
+                            <thead style="background:#181f2a; color:#00fff7; border-bottom:2px solid #00fff7;">
+                                <tr>
+                                    <th style="color:#00fff7; background:#181f2a;">Código</th>
+                                    <th style="color:#00fff7; background:#181f2a;">Descuento</th>
+                                    <th style="color:#00fff7; background:#181f2a;">Influencer</th>
+                                    <th style="color:#00fff7; background:#181f2a;">Comisión</th>
+                                    <th style="color:#00fff7; background:#181f2a;">Usos</th>
+                                    <th style="color:#00fff7; background:#181f2a;">Activo</th>
+                                    <th style="color:#00fff7; background:#181f2a;">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($cupones as $c): ?>
+                                    <tr style="background:#181f2a; color:#fff;">
+                                        <td style="background:#181f2a; color:#00fff7; font-weight:bold;">
+                                            <div><?= htmlspecialchars((string) $c['codigo']) ?></div>
+                                            <div style="color:#b2f6ff; font-size:0.9em;">ID: <?= htmlspecialchars((string) $c['id']) ?></div>
+                                        </td>
+                                        <td style="background:#181f2a; color:#b2f6ff;">
+                                            <div><?= htmlspecialchars((string) $c['tipo_descuento']) ?></div>
+                                            <div><?= htmlspecialchars((string) $c['valor_descuento']) ?></div>
+                                        </td>
+                                        <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars(admin_display_value($c['nombre_influencer'] ?? null)) ?></td>
+                                        <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars(admin_display_value(isset($c['comision_influencer']) && (float) $c['comision_influencer'] > 0 ? admin_format_money($c['comision_influencer']) . '%' : null)) ?></td>
+                                        <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars((string) ($c['usos_actuales'] ?? 0)) ?> / <?= htmlspecialchars(admin_display_value($c['limite_usos'] ?? null, '∞')) ?></td>
+                                        <td style="background:#181f2a; color:#b2f6ff;"><?= !empty($c['activo']) ? 'Sí' : 'No' ?></td>
+                                        <td style="background:#181f2a;">
+                                            <a href="?seccion=cupones&tab=cupones&editar_cupon=<?= urlencode((string) $c['id']) ?>" style="color:#00fff7; text-decoration:underline; margin-right:1em;">Editar</a>
+                                            <a href="?seccion=cupones&tab=cupones&toggle_cupon=<?= urlencode((string) $c['id']) ?>" style="color:#00fff7; text-decoration:underline; margin-right:1em;"><?= !empty($c['activo']) ? 'Desactivar' : 'Activar' ?></a>
+                                            <a href="?seccion=cupones&tab=cupones&borrar_cupon=<?= urlencode((string) $c['id']) ?>" style="color:#ff0059; text-decoration:underline;" onclick="return confirm('¿Eliminar este cupón?')">Eliminar</a>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="d-block d-md-none">
+                        <?php foreach ($cupones as $c): ?>
+                            <div style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:1rem; color:#00fff7; margin-bottom:1.2rem;">
+                                <div style="font-weight:bold; font-size:1.15em; color:#00fff7;"><?= htmlspecialchars((string) $c['codigo']) ?></div>
+                                <div style="margin-top:0.45rem; color:#b2f6ff;">Tipo: <?= htmlspecialchars((string) $c['tipo_descuento']) ?> | Valor: <?= htmlspecialchars((string) $c['valor_descuento']) ?></div>
+                                <div style="margin-top:0.45rem; color:#b2f6ff;">Influencer: <?= htmlspecialchars(admin_display_value($c['nombre_influencer'] ?? null)) ?></div>
+                                <div style="margin-top:0.45rem; color:#b2f6ff;">Comisión: <?= htmlspecialchars(admin_display_value(isset($c['comision_influencer']) && (float) $c['comision_influencer'] > 0 ? admin_format_money($c['comision_influencer']) . '%' : null)) ?></div>
+                                <div style="margin-top:0.45rem; color:#b2f6ff;">Usos: <?= htmlspecialchars((string) ($c['usos_actuales'] ?? 0)) ?> / <?= htmlspecialchars(admin_display_value($c['limite_usos'] ?? null, '∞')) ?></div>
+                                <div style="margin-top:0.45rem; color:#b2f6ff;">Activo: <?= !empty($c['activo']) ? 'Sí' : 'No' ?></div>
+                                <div style="display:flex; gap:1rem; margin-top:1rem; flex-wrap:wrap;">
+                                    <a href="?seccion=cupones&tab=cupones&editar_cupon=<?= urlencode((string) $c['id']) ?>" style="color:#00fff7; text-decoration:underline; font-weight:bold;">Editar</a>
+                                    <a href="?seccion=cupones&tab=cupones&toggle_cupon=<?= urlencode((string) $c['id']) ?>" style="color:#00fff7; text-decoration:underline; font-weight:bold;"><?= !empty($c['activo']) ? 'Desactivar' : 'Activar' ?></a>
+                                    <a href="?seccion=cupones&tab=cupones&borrar_cupon=<?= urlencode((string) $c['id']) ?>" style="color:#ff0059; text-decoration:underline; font-weight:bold;" onclick="return confirm('¿Eliminar este cupón?')">Eliminar</a>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else: ?>
+                    <div style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:1.5rem;">
+                        <div class="d-flex justify-content-between align-items-center gap-3 mb-3 flex-wrap">
+                            <div>
+                                <h3 class="h5 mb-1" style="color:#00fff7;">Cupones de Influencers</h3>
+                                <p class="mb-0" style="color:#b2f6ff;">Ventas confirmadas con cupones asociados a influencers.</p>
+                            </div>
+                        </div>
+                        <form method="GET" action="" class="row g-3 align-items-end mb-4">
+                            <input type="hidden" name="seccion" value="cupones">
+                            <input type="hidden" name="tab" value="influencers">
+                            <div class="col-md-4">
+                                <label class="form-label" style="color:#00fff7;">Filtrar estado</label>
+                                <select name="filtro_estado_pago" class="form-select" onchange="this.form.submit()" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
+                                    <option value="pendiente" <?= $influencerPaymentFilter === 'pendiente' ? 'selected' : '' ?>>Mostrar Solo Pendientes</option>
+                                    <option value="pagado" <?= $influencerPaymentFilter === 'pagado' ? 'selected' : '' ?>>Mostrar Solo Pagados</option>
+                                    <option value="todos" <?= $influencerPaymentFilter === 'todos' ? 'selected' : '' ?>>Mostrar Todos</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label" style="color:#00fff7;">Desde</label>
+                                <input type="date" name="fecha_desde" value="<?= htmlspecialchars((string) ($influencerDateFrom ?? '')) ?>" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label" style="color:#00fff7;">Hasta</label>
+                                <input type="date" name="fecha_hasta" value="<?= htmlspecialchars((string) ($influencerDateTo ?? '')) ?>" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
+                            </div>
+                            <div class="col-md-2 d-flex gap-2">
+                                <button type="submit" class="btn btn-info flex-fill" style="background:#00fff7; color:#181f2a; border:none; box-shadow:0 0 8px #00fff7;">Filtrar</button>
+                                <a href="<?= htmlspecialchars($influencerTabLink) ?>" class="btn btn-outline-info flex-fill" style="border:1px solid #00fff7; color:#00fff7;">Limpiar</a>
+                            </div>
+                        </form>
+                        <?php if (empty($influencerSales)): ?>
+                            <p class="mb-0" style="color:#b2f6ff;">Aún no hay ventas registradas para cupones de influencers.</p>
+                        <?php else: ?>
+                            <div class="table-responsive d-none d-md-block">
+                                <table class="table align-middle" style="background:#181f2a; color:#00fff7; border-radius:12px;">
+                                    <thead style="background:#181f2a; color:#00fff7; border-bottom:2px solid #00fff7;">
+                                        <tr>
+                                            <th style="color:#00fff7; background:#181f2a;">Nombre Influencer</th>
+                                            <th style="color:#00fff7; background:#181f2a;">Cupón</th>
+                                            <th style="color:#00fff7; background:#181f2a;">Teléfono</th>
+                                            <th style="color:#00fff7; background:#181f2a;">Correo</th>
+                                            <th style="color:#00fff7; background:#181f2a;">Comisión</th>
+                                            <th style="color:#00fff7; background:#181f2a;">Paquete Vendido</th>
+                                            <th style="color:#00fff7; background:#181f2a;">Fecha</th>
+                                            <th style="color:#00fff7; background:#181f2a;">Pendiente/Pagado</th>
+                                            <th style="color:#00fff7; background:#181f2a;">Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($influencerSales as $sale): ?>
+                                            <tr style="background:#181f2a; color:#fff;">
+                                                <td style="background:#181f2a; color:#00fff7; font-weight:bold;"><?= htmlspecialchars(admin_display_value($sale['nombre_influencer'] ?? null)) ?></td>
+                                                <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars(admin_display_value($sale['codigo_cupon'] ?? null)) ?></td>
+                                                <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars(admin_display_value($sale['telefono_influencer'] ?? null)) ?></td>
+                                                <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars(admin_display_value($sale['email_influencer'] ?? null)) ?></td>
+                                                <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars(admin_format_money($sale['comision_porcentaje'] ?? 0)) ?>%</td>
+                                                <td style="background:#181f2a; color:#b2f6ff;">
+                                                    <div><?= htmlspecialchars(admin_display_value($sale['paquete_vendido'] ?? null)) ?></div>
+                                                    <div style="color:#00fff7; font-size:0.92em; margin-top:0.2rem;"><?= htmlspecialchars(admin_display_value($sale['juego_nombre'] ?? null)) ?></div>
+                                                    <div style="color:#b2f6ff; font-size:0.88em; margin-top:0.2rem;">Pedido #<?= htmlspecialchars((string) ($sale['pedido_id'] ?? '')) ?></div>
+                                                </td>
+                                                <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars(admin_display_value($sale['creado_en'] ?? null)) ?></td>
+                                                <td style="background:#181f2a; color:#b2f6ff; min-width:170px;">
+                                                    <form method="POST" action="" class="m-0">
+                                                        <input type="hidden" name="actualizar_estado_pago_influencer" value="1">
+                                                        <input type="hidden" name="pedido_id" value="<?= htmlspecialchars((string) $sale['pedido_id']) ?>">
+                                                        <input type="hidden" name="filtro_estado_pago" value="<?= htmlspecialchars($influencerPaymentFilter) ?>">
+                                                        <input type="hidden" name="fecha_desde" value="<?= htmlspecialchars((string) ($influencerDateFrom ?? '')) ?>">
+                                                        <input type="hidden" name="fecha_hasta" value="<?= htmlspecialchars((string) ($influencerDateTo ?? '')) ?>">
+                                                        <select name="estado_pago_influencer" class="form-select form-select-sm" onchange="this.form.submit()" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
+                                                            <option value="pendiente" <?= ($sale['estado_pago_influencer'] ?? 'pendiente') === 'pendiente' ? 'selected' : '' ?>>Pendiente</option>
+                                                            <option value="pagado" <?= ($sale['estado_pago_influencer'] ?? 'pendiente') === 'pagado' ? 'selected' : '' ?>>Pagado</option>
+                                                        </select>
+                                                    </form>
+                                                </td>
+                                                <td style="background:#181f2a; color:#00ffb3; font-weight:bold;"><?= htmlspecialchars(admin_display_value($sale['moneda'] ?? null, '')) ?> <?= htmlspecialchars(admin_format_money($sale['total_comision'] ?? 0)) ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="d-block d-md-none">
+                                <?php foreach ($influencerSales as $sale): ?>
+                                    <div style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:1rem; color:#00fff7; margin-bottom:1.2rem;">
+                                        <div style="font-weight:bold; font-size:1.1em; color:#00fff7;"><?= htmlspecialchars(admin_display_value($sale['nombre_influencer'] ?? null)) ?></div>
+                                        <div style="margin-top:0.45rem; color:#b2f6ff;">Cupón: <?= htmlspecialchars(admin_display_value($sale['codigo_cupon'] ?? null)) ?></div>
+                                        <div style="margin-top:0.45rem; color:#b2f6ff;">Teléfono: <?= htmlspecialchars(admin_display_value($sale['telefono_influencer'] ?? null)) ?></div>
+                                        <div style="margin-top:0.45rem; color:#b2f6ff;">Correo: <?= htmlspecialchars(admin_display_value($sale['email_influencer'] ?? null)) ?></div>
+                                        <div style="margin-top:0.45rem; color:#b2f6ff;">Comisión: <?= htmlspecialchars(admin_format_money($sale['comision_porcentaje'] ?? 0)) ?>%</div>
+                                        <div style="margin-top:0.45rem; color:#b2f6ff;">Paquete vendido: <?= htmlspecialchars(admin_display_value($sale['paquete_vendido'] ?? null)) ?></div>
+                                        <div style="margin-top:0.2rem; color:#00fff7;">Juego: <?= htmlspecialchars(admin_display_value($sale['juego_nombre'] ?? null)) ?></div>
+                                        <div style="margin-top:0.2rem; color:#b2f6ff;">Pedido: #<?= htmlspecialchars((string) ($sale['pedido_id'] ?? '')) ?></div>
+                                        <div style="margin-top:0.2rem; color:#b2f6ff;">Fecha: <?= htmlspecialchars(admin_display_value($sale['creado_en'] ?? null)) ?></div>
+                                        <form method="POST" action="" class="mt-2">
+                                            <input type="hidden" name="actualizar_estado_pago_influencer" value="1">
+                                            <input type="hidden" name="pedido_id" value="<?= htmlspecialchars((string) $sale['pedido_id']) ?>">
+                                            <input type="hidden" name="filtro_estado_pago" value="<?= htmlspecialchars($influencerPaymentFilter) ?>">
+                                            <input type="hidden" name="fecha_desde" value="<?= htmlspecialchars((string) ($influencerDateFrom ?? '')) ?>">
+                                            <input type="hidden" name="fecha_hasta" value="<?= htmlspecialchars((string) ($influencerDateTo ?? '')) ?>">
+                                            <label class="form-label" style="color:#00fff7;">Pendiente/Pagado</label>
+                                            <select name="estado_pago_influencer" class="form-select form-select-sm" onchange="this.form.submit()" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
+                                                <option value="pendiente" <?= ($sale['estado_pago_influencer'] ?? 'pendiente') === 'pendiente' ? 'selected' : '' ?>>Pendiente</option>
+                                                <option value="pagado" <?= ($sale['estado_pago_influencer'] ?? 'pendiente') === 'pagado' ? 'selected' : '' ?>>Pagado</option>
+                                            </select>
+                                        </form>
+                                        <div style="margin-top:0.45rem; color:#00ffb3; font-weight:bold;">Total: <?= htmlspecialchars(admin_display_value($sale['moneda'] ?? null, '')) ?> <?= htmlspecialchars(admin_format_money($sale['total_comision'] ?? 0)) ?></div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+                <?php
                 break;
             case 'pedidos':
                 echo '<h2 class="text-2xl font-semibold mb-4 text-cyan-300">Gestión de Pedidos</h2>';
