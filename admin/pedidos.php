@@ -152,7 +152,7 @@ function order_search_index(array $order): string {
             <span style="display:inline-block; height:10px; width:10px; border-radius:50%; background:<?= $st === 'pendiente' ? '#ffc107' : ($st === 'pagado' ? '#00ffb3' : ($st === 'enviado' ? '#00fff7' : '#ff0059')) ?>;"></span>
             <h2 style="font-size:1.2em; font-weight:bold; color:#00fff7;">Estado: <?= ucfirst($st) ?></h2>
           </div>
-          <p style="font-size:1em; color:#b2f6ff;">Total: <?= count($list) ?> pedidos</p>
+          <p data-total-label style="font-size:1em; color:#b2f6ff;">Total: <?= count($list) ?> pedidos</p>
         </div>
 
         <?php if (count($list) === 0): ?>
@@ -307,7 +307,10 @@ function order_search_index(array $order): string {
       });
     }
   }
-  window.addEventListener('resize', adjustDateFilterResponsive);
+  window.addEventListener('resize', function(){
+    adjustDateFilterResponsive();
+    updateTabCounts();
+  });
   adjustDateFilterResponsive();
 
   function applyFilters(){
@@ -334,6 +337,8 @@ function order_search_index(array $order): string {
         item.style.display = visible ? '' : 'none';
       });
     });
+
+    updateTabCounts();
   }
 
   dateForm.addEventListener('submit', function(e){
@@ -403,9 +408,11 @@ function order_search_index(array $order): string {
 
   function updateTabCounts() {
     panels.forEach(panel => {
-      const status = panel.dataset.panel;
-      const count = document.querySelectorAll(`[data-order-row][data-status="${status}"]`).length;
-      const totalLabel = panel.querySelector('p[style*="Total:"]');
+      const source = window.innerWidth >= 768
+        ? Array.from(panel.querySelectorAll('[data-order-row]'))
+        : Array.from(panel.querySelectorAll('[data-order-card]'));
+      const count = source.filter(item => item.style.display !== 'none').length;
+      const totalLabel = panel.querySelector('[data-total-label]');
       if (totalLabel) {
         totalLabel.textContent = `Total: ${count} pedidos`;
       }
