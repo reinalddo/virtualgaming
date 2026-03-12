@@ -50,6 +50,27 @@ function order_search_index(array $order): string {
 
   return strtolower(trim(implode(' ', array_map(static fn ($value) => trim((string) $value), $parts))));
 }
+
+function order_status_color(string $status): string {
+  return match ($status) {
+    'pendiente' => '#ffc107',
+    'pagado' => '#00ffb3',
+    'enviado' => '#2196f3',
+    'cancelado' => '#ff0059',
+    default => '#00fff7',
+  };
+}
+
+function order_status_button_style(string $status, bool $isActive = false): string {
+  $color = order_status_color($status);
+  $background = $isActive ? $color : ($status === 'pendiente' ? 'rgba(255, 193, 7, 0.08)' : ($status === 'pagado' ? 'rgba(0, 255, 179, 0.08)' : ($status === 'enviado' ? 'rgba(33, 150, 243, 0.08)' : 'rgba(255, 0, 89, 0.08)')));
+  $textColor = $isActive
+    ? ($status === 'pendiente' ? '#181f2a' : '#ffffff')
+    : $color;
+  $shadow = $isActive ? '0 0 12px ' . $color . '66' : 'none';
+
+  return 'border:1px solid ' . $color . '; background:' . $background . '; color:' . $textColor . '; box-shadow:' . $shadow . ';';
+}
 ?>
 <main class="container-lg mt-5 mb-5 px-2">
   <style>
@@ -101,6 +122,25 @@ function order_search_index(array $order): string {
     @keyframes adminSpin {
       to { transform: rotate(360deg); }
     }
+    .order-status-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.6rem;
+      margin-top: 1rem;
+    }
+    .order-status-btn {
+      border-radius: 10px;
+      font-weight: 700;
+      padding: 0.55rem 0.75rem;
+      transition: transform 0.18s ease, opacity 0.18s ease, box-shadow 0.18s ease;
+    }
+    .order-status-btn:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+    .order-status-btn:not(:disabled):active {
+      transform: scale(0.98);
+    }
   </style>
   <div class="row mb-4">
     <div class="col-12 text-center">
@@ -149,7 +189,7 @@ function order_search_index(array $order): string {
       <div style="border-radius:16px; border:2px solid #00fff7; background:#181f2a; box-shadow:0 0 24px #00fff733; padding:1.5rem; margin-bottom:2rem;">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
           <div style="display:flex; align-items:center; gap:0.75rem;">
-            <span style="display:inline-block; height:10px; width:10px; border-radius:50%; background:<?= $st === 'pendiente' ? '#ffc107' : ($st === 'pagado' ? '#00ffb3' : ($st === 'enviado' ? '#00fff7' : '#ff0059')) ?>;"></span>
+            <span style="display:inline-block; height:10px; width:10px; border-radius:50%; background:<?= order_status_color($st) ?>;"></span>
             <h2 style="font-size:1.2em; font-weight:bold; color:#00fff7;">Estado: <?= ucfirst($st) ?></h2>
           </div>
           <p data-total-label style="font-size:1em; color:#b2f6ff;">Total: <?= count($list) ?> pedidos</p>
@@ -202,8 +242,10 @@ function order_search_index(array $order): string {
                     </td>
                     <td style="background:#181f2a;">
                       <select class="js-status" style="border-radius:8px; border:1px solid #00fff7; background:#222c3a; color:#00fff7; font-weight:bold; padding:0.25em 0.5em;" data-order-id="<?= $order['id'] ?>" data-status="<?= $st ?>">
+                        <option value="" selected disabled>Cambiar estado...</option>
                         <?php foreach ($statuses as $opt): ?>
-                          <option value="<?= $opt ?>" <?= $opt === $st ? 'selected' : '' ?>><?= ucfirst($opt) ?></option>
+                          <?php if ($opt === $st) { continue; } ?>
+                          <option value="<?= $opt ?>"><?= ucfirst($opt) ?></option>
                         <?php endforeach; ?>
                       </select>
                     </td>
@@ -236,12 +278,17 @@ function order_search_index(array $order): string {
                 <div style="color:#b2f6ff; font-size:1em;">Paquete: <span style="color:#00fff7; font-weight:bold;"><?= htmlspecialchars($order['paquete_nombre'] ?? '') ?></span></div>
                 <div style="color:#00ffb3; font-weight:bold; margin-top:0.5em;">Total: <?= htmlspecialchars($order['moneda'] ?? '') ?> <?= format_money($order['precio']) ?></div>
                 <div style="color:#b2f6ff; font-size:0.95em; margin-top:0.5em;">Cupón: <?= !empty($order['cupon']) ? htmlspecialchars($order['cupon']) : '—' ?></div>
-                <div style="margin-top:1em;">
-                  <select class="js-status" style="width:100%; border-radius:8px; border:1px solid #00fff7; background:#222c3a; color:#00fff7; font-weight:bold; padding:0.5em;" data-order-id="<?= $order['id'] ?>" data-status="<?= $st ?>">
-                    <?php foreach ($statuses as $opt): ?>
-                      <option value="<?= $opt ?>" <?= $opt === $st ? 'selected' : '' ?>><?= ucfirst($opt) ?></option>
-                    <?php endforeach; ?>
-                  </select>
+                <div class="order-status-actions" data-order-actions="<?= $order['id'] ?>">
+                  <?php foreach ($statuses as $opt): ?>
+                    <button
+                      type="button"
+                      class="order-status-btn js-status-btn"
+                      data-order-id="<?= $order['id'] ?>"
+                      data-status="<?= $st ?>"
+                      data-status-value="<?= $opt ?>"
+                      style="<?= htmlspecialchars(order_status_button_style($opt, false)) ?>;<?= $opt === $st ? ' display:none;' : '' ?>"
+                    ><?= ucfirst($opt) ?></button>
+                  <?php endforeach; ?>
                 </div>
               </div>
             <?php endforeach; ?>
@@ -362,6 +409,13 @@ function order_search_index(array $order): string {
   const tabs = Array.from(document.querySelectorAll('.tab-btn'));
   const panels = Array.from(document.querySelectorAll('.tab-panel'));
   const adminLoadingModal = document.getElementById('admin-loading-modal');
+  const STATUS_ORDER = ['pendiente', 'pagado', 'enviado', 'cancelado'];
+  const STATUS_LABELS = {
+    pendiente: 'Pendiente',
+    pagado: 'Pagado',
+    enviado: 'Enviado',
+    cancelado: 'Cancelado'
+  };
 
   function setAdminLoadingVisible(visible) {
     if (!adminLoadingModal) {
@@ -401,9 +455,66 @@ function order_search_index(array $order): string {
       card.dataset.status = newStatus;
       const targetCards = document.getElementById('cards-' + newStatus);
       if (targetCards) targetCards.prepend(card);
-      const selectCard = card.querySelector('select');
-      if (selectCard) selectCard.value = newStatus;
     }
+  }
+
+  function buildDesktopStatusOptions(currentStatus) {
+    const placeholder = '<option value="" selected disabled>Cambiar estado...</option>';
+    const options = STATUS_ORDER
+      .filter(status => status !== currentStatus)
+      .map(status => `<option value="${status}">${STATUS_LABELS[status] || status}</option>`)
+      .join('');
+
+    return placeholder + options;
+  }
+
+  function refreshDesktopStatusSelects(orderId, currentStatus) {
+    document.querySelectorAll(`.js-status[data-order-id="${orderId}"]`).forEach(select => {
+      select.dataset.status = currentStatus;
+      select.innerHTML = buildDesktopStatusOptions(currentStatus);
+      select.value = '';
+    });
+  }
+
+  function statusColor(status) {
+    switch (status) {
+      case 'pendiente':
+        return '#ffc107';
+      case 'pagado':
+        return '#00ffb3';
+      case 'enviado':
+        return '#2196f3';
+      case 'cancelado':
+        return '#ff0059';
+      default:
+        return '#00fff7';
+    }
+  }
+
+  function applyButtonState(button, isActive) {
+    const status = button.dataset.statusValue || '';
+    const color = statusColor(status);
+    button.style.borderColor = color;
+    button.style.background = isActive
+      ? color
+      : (status === 'pendiente'
+        ? 'rgba(255, 193, 7, 0.08)'
+        : (status === 'pagado'
+          ? 'rgba(0, 255, 179, 0.08)'
+          : (status === 'enviado' ? 'rgba(33, 150, 243, 0.08)' : 'rgba(255, 0, 89, 0.08)')));
+    button.style.color = isActive
+      ? (status === 'pendiente' ? '#181f2a' : '#ffffff')
+      : color;
+    button.style.boxShadow = isActive ? `0 0 12px ${color}66` : 'none';
+  }
+
+  function updateCardStatusButtons(orderId, newStatus) {
+    document.querySelectorAll(`.js-status-btn[data-order-id="${orderId}"]`).forEach(button => {
+      button.dataset.status = newStatus;
+      const isCurrent = button.dataset.statusValue === newStatus;
+      button.style.display = isCurrent ? 'none' : '';
+      applyButtonState(button, false);
+    });
   }
 
   function updateTabCounts() {
@@ -419,41 +530,74 @@ function order_search_index(array $order): string {
     });
   }
 
+  async function submitStatusChange(orderId, prevStatus, newStatus) {
+    const fd = new FormData();
+    fd.append('action','update_status');
+    fd.append('order_id', orderId);
+    fd.append('estado', newStatus);
+
+    const res = await fetch('/api/pedidos.php', { method: 'POST', body: fd });
+    const txt = await res.text();
+    let data;
+    try {
+      data = JSON.parse(txt);
+    } catch (_) {
+      throw new Error('Respuesta no válida del servidor');
+    }
+    if (!data.ok) {
+      throw new Error(data.message || 'Error');
+    }
+
+    moveOrder(orderId, newStatus);
+    refreshDesktopStatusSelects(orderId, newStatus);
+    updateCardStatusButtons(orderId, newStatus);
+    updateTabCounts();
+  }
+
   function bindStatusSelectors(){
     document.querySelectorAll('.js-status').forEach(sel => {
-      sel.addEventListener('change', async (e) => {
+      sel.addEventListener('change', async () => {
         const orderId = sel.dataset.orderId;
         const prevStatus = sel.dataset.status;
         const newStatus = sel.value;
+        if (!newStatus) {
+          return;
+        }
         sel.disabled = true;
         setAdminLoadingVisible(true);
-        const fd = new FormData();
-        fd.append('action','update_status');
-        fd.append('order_id', orderId);
-        fd.append('estado', newStatus);
         try {
-          const res = await fetch('/api/pedidos.php', { method: 'POST', body: fd });
-          const txt = await res.text();
-          let data;
-          try {
-            data = JSON.parse(txt);
-          } catch (_) {
-            throw new Error('Respuesta no válida del servidor');
-          }
-          if (!data.ok) throw new Error(data.message || 'Error');
-          moveOrder(orderId, newStatus);
-          document.querySelectorAll(`.js-status[data-order-id="${orderId}"]`).forEach(control => {
-            control.dataset.status = newStatus;
-            control.value = newStatus;
-          });
-          updateTabCounts();
-          // Actualiza el status en el selector para futuras referencias
+          await submitStatusChange(orderId, prevStatus, newStatus);
           sel.dataset.status = newStatus;
         } catch(err){
-          sel.value = prevStatus;
+          refreshDesktopStatusSelects(orderId, prevStatus);
           alert(err.message || 'No se pudo cambiar el estado');
         } finally {
           sel.disabled = false;
+          setAdminLoadingVisible(false);
+        }
+      });
+    });
+
+    document.querySelectorAll('.js-status-btn').forEach(button => {
+      applyButtonState(button, button.dataset.statusValue === button.dataset.status);
+      button.addEventListener('click', async () => {
+        const orderId = button.dataset.orderId;
+        const prevStatus = button.dataset.status;
+        const newStatus = button.dataset.statusValue;
+        if (!orderId || !newStatus || prevStatus === newStatus) {
+          return;
+        }
+
+        const relatedButtons = document.querySelectorAll(`.js-status-btn[data-order-id="${orderId}"]`);
+        relatedButtons.forEach(item => { item.disabled = true; });
+        setAdminLoadingVisible(true);
+        try {
+          await submitStatusChange(orderId, prevStatus, newStatus);
+        } catch (err) {
+          updateCardStatusButtons(orderId, prevStatus);
+          alert(err.message || 'No se pudo cambiar el estado');
+        } finally {
+          relatedButtons.forEach(item => { item.disabled = false; });
           setAdminLoadingVisible(false);
         }
       });
