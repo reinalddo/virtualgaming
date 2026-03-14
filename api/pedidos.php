@@ -73,6 +73,76 @@ function ensure_pedidos_table(mysqli $mysqli): void {
     }
 }
 
+function ensure_movimientos_table(mysqli $mysqli): void {
+    $create = "CREATE TABLE IF NOT EXISTS movimientos (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        referencia VARCHAR(120) NOT NULL,
+        descripcion VARCHAR(255) DEFAULT NULL,
+        fecha_raw VARCHAR(120) DEFAULT NULL,
+        fecha_movimiento DATETIME DEFAULT NULL,
+        tipo VARCHAR(80) DEFAULT NULL,
+        monto DECIMAL(14,2) NOT NULL DEFAULT 0,
+        moneda VARCHAR(20) NOT NULL DEFAULT 'VES',
+        pedido_id INT DEFAULT NULL,
+        payload_json LONGTEXT DEFAULT NULL,
+        creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_movimientos_referencia (referencia),
+        INDEX idx_movimientos_pedido_id (pedido_id),
+        INDEX idx_movimientos_monto (monto),
+        INDEX idx_movimientos_fecha (fecha_movimiento)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    $mysqli->query($create);
+
+    $neededCols = [
+        'referencia' => "ALTER TABLE movimientos ADD COLUMN referencia VARCHAR(120) NOT NULL AFTER id",
+        'descripcion' => "ALTER TABLE movimientos ADD COLUMN descripcion VARCHAR(255) NULL AFTER referencia",
+        'fecha_raw' => "ALTER TABLE movimientos ADD COLUMN fecha_raw VARCHAR(120) NULL AFTER descripcion",
+        'fecha_movimiento' => "ALTER TABLE movimientos ADD COLUMN fecha_movimiento DATETIME NULL AFTER fecha_raw",
+        'tipo' => "ALTER TABLE movimientos ADD COLUMN tipo VARCHAR(80) NULL AFTER fecha_movimiento",
+        'monto' => "ALTER TABLE movimientos ADD COLUMN monto DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER tipo",
+        'moneda' => "ALTER TABLE movimientos ADD COLUMN moneda VARCHAR(20) NOT NULL DEFAULT 'VES' AFTER monto",
+        'pedido_id' => "ALTER TABLE movimientos ADD COLUMN pedido_id INT NULL AFTER moneda",
+        'payload_json' => "ALTER TABLE movimientos ADD COLUMN payload_json LONGTEXT NULL AFTER pedido_id",
+        'creado_en' => "ALTER TABLE movimientos ADD COLUMN creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER payload_json",
+        'actualizado_en' => "ALTER TABLE movimientos ADD COLUMN actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER creado_en",
+    ];
+
+    $colResult = $mysqli->query("SHOW COLUMNS FROM movimientos");
+    $existing = [];
+    if ($colResult instanceof mysqli_result) {
+        while ($row = $colResult->fetch_assoc()) {
+            $existing[$row['Field']] = true;
+        }
+    }
+
+    foreach ($neededCols as $col => $alterSql) {
+        if (!isset($existing[$col])) {
+            $mysqli->query($alterSql);
+        }
+    }
+
+    $indexes = [
+        'uniq_movimientos_referencia' => 'ALTER TABLE movimientos ADD UNIQUE KEY uniq_movimientos_referencia (referencia)',
+        'idx_movimientos_pedido_id' => 'ALTER TABLE movimientos ADD INDEX idx_movimientos_pedido_id (pedido_id)',
+        'idx_movimientos_monto' => 'ALTER TABLE movimientos ADD INDEX idx_movimientos_monto (monto)',
+        'idx_movimientos_fecha' => 'ALTER TABLE movimientos ADD INDEX idx_movimientos_fecha (fecha_movimiento)',
+    ];
+    foreach ($indexes as $indexName => $sql) {
+        $indexResult = $mysqli->query("SHOW INDEX FROM movimientos WHERE Key_name = '" . $mysqli->real_escape_string($indexName) . "'");
+        if (!($indexResult instanceof mysqli_result) || $indexResult->num_rows === 0) {
+            $mysqli->query($sql);
+        }
+    }
+}
+
+function ensure_juegos_api_free_fire_column(mysqli $mysqli): void {
+    $result = $mysqli->query("SHOW COLUMNS FROM juegos LIKE 'api_free_fire'");
+    if (!($result instanceof mysqli_result) || $result->num_rows === 0) {
+        $mysqli->query("ALTER TABLE juegos ADD COLUMN api_free_fire TINYINT(1) NOT NULL DEFAULT 0 AFTER popular");
+    }
+}
+
 function coupon_table_exists(mysqli $mysqli): bool {
     $res = $mysqli->query("SHOW TABLES LIKE 'cupones'");
     return $res && $res->num_rows > 0;
@@ -730,6 +800,275 @@ function fetch_active_payment_method(mysqli $mysqli, int $methodId): ?array {
     return $method ?: null;
 }
 
+function order_currency_uses_bank_api(?string $currencyCode): bool {
+    $normalized = strtoupper(trim((string) $currencyCode));
+    return in_array($normalized, ['BS', 'VES'], true);
+}
+
+function game_uses_free_fire_api(mysqli $mysqli, int $gameId): bool {
+    if ($gameId <= 0) {
+        return false;
+    }
+
+    $stmt = $mysqli->prepare('SELECT api_free_fire FROM juegos WHERE id = ? LIMIT 1');
+    if (!$stmt) {
+        return false;
+    }
+
+    $stmt->bind_param('i', $gameId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $row = $res ? $res->fetch_assoc() : null;
+    $stmt->close();
+
+    return !empty($row['api_free_fire']);
+}
+
+function parse_bank_movement_datetime(?string $value): ?string {
+    $raw = trim((string) $value);
+    if ($raw === '') {
+        return null;
+    }
+
+    $normalized = str_ireplace([' a. m.', ' p. m.', ' a.m.', ' p.m.', ' am', ' pm'], [' AM', ' PM', ' AM', ' PM', ' AM', ' PM'], $raw);
+    $date = DateTime::createFromFormat('d/m/Y h:i:s A', $normalized)
+        ?: DateTime::createFromFormat('d/m/Y h:i A', $normalized)
+        ?: DateTime::createFromFormat('d/m/Y H:i:s', $normalized)
+        ?: DateTime::createFromFormat('d/m/Y H:i', $normalized);
+
+    return $date ? $date->format('Y-m-d H:i:s') : null;
+}
+
+function normalize_bank_amount($value): float {
+    if (is_numeric($value)) {
+        return round((float) $value, 2);
+    }
+    $clean = str_replace([',', ' '], '', (string) $value);
+    return is_numeric($clean) ? round((float) $clean, 2) : 0.0;
+}
+
+function http_get_json(string $url, int $timeout = 20): array {
+    $body = null;
+
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_CONNECTTIMEOUT => $timeout,
+            CURLOPT_TIMEOUT => $timeout,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
+        ]);
+        $response = curl_exec($ch);
+        $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+        if ($response === false) {
+            throw new RuntimeException('No se pudo consultar la API bancaria: ' . $error);
+        }
+        if ($status >= 400) {
+            throw new RuntimeException('La API bancaria respondió con código HTTP ' . $status . '.');
+        }
+        $body = $response;
+    } else {
+        $context = stream_context_create([
+            'http' => [
+                'method' => 'GET',
+                'timeout' => $timeout,
+                'ignore_errors' => true,
+            ],
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+            ],
+        ]);
+        $response = @file_get_contents($url, false, $context);
+        if ($response === false) {
+            throw new RuntimeException('No se pudo consultar la API bancaria.');
+        }
+        $body = $response;
+    }
+
+    $data = json_decode((string) $body, true);
+    if (!is_array($data)) {
+        throw new RuntimeException('La API bancaria no devolvió un JSON válido.');
+    }
+
+    return $data;
+}
+
+function fetch_bank_movements(array $config): array {
+    $position = trim((string) ($config['ff_bank_posicion'] ?? ''));
+    $token = trim((string) ($config['ff_bank_token'] ?? ''));
+    $password = trim((string) ($config['ff_bank_clave'] ?? ''));
+
+    if ($position === '' || $token === '' || $password === '') {
+        throw new RuntimeException('La conexión automática para pagos en Bs/VES no está configurada completamente.');
+    }
+
+    $url = 'https://pagonorte.net/recargas/movimientos.jsp?' . http_build_query([
+        'posicion' => $position,
+        'token' => $token,
+        'password' => $password,
+    ]);
+
+    $data = http_get_json($url);
+    $movements = $data['movimientos'] ?? null;
+    if (!is_array($movements)) {
+        throw new RuntimeException('La API bancaria no devolvió la lista de movimientos esperada.');
+    }
+
+    $normalized = [];
+    foreach ($movements as $movement) {
+        if (!is_array($movement)) {
+            continue;
+        }
+        $reference = trim((string) ($movement['referencia'] ?? ''));
+        if ($reference === '') {
+            continue;
+        }
+        $normalized[] = [
+            'referencia' => substr($reference, 0, 120),
+            'descripcion' => sanitize_str((string) ($movement['descripcion'] ?? ''), 255),
+            'fecha_raw' => sanitize_str((string) ($movement['fecha'] ?? ''), 120),
+            'fecha_movimiento' => parse_bank_movement_datetime((string) ($movement['fecha'] ?? '')),
+            'tipo' => sanitize_str((string) ($movement['tipo'] ?? ''), 80),
+            'monto' => normalize_bank_amount($movement['monto'] ?? 0),
+            'moneda' => 'VES',
+            'payload_json' => json_encode($movement, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ];
+    }
+
+    return $normalized;
+}
+
+function sync_bank_movements(mysqli $mysqli, array $movements): void {
+    if (empty($movements)) {
+        return;
+    }
+
+    $stmt = $mysqli->prepare(
+        'INSERT INTO movimientos (referencia, descripcion, fecha_raw, fecha_movimiento, tipo, monto, moneda, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?) '
+        . 'ON DUPLICATE KEY UPDATE descripcion = VALUES(descripcion), fecha_raw = VALUES(fecha_raw), fecha_movimiento = COALESCE(VALUES(fecha_movimiento), fecha_movimiento), tipo = VALUES(tipo), monto = VALUES(monto), moneda = VALUES(moneda), payload_json = VALUES(payload_json)'
+    );
+    if (!$stmt) {
+        throw new RuntimeException('No se pudo preparar el registro de movimientos bancarios.');
+    }
+
+    foreach ($movements as $movement) {
+        $stmt->bind_param(
+            'sssssdss',
+            $movement['referencia'],
+            $movement['descripcion'],
+            $movement['fecha_raw'],
+            $movement['fecha_movimiento'],
+            $movement['tipo'],
+            $movement['monto'],
+            $movement['moneda'],
+            $movement['payload_json']
+        );
+        $stmt->execute();
+    }
+
+    $stmt->close();
+}
+
+function movement_reference_matches(string $fullReference, string $reportedReference, int $requiredDigits): bool {
+    if ($reportedReference === '') {
+        return false;
+    }
+
+    if ($requiredDigits > 0) {
+        return substr($fullReference, -$requiredDigits) === $reportedReference;
+    }
+
+    return $fullReference === $reportedReference;
+}
+
+function movement_is_available_for_order(mysqli $mysqli, string $reference, int $orderId): bool {
+    $stmt = $mysqli->prepare('SELECT pedido_id FROM movimientos WHERE referencia = ? LIMIT 1');
+    if (!$stmt) {
+        return false;
+    }
+    $stmt->bind_param('s', $reference);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $row = $res ? $res->fetch_assoc() : null;
+    $stmt->close();
+
+    if (!$row) {
+        return false;
+    }
+
+    $linkedOrderId = isset($row['pedido_id']) ? (int) $row['pedido_id'] : 0;
+    return $linkedOrderId === 0 || $linkedOrderId === $orderId;
+}
+
+function find_matching_bank_movement(mysqli $mysqli, array $movements, string $reportedReference, float $orderAmount, int $requiredDigits, int $orderId): ?array {
+    foreach ($movements as $movement) {
+        $reference = (string) ($movement['referencia'] ?? '');
+        if ($reference === '') {
+            continue;
+        }
+        if (!movement_reference_matches($reference, $reportedReference, $requiredDigits)) {
+            continue;
+        }
+        if (abs(((float) ($movement['monto'] ?? 0)) - $orderAmount) > 0.009) {
+            continue;
+        }
+        if (!movement_is_available_for_order($mysqli, $reference, $orderId)) {
+            continue;
+        }
+        return $movement;
+    }
+
+    return null;
+}
+
+function explain_bank_movement_mismatch(array $movements, string $reportedReference, float $orderAmount, int $requiredDigits): array {
+    $referenceMatch = false;
+    $amountMatch = false;
+
+    foreach ($movements as $movement) {
+        $reference = (string) ($movement['referencia'] ?? '');
+        $amount = (float) ($movement['monto'] ?? 0);
+        if ($reference !== '' && movement_reference_matches($reference, $reportedReference, $requiredDigits)) {
+            $referenceMatch = true;
+        }
+        if (abs($amount - $orderAmount) <= 0.009) {
+            $amountMatch = true;
+        }
+    }
+
+    $reasons = [];
+    if (!$referenceMatch) {
+        $reasons[] = 'La referencia ingresada no coincide con ningún movimiento encontrado en la API bancaria.';
+    }
+    if (!$amountMatch) {
+        $reasons[] = 'El monto del pago no coincide con el total esperado del pedido.';
+    }
+    if ($referenceMatch && $amountMatch) {
+        $reasons[] = 'Existe coincidencia parcial en referencia y monto, pero no en un mismo movimiento bancario.';
+    }
+
+    return [
+        'reference_match' => $referenceMatch,
+        'amount_match' => $amountMatch,
+        'reasons' => $reasons,
+    ];
+}
+
+function link_movement_to_order(mysqli $mysqli, string $reference, int $orderId): void {
+    $stmt = $mysqli->prepare('UPDATE movimientos SET pedido_id = ? WHERE referencia = ? AND (pedido_id IS NULL OR pedido_id = 0 OR pedido_id = ?)');
+    if (!$stmt) {
+        throw new RuntimeException('No se pudo asociar el movimiento al pedido.');
+    }
+    $stmt->bind_param('isi', $orderId, $reference, $orderId);
+    $stmt->execute();
+    $stmt->close();
+}
+
 function cancel_expired_order(mysqli $mysqli, array $order): array {
     $orderId = (int) ($order['id'] ?? 0);
     if ($orderId <= 0) {
@@ -796,12 +1135,140 @@ function cancel_expired_order(mysqli $mysqli, array $order): array {
     return ['changed' => true, 'message' => 'La orden expiró y fue cancelada automáticamente.'];
 }
 
+function cancel_pending_order_by_customer(mysqli $mysqli, array $order): array {
+    $orderId = (int) ($order['id'] ?? 0);
+    if ($orderId <= 0) {
+        return ['changed' => false, 'message' => 'Pedido inválido.'];
+    }
+    if (($order['estado'] ?? '') !== 'pendiente') {
+        return ['changed' => false, 'message' => 'La orden ya no se puede cancelar.'];
+    }
+
+    $stmt = $mysqli->prepare("UPDATE pedidos SET estado = 'cancelado' WHERE id = ? AND estado = 'pendiente'");
+    if (!$stmt) {
+        return ['changed' => false, 'message' => 'No se pudo cancelar la orden.'];
+    }
+    $stmt->bind_param('i', $orderId);
+    $stmt->execute();
+    $changed = $stmt->affected_rows > 0;
+    $stmt->close();
+
+    if (!$changed) {
+        return ['changed' => false, 'message' => 'La orden ya fue actualizada previamente.'];
+    }
+
+    $adminEmail = resolve_admin_email($mysqli);
+    $brandingImages = email_branding_embedded_images();
+
+    $customerHtml = render_order_email('Orden cancelada', 'Cliente',
+        '<p style="margin:0 0 10px;">Cancelaste la orden desde la ventana de pago.</p><p style="margin:0;">Si deseas continuar, deberás generar una nueva orden.</p>', [
+            'order_id' => $orderId,
+            'game_name' => $order['juego_nombre'] ?? '',
+            'pack_name' => $order['paquete_nombre'] ?? '',
+            'pack_amount' => $order['paquete_cantidad'] ?? '',
+            'currency' => $order['moneda'] ?? '',
+            'price' => number_format((float) ($order['precio'] ?? 0), 2, '.', ','),
+            'user_identifier' => $order['user_identifier'] ?? '',
+            'email' => $order['email'] ?? '',
+            'coupon' => $order['cupon'] ?? null,
+            'status' => 'Cancelado',
+        ], '#f87171');
+    $adminHtml = render_order_email('Orden cancelada por cliente', 'Administrador',
+        '<p style="margin:0 0 10px;">El cliente canceló la orden desde la ventana de pago.</p><p style="margin:0;">No se requiere validación adicional para este pedido.</p>', [
+            'order_id' => $orderId,
+            'game_name' => $order['juego_nombre'] ?? '',
+            'pack_name' => $order['paquete_nombre'] ?? '',
+            'pack_amount' => $order['paquete_cantidad'] ?? '',
+            'currency' => $order['moneda'] ?? '',
+            'price' => number_format((float) ($order['precio'] ?? 0), 2, '.', ','),
+            'user_identifier' => $order['user_identifier'] ?? '',
+            'email' => $order['email'] ?? '',
+            'coupon' => $order['cupon'] ?? null,
+            'status' => 'Cancelado',
+        ], '#f87171');
+
+    if (!empty($order['email']) && filter_var($order['email'], FILTER_VALIDATE_EMAIL)) {
+        send_app_mail((string) $order['email'], "Orden cancelada #{$orderId}", $customerHtml, null, $brandingImages);
+    }
+    if ($adminEmail !== null) {
+        send_app_mail($adminEmail, "Orden cancelada por cliente #{$orderId}", $adminHtml, null, $brandingImages);
+    }
+
+    return ['changed' => true, 'message' => 'La orden fue cancelada correctamente.'];
+}
+
+function notify_payment_validation_failed_cancellation(
+    mysqli $mysqli,
+    array $order,
+    string $paymentMethodName,
+    string $referenceNumber,
+    string $phone
+): void {
+    $orderId = (int) ($order['id'] ?? 0);
+    if ($orderId <= 0) {
+        return;
+    }
+
+    $adminEmail = resolve_admin_email($mysqli);
+    $brandingImages = email_branding_embedded_images();
+    $customerMessage = '<p style="margin:0 0 10px;">No pudimos validar automáticamente tu pago con la referencia y el monto enviados.</p>'
+        . '<p style="margin:0;">La orden fue cancelada. Debes generar una nueva orden si deseas volver a intentarlo.</p>';
+    $adminMessage = '<p style="margin:0 0 10px;">La verificación automática del pago no encontró coincidencia entre monto y referencia.</p>'
+        . '<p style="margin:0;">El pedido fue cancelado automáticamente para evitar una validación errónea.</p>';
+
+    $customerHtml = render_order_email('Pago no verificado', 'Cliente', $customerMessage, [
+        'order_id' => $orderId,
+        'game_name' => $order['juego_nombre'] ?? '',
+        'pack_name' => $order['paquete_nombre'] ?? '',
+        'pack_amount' => $order['paquete_cantidad'] ?? '',
+        'currency' => $order['moneda'] ?? '',
+        'price' => number_format((float) ($order['precio'] ?? 0), 2, '.', ','),
+        'user_identifier' => $order['user_identifier'] ?? '',
+        'email' => $order['email'] ?? '',
+        'coupon' => $order['cupon'] ?? null,
+        'payment_method' => $paymentMethodName,
+        'reference_number' => $referenceNumber,
+        'phone' => $phone,
+        'status' => 'Cancelado',
+    ], '#f87171');
+    $adminHtml = render_order_email('Pago no verificado', 'Administrador', $adminMessage, [
+        'order_id' => $orderId,
+        'game_name' => $order['juego_nombre'] ?? '',
+        'pack_name' => $order['paquete_nombre'] ?? '',
+        'pack_amount' => $order['paquete_cantidad'] ?? '',
+        'currency' => $order['moneda'] ?? '',
+        'price' => number_format((float) ($order['precio'] ?? 0), 2, '.', ','),
+        'user_identifier' => $order['user_identifier'] ?? '',
+        'email' => $order['email'] ?? '',
+        'coupon' => $order['cupon'] ?? null,
+        'payment_method' => $paymentMethodName,
+        'reference_number' => $referenceNumber,
+        'phone' => $phone,
+        'status' => 'Cancelado',
+    ], '#f87171');
+
+    $customerEmail = trim((string) ($order['email'] ?? ''));
+    if ($customerEmail !== '' && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
+        send_app_mail($customerEmail, "Pago no verificado #{$orderId}", $customerHtml, null, $brandingImages);
+    } else {
+        error_log("TVG payment validation cancel mail skipped for order #{$orderId}: invalid customer email");
+    }
+
+    if ($adminEmail !== null) {
+        send_app_mail($adminEmail, "Pedido cancelado por validación #{$orderId}", $adminHtml, null, $brandingImages);
+    } else {
+        error_log("TVG payment validation cancel mail skipped for order #{$orderId}: admin email not configured");
+    }
+}
+
 $action = $_POST['action'] ?? $_GET['action'] ?? null;
 if (!$action) {
     json_error('Acción no especificada', 422);
 }
 
 ensure_pedidos_table($mysqli);
+ensure_movimientos_table($mysqli);
+ensure_juegos_api_free_fire_column($mysqli);
 influencer_coupon_ensure_sales_table_mysqli($mysqli);
 sync_coupon_usage_counts_mysqli($mysqli);
 
@@ -1009,10 +1476,141 @@ if ($action === 'submit_payment') {
     $stmt->close();
 
     $updatedOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
-    register_influencer_coupon_sale($mysqli, $updatedOrder);
     $adminEmail = resolve_admin_email($mysqli);
     $paymentMethodName = (string) ($method['nombre'] ?? 'Método de pago');
     $brandingImages = email_branding_embedded_images();
+
+    if (order_currency_uses_bank_api((string) ($updatedOrder['moneda'] ?? '')) && game_uses_free_fire_api($mysqli, (int) ($updatedOrder['juego_id'] ?? 0))) {
+        $bankConfig = [
+            'ff_bank_posicion' => store_config_get('ff_bank_posicion', '0'),
+            'ff_bank_token' => store_config_get('ff_bank_token', ''),
+            'ff_bank_clave' => store_config_get('ff_bank_clave', ''),
+        ];
+
+        try {
+            $bankMovements = fetch_bank_movements($bankConfig);
+            sync_bank_movements($mysqli, $bankMovements);
+        } catch (Throwable $e) {
+            json_error($e->getMessage(), 502);
+        }
+
+        $matchingMovement = find_matching_bank_movement(
+            $mysqli,
+            $bankMovements,
+            $referenceNumber,
+            (float) ($updatedOrder['precio'] ?? 0),
+            $referenceDigitsLimit,
+            $orderId
+        );
+
+        if ($matchingMovement !== null) {
+            $verifiedReference = (string) ($matchingMovement['referencia'] ?? $referenceNumber);
+            link_movement_to_order($mysqli, $verifiedReference, $orderId);
+
+            $verifiedStatus = 'enviado';
+            $verifyStmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, telefono_contacto = ?, estado = ? WHERE id = ? AND estado = 'pendiente'");
+            if (!$verifyStmt) {
+                json_error('No se pudo confirmar el pedido automáticamente.', 500);
+            }
+            $verifyStmt->bind_param('sssi', $verifiedReference, $phone, $verifiedStatus, $orderId);
+            if (!$verifyStmt->execute()) {
+                $verifyStmt->close();
+                json_error('No se pudo actualizar el pedido tras validar el pago.', 500);
+            }
+            $verifyStmt->close();
+
+            $verifiedOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+            register_influencer_coupon_sale($mysqli, $verifiedOrder);
+
+            $customerMessage = '<p style="margin:0 0 10px;">Tu pago fue verificado automáticamente contra los movimientos bancarios.</p>'
+                . '<p style="margin:0;">La orden fue procesada y el pedido pasó directamente a estado <strong style="color:#34d399;">Enviado</strong>.</p>';
+            $adminMessage = '<p style="margin:0 0 10px;">El pago del cliente fue validado automáticamente con la API bancaria.</p>'
+                . '<p style="margin:0;">El pedido quedó marcado como <strong style="color:#34d399;">Enviado</strong> sin revisión manual adicional.</p>';
+
+            $customerHtml = render_order_email('Pago verificado y pedido enviado', 'Cliente', $customerMessage, [
+                'order_id' => $orderId,
+                'game_name' => $verifiedOrder['juego_nombre'] ?? '',
+                'pack_name' => $verifiedOrder['paquete_nombre'] ?? '',
+                'pack_amount' => $verifiedOrder['paquete_cantidad'] ?? '',
+                'currency' => $verifiedOrder['moneda'] ?? '',
+                'price' => number_format((float) ($verifiedOrder['precio'] ?? 0), 2, '.', ','),
+                'user_identifier' => $verifiedOrder['user_identifier'] ?? '',
+                'email' => $verifiedOrder['email'] ?? '',
+                'coupon' => $verifiedOrder['cupon'] ?? null,
+                'payment_method' => $paymentMethodName,
+                'reference_number' => $verifiedReference,
+                'phone' => $phone,
+                'status' => 'Enviado',
+            ], '#34d399');
+            $adminHtml = render_order_email('Pago verificado automáticamente', 'Administrador', $adminMessage, [
+                'order_id' => $orderId,
+                'game_name' => $verifiedOrder['juego_nombre'] ?? '',
+                'pack_name' => $verifiedOrder['paquete_nombre'] ?? '',
+                'pack_amount' => $verifiedOrder['paquete_cantidad'] ?? '',
+                'currency' => $verifiedOrder['moneda'] ?? '',
+                'price' => number_format((float) ($verifiedOrder['precio'] ?? 0), 2, '.', ','),
+                'user_identifier' => $verifiedOrder['user_identifier'] ?? '',
+                'email' => $verifiedOrder['email'] ?? '',
+                'coupon' => $verifiedOrder['cupon'] ?? null,
+                'payment_method' => $paymentMethodName,
+                'reference_number' => $verifiedReference,
+                'phone' => $phone,
+                'status' => 'Enviado',
+            ], '#34d399');
+
+            if (!empty($verifiedOrder['email']) && filter_var($verifiedOrder['email'], FILTER_VALIDATE_EMAIL)) {
+                send_app_mail((string) $verifiedOrder['email'], "Pago verificado #{$orderId}", $customerHtml, null, $brandingImages);
+            }
+            if ($adminEmail !== null) {
+                send_app_mail($adminEmail, "Pedido enviado automáticamente #{$orderId}", $adminHtml, null, $brandingImages);
+            }
+
+            echo json_encode([
+                'ok' => true,
+                'message' => 'Pago verificado automáticamente. Tu pedido fue enviado.',
+                'order_id' => $orderId,
+                'estado' => 'enviado',
+                'verified' => true,
+            ]);
+            exit;
+        }
+
+        $cancelledStatus = 'cancelado';
+        $cancelStmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, telefono_contacto = ?, estado = ? WHERE id = ? AND estado = 'pendiente'");
+        if (!$cancelStmt) {
+            json_error('No se pudo cancelar el pedido tras la validación.', 500);
+        }
+        $cancelStmt->bind_param('sssi', $referenceNumber, $phone, $cancelledStatus, $orderId);
+        if (!$cancelStmt->execute()) {
+            $cancelStmt->close();
+            json_error('No se pudo actualizar el pedido tras no validar el pago.', 500);
+        }
+        $cancelStmt->close();
+
+        $cancelledOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+        $mismatch = explain_bank_movement_mismatch($bankMovements, $referenceNumber, (float) ($updatedOrder['precio'] ?? 0), $referenceDigitsLimit);
+        notify_payment_validation_failed_cancellation(
+            $mysqli,
+            $cancelledOrder,
+            $paymentMethodName,
+            $referenceNumber,
+            $phone
+        );
+
+        echo json_encode([
+            'ok' => true,
+            'message' => 'No pudimos validar el pago automáticamente. La orden fue cancelada.',
+            'order_id' => $orderId,
+            'estado' => 'cancelado',
+            'verified' => false,
+            'reasons' => $mismatch['reasons'],
+            'reference_match' => $mismatch['reference_match'],
+            'amount_match' => $mismatch['amount_match'],
+        ]);
+        exit;
+    }
+
+    register_influencer_coupon_sale($mysqli, $updatedOrder);
 
     $customerMessage = '<p style="margin:0 0 10px;">Recibimos tu pago reportado y ya quedó enviado al equipo administrativo para validación.</p>'
         . '<p style="margin:0;">Cuando el administrador lo revise y apruebe, te notificaremos el siguiente cambio de estado.</p>';
@@ -1101,6 +1699,31 @@ if ($action === 'expire_order') {
         'ok' => true,
         'expired' => true,
         'message' => $result['message']
+    ]);
+    exit;
+}
+
+if ($action === 'cancel_order') {
+    $orderId = intval($_POST['order_id'] ?? 0);
+    if ($orderId <= 0) {
+        json_error('Pedido inválido.');
+    }
+
+    $order = fetch_order_by_id($mysqli, $orderId);
+    if (!$order) {
+        json_error('Pedido no encontrado.', 404);
+    }
+
+    $result = cancel_pending_order_by_customer($mysqli, $order);
+    if (!$result['changed']) {
+        json_error($result['message'], 409);
+    }
+
+    echo json_encode([
+        'ok' => true,
+        'message' => $result['message'],
+        'estado' => 'cancelado',
+        'order_id' => $orderId,
     ]);
     exit;
 }

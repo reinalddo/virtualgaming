@@ -2,6 +2,7 @@
 require_once __DIR__ . "/includes/db_connect.php";
 require_once __DIR__ . "/includes/store_config.php";
 require_once __DIR__ . "/includes/payment_methods.php";
+$paymentSupportWhatsappBase = store_config_whatsapp_link(store_config_get('whatsapp', ''));
 $loggedUserEmail = '';
 if (session_status() !== PHP_SESSION_ACTIVE) {
   session_start();
@@ -273,14 +274,13 @@ include __DIR__ . "/includes/header.php";
   <div id="payment-modal" class="modal fade app-overlay-modal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered payment-modal-dialog">
       <div class="modal-content payment-modal-content text-light border-info">
-        <button type="button" id="payment-modal-close" class="btn btn-outline-info rounded-circle position-absolute top-0 end-0 m-3 d-flex align-items-center justify-content-center" style="width:42px;height:42px;z-index:2;" aria-label="Cerrar">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-        </button>
         <div class="payment-expiration-banner" id="payment-expiration-banner">
           <span>La orden expira en:</span>
           <strong id="payment-timer-value">30:00</strong>
         </div>
         <div id="payment-modal-alert" class="d-none alert mb-3"></div>
+        <div id="payment-modal-reasons" class="d-none payment-reasons-card mb-3"></div>
+        <div id="payment-modal-actions" class="d-none payment-support-actions mb-4"></div>
         <div class="payment-summary-card mb-4">
           <h3 class="h5 fw-bold text-white mb-3">Resumen de Pago</h3>
           <div class="payment-summary-row"><span>ID Jugador:</span><strong id="payment-summary-user">-</strong></div>
@@ -306,6 +306,20 @@ include __DIR__ . "/includes/header.php";
           <input type="tel" id="payment-phone-input" class="form-control bg-dark text-info border-info" autocomplete="tel" placeholder="Ej: 04121234567">
         </div>
         <button type="button" id="payment-submit-btn" class="btn btn-info w-100 fw-bold text-uppercase py-3">Pagado / Enviar orden</button>
+        <button type="button" id="payment-cancel-order-btn" class="btn btn-danger w-100 fw-bold text-uppercase py-3 mt-3">Cancelar Orden</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="payment-cancel-confirm-modal" class="modal fade app-overlay-modal payment-confirm-overlay" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content bg-dark border-danger text-light p-4 rounded-4">
+        <h4 class="fw-bold text-danger mb-3">¿Deseas cancelar esta orden?</h4>
+        <p class="text-light mb-4">La orden se marcará como cancelada y deberás generar una nueva si quieres continuar con la compra.</p>
+        <div class="d-flex gap-2 justify-content-end flex-wrap">
+          <button type="button" id="payment-cancel-dismiss-btn" class="btn btn-outline-info">Volver</button>
+          <button type="button" id="payment-cancel-confirm-btn" class="btn btn-danger">Sí, cancelar orden</button>
+        </div>
       </div>
     </div>
   </div>
@@ -403,6 +417,50 @@ include __DIR__ . "/includes/header.php";
 
   .payment-modal-content .form-control::placeholder {
     color: rgba(148, 163, 184, 0.7) !important;
+  }
+
+  .payment-reasons-card {
+    padding: 0.95rem 1rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(248, 113, 113, 0.35);
+    background: rgba(127, 29, 29, 0.12);
+  }
+
+  .payment-reasons-card ul {
+    margin: 0.65rem 0 0;
+    padding-left: 1.15rem;
+    color: #fecaca;
+  }
+
+  .payment-support-actions {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .payment-support-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 3rem;
+    padding: 0.8rem 1rem;
+    border-radius: 999px;
+    border: 1px solid rgba(45, 212, 191, 0.65);
+    background: linear-gradient(135deg, rgba(6, 78, 59, 0.9), rgba(16, 185, 129, 0.82));
+    color: #f0fdf4;
+    text-decoration: none;
+    font-weight: 700;
+    box-shadow: 0 0 18px rgba(16, 185, 129, 0.18);
+  }
+
+  .payment-support-link:hover {
+    color: #ffffff;
+    box-shadow: 0 0 22px rgba(16, 185, 129, 0.28);
+  }
+
+  .payment-confirm-overlay {
+    z-index: 1115;
+    background: rgba(5, 10, 20, 0.38);
+    backdrop-filter: blur(2px);
   }
 
   @media (max-width: 575.98px) {
@@ -557,6 +615,7 @@ include __DIR__ . "/includes/header.php";
   // Todas las variables y lógica JS en un solo bloque
   const defaultOrderEmail = <?= json_encode($loggedUserEmail, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const paymentMethodsByCurrency = <?= json_encode($paymentMethodsByCurrency, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+  const paymentSupportWhatsappBase = <?= json_encode($paymentSupportWhatsappBase, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const packCards2 = Array.from(document.querySelectorAll('.pack-card'));
   const selectedPack = document.getElementById("selected-pack");
   const selectedPrice = document.getElementById("selected-price");
@@ -573,8 +632,9 @@ include __DIR__ . "/includes/header.php";
   const modalCancel = document.getElementById('modal-cancel');
   const applyCouponButton = document.getElementById('apply-coupon-btn');
   const paymentModal = document.getElementById('payment-modal');
-  const paymentModalClose = document.getElementById('payment-modal-close');
   const paymentModalAlert = document.getElementById('payment-modal-alert');
+  const paymentModalReasons = document.getElementById('payment-modal-reasons');
+  const paymentModalActions = document.getElementById('payment-modal-actions');
   const paymentTimerValue = document.getElementById('payment-timer-value');
   const paymentSummaryUser = document.getElementById('payment-summary-user');
   const paymentSummaryProduct = document.getElementById('payment-summary-product');
@@ -588,6 +648,10 @@ include __DIR__ . "/includes/header.php";
   const paymentReferenceHelp = document.getElementById('payment-reference-help');
   const paymentPhoneInput = document.getElementById('payment-phone-input');
   const paymentSubmitButton = document.getElementById('payment-submit-btn');
+  const paymentCancelOrderButton = document.getElementById('payment-cancel-order-btn');
+  const paymentCancelConfirmModal = document.getElementById('payment-cancel-confirm-modal');
+  const paymentCancelDismissButton = document.getElementById('payment-cancel-dismiss-btn');
+  const paymentCancelConfirmButton = document.getElementById('payment-cancel-confirm-btn');
   let lastFocusedElement = null;
   let activePack = null;
   let couponApplied = false;
@@ -721,6 +785,69 @@ include __DIR__ . "/includes/header.php";
     paymentModalAlert.className = `alert mb-3 alert-${type || 'info'}`;
   }
 
+  function clearPaymentSupportUi() {
+    if (paymentModalReasons) {
+      paymentModalReasons.className = 'd-none payment-reasons-card mb-3';
+      paymentModalReasons.innerHTML = '';
+    }
+    if (paymentModalActions) {
+      paymentModalActions.className = 'd-none payment-support-actions mb-4';
+      paymentModalActions.innerHTML = '';
+    }
+  }
+
+  function buildPaymentSupportWhatsappUrl(orderId, reference, totalText) {
+    if (!paymentSupportWhatsappBase) {
+      return '';
+    }
+
+    const gameName = <?= json_encode((string) ($game['nombre'] ?? ''), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const productName = paymentSummaryProduct ? paymentSummaryProduct.textContent : '';
+    const userIdentifier = paymentSummaryUser ? paymentSummaryUser.textContent : '';
+    const message = [
+      'Hola, necesito apoyo para revisar manualmente un pago.',
+      `Pedido: #${orderId || '-'}`,
+      `Juego: ${gameName || '-'}`,
+      `Producto: ${productName || '-'}`,
+      `ID Jugador: ${userIdentifier || '-'}`,
+      `Referencia: ${reference || '-'}`,
+      `Monto: ${totalText || '-'}`,
+      'Adjunto o enviaré captura del comprobante para revisión manual.'
+    ].join('\n');
+    return `${paymentSupportWhatsappBase}?text=${encodeURIComponent(message)}`;
+  }
+
+  function renderPaymentFailureDetails(data, reference, totalText) {
+    clearPaymentSupportUi();
+    const reasons = Array.isArray(data && data.reasons) ? data.reasons.filter(Boolean) : [];
+    if (paymentModalReasons && reasons.length) {
+      paymentModalReasons.className = 'payment-reasons-card mb-3';
+      paymentModalReasons.innerHTML = `<div class="fw-bold text-danger">No pudimos validar la orden automáticamente</div><ul>${reasons.map((reason) => `<li>${escapePaymentHtml(reason)}</li>`).join('')}</ul>`;
+    }
+
+    const whatsappUrl = buildPaymentSupportWhatsappUrl(activePaymentOrder ? activePaymentOrder.orderId : '', reference, totalText);
+    if (paymentModalActions && whatsappUrl) {
+      paymentModalActions.className = 'payment-support-actions mb-4';
+      paymentModalActions.innerHTML = `<a href="${escapePaymentHtml(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="payment-support-link">Contactar al administrador por WhatsApp</a>`;
+    }
+  }
+
+  function setCancelOrderButtonMode(mode) {
+    if (!paymentCancelOrderButton) {
+      return;
+    }
+    paymentCancelOrderButton.dataset.mode = mode;
+    if (mode === 'close') {
+      paymentCancelOrderButton.textContent = 'Cerrar ventana';
+      paymentCancelOrderButton.classList.remove('btn-danger');
+      paymentCancelOrderButton.classList.add('btn-outline-light');
+      return;
+    }
+    paymentCancelOrderButton.textContent = 'Cancelar Orden';
+    paymentCancelOrderButton.classList.remove('btn-outline-light');
+    paymentCancelOrderButton.classList.add('btn-danger');
+  }
+
   function setPaymentFormDisabled(disabled) {
     [paymentMethodSelect, paymentReferenceInput, paymentPhoneInput, paymentSubmitButton].forEach((field) => {
       if (field) {
@@ -796,6 +923,8 @@ include __DIR__ . "/includes/header.php";
       activePaymentOrder = null;
       paymentReferenceInput.value = '';
       paymentPhoneInput.value = '';
+      clearPaymentSupportUi();
+      setCancelOrderButtonMode('cancel');
     }
   }
 
@@ -862,6 +991,8 @@ include __DIR__ . "/includes/header.php";
     paymentPhoneInput.value = '';
     setPaymentFormDisabled(false);
     setPaymentAlert('', 'info');
+    clearPaymentSupportUi();
+    setCancelOrderButtonMode('cancel');
     setOverlayVisible(paymentModal, true);
     clearPaymentTimer();
     updatePaymentTimer();
@@ -958,9 +1089,55 @@ include __DIR__ . "/includes/header.php";
                 });
               }
 
-              if (paymentModalClose) {
-                paymentModalClose.addEventListener('click', function() {
-                  setOverlayVisible(paymentModal, false);
+              if (paymentCancelOrderButton) {
+                paymentCancelOrderButton.addEventListener('click', function() {
+                  const mode = paymentCancelOrderButton.dataset.mode || 'cancel';
+                  if (mode === 'close') {
+                    closePaymentModal(true);
+                    return;
+                  }
+                  if (!activePaymentOrder) {
+                    return;
+                  }
+                  setOverlayVisible(paymentCancelConfirmModal, true);
+                });
+              }
+
+              if (paymentCancelDismissButton) {
+                paymentCancelDismissButton.addEventListener('click', function() {
+                  setOverlayVisible(paymentCancelConfirmModal, false);
+                });
+              }
+
+              if (paymentCancelConfirmButton) {
+                paymentCancelConfirmButton.addEventListener('click', function() {
+                  if (!activePaymentOrder) {
+                    setOverlayVisible(paymentCancelConfirmModal, false);
+                    return;
+                  }
+                  paymentCancelConfirmButton.disabled = true;
+                  fetch('/api/pedidos.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `action=cancel_order&order_id=${encodeURIComponent(activePaymentOrder.orderId)}`
+                  })
+                  .then(async (response) => {
+                    const data = await response.json();
+                    if (!response.ok || !data.ok) {
+                      throw new Error((data && data.message) ? data.message : 'No se pudo cancelar la orden.');
+                    }
+                    setOverlayVisible(paymentCancelConfirmModal, false);
+                    showToast(data.message || 'Orden cancelada.', 'error');
+                    closePaymentModal(true);
+                    resetCheckoutState();
+                  })
+                  .catch((error) => {
+                    setOverlayVisible(paymentCancelConfirmModal, false);
+                    setPaymentAlert(error.message || 'No se pudo cancelar la orden.', 'danger');
+                  })
+                  .finally(() => {
+                    paymentCancelConfirmButton.disabled = false;
+                  });
                 });
               }
 
@@ -1016,7 +1193,31 @@ include __DIR__ . "/includes/header.php";
                       throw new Error((data && data.message) ? data.message : 'No se pudieron guardar los datos del pago.');
                     }
                     setOverlayVisible(loadingModal, false);
-                    showToast(data.message || 'Datos de pago enviados correctamente.', 'success');
+
+                    const nextState = String((data && data.estado) || '').toLowerCase();
+                    let toastVariant = 'success';
+                    if (nextState === 'cancelado') {
+                      toastVariant = 'error';
+                    } else if (nextState === 'pendiente') {
+                      toastVariant = 'info';
+                    }
+
+                    showToast(data.message || 'Datos de pago enviados correctamente.', toastVariant);
+                    if (nextState === 'enviado') {
+                      closePaymentModal(true);
+                      resetCheckoutState();
+                      return;
+                    }
+
+                    if (nextState === 'cancelado') {
+                      setPaymentAlert(data.message || 'La orden fue cancelada.', 'danger');
+                      renderPaymentFailureDetails(data, reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
+                      setPaymentFormDisabled(true);
+                      clearPaymentTimer();
+                      setCancelOrderButtonMode('close');
+                      return;
+                    }
+
                     closePaymentModal(true);
                     resetCheckoutState();
                   })

@@ -2,6 +2,15 @@
 // admin/juegos.php - Gestión de juegos y características
 require_once '../includes/db_connect.php';
 
+function ensure_juegos_api_free_fire_column(mysqli $mysqli): void {
+    $result = $mysqli->query("SHOW COLUMNS FROM juegos LIKE 'api_free_fire'");
+    if (!($result instanceof mysqli_result) || $result->num_rows === 0) {
+        $mysqli->query("ALTER TABLE juegos ADD COLUMN api_free_fire TINYINT(1) NOT NULL DEFAULT 0 AFTER popular");
+    }
+}
+
+ensure_juegos_api_free_fire_column($mysqli);
+
 // Procesar eliminación de juego (antes de cualquier salida)
 if (isset($_GET['eliminar'])) {
     $del_id = intval($_GET['eliminar']);
@@ -47,6 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_juego_submit'], 
     $edit_nombre = trim($_POST['edit_nombre']);
     $edit_descripcion = trim($_POST['edit_descripcion']);
     $edit_popular = isset($_POST['edit_popular']) ? 1 : 0;
+    $edit_api_free_fire = isset($_POST['edit_api_free_fire']) ? 1 : 0;
     $edit_moneda_fija_id = isset($_POST['edit_moneda_fija_id']) && $_POST['edit_moneda_fija_id'] !== '' ? intval($_POST['edit_moneda_fija_id']) : null;
     $edit_imagen = null;
     $edit_imagen_paquete = null;
@@ -77,17 +87,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_juego_submit'], 
         }
     }
     if ($edit_imagen && $edit_imagen_paquete) {
-        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, imagen=?, imagen_paquete=?, popular=?, moneda_fija_id=? WHERE id=?");
-        $stmt->bind_param('ssssiii', $edit_nombre, $edit_descripcion, $edit_imagen, $edit_imagen_paquete, $edit_popular, $edit_moneda_fija_id, $edit_id);
+        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, imagen=?, imagen_paquete=?, popular=?, api_free_fire=?, moneda_fija_id=? WHERE id=?");
+        $stmt->bind_param('ssssiiii', $edit_nombre, $edit_descripcion, $edit_imagen, $edit_imagen_paquete, $edit_popular, $edit_api_free_fire, $edit_moneda_fija_id, $edit_id);
     } elseif ($edit_imagen) {
-        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, imagen=?, popular=?, moneda_fija_id=? WHERE id=?");
-        $stmt->bind_param('sssiii', $edit_nombre, $edit_descripcion, $edit_imagen, $edit_popular, $edit_moneda_fija_id, $edit_id);
+        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, imagen=?, popular=?, api_free_fire=?, moneda_fija_id=? WHERE id=?");
+        $stmt->bind_param('sssiiii', $edit_nombre, $edit_descripcion, $edit_imagen, $edit_popular, $edit_api_free_fire, $edit_moneda_fija_id, $edit_id);
     } elseif ($edit_imagen_paquete) {
-        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, imagen_paquete=?, popular=?, moneda_fija_id=? WHERE id=?");
-        $stmt->bind_param('sssiii', $edit_nombre, $edit_descripcion, $edit_imagen_paquete, $edit_popular, $edit_moneda_fija_id, $edit_id);
+        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, imagen_paquete=?, popular=?, api_free_fire=?, moneda_fija_id=? WHERE id=?");
+        $stmt->bind_param('sssiiii', $edit_nombre, $edit_descripcion, $edit_imagen_paquete, $edit_popular, $edit_api_free_fire, $edit_moneda_fija_id, $edit_id);
     } else {
-        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, popular=?, moneda_fija_id=? WHERE id=?");
-        $stmt->bind_param('ssiii', $edit_nombre, $edit_descripcion, $edit_popular, $edit_moneda_fija_id, $edit_id);
+        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, popular=?, api_free_fire=?, moneda_fija_id=? WHERE id=?");
+        $stmt->bind_param('ssiiii', $edit_nombre, $edit_descripcion, $edit_popular, $edit_api_free_fire, $edit_moneda_fija_id, $edit_id);
     }
     $stmt->execute();
     header('Location: /admin/juegos');
@@ -100,6 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['des
     $descripcion = trim($_POST['descripcion']);
     $moneda_fija_id = !empty($_POST['moneda_fija_id']) ? intval($_POST['moneda_fija_id']) : null;
     $popular = isset($_POST['popular']) ? 1 : 0;
+    $api_free_fire = isset($_POST['api_free_fire']) ? 1 : 0;
     $imagen = null;
     $imagen_paquete = null;
     if (isset($_FILES['imagen']) && $_FILES['imagen']['error'] === UPLOAD_ERR_OK) {
@@ -128,8 +139,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['des
             }
         }
     }
-    $stmt = $mysqli->prepare("INSERT INTO juegos (nombre, imagen, imagen_paquete, descripcion, moneda_fija_id, popular) VALUES (?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param('ssssii', $nombre, $imagen, $imagen_paquete, $descripcion, $moneda_fija_id, $popular);
+    $stmt = $mysqli->prepare("INSERT INTO juegos (nombre, imagen, imagen_paquete, descripcion, moneda_fija_id, popular, api_free_fire) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param('ssssiii', $nombre, $imagen, $imagen_paquete, $descripcion, $moneda_fija_id, $popular, $api_free_fire);
     $stmt->execute();
     $juego_id = $mysqli->insert_id;
     // Características seleccionadas del select múltiple
@@ -215,6 +226,10 @@ if ($resPaquetes instanceof mysqli_result) {
                 <input type="checkbox" name="edit_popular" class="form-check-input" id="editPopularCheck" <?= !empty($juego_edit['popular']) ? 'checked' : '' ?>>
                 <label class="form-check-label text-neon" for="editPopularCheck">Marcar como popular</label>
             </div>
+            <div class="form-check mb-3">
+                <input type="checkbox" name="edit_api_free_fire" class="form-check-input" id="editApiFreeFireCheck" <?= !empty($juego_edit['api_free_fire']) ? 'checked' : '' ?>>
+                <label class="form-check-label text-neon" for="editApiFreeFireCheck">Este Juego usa API Free Fire</label>
+            </div>
             <div class="mb-3">
                 <label class="form-label text-neon">Imagen actual:</label><br>
                 <?php if ($juego_edit['imagen']): ?>
@@ -246,6 +261,10 @@ if ($resPaquetes instanceof mysqli_result) {
             <div class="form-check">
                 <input type="checkbox" name="popular" class="form-check-input" id="popularCheck">
                 <label class="form-check-label" for="popularCheck" style="color:#00fff7;">Popular</label>
+            </div>
+            <div class="form-check mt-3">
+                <input type="checkbox" name="api_free_fire" class="form-check-input" id="apiFreeFireCheck">
+                <label class="form-check-label" for="apiFreeFireCheck" style="color:#00fff7;">Este Juego usa API Free Fire</label>
             </div>
         </div>
         <div class="col-12">
@@ -323,6 +342,9 @@ if ($resPaquetes instanceof mysqli_result) {
                     <td style="background:#181f2a; color:#00fff7;">
                         <div class="fw-semibold"><?= htmlspecialchars($j['nombre']) ?></div>
                         <div class="small" style="color:#b2f6ff;"><?= $totalPaquetes ?> paquete<?= $totalPaquetes === 1 ? '' : 's' ?> registrado<?= $totalPaquetes === 1 ? '' : 's' ?></div>
+                        <?php if (!empty($j['api_free_fire'])): ?>
+                            <div class="small mt-1"><span style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.2rem 0.55rem;border-radius:999px;border:1px solid rgba(52,211,153,0.7);background:rgba(16,185,129,0.12);color:#6ee7b7;font-weight:700;letter-spacing:0.04em;">API Free Fire</span></div>
+                        <?php endif; ?>
                     </td>
                     <td class="text-center" style="background:#181f2a;">
                         <?php if (!empty($j['popular'])): ?>
@@ -389,6 +411,9 @@ if ($resPaquetes instanceof mysqli_result) {
                                 <?php endif; ?>
                             </div>
                             <div style="font-size:0.9rem; color:#b2f6ff;"><?= $totalPaquetes ?> paquete<?= $totalPaquetes === 1 ? '' : 's' ?> registrado<?= $totalPaquetes === 1 ? '' : 's' ?></div>
+                            <?php if (!empty($j['api_free_fire'])): ?>
+                                <div class="mt-1"><span style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.2rem 0.55rem;border-radius:999px;border:1px solid rgba(52,211,153,0.7);background:rgba(16,185,129,0.12);color:#6ee7b7;font-weight:700;font-size:0.78rem;letter-spacing:0.04em;">API Free Fire</span></div>
+                            <?php endif; ?>
                             <div class="text-muted" style="font-size:0.85rem; color:#b2f6ff;">ID: <?= $j['id'] ?></div>
                         </div>
                     </div>
