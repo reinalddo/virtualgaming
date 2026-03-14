@@ -16,6 +16,12 @@ function store_config_descriptions(): array {
         'whatsapp' => 'Número o enlace de WhatsApp de la tienda',
         'mensaje_whatsapp' => 'Mensaje predefinido para el botón flotante de WhatsApp',
         'whatsapp_channel' => 'URL del canal de WhatsApp de la tienda',
+        'ff_bank_posicion' => 'Posicion para la conexion al banco de Free Fire',
+        'ff_bank_token' => 'Token para la conexion al banco de Free Fire',
+        'ff_bank_clave' => 'Clave para la conexion al banco de Free Fire',
+        'ff_api_usuario' => 'Usuario para la API de Free Fire',
+        'ff_api_clave' => 'Clave para la API de Free Fire',
+        'ff_api_tipo' => 'Tipo para la API de Free Fire',
     ];
 }
 
@@ -35,6 +41,12 @@ function store_config_defaults(): array {
         'whatsapp' => '',
         'mensaje_whatsapp' => '',
         'whatsapp_channel' => '',
+        'ff_bank_posicion' => '0',
+        'ff_bank_token' => '',
+        'ff_bank_clave' => '',
+        'ff_api_usuario' => '',
+        'ff_api_clave' => '',
+        'ff_api_tipo' => 'recargaFreefire',
     ];
 }
 

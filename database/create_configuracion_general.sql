@@ -22,4 +22,10 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('instagram', '', 'URL de Instagram de la tienda'),
 ('whatsapp', '', 'Número o enlace de WhatsApp de la tienda'),
 ('mensaje_whatsapp', '', 'Mensaje predefinido para el botón flotante de WhatsApp'),
-('whatsapp_channel', '', 'URL del canal de WhatsApp de la tienda');
+('whatsapp_channel', '', 'URL del canal de WhatsApp de la tienda'),
+('ff_bank_posicion', '0', 'Posicion para la conexion al banco de Free Fire'),
+('ff_bank_token', '', 'Token para la conexion al banco de Free Fire'),
+('ff_bank_clave', '', 'Clave para la conexion al banco de Free Fire'),
+('ff_api_usuario', '', 'Usuario para la API de Free Fire'),
+('ff_api_clave', '', 'Clave para la API de Free Fire'),
+('ff_api_tipo', 'recargaFreefire', 'Tipo para la API de Free Fire');

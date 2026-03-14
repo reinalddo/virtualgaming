@@ -8,7 +8,7 @@ require_once __DIR__ . '/includes/home_gallery.php';
 require_once __DIR__ . '/includes/payment_methods.php';
 
 $activeTab = defined('ADMIN_CONFIG_ACTIVE_TAB') ? ADMIN_CONFIG_ACTIVE_TAB : ($_GET['tab'] ?? 'correo');
-if (!in_array($activeTab, ['correo', 'cabecera', 'sociales', 'galeria', 'metodos-pago'], true)) {
+if (!in_array($activeTab, ['correo', 'cabecera', 'sociales', 'api-free-fire', 'galeria', 'metodos-pago'], true)) {
     $activeTab = 'correo';
 }
 
@@ -225,6 +225,9 @@ $galleryForm = [
             <a href="/admin/configuracion?tab=sociales" class="neon-tab-link <?= $activeTab === 'sociales' ? 'active' : '' ?>">Redes Sociales</a>
           </div>
           <div class="col-12 col-md-6 col-xl">
+            <a href="/admin/configuracion?tab=api-free-fire" class="neon-tab-link <?= $activeTab === 'api-free-fire' ? 'active' : '' ?>">Datos API Free Fire</a>
+          </div>
+          <div class="col-12 col-md-6 col-xl">
             <a href="/admin/configuracion?tab=galeria" class="neon-tab-link <?= $activeTab === 'galeria' ? 'active' : '' ?>">Galería</a>
           </div>
           <div class="col-12 col-md-6 col-xl">
@@ -236,7 +239,7 @@ $galleryForm = [
       <div class="card neon-card mb-4">
         <div class="card-header text-center py-4" style="background: linear-gradient(90deg, #00fff7 0%, #34d399 100%); color: #181f2a; border-radius: 16px 16px 0 0;">
           <h2 class="h4 fw-bold mb-0" style="font-family: 'Oxanium', 'Montserrat', 'Arial', sans-serif; letter-spacing: 0.08em;">
-            <?php if ($activeTab === 'correo'): ?>Configuración de correo corporativo<?php elseif ($activeTab === 'cabecera'): ?>Datos de cabecera<?php elseif ($activeTab === 'sociales'): ?>Redes Sociales<?php elseif ($activeTab === 'galeria'): ?>Galería principal del index<?php else: ?>Métodos de Pago<?php endif; ?>
+            <?php if ($activeTab === 'correo'): ?>Configuración de correo corporativo<?php elseif ($activeTab === 'cabecera'): ?>Datos de cabecera<?php elseif ($activeTab === 'sociales'): ?>Redes Sociales<?php elseif ($activeTab === 'api-free-fire'): ?>Datos API Free Fire<?php elseif ($activeTab === 'galeria'): ?>Galería principal del index<?php else: ?>Métodos de Pago<?php endif; ?>
           </h2>
         </div>
         <div class="card-body p-4">
@@ -341,6 +344,54 @@ $galleryForm = [
                 </div>
               </div>
               <button type="submit" class="neon-btn w-100 py-3 mt-4">Guardar redes sociales</button>
+            </form>
+          <?php elseif ($activeTab === 'api-free-fire'): ?>
+            <form method="post">
+              <input type="hidden" name="config_section" value="api-free-fire">
+              <div class="config-section-note mb-4">Configura aquí los datos de conexión requeridos para el banco y para la API de Free Fire.</div>
+
+              <div class="gallery-table-wrap mb-4">
+                <h3 class="h5 fw-bold text-info mb-3">Datos para conexión al banco</h3>
+                <div class="row g-3">
+                  <div class="col-md-4">
+                    <label class="form-label">Posicion</label>
+                    <select name="ff_bank_posicion" class="form-select">
+                      <?php for ($position = 0; $position <= 5; $position++): ?>
+                        <option value="<?= $position ?>" <?= (string) ($cfg['ff_bank_posicion'] ?? '0') === (string) $position ? 'selected' : '' ?>><?= $position ?></option>
+                      <?php endfor; ?>
+                    </select>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Token</label>
+                    <input type="text" name="ff_bank_token" value="<?= htmlspecialchars($cfg['ff_bank_token'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Clave</label>
+                    <input type="text" name="ff_bank_clave" value="<?= htmlspecialchars($cfg['ff_bank_clave'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" pattern="^[A-Za-z0-9._!-]+$">
+                    <div class="form-text">Solo letras, números y estos caracteres especiales: . - _ ! sin espacios.</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="gallery-table-wrap mb-2">
+                <h3 class="h5 fw-bold text-info mb-3">Datos para API Free Fire</h3>
+                <div class="row g-3">
+                  <div class="col-md-4">
+                    <label class="form-label">usuario</label>
+                    <input type="text" name="ff_api_usuario" value="<?= htmlspecialchars($cfg['ff_api_usuario'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">clave</label>
+                    <input type="text" name="ff_api_clave" value="<?= htmlspecialchars($cfg['ff_api_clave'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">tipo</label>
+                    <input type="text" name="ff_api_tipo" value="<?= htmlspecialchars($cfg['ff_api_tipo'] ?? 'recargaFreefire', ENT_QUOTES, 'UTF-8') ?>" class="form-control">
+                  </div>
+                </div>
+              </div>
+
+              <button type="submit" class="neon-btn w-100 py-3 mt-4">Guardar datos API Free Fire</button>
             </form>
           <?php elseif ($activeTab === 'galeria'): ?>
             <form method="post" enctype="multipart/form-data">
