@@ -327,11 +327,17 @@ $galleryForm = [
                 </div>
                 <div class="col-md-6">
                   <label class="form-label">Whatsapp</label>
-                  <input type="text" name="whatsapp" value="<?= htmlspecialchars($cfg['whatsapp'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="https://wa.me/58412XXXXXXX o +58 412XXXXXXX">
+                  <input type="tel" name="whatsapp" value="<?= htmlspecialchars($cfg['whatsapp'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="+584121234567" pattern="^\+?[1-9]\d{9,14}$" inputmode="tel">
+                  <div class="form-text">Ingresa solo el número en formato internacional, con código de país y sin enlaces. Ejemplo: +584121234567.</div>
                 </div>
                 <div class="col-md-6">
                   <label class="form-label">Whatsapp Channel</label>
                   <input type="url" name="whatsapp_channel" value="<?= htmlspecialchars($cfg['whatsapp_channel'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="https://whatsapp.com/channel/...">
+                </div>
+                <div class="col-12">
+                  <label class="form-label">Mensaje del botón de Whatsapp</label>
+                  <textarea name="mensaje_whatsapp" rows="3" class="form-control" placeholder="Hola, quiero información sobre sus productos."><?= htmlspecialchars($cfg['mensaje_whatsapp'] ?? '', ENT_QUOTES, 'UTF-8') ?></textarea>
+                  <div class="form-text">Este texto se enviará automáticamente al abrir el flotante de WhatsApp.</div>
                 </div>
               </div>
               <button type="submit" class="neon-btn w-100 py-3 mt-4">Guardar redes sociales</button>

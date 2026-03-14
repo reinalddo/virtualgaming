@@ -14,6 +14,7 @@ function store_config_descriptions(): array {
         'facebook' => 'URL de Facebook de la tienda',
         'instagram' => 'URL de Instagram de la tienda',
         'whatsapp' => 'Número o enlace de WhatsApp de la tienda',
+        'mensaje_whatsapp' => 'Mensaje predefinido para el botón flotante de WhatsApp',
         'whatsapp_channel' => 'URL del canal de WhatsApp de la tienda',
     ];
 }
@@ -32,6 +33,7 @@ function store_config_defaults(): array {
         'facebook' => '',
         'instagram' => '',
         'whatsapp' => '',
+        'mensaje_whatsapp' => '',
         'whatsapp_channel' => '',
     ];
 }
@@ -70,6 +72,75 @@ function store_config_get(string $key, ?string $default = null): string {
     }
 
     return $default ?? '';
+}
+
+function store_config_normalize_social_url(string $value): string {
+    return trim($value);
+}
+
+function store_config_is_valid_social_url(string $value): bool {
+    $normalized = store_config_normalize_social_url($value);
+    if ($normalized === '') {
+        return false;
+    }
+
+    if (filter_var($normalized, FILTER_VALIDATE_URL) === false) {
+        return false;
+    }
+
+    $scheme = strtolower((string) parse_url($normalized, PHP_URL_SCHEME));
+    return in_array($scheme, ['http', 'https'], true);
+}
+
+function store_config_normalize_whatsapp(string $value): string {
+    $trimmed = trim($value);
+    if ($trimmed === '') {
+        return '';
+    }
+
+    $digits = preg_replace('/\D+/', '', $trimmed);
+    if ($digits === null || $digits === '') {
+        return '';
+    }
+
+    return '+' . $digits;
+}
+
+function store_config_is_valid_whatsapp(string $value): bool {
+    $normalized = store_config_normalize_whatsapp($value);
+    if ($normalized === '') {
+        return false;
+    }
+
+    return preg_match('/^\+[1-9]\d{9,14}$/', $normalized) === 1;
+}
+
+function store_config_whatsapp_link(string $value): string {
+    if (!store_config_is_valid_whatsapp($value)) {
+        return '';
+    }
+
+    $normalized = store_config_normalize_whatsapp($value);
+    return 'https://wa.me/' . ltrim($normalized, '+');
+}
+
+function store_config_normalize_whatsapp_message(string $value): string {
+    $normalized = trim(preg_replace('/\s+/u', ' ', $value) ?? '');
+    return $normalized;
+}
+
+function store_config_whatsapp_link_with_message(string $value, string $message = ''): string {
+    $baseLink = store_config_whatsapp_link($value);
+    if ($baseLink === '') {
+        return '';
+    }
+
+    $normalizedMessage = store_config_normalize_whatsapp_message($message);
+    if ($normalizedMessage === '') {
+        return $baseLink;
+    }
+
+    return $baseLink . '?text=' . rawurlencode($normalizedMessage);
 }
 
 function store_config_upsert(string $key, string $value, ?string $description = null): bool {

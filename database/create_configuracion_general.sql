@@ -21,4 +21,5 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('facebook', '', 'URL de Facebook de la tienda'),
 ('instagram', '', 'URL de Instagram de la tienda'),
 ('whatsapp', '', 'Número o enlace de WhatsApp de la tienda'),
+('mensaje_whatsapp', '', 'Mensaje predefinido para el botón flotante de WhatsApp'),
 ('whatsapp_channel', '', 'URL del canal de WhatsApp de la tienda');

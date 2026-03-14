@@ -343,12 +343,41 @@ switch ($seccion) {
             }
 
             if ($activeTab === 'sociales') {
-                $campos = [
-                    'facebook', 'instagram', 'whatsapp', 'whatsapp_channel'
-                ];
-                foreach ($campos as $clave) {
-                    store_config_upsert($clave, trim((string) ($_POST[$clave] ?? '')));
+                $facebook = store_config_normalize_social_url((string) ($_POST['facebook'] ?? ''));
+                $instagram = store_config_normalize_social_url((string) ($_POST['instagram'] ?? ''));
+                $whatsapp = store_config_normalize_whatsapp((string) ($_POST['whatsapp'] ?? ''));
+                $whatsappMessage = store_config_normalize_whatsapp_message((string) ($_POST['mensaje_whatsapp'] ?? ''));
+                $whatsappChannel = store_config_normalize_social_url((string) ($_POST['whatsapp_channel'] ?? ''));
+
+                if ($facebook !== '' && !store_config_is_valid_social_url($facebook)) {
+                    admin_set_flash('error', 'El enlace de Facebook no es válido. Usa una URL completa con http:// o https://');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'sociales']);
                 }
+
+                if ($instagram !== '' && !store_config_is_valid_social_url($instagram)) {
+                    admin_set_flash('error', 'El enlace de Instagram no es válido. Usa una URL completa con http:// o https://');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'sociales']);
+                }
+
+                if ($whatsapp !== '' && !store_config_is_valid_whatsapp($whatsapp)) {
+                    admin_set_flash('error', 'El número de WhatsApp debe incluir código de país y número telefónico, por ejemplo: +584121234567.');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'sociales']);
+                }
+
+                if ($whatsappChannel !== '' && !store_config_is_valid_social_url($whatsappChannel)) {
+                    admin_set_flash('error', 'El enlace de WhatsApp Channel no es válido. Usa una URL completa con http:// o https://');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'sociales']);
+                }
+
+                store_config_upsert('facebook', $facebook);
+                store_config_upsert('instagram', $instagram);
+                store_config_upsert('whatsapp', $whatsapp);
+                store_config_upsert('mensaje_whatsapp', $whatsappMessage);
+                store_config_upsert('whatsapp_channel', $whatsappChannel);
                 admin_set_flash('success', 'Redes sociales actualizadas.');
             }
 
