@@ -17,4 +17,8 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('smtp_secure', 'tls', 'Tipo de seguridad SMTP'),
 ('nombre_prefijo', 'TIENDA', 'Texto superior del encabezado de la tienda'),
 ('nombre_tienda', 'TVirtualGaming', 'Nombre principal visible de la tienda'),
-('logo_tienda', '', 'Ruta del logo visible en el encabezado');
+('logo_tienda', '', 'Ruta del logo visible en el encabezado'),
+('facebook', '', 'URL de Facebook de la tienda'),
+('instagram', '', 'URL de Instagram de la tienda'),
+('whatsapp', '', 'Número o enlace de WhatsApp de la tienda'),
+('whatsapp_channel', '', 'URL del canal de WhatsApp de la tienda');

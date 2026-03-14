@@ -8,7 +8,7 @@ require_once __DIR__ . '/includes/home_gallery.php';
 require_once __DIR__ . '/includes/payment_methods.php';
 
 $activeTab = defined('ADMIN_CONFIG_ACTIVE_TAB') ? ADMIN_CONFIG_ACTIVE_TAB : ($_GET['tab'] ?? 'correo');
-if (!in_array($activeTab, ['correo', 'cabecera', 'galeria', 'metodos-pago'], true)) {
+if (!in_array($activeTab, ['correo', 'cabecera', 'sociales', 'galeria', 'metodos-pago'], true)) {
     $activeTab = 'correo';
 }
 
@@ -215,16 +215,19 @@ $galleryForm = [
     <div class="col-lg-10 col-xl-9">
       <div class="neon-tabs-wrap mb-4">
         <div class="row g-2">
-          <div class="col-12 col-md-4">
+          <div class="col-12 col-md-6 col-xl">
             <a href="/admin/configuracion?tab=correo" class="neon-tab-link <?= $activeTab === 'correo' ? 'active' : '' ?>">Configuración de correo</a>
           </div>
-          <div class="col-12 col-md-4">
+          <div class="col-12 col-md-6 col-xl">
             <a href="/admin/configuracion?tab=cabecera" class="neon-tab-link <?= $activeTab === 'cabecera' ? 'active' : '' ?>">Datos de cabecera</a>
           </div>
-          <div class="col-12 col-md-4">
+          <div class="col-12 col-md-6 col-xl">
+            <a href="/admin/configuracion?tab=sociales" class="neon-tab-link <?= $activeTab === 'sociales' ? 'active' : '' ?>">Redes Sociales</a>
+          </div>
+          <div class="col-12 col-md-6 col-xl">
             <a href="/admin/configuracion?tab=galeria" class="neon-tab-link <?= $activeTab === 'galeria' ? 'active' : '' ?>">Galería</a>
           </div>
-          <div class="col-12 col-md-4">
+          <div class="col-12 col-md-6 col-xl">
             <a href="/admin/configuracion?tab=metodos-pago" class="neon-tab-link <?= $activeTab === 'metodos-pago' ? 'active' : '' ?>">Métodos de Pago</a>
           </div>
         </div>
@@ -233,7 +236,7 @@ $galleryForm = [
       <div class="card neon-card mb-4">
         <div class="card-header text-center py-4" style="background: linear-gradient(90deg, #00fff7 0%, #34d399 100%); color: #181f2a; border-radius: 16px 16px 0 0;">
           <h2 class="h4 fw-bold mb-0" style="font-family: 'Oxanium', 'Montserrat', 'Arial', sans-serif; letter-spacing: 0.08em;">
-            <?php if ($activeTab === 'correo'): ?>Configuración de correo corporativo<?php elseif ($activeTab === 'cabecera'): ?>Datos de cabecera<?php elseif ($activeTab === 'galeria'): ?>Galería principal del index<?php else: ?>Métodos de Pago<?php endif; ?>
+            <?php if ($activeTab === 'correo'): ?>Configuración de correo corporativo<?php elseif ($activeTab === 'cabecera'): ?>Datos de cabecera<?php elseif ($activeTab === 'sociales'): ?>Redes Sociales<?php elseif ($activeTab === 'galeria'): ?>Galería principal del index<?php else: ?>Métodos de Pago<?php endif; ?>
           </h2>
         </div>
         <div class="card-body p-4">
@@ -308,6 +311,30 @@ $galleryForm = [
                 </div>
               </div>
               <button type="submit" class="neon-btn w-100 py-3 mt-4">Guardar datos de cabecera</button>
+            </form>
+          <?php elseif ($activeTab === 'sociales'): ?>
+            <form method="post">
+              <input type="hidden" name="config_section" value="sociales">
+              <div class="config-section-note mb-4">Registra los enlaces oficiales de la tienda para mostrarlos o reutilizarlos desde otras secciones del sitio.</div>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label">Facebook</label>
+                  <input type="url" name="facebook" value="<?= htmlspecialchars($cfg['facebook'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="https://facebook.com/tupagina">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Instagram</label>
+                  <input type="url" name="instagram" value="<?= htmlspecialchars($cfg['instagram'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="https://instagram.com/tucuenta">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Whatsapp</label>
+                  <input type="text" name="whatsapp" value="<?= htmlspecialchars($cfg['whatsapp'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="https://wa.me/58412XXXXXXX o +58 412XXXXXXX">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Whatsapp Channel</label>
+                  <input type="url" name="whatsapp_channel" value="<?= htmlspecialchars($cfg['whatsapp_channel'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="https://whatsapp.com/channel/...">
+                </div>
+              </div>
+              <button type="submit" class="neon-btn w-100 py-3 mt-4">Guardar redes sociales</button>
             </form>
           <?php elseif ($activeTab === 'galeria'): ?>
             <form method="post" enctype="multipart/form-data">

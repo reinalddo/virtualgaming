@@ -247,7 +247,7 @@ switch ($seccion) {
         require_once __DIR__ . '/includes/home_gallery.php';
         require_once __DIR__ . '/includes/payment_methods.php';
         $activeTab = $_GET['tab'] ?? 'correo';
-        if (!in_array($activeTab, ['correo', 'cabecera', 'galeria', 'metodos-pago'], true)) {
+        if (!in_array($activeTab, ['correo', 'cabecera', 'sociales', 'galeria', 'metodos-pago'], true)) {
             $activeTab = 'correo';
         }
 
@@ -286,7 +286,7 @@ switch ($seccion) {
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $activeTab = $_POST['config_section'] ?? $activeTab;
-            if (!in_array($activeTab, ['correo', 'cabecera', 'galeria', 'metodos-pago'], true)) {
+            if (!in_array($activeTab, ['correo', 'cabecera', 'sociales', 'galeria', 'metodos-pago'], true)) {
                 $activeTab = 'correo';
             }
 
@@ -340,6 +340,16 @@ switch ($seccion) {
                 }
 
                 admin_set_flash('success', 'Datos de cabecera actualizados.');
+            }
+
+            if ($activeTab === 'sociales') {
+                $campos = [
+                    'facebook', 'instagram', 'whatsapp', 'whatsapp_channel'
+                ];
+                foreach ($campos as $clave) {
+                    store_config_upsert($clave, trim((string) ($_POST[$clave] ?? '')));
+                }
+                admin_set_flash('success', 'Redes sociales actualizadas.');
             }
 
             if ($activeTab === 'galeria') {
