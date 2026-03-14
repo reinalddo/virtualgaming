@@ -170,6 +170,13 @@ while ($row = $rescar->fetch_assoc()) {
 // Listar juegos existentes
 $resj = $mysqli->query("SELECT * FROM juegos ORDER BY id DESC");
 $juegos = $resj->fetch_all(MYSQLI_ASSOC);
+$paquetesPorJuego = [];
+$resPaquetes = $mysqli->query("SELECT juego_id, COUNT(*) AS total FROM juego_paquetes GROUP BY juego_id");
+if ($resPaquetes instanceof mysqli_result) {
+    while ($row = $resPaquetes->fetch_assoc()) {
+        $paquetesPorJuego[(int) $row['juego_id']] = (int) $row['total'];
+    }
+}
 ?>
 <?php include '../includes/header.php'; ?>
 <main class="container-lg mt-5 bg-dark bg-opacity-75 rounded-4 p-4 shadow">
@@ -304,6 +311,7 @@ $juegos = $resj->fetch_all(MYSQLI_ASSOC);
             </thead>
             <tbody>
             <?php foreach ($juegos as $j): ?>
+                <?php $totalPaquetes = $paquetesPorJuego[(int) $j['id']] ?? 0; ?>
                 <tr style="background:#181f2a; color:#fff;">
                     <td style="background:#181f2a;">
                         <?php if (!empty($j['imagen'])): ?>
@@ -312,7 +320,10 @@ $juegos = $resj->fetch_all(MYSQLI_ASSOC);
                             <span class="fst-italic text-secondary">Sin imagen</span>
                         <?php endif; ?>
                     </td>
-                    <td class="fw-semibold" style="background:#181f2a; color:#00fff7;"><?= htmlspecialchars($j['nombre']) ?></td>
+                    <td style="background:#181f2a; color:#00fff7;">
+                        <div class="fw-semibold"><?= htmlspecialchars($j['nombre']) ?></div>
+                        <div class="small" style="color:#b2f6ff;"><?= $totalPaquetes ?> paquete<?= $totalPaquetes === 1 ? '' : 's' ?> registrado<?= $totalPaquetes === 1 ? '' : 's' ?></div>
+                    </td>
                     <td class="text-center" style="background:#181f2a;">
                         <?php if (!empty($j['popular'])): ?>
                                 <span title="Popular" style="color:#00fff7; font-size:1.2em;">★</span>
@@ -361,6 +372,7 @@ $juegos = $resj->fetch_all(MYSQLI_ASSOC);
     <div class="d-md-none">
         <div class="row gy-4 mt-1 mb-2">
         <?php foreach ($juegos as $j): ?>
+            <?php $totalPaquetes = $paquetesPorJuego[(int) $j['id']] ?? 0; ?>
             <div class="col-12">
                 <div class="card neon-card p-3" style="background:#181f2a; border:2px solid #22d3ee; box-shadow:0 0 16px #22d3ee,0 0 4px #2dd4bf; color:#22d3ee; border-radius:16px;">
                     <div class="d-flex align-items-center mb-3">
@@ -376,6 +388,7 @@ $juegos = $resj->fetch_all(MYSQLI_ASSOC);
                                     <span title="Popular" style="margin-left:0.35rem; color:#22d3ee; font-size:1.1rem;">★</span>
                                 <?php endif; ?>
                             </div>
+                            <div style="font-size:0.9rem; color:#b2f6ff;"><?= $totalPaquetes ?> paquete<?= $totalPaquetes === 1 ? '' : 's' ?> registrado<?= $totalPaquetes === 1 ? '' : 's' ?></div>
                             <div class="text-muted" style="font-size:0.85rem; color:#b2f6ff;">ID: <?= $j['id'] ?></div>
                         </div>
                     </div>

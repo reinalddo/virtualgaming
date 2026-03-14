@@ -32,10 +32,43 @@ if (!empty($galleryFeatured)) {
   ];
 }
 
-$resPop = $mysqli->query("SELECT * FROM juegos WHERE popular=1 ORDER BY id DESC");
-$popularGames = $resPop ? $resPop->fetch_all(MYSQLI_ASSOC) : [];
-$resMore = $mysqli->query("SELECT * FROM juegos WHERE popular=0 ORDER BY id DESC");
-$moreGames = $resMore ? $resMore->fetch_all(MYSQLI_ASSOC) : [];
+$gameCurrencyMap = [];
+$resCurrencies = $mysqli->query("SELECT id, tasa, clave FROM monedas");
+if ($resCurrencies instanceof mysqli_result) {
+  while ($currency = $resCurrencies->fetch_assoc()) {
+    $gameCurrencyMap[(int) $currency['id']] = [
+      'tasa' => (float) ($currency['tasa'] ?? 0),
+      'clave' => (string) ($currency['clave'] ?? ''),
+    ];
+  }
+}
+
+$gameCards = [];
+$resGames = $mysqli->query(
+  "SELECT j.*, COUNT(jp.id) AS paquetes_total, MIN(jp.precio) AS precio_minimo\n"
+  . "FROM juegos j\n"
+  . "INNER JOIN juego_paquetes jp ON jp.juego_id = j.id\n"
+  . "GROUP BY j.id\n"
+  . "ORDER BY j.id DESC"
+);
+if ($resGames instanceof mysqli_result) {
+  while ($game = $resGames->fetch_assoc()) {
+    $currency = null;
+    $minPriceLabel = null;
+    $currencyId = (int) ($game['moneda_fija_id'] ?? 0);
+    if ($currencyId > 0 && isset($gameCurrencyMap[$currencyId])) {
+      $currency = $gameCurrencyMap[$currencyId];
+      $minPriceLabel = strtoupper($currency['clave']) . ' ' . number_format(((float) ($game['precio_minimo'] ?? 0)) * $currency['tasa'], 2, '.', ',');
+    }
+
+    $game['paquetes_total'] = (int) ($game['paquetes_total'] ?? 0);
+    $game['min_price_label'] = $minPriceLabel;
+    $gameCards[] = $game;
+  }
+}
+
+$popularGames = array_values(array_filter($gameCards, static fn ($game) => !empty($game['popular'])));
+$moreGames = $gameCards;
 $accentMap = [
   "cyan" => [
     "label" => "text-cyan-300/70",
@@ -107,26 +140,6 @@ $accentMap = [
         </div>
         <div class="mt-4 row row-cols-2 row-cols-sm-3 row-cols-lg-4 g-3">
           <?php foreach ($popularGames as $game): ?>
-            <?php
-              $resPaqCount = $mysqli->query("SELECT COUNT(*) as total FROM juego_paquetes WHERE juego_id=" . intval($game['id']));
-              $paqCount = $resPaqCount ? $resPaqCount->fetch_assoc()['total'] : 0;
-              if ($paqCount == 0) continue;
-            ?>
-            <?php
-              // Obtener precio mínimo en Bs solo si tiene moneda fija
-              $min_precio_bs = null;
-              if (!empty($game['moneda_fija_id'])) {
-                $resPaq = $mysqli->query("SELECT precio FROM juego_paquetes WHERE juego_id=" . intval($game['id']) . " ORDER BY precio ASC LIMIT 1");
-                $paq = $resPaq ? $resPaq->fetch_assoc() : null;
-                if ($paq) {
-                  $resMon = $mysqli->query("SELECT tasa, clave FROM monedas WHERE id=" . intval($game['moneda_fija_id']) . " LIMIT 1");
-                  $mon = $resMon ? $resMon->fetch_assoc() : null;
-                  if ($mon) {
-                    $min_precio_bs = $paq['precio'] * floatval($mon['tasa']);
-                  }
-                }
-              }
-            ?>
             <div class="col">
               <a href="/juego/<?= urlencode($game['id']) ?>" class="d-block rounded-4 border bg-dark p-2 h-100 text-decoration-none">
                 <div class="position-relative overflow-hidden rounded-3" style="aspect-ratio:1/1;">
@@ -141,8 +154,8 @@ $accentMap = [
                     <?php if (!empty($game['imagen_paquete'])): ?>
                       <img src="/<?= htmlspecialchars($game['imagen_paquete'], ENT_QUOTES, 'UTF-8') ?>" alt="Paquete" class="img-fluid rounded me-1 align-middle" style="height:20px;width:20px;display:inline-block;" />
                     <?php endif; ?>
-                    <?php if ($min_precio_bs !== null && isset($mon['clave'])): ?>
-                      Desde <span class="text-info"><?= htmlspecialchars(strtoupper($mon['clave'])) ?> <?= number_format($min_precio_bs, 2, '.', ',') ?></span>
+                    <?php if (!empty($game['min_price_label'])): ?>
+                      Desde <span class="text-info"><?= htmlspecialchars($game['min_price_label'], ENT_QUOTES, 'UTF-8') ?></span>
                     <?php endif; ?>
                   </p>
                 </div>
@@ -177,25 +190,6 @@ $accentMap = [
         </div>
         <div class="mt-4 row row-cols-2 row-cols-sm-3 row-cols-lg-4 g-3">
           <?php foreach ($moreGames as $game): ?>
-            <?php
-              $resPaqCount = $mysqli->query("SELECT COUNT(*) as total FROM juego_paquetes WHERE juego_id=" . intval($game['id']));
-              $paqCount = $resPaqCount ? $resPaqCount->fetch_assoc()['total'] : 0;
-              if ($paqCount == 0) continue;
-            ?>
-            <?php
-              $min_precio_bs = null;
-              if (!empty($game['moneda_fija_id'])) {
-                $resPaq = $mysqli->query("SELECT precio FROM juego_paquetes WHERE juego_id=" . intval($game['id']) . " ORDER BY precio ASC LIMIT 1");
-                $paq = $resPaq ? $resPaq->fetch_assoc() : null;
-                if ($paq) {
-                  $resMon = $mysqli->query("SELECT tasa, clave FROM monedas WHERE id=" . intval($game['moneda_fija_id']) . " LIMIT 1");
-                  $mon = $resMon ? $resMon->fetch_assoc() : null;
-                  if ($mon) {
-                    $min_precio_bs = $paq['precio'] * floatval($mon['tasa']);
-                  }
-                }
-              }
-            ?>
             <div class="col">
               <a href="/juego/<?= urlencode($game['id']) ?>" class="d-block rounded-4 border bg-dark p-2 h-100 text-decoration-none">
                 <div class="position-relative overflow-hidden rounded-3" style="aspect-ratio:1/1;">
@@ -212,8 +206,8 @@ $accentMap = [
                     <?php if (!empty($game['imagen_paquete'])): ?>
                       <img src="/<?= htmlspecialchars($game['imagen_paquete'], ENT_QUOTES, 'UTF-8') ?>" alt="Paquete" class="img-fluid rounded me-1 align-middle" style="height:20px;width:20px;display:inline-block;" />
                     <?php endif; ?>
-                    <?php if ($min_precio_bs !== null && isset($mon['clave'])): ?>
-                      Desde <span class="text-info"><?= htmlspecialchars(strtoupper($mon['clave'])) ?> <?= number_format($min_precio_bs, 2, '.', ',') ?></span>
+                    <?php if (!empty($game['min_price_label'])): ?>
+                      Desde <span class="text-info"><?= htmlspecialchars($game['min_price_label'], ENT_QUOTES, 'UTF-8') ?></span>
                     <?php endif; ?>
                   </p>
                 </div>
