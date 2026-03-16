@@ -119,6 +119,7 @@ include __DIR__ . "/includes/header.php";
     ?>
       <div class="col">
         <button type="button" class="pack-card card border-info bg-dark text-start w-100 h-100 shadow-sm"
+          data-package-id="<?= (int) ($pack['id'] ?? 0) ?>"
           data-base="<?= htmlspecialchars($precio_base) ?>"
           data-name="<?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?>"
           data-cantidad="<?= htmlspecialchars($pack['cantidad'], ENT_QUOTES, 'UTF-8') ?>"
@@ -1046,6 +1047,7 @@ include __DIR__ . "/includes/header.php";
       });
       card.classList.add("neon-selected");
       activePack = {
+        id: card.dataset.packageId,
         name: card.dataset.name,
         price: card.dataset.price,
         moneda: card.dataset.moneda,
@@ -1094,6 +1096,7 @@ include __DIR__ . "/includes/header.php";
                   const mode = paymentCancelOrderButton.dataset.mode || 'cancel';
                   if (mode === 'close') {
                     closePaymentModal(true);
+                    resetCheckoutState();
                     return;
                   }
                   if (!activePaymentOrder) {
@@ -1204,13 +1207,25 @@ include __DIR__ . "/includes/header.php";
 
                     showToast(data.message || 'Datos de pago enviados correctamente.', toastVariant);
                     if (nextState === 'enviado') {
-                      closePaymentModal(true);
-                      resetCheckoutState();
+                      setPaymentAlert(data.message || 'La recarga fue procesada correctamente.', 'success');
+                      clearPaymentSupportUi();
+                      setPaymentFormDisabled(true);
+                      clearPaymentTimer();
+                      setCancelOrderButtonMode('close');
                       return;
                     }
 
                     if (nextState === 'cancelado') {
                       setPaymentAlert(data.message || 'La orden fue cancelada.', 'danger');
+                      renderPaymentFailureDetails(data, reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
+                      setPaymentFormDisabled(true);
+                      clearPaymentTimer();
+                      setCancelOrderButtonMode('close');
+                      return;
+                    }
+
+                    if (nextState === 'pagado') {
+                      setPaymentAlert(data.message || 'El pago fue confirmado, pero la recarga requiere revisión.', 'warning');
                       renderPaymentFailureDetails(data, reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
                       setPaymentFormDisabled(true);
                       clearPaymentTimer();
@@ -1244,6 +1259,7 @@ include __DIR__ . "/includes/header.php";
                     const selectedCard = packCards2.find((card) => card.classList.contains('neon-selected'));
                     if (selectedCard) {
                       activePack = {
+                        id: selectedCard.dataset.packageId,
                         name: selectedCard.dataset.name,
                         price: selectedCard.dataset.price,
                         moneda: selectedCard.dataset.moneda,
@@ -1399,6 +1415,7 @@ include __DIR__ . "/includes/header.php";
                 const pedidoData = {
                   action: 'create',
                   game_id: "<?= $game['id'] ?>",
+                  package_id: pack.id || '',
                   game_name: "<?= $game['nombre'] ?>",//window.gameName,
                   pack_name: pack.name || '',
                   pack_amount: pack.cantidad || '',

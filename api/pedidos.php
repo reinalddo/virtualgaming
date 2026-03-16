@@ -18,9 +18,11 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         id INT AUTO_INCREMENT PRIMARY KEY,
         tenant_slug VARCHAR(80) DEFAULT NULL,
         juego_id INT DEFAULT NULL,
+        paquete_id INT DEFAULT NULL,
         juego_nombre VARCHAR(180) DEFAULT NULL,
         paquete_nombre VARCHAR(180) DEFAULT NULL,
         paquete_cantidad VARCHAR(80) DEFAULT NULL,
+        monto_ff VARCHAR(20) DEFAULT NULL,
         moneda VARCHAR(20) DEFAULT NULL,
         precio DECIMAL(12,2) NOT NULL DEFAULT 0,
         user_identifier VARCHAR(150) DEFAULT NULL,
@@ -29,6 +31,9 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         numero_referencia VARCHAR(120) DEFAULT NULL,
         telefono_contacto VARCHAR(40) DEFAULT NULL,
         cupon VARCHAR(60) DEFAULT NULL,
+        ff_api_referencia VARCHAR(120) DEFAULT NULL,
+        ff_api_mensaje VARCHAR(255) DEFAULT NULL,
+        ff_api_payload LONGTEXT DEFAULT NULL,
         estado ENUM('pendiente','pagado','enviado','cancelado') NOT NULL DEFAULT 'pendiente',
         creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -42,9 +47,11 @@ function ensure_pedidos_table(mysqli $mysqli): void {
     $neededCols = [
         'tenant_slug' => "ALTER TABLE pedidos ADD COLUMN tenant_slug VARCHAR(80) NULL AFTER id",
         'juego_id' => "ALTER TABLE pedidos ADD COLUMN juego_id INT NULL AFTER tenant_slug",
+        'paquete_id' => "ALTER TABLE pedidos ADD COLUMN paquete_id INT NULL AFTER juego_id",
         'juego_nombre' => "ALTER TABLE pedidos ADD COLUMN juego_nombre VARCHAR(180) NULL AFTER juego_id",
         'paquete_nombre' => "ALTER TABLE pedidos ADD COLUMN paquete_nombre VARCHAR(180) NULL AFTER juego_nombre",
         'paquete_cantidad' => "ALTER TABLE pedidos ADD COLUMN paquete_cantidad VARCHAR(80) NULL AFTER paquete_nombre",
+        'monto_ff' => "ALTER TABLE pedidos ADD COLUMN monto_ff VARCHAR(20) NULL AFTER paquete_cantidad",
         'moneda' => "ALTER TABLE pedidos ADD COLUMN moneda VARCHAR(20) NULL AFTER paquete_cantidad",
         'precio' => "ALTER TABLE pedidos ADD COLUMN precio DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER moneda",
         'user_identifier' => "ALTER TABLE pedidos ADD COLUMN user_identifier VARCHAR(150) NULL AFTER precio",
@@ -54,6 +61,9 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         'numero_referencia' => "ALTER TABLE pedidos ADD COLUMN numero_referencia VARCHAR(120) NULL AFTER cliente_usuario_id",
         'telefono_contacto' => "ALTER TABLE pedidos ADD COLUMN telefono_contacto VARCHAR(40) NULL AFTER numero_referencia",
         'cupon' => "ALTER TABLE pedidos ADD COLUMN cupon VARCHAR(60) NULL AFTER telefono_contacto",
+        'ff_api_referencia' => "ALTER TABLE pedidos ADD COLUMN ff_api_referencia VARCHAR(120) NULL AFTER cupon",
+        'ff_api_mensaje' => "ALTER TABLE pedidos ADD COLUMN ff_api_mensaje VARCHAR(255) NULL AFTER ff_api_referencia",
+        'ff_api_payload' => "ALTER TABLE pedidos ADD COLUMN ff_api_payload LONGTEXT NULL AFTER ff_api_mensaje",
         'estado_pago_influencer' => "ALTER TABLE pedidos ADD COLUMN estado_pago_influencer ENUM('pendiente','pagado') NOT NULL DEFAULT 'pendiente' AFTER cupon",
         'estado' => "ALTER TABLE pedidos ADD COLUMN estado ENUM('pendiente','pagado','enviado','cancelado') NOT NULL DEFAULT 'pendiente' AFTER cupon",
         'creado_en' => "ALTER TABLE pedidos ADD COLUMN creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER estado",
@@ -70,6 +80,13 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         if (!isset($existing[$col])) {
             $mysqli->query($alterSql);
         }
+    }
+}
+
+function ensure_juego_paquetes_monto_ff_column(mysqli $mysqli): void {
+    $result = $mysqli->query("SHOW COLUMNS FROM juego_paquetes LIKE 'monto_ff'");
+    if (!($result instanceof mysqli_result) || $result->num_rows === 0) {
+        $mysqli->query("ALTER TABLE juego_paquetes ADD COLUMN monto_ff VARCHAR(20) NULL AFTER clave");
     }
 }
 
@@ -824,6 +841,77 @@ function game_uses_free_fire_api(mysqli $mysqli, int $gameId): bool {
     return !empty($row['api_free_fire']);
 }
 
+function fetch_game_package(mysqli $mysqli, int $packageId, int $gameId): ?array {
+    if ($packageId <= 0 || $gameId <= 0) {
+        return null;
+    }
+
+    $stmt = $mysqli->prepare('SELECT * FROM juego_paquetes WHERE id = ? AND juego_id = ? LIMIT 1');
+    if (!$stmt) {
+        return null;
+    }
+
+    $stmt->bind_param('ii', $packageId, $gameId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $package = $res ? $res->fetch_assoc() : null;
+    $stmt->close();
+
+    return $package ?: null;
+}
+
+function free_fire_api_config(): array {
+    return [
+        'usuario' => trim(store_config_get('ff_api_usuario', '')),
+        'clave' => trim(store_config_get('ff_api_clave', '')),
+        'tipo' => trim(store_config_get('ff_api_tipo', 'recargaFreefire')),
+    ];
+}
+
+function free_fire_api_config_is_complete(array $config): bool {
+    return trim((string) ($config['usuario'] ?? '')) !== ''
+        && trim((string) ($config['clave'] ?? '')) !== ''
+        && trim((string) ($config['tipo'] ?? '')) !== '';
+}
+
+function free_fire_api_alert_is_success(?string $alert): bool {
+    $normalized = strtolower(trim((string) $alert));
+    return in_array($normalized, ['green', 'success', 'ok'], true);
+}
+
+function execute_free_fire_recharge(array $config, string $monto, string $numero): array {
+    if (!free_fire_api_config_is_complete($config)) {
+        throw new RuntimeException('La configuración de la API de Free Fire está incompleta.');
+    }
+
+    if ($monto === '') {
+        throw new RuntimeException('El paquete seleccionado no tiene monto_ff configurado.');
+    }
+
+    if ($numero === '') {
+        throw new RuntimeException('El ID del jugador es obligatorio para la recarga de Free Fire.');
+    }
+
+    $url = 'https://www.tiendagiftven.net/conexion_api/api.php?' . http_build_query([
+        'action' => 'recarga',
+        'usuario' => $config['usuario'],
+        'clave' => $config['clave'],
+        'tipo' => $config['tipo'],
+        'monto' => $monto,
+        'numero' => $numero,
+    ]);
+
+    $response = http_get_json($url, 25, true);
+    $message = trim((string) ($response['mensaje'] ?? ''));
+
+    return [
+        'success' => free_fire_api_alert_is_success($response['alerta'] ?? null),
+        'message' => $message !== '' ? $message : 'Respuesta recibida desde la API de Free Fire.',
+        'reference' => sanitize_str((string) ($response['referencia'] ?? ''), 120),
+        'payload' => $response,
+    ];
+}
+
 function parse_bank_movement_datetime(?string $value): ?string {
     $raw = trim((string) $value);
     if ($raw === '') {
@@ -847,7 +935,7 @@ function normalize_bank_amount($value): float {
     return is_numeric($clean) ? round((float) $clean, 2) : 0.0;
 }
 
-function http_get_json(string $url, int $timeout = 20): array {
+function http_get_json(string $url, int $timeout = 20, bool $verifySsl = true): array {
     $body = null;
 
     if (function_exists('curl_init')) {
@@ -857,8 +945,8 @@ function http_get_json(string $url, int $timeout = 20): array {
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_CONNECTTIMEOUT => $timeout,
             CURLOPT_TIMEOUT => $timeout,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_SSL_VERIFYPEER => $verifySsl,
+            CURLOPT_SSL_VERIFYHOST => $verifySsl ? 2 : 0,
         ]);
         $response = curl_exec($ch);
         $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -879,8 +967,8 @@ function http_get_json(string $url, int $timeout = 20): array {
                 'ignore_errors' => true,
             ],
             'ssl' => [
-                'verify_peer' => false,
-                'verify_peer_name' => false,
+                'verify_peer' => $verifySsl,
+                'verify_peer_name' => $verifySsl,
             ],
         ]);
         $response = @file_get_contents($url, false, $context);
@@ -913,7 +1001,7 @@ function fetch_bank_movements(array $config): array {
         'password' => $password,
     ]);
 
-    $data = http_get_json($url);
+    $data = http_get_json($url, 20, false);
     $movements = $data['movimientos'] ?? null;
     if (!is_array($movements)) {
         throw new RuntimeException('La API bancaria no devolvió la lista de movimientos esperada.');
@@ -1261,6 +1349,144 @@ function notify_payment_validation_failed_cancellation(
     }
 }
 
+function notify_free_fire_recharge_success(
+    mysqli $mysqli,
+    array $order,
+    string $paymentMethodName,
+    string $referenceNumber,
+    string $phone,
+    string $providerReference,
+    string $providerMessage
+): void {
+    $orderId = (int) ($order['id'] ?? 0);
+    if ($orderId <= 0) {
+        return;
+    }
+
+    $adminEmail = resolve_admin_email($mysqli);
+    $brandingImages = email_branding_embedded_images();
+    $providerReferenceText = $providerReference !== '' ? '<p style="margin:0 0 10px;">Referencia del proveedor: <strong>' . email_escape($providerReference) . '</strong></p>' : '';
+    $providerMessageText = '<p style="margin:0;">Respuesta del proveedor: <strong>' . email_escape($providerMessage) . '</strong></p>';
+
+    $customerHtml = render_order_email('Pago verificado y recarga enviada', 'Cliente',
+        '<p style="margin:0 0 10px;">Tu pago fue validado automáticamente y la recarga de Free Fire fue procesada con éxito.</p>'
+        . $providerReferenceText
+        . $providerMessageText,
+        [
+            'order_id' => $orderId,
+            'game_name' => $order['juego_nombre'] ?? '',
+            'pack_name' => $order['paquete_nombre'] ?? '',
+            'pack_amount' => $order['paquete_cantidad'] ?? '',
+            'currency' => $order['moneda'] ?? '',
+            'price' => number_format((float) ($order['precio'] ?? 0), 2, '.', ','),
+            'user_identifier' => $order['user_identifier'] ?? '',
+            'email' => $order['email'] ?? '',
+            'coupon' => $order['cupon'] ?? null,
+            'payment_method' => $paymentMethodName,
+            'reference_number' => $referenceNumber,
+            'phone' => $phone,
+            'status' => 'Enviado',
+        ],
+        '#34d399'
+    );
+    $adminHtml = render_order_email('Recarga Free Fire enviada', 'Administrador',
+        '<p style="margin:0 0 10px;">El pago fue validado automáticamente y la API de Free Fire respondió exitosamente.</p>'
+        . $providerReferenceText
+        . $providerMessageText,
+        [
+            'order_id' => $orderId,
+            'game_name' => $order['juego_nombre'] ?? '',
+            'pack_name' => $order['paquete_nombre'] ?? '',
+            'pack_amount' => $order['paquete_cantidad'] ?? '',
+            'currency' => $order['moneda'] ?? '',
+            'price' => number_format((float) ($order['precio'] ?? 0), 2, '.', ','),
+            'user_identifier' => $order['user_identifier'] ?? '',
+            'email' => $order['email'] ?? '',
+            'coupon' => $order['cupon'] ?? null,
+            'payment_method' => $paymentMethodName,
+            'reference_number' => $referenceNumber,
+            'phone' => $phone,
+            'status' => 'Enviado',
+        ],
+        '#34d399'
+    );
+
+    if (!empty($order['email']) && filter_var($order['email'], FILTER_VALIDATE_EMAIL)) {
+        send_app_mail((string) $order['email'], "Recarga enviada #{$orderId}", $customerHtml, null, $brandingImages);
+    }
+    if ($adminEmail !== null) {
+        send_app_mail($adminEmail, "Recarga Free Fire enviada #{$orderId}", $adminHtml, null, $brandingImages);
+    }
+}
+
+function notify_free_fire_recharge_failure(
+    mysqli $mysqli,
+    array $order,
+    string $paymentMethodName,
+    string $referenceNumber,
+    string $phone,
+    string $providerMessage
+): void {
+    $orderId = (int) ($order['id'] ?? 0);
+    if ($orderId <= 0) {
+        return;
+    }
+
+    $adminEmail = resolve_admin_email($mysqli);
+    $brandingImages = email_branding_embedded_images();
+    $providerMessageText = '<p style="margin:0;">Respuesta del proveedor: <strong>' . email_escape($providerMessage) . '</strong></p>';
+
+    $customerHtml = render_order_email('Pago confirmado, recarga en revisión', 'Cliente',
+        '<p style="margin:0 0 10px;">Tu pago sí fue validado automáticamente, pero la recarga no pudo completarse de forma inmediata.</p>'
+        . '<p style="margin:0 0 10px;">Nuestro equipo ya fue notificado para revisar el caso manualmente.</p>'
+        . $providerMessageText,
+        [
+            'order_id' => $orderId,
+            'game_name' => $order['juego_nombre'] ?? '',
+            'pack_name' => $order['paquete_nombre'] ?? '',
+            'pack_amount' => $order['paquete_cantidad'] ?? '',
+            'currency' => $order['moneda'] ?? '',
+            'price' => number_format((float) ($order['precio'] ?? 0), 2, '.', ','),
+            'user_identifier' => $order['user_identifier'] ?? '',
+            'email' => $order['email'] ?? '',
+            'coupon' => $order['cupon'] ?? null,
+            'payment_method' => $paymentMethodName,
+            'reference_number' => $referenceNumber,
+            'phone' => $phone,
+            'status' => 'Pagado',
+        ],
+        '#f59e0b'
+    );
+    $adminHtml = render_order_email('Pago confirmado, recarga Free Fire fallida', 'Administrador',
+        '<p style="margin:0 0 10px;">El pago fue validado automáticamente, pero la API de Free Fire no completó la recarga.</p>'
+        . '<p style="margin:0 0 10px;">El pedido quedó en estado pagado para revisión manual.</p>'
+        . $providerMessageText,
+        [
+            'order_id' => $orderId,
+            'game_name' => $order['juego_nombre'] ?? '',
+            'pack_name' => $order['paquete_nombre'] ?? '',
+            'pack_amount' => $order['paquete_cantidad'] ?? '',
+            'currency' => $order['moneda'] ?? '',
+            'price' => number_format((float) ($order['precio'] ?? 0), 2, '.', ','),
+            'user_identifier' => $order['user_identifier'] ?? '',
+            'email' => $order['email'] ?? '',
+            'coupon' => $order['cupon'] ?? null,
+            'payment_method' => $paymentMethodName,
+            'reference_number' => $referenceNumber,
+            'phone' => $phone,
+            'status' => 'Pagado',
+        ],
+        '#f59e0b'
+    );
+
+    if (!empty($order['email']) && filter_var($order['email'], FILTER_VALIDATE_EMAIL)) {
+        send_app_mail((string) $order['email'], "Pago confirmado, recarga en revisión #{$orderId}", $customerHtml, null, $brandingImages);
+    }
+    if ($adminEmail !== null) {
+        send_app_mail($adminEmail, "Recarga Free Fire pendiente de revisión #{$orderId}", $adminHtml, null, $brandingImages);
+    }
+}
+
 $action = $_POST['action'] ?? $_GET['action'] ?? null;
 if (!$action) {
     json_error('Acción no especificada', 422);
@@ -1269,15 +1495,18 @@ if (!$action) {
 ensure_pedidos_table($mysqli);
 ensure_movimientos_table($mysqli);
 ensure_juegos_api_free_fire_column($mysqli);
+ensure_juego_paquetes_monto_ff_column($mysqli);
 influencer_coupon_ensure_sales_table_mysqli($mysqli);
 sync_coupon_usage_counts_mysqli($mysqli);
 
 if ($action === 'create') {
     $game_id = isset($_POST['game_id']) ? intval($_POST['game_id']) : null;
+    $package_id = isset($_POST['package_id']) ? intval($_POST['package_id']) : 0;
     // Si no viene game_name, intentar obtenerlo por ID
     $game_name = sanitize_str($_POST['game_name'] ?? null, 180);
     $pack_name = sanitize_str($_POST['pack_name'] ?? null, 180);
     $pack_amount_text = sanitize_str($_POST['pack_amount'] ?? null, 80); // texto descriptivo
+    $monto_ff = null;
     $pack_amount_num = 1;
     if ($pack_amount_text !== null && is_numeric($pack_amount_text)) {
         $pack_amount_num = intval($pack_amount_text);
@@ -1312,7 +1541,21 @@ if ($action === 'create') {
         }
     }
 
+    $selectedPackage = null;
+    if ($package_id > 0 && $game_id) {
+        $selectedPackage = fetch_game_package($mysqli, $package_id, (int) $game_id);
+        if ($selectedPackage) {
+            $pack_name = sanitize_str((string) ($selectedPackage['nombre'] ?? $pack_name), 180);
+            $pack_amount_text = sanitize_str((string) ($selectedPackage['cantidad'] ?? $pack_amount_text), 80);
+            $monto_ff = sanitize_str((string) ($selectedPackage['monto_ff'] ?? ''), 20);
+            if ($pack_amount_text !== null && is_numeric($pack_amount_text)) {
+                $pack_amount_num = intval($pack_amount_text);
+            }
+        }
+    }
+
     if (!$game_name) $missing[] = 'game_name';
+    if ($package_id <= 0) $missing[] = 'package_id';
     if (!$pack_name) $missing[] = 'pack_name';
     if (!$currency) $missing[] = 'currency';
     if (!$price || $price <= 0) $missing[] = 'price';
@@ -1320,6 +1563,14 @@ if ($action === 'create') {
     if (!$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) $missing[] = 'email';
     if (!empty($missing)) {
         json_error('Faltan datos obligatorios del pedido: ' . implode(', ', $missing));
+    }
+
+    if (!$selectedPackage) {
+        json_error('El paquete seleccionado no existe para este juego.');
+    }
+
+    if (game_uses_free_fire_api($mysqli, (int) $game_id) && $monto_ff === null) {
+        json_error('Este paquete no tiene un monto API configurado para Free Fire.');
     }
 
     // Validar y aplicar cupón si existe
@@ -1347,11 +1598,11 @@ if ($action === 'create') {
         $cupon = null;
     }
 
-    $stmt = $mysqli->prepare("INSERT INTO pedidos (tenant_slug, juego_id, juego_nombre, paquete_nombre, paquete_cantidad, moneda, precio, user_identifier, email, cliente_usuario_id, cupon, cantidad, estado) VALUES (?,?,?,?,?,?,?,?,?,?,?,?, 'pendiente')");
+    $stmt = $mysqli->prepare("INSERT INTO pedidos (tenant_slug, juego_id, paquete_id, juego_nombre, paquete_nombre, paquete_cantidad, monto_ff, moneda, precio, user_identifier, email, cliente_usuario_id, cupon, cantidad, estado) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'pendiente')");
     if (!$stmt) {
         json_error('No se pudo preparar el pedido');
     }
-    $stmt->bind_param('sissssdssisi', $tenant_slug, $game_id, $game_name, $pack_name, $pack_amount_text, $currency, $price, $user_identifier, $email, $cliente_usuario_id, $cupon, $pack_amount_num);
+    $stmt->bind_param('siissssdssisii', $tenant_slug, $game_id, $package_id, $game_name, $pack_name, $pack_amount_text, $monto_ff, $currency, $price, $user_identifier, $email, $cliente_usuario_id, $cupon, $pack_amount_num);
     if (!$stmt->execute()) {
         json_error('No se pudo guardar el pedido');
     }
@@ -1507,70 +1758,78 @@ if ($action === 'submit_payment') {
             $verifiedReference = (string) ($matchingMovement['referencia'] ?? $referenceNumber);
             link_movement_to_order($mysqli, $verifiedReference, $orderId);
 
-            $verifiedStatus = 'enviado';
-            $verifyStmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, telefono_contacto = ?, estado = ? WHERE id = ? AND estado = 'pendiente'");
-            if (!$verifyStmt) {
-                json_error('No se pudo confirmar el pedido automáticamente.', 500);
+            $montoFf = trim((string) ($updatedOrder['monto_ff'] ?? ''));
+            $freeFireConfig = free_fire_api_config();
+
+            try {
+                $freeFireResult = execute_free_fire_recharge($freeFireConfig, $montoFf, (string) ($updatedOrder['user_identifier'] ?? ''));
+            } catch (Throwable $e) {
+                $freeFireResult = [
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                    'reference' => '',
+                    'payload' => ['exception' => $e->getMessage()],
+                ];
             }
-            $verifyStmt->bind_param('sssi', $verifiedReference, $phone, $verifiedStatus, $orderId);
-            if (!$verifyStmt->execute()) {
+
+            $providerReference = (string) ($freeFireResult['reference'] ?? '');
+            $providerMessage = (string) ($freeFireResult['message'] ?? 'No se recibió mensaje del proveedor.');
+            $providerPayload = json_encode($freeFireResult['payload'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            if (!empty($freeFireResult['success'])) {
+                $verifiedStatus = 'enviado';
+                $verifyStmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, telefono_contacto = ?, ff_api_referencia = ?, ff_api_mensaje = ?, ff_api_payload = ?, estado = ? WHERE id = ? AND estado = 'pendiente'");
+                if (!$verifyStmt) {
+                    json_error('No se pudo confirmar la recarga automáticamente.', 500);
+                }
+                $verifyStmt->bind_param('ssssssi', $verifiedReference, $phone, $providerReference, $providerMessage, $providerPayload, $verifiedStatus, $orderId);
+                if (!$verifyStmt->execute()) {
+                    $verifyStmt->close();
+                    json_error('No se pudo actualizar el pedido tras procesar la recarga.', 500);
+                }
                 $verifyStmt->close();
+
+                $verifiedOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+                register_influencer_coupon_sale($mysqli, $verifiedOrder);
+                notify_free_fire_recharge_success($mysqli, $verifiedOrder, $paymentMethodName, $verifiedReference, $phone, $providerReference, $providerMessage);
+
+                echo json_encode([
+                    'ok' => true,
+                    'message' => 'Pago verificado y recarga Free Fire procesada correctamente.',
+                    'order_id' => $orderId,
+                    'estado' => 'enviado',
+                    'verified' => true,
+                    'provider_reference' => $providerReference,
+                    'provider_message' => $providerMessage,
+                ]);
+                exit;
+            }
+
+            $paidStatus = 'pagado';
+            $paidStmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, telefono_contacto = ?, ff_api_referencia = ?, ff_api_mensaje = ?, ff_api_payload = ?, estado = ? WHERE id = ? AND estado = 'pendiente'");
+            if (!$paidStmt) {
                 json_error('No se pudo actualizar el pedido tras validar el pago.', 500);
             }
-            $verifyStmt->close();
-
-            $verifiedOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
-            register_influencer_coupon_sale($mysqli, $verifiedOrder);
-
-            $customerMessage = '<p style="margin:0 0 10px;">Tu pago fue verificado automáticamente contra los movimientos bancarios.</p>'
-                . '<p style="margin:0;">La orden fue procesada y el pedido pasó directamente a estado <strong style="color:#34d399;">Enviado</strong>.</p>';
-            $adminMessage = '<p style="margin:0 0 10px;">El pago del cliente fue validado automáticamente con la API bancaria.</p>'
-                . '<p style="margin:0;">El pedido quedó marcado como <strong style="color:#34d399;">Enviado</strong> sin revisión manual adicional.</p>';
-
-            $customerHtml = render_order_email('Pago verificado y pedido enviado', 'Cliente', $customerMessage, [
-                'order_id' => $orderId,
-                'game_name' => $verifiedOrder['juego_nombre'] ?? '',
-                'pack_name' => $verifiedOrder['paquete_nombre'] ?? '',
-                'pack_amount' => $verifiedOrder['paquete_cantidad'] ?? '',
-                'currency' => $verifiedOrder['moneda'] ?? '',
-                'price' => number_format((float) ($verifiedOrder['precio'] ?? 0), 2, '.', ','),
-                'user_identifier' => $verifiedOrder['user_identifier'] ?? '',
-                'email' => $verifiedOrder['email'] ?? '',
-                'coupon' => $verifiedOrder['cupon'] ?? null,
-                'payment_method' => $paymentMethodName,
-                'reference_number' => $verifiedReference,
-                'phone' => $phone,
-                'status' => 'Enviado',
-            ], '#34d399');
-            $adminHtml = render_order_email('Pago verificado automáticamente', 'Administrador', $adminMessage, [
-                'order_id' => $orderId,
-                'game_name' => $verifiedOrder['juego_nombre'] ?? '',
-                'pack_name' => $verifiedOrder['paquete_nombre'] ?? '',
-                'pack_amount' => $verifiedOrder['paquete_cantidad'] ?? '',
-                'currency' => $verifiedOrder['moneda'] ?? '',
-                'price' => number_format((float) ($verifiedOrder['precio'] ?? 0), 2, '.', ','),
-                'user_identifier' => $verifiedOrder['user_identifier'] ?? '',
-                'email' => $verifiedOrder['email'] ?? '',
-                'coupon' => $verifiedOrder['cupon'] ?? null,
-                'payment_method' => $paymentMethodName,
-                'reference_number' => $verifiedReference,
-                'phone' => $phone,
-                'status' => 'Enviado',
-            ], '#34d399');
-
-            if (!empty($verifiedOrder['email']) && filter_var($verifiedOrder['email'], FILTER_VALIDATE_EMAIL)) {
-                send_app_mail((string) $verifiedOrder['email'], "Pago verificado #{$orderId}", $customerHtml, null, $brandingImages);
+            $paidStmt->bind_param('ssssssi', $verifiedReference, $phone, $providerReference, $providerMessage, $providerPayload, $paidStatus, $orderId);
+            if (!$paidStmt->execute()) {
+                $paidStmt->close();
+                json_error('No se pudo marcar el pedido como pagado.', 500);
             }
-            if ($adminEmail !== null) {
-                send_app_mail($adminEmail, "Pedido enviado automáticamente #{$orderId}", $adminHtml, null, $brandingImages);
-            }
+            $paidStmt->close();
+
+            $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+            register_influencer_coupon_sale($mysqli, $paidOrder);
+            notify_free_fire_recharge_failure($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerMessage);
 
             echo json_encode([
                 'ok' => true,
-                'message' => 'Pago verificado automáticamente. Tu pedido fue enviado.',
+                'message' => 'El pago fue verificado, pero la recarga Free Fire no pudo completarse automáticamente. Nuestro equipo revisará tu pedido.',
                 'order_id' => $orderId,
-                'estado' => 'enviado',
+                'estado' => 'pagado',
                 'verified' => true,
+                'reasons' => [$providerMessage],
+                'provider_reference' => $providerReference,
+                'provider_message' => $providerMessage,
             ]);
             exit;
         }
