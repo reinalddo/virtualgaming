@@ -832,15 +832,22 @@ function normalize_currency_code(?string $currencyCode): string {
         return '';
     }
 
-    $normalized = str_replace(['.', ' ', '-', '_'], '', $normalized);
+    $normalized = preg_replace('/[^A-Z0-9]+/u', '', $normalized) ?? '';
     $normalized = str_replace(['Á', 'À', 'Ä', 'Â'], 'A', $normalized);
     $normalized = str_replace(['É', 'È', 'Ë', 'Ê'], 'E', $normalized);
     $normalized = str_replace(['Í', 'Ì', 'Ï', 'Î'], 'I', $normalized);
     $normalized = str_replace(['Ó', 'Ò', 'Ö', 'Ô'], 'O', $normalized);
     $normalized = str_replace(['Ú', 'Ù', 'Ü', 'Û'], 'U', $normalized);
 
-    $bankAliases = ['BS', 'BSS', 'VES', 'VEF', 'BOLIVAR', 'BOLIVARES', 'BOLIVARESBS', 'BOLIVARESVES'];
-    if (in_array($normalized, $bankAliases, true)) {
+    if (
+        $normalized === 'BS'
+        || $normalized === 'BSS'
+        || str_contains($normalized, 'VES')
+        || str_contains($normalized, 'VEF')
+        || str_contains($normalized, 'BOLIVAR')
+        || str_contains($normalized, 'BOLIVARES')
+        || str_ends_with($normalized, 'BS')
+    ) {
         return 'VES';
     }
 
@@ -1782,7 +1789,7 @@ if ($action === 'create') {
     if (!$stmt) {
         json_error('No se pudo preparar el pedido');
     }
-    $stmt->bind_param('siissssdssisii', $tenant_slug, $game_id, $package_id, $game_name, $pack_name, $pack_amount_text, $monto_ff, $currency, $price, $user_identifier, $email, $cliente_usuario_id, $cupon, $pack_amount_num);
+    $stmt->bind_param('siisssssdssisi', $tenant_slug, $game_id, $package_id, $game_name, $pack_name, $pack_amount_text, $monto_ff, $currency, $price, $user_identifier, $email, $cliente_usuario_id, $cupon, $pack_amount_num);
     if (!$stmt->execute()) {
         json_error('No se pudo guardar el pedido');
     }
@@ -1918,9 +1925,10 @@ if ($action === 'submit_payment') {
     $paymentMethodName = (string) ($method['nombre'] ?? 'Método de pago');
     $brandingImages = email_branding_embedded_images();
     $usesFreeFireApi = game_uses_free_fire_api($mysqli, (int) ($updatedOrder['juego_id'] ?? 0));
+    $bankFlowRequested = $orderSupportsBankApi || $methodSupportsBankApi;
     $usesBankValidation = $orderSupportsBankApi && $methodSupportsBankApi && $currencyMatchesOrder;
 
-    if ($usesBankValidation) {
+    if ($bankFlowRequested) {
         $bankConfig = [
             'ff_bank_posicion' => store_config_get('ff_bank_posicion', '0'),
             'ff_bank_token' => store_config_get('ff_bank_token', ''),
@@ -1933,6 +1941,18 @@ if ($action === 'submit_payment') {
         } catch (Throwable $e) {
             json_error($e->getMessage(), 502);
         }
+
+        if (!$usesBankValidation) {
+            error_log('TVG bank validation skipped for order #' . $orderId
+                . ' order_currency=' . ($order['moneda'] ?? '')
+                . ' normalized_order_currency=' . $orderCurrencyCode
+                . ' method_currency=' . (($method['moneda_clave'] ?? ''))
+                . ' normalized_method_currency=' . $methodCurrencyCode
+                . ' bank_flow_requested=' . ($bankFlowRequested ? '1' : '0'));
+        }
+    }
+
+    if ($usesBankValidation) {
 
         $matchingMovement = find_matching_bank_movement(
             $mysqli,
