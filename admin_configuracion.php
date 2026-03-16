@@ -8,7 +8,7 @@ require_once __DIR__ . '/includes/home_gallery.php';
 require_once __DIR__ . '/includes/payment_methods.php';
 
 $activeTab = defined('ADMIN_CONFIG_ACTIVE_TAB') ? ADMIN_CONFIG_ACTIVE_TAB : ($_GET['tab'] ?? 'correo');
-if (!in_array($activeTab, ['correo', 'cabecera', 'sociales', 'api-banco', 'api-free-fire', 'galeria', 'metodos-pago'], true)) {
+if (!in_array($activeTab, ['correo', 'cabecera', 'sociales', 'api-banco', 'api-free-fire', 'personalizar-colores', 'galeria', 'metodos-pago'], true)) {
     $activeTab = 'correo';
 }
 
@@ -39,6 +39,14 @@ $galleryForm = [
     'referencia_digitos' => isset($paymentMethodEditItem['referencia_digitos']) ? max(0, (int) $paymentMethodEditItem['referencia_digitos']) : 0,
     'activo' => !array_key_exists('activo', $paymentMethodEditItem ?? []) ? true : !empty($paymentMethodEditItem['activo']),
   ];
+$themeDefinitions = store_theme_definitions();
+$themeBaseValues = store_theme_base_values();
+$themeValues = store_theme_values();
+$themeFieldGroups = [
+  'Fondos y paneles' => ['theme_bg_main', 'theme_bg_alt', 'theme_surface', 'theme_surface_alt', 'theme_border'],
+  'Neón y acciones' => ['theme_primary', 'theme_highlight', 'theme_secondary', 'theme_success'],
+  'Textos y estados' => ['theme_text', 'theme_text_muted', 'theme_warning', 'theme_danger'],
+];
 ?>
 <style>
   .neon-card {
@@ -218,6 +226,93 @@ $galleryForm = [
     color: #9be7ff;
     background: rgba(34, 211, 238, 0.08);
   }
+  .theme-swatch-card {
+    height: 100%;
+    border-radius: 18px;
+    border: 1px solid rgba(var(--theme-primary-rgb), 0.2);
+    background: rgba(var(--theme-bg-alt-rgb), 0.58);
+    padding: 1rem;
+    box-shadow: 0 0 20px rgba(var(--theme-primary-rgb), 0.08);
+  }
+  .theme-swatch-preview {
+    width: 100%;
+    height: 4.5rem;
+    border-radius: 14px;
+    border: 1px solid rgba(var(--theme-text-rgb), 0.14);
+    box-shadow: inset 0 0 0 1px rgba(var(--theme-text-rgb), 0.04);
+  }
+  .theme-swatch-card .form-control-color {
+    width: 100%;
+    height: 3rem;
+    padding: 0.25rem;
+    border-radius: 12px;
+  }
+  .theme-group-title {
+    color: var(--theme-highlight);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+  .theme-default-note {
+    color: rgba(var(--theme-text-muted-rgb), 0.92);
+    font-size: 0.84rem;
+  }
+  .theme-action-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+  .theme-action-row > * {
+    flex: 1 1 260px;
+  }
+  .theme-reset-btn {
+    border-radius: 16px !important;
+    min-height: 60px;
+    border: 1px solid rgba(var(--theme-warning-rgb), 0.5) !important;
+    background: rgba(var(--theme-warning-rgb), 0.12) !important;
+    color: var(--theme-text) !important;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    box-shadow: 0 0 16px rgba(var(--theme-warning-rgb), 0.16);
+  }
+  .theme-reset-btn:hover {
+    background: rgba(var(--theme-warning-rgb), 0.2) !important;
+    border-color: rgba(var(--theme-warning-rgb), 0.72) !important;
+  }
+  .neon-card {
+    background: var(--theme-surface-alt) !important;
+    border-color: var(--theme-highlight) !important;
+    box-shadow: 0 0 32px rgba(var(--theme-highlight-rgb), 0.2), 0 0 8px rgba(var(--theme-highlight-rgb), 0.95);
+    color: var(--theme-highlight);
+  }
+  .neon-card .form-control,
+  .neon-card .form-select {
+    background: rgba(var(--theme-bg-alt-rgb), 0.92) !important;
+    color: var(--theme-text) !important;
+    border-color: var(--theme-highlight) !important;
+    box-shadow: 0 0 8px rgba(var(--theme-highlight-rgb), 0.2);
+  }
+  .neon-card .form-control:focus,
+  .neon-card .form-select:focus {
+    border-color: var(--theme-success) !important;
+    box-shadow: 0 0 16px rgba(var(--theme-success-rgb), 0.6);
+  }
+  .neon-tabs-wrap,
+  .config-section-note,
+  .gallery-table-wrap,
+  .gallery-card-mobile,
+  .header-logo-preview,
+  .gallery-image-preview,
+  .gallery-thumb,
+  .gallery-badge-neon,
+  .neon-tab-link,
+  .neon-tab-link.active,
+  .neon-tab-link:hover {
+    border-color: rgba(var(--theme-primary-rgb), 0.24) !important;
+  }
   @media (max-width: 575.98px) {
     .neon-tabs-item {
       min-width: 100%;
@@ -245,6 +340,9 @@ $galleryForm = [
             <a href="/admin/configuracion?tab=api-free-fire" class="neon-tab-link <?= $activeTab === 'api-free-fire' ? 'active' : '' ?>">Datos API Free Fire</a>
           </div>
           <div class="neon-tabs-item">
+            <a href="/admin/configuracion?tab=personalizar-colores" class="neon-tab-link <?= $activeTab === 'personalizar-colores' ? 'active' : '' ?>">Personalizar Colores</a>
+          </div>
+          <div class="neon-tabs-item">
             <a href="/admin/configuracion?tab=galeria" class="neon-tab-link <?= $activeTab === 'galeria' ? 'active' : '' ?>">Galería</a>
           </div>
           <div class="neon-tabs-item">
@@ -254,9 +352,9 @@ $galleryForm = [
       </div>
 
       <div class="card neon-card mb-4">
-        <div class="card-header text-center py-4" style="background: linear-gradient(90deg, #00fff7 0%, #34d399 100%); color: #181f2a; border-radius: 16px 16px 0 0;">
+        <div class="card-header text-center py-4" style="background: linear-gradient(90deg, var(--theme-highlight) 0%, var(--theme-success) 100%); color: var(--theme-button-text-strong); border-radius: 16px 16px 0 0;">
           <h2 class="h4 fw-bold mb-0" style="font-family: 'Oxanium', 'Montserrat', 'Arial', sans-serif; letter-spacing: 0.08em;">
-            <?php if ($activeTab === 'correo'): ?>Configuración de correo corporativo<?php elseif ($activeTab === 'cabecera'): ?>Datos de cabecera<?php elseif ($activeTab === 'sociales'): ?>Redes Sociales<?php elseif ($activeTab === 'api-banco'): ?>Datos conexión Banco<?php elseif ($activeTab === 'api-free-fire'): ?>Datos API Free Fire<?php elseif ($activeTab === 'galeria'): ?>Galería principal del index<?php else: ?>Métodos de Pago<?php endif; ?>
+            <?php if ($activeTab === 'correo'): ?>Configuración de correo corporativo<?php elseif ($activeTab === 'cabecera'): ?>Datos de cabecera<?php elseif ($activeTab === 'sociales'): ?>Redes Sociales<?php elseif ($activeTab === 'api-banco'): ?>Datos conexión Banco<?php elseif ($activeTab === 'api-free-fire'): ?>Datos API Free Fire<?php elseif ($activeTab === 'personalizar-colores'): ?>Personalizar Colores<?php elseif ($activeTab === 'galeria'): ?>Galería principal del index<?php else: ?>Métodos de Pago<?php endif; ?>
           </h2>
         </div>
         <div class="card-body p-4">
@@ -416,6 +514,37 @@ $galleryForm = [
               </div>
 
               <button type="submit" class="neon-btn w-100 py-3 mt-4">Guardar datos API Free Fire</button>
+            </form>
+          <?php elseif ($activeTab === 'personalizar-colores'): ?>
+            <form method="post">
+              <input type="hidden" name="config_section" value="personalizar-colores">
+              <div class="config-section-note mb-4">Los valores `theme_*` quedan como base fija. Aquí solo editas una copia activa de esa paleta. Si el cliente quiere volver al diseño original, puedes restaurar la copia editable desde los valores base.</div>
+              <div class="row g-4">
+                <?php foreach ($themeFieldGroups as $groupTitle => $groupKeys): ?>
+                  <div class="col-12">
+                    <div class="theme-group-title mb-3"><?= htmlspecialchars($groupTitle, ENT_QUOTES, 'UTF-8') ?></div>
+                    <div class="row g-3">
+                      <?php foreach ($groupKeys as $themeKey): ?>
+                        <?php $definition = $themeDefinitions[$themeKey]; ?>
+                        <div class="col-md-6 col-xl-4">
+                          <div class="theme-swatch-card">
+                            <div class="theme-swatch-preview mb-3" style="background: <?= htmlspecialchars($themeValues[$themeKey], ENT_QUOTES, 'UTF-8') ?>;"></div>
+                            <label class="form-label fw-semibold"><?= htmlspecialchars($definition['label'], ENT_QUOTES, 'UTF-8') ?></label>
+                            <input type="color" name="<?= htmlspecialchars($themeKey, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars($themeValues[$themeKey], ENT_QUOTES, 'UTF-8') ?>" class="form-control form-control-color mb-2">
+                            <div class="small text-info mb-1">Editable: <?= htmlspecialchars($themeValues[$themeKey], ENT_QUOTES, 'UTF-8') ?></div>
+                            <div class="theme-default-note mb-2">Base fija: <?= htmlspecialchars($themeBaseValues[$themeKey], ENT_QUOTES, 'UTF-8') ?></div>
+                            <div class="form-text"><?= htmlspecialchars($definition['description'], ENT_QUOTES, 'UTF-8') ?></div>
+                          </div>
+                        </div>
+                      <?php endforeach; ?>
+                    </div>
+                  </div>
+                <?php endforeach; ?>
+              </div>
+              <div class="theme-action-row">
+                <button type="submit" class="neon-btn py-3">Guardar paleta de colores</button>
+                <button type="submit" name="restore_theme_defaults" value="1" class="btn theme-reset-btn" onclick="return confirm('Esto reemplazará la paleta editable actual por los valores base. ¿Deseas continuar?');">Restaurar a default</button>
+              </div>
             </form>
           <?php elseif ($activeTab === 'galeria'): ?>
             <form method="post" enctype="multipart/form-data">

@@ -58,6 +58,7 @@ if (!function_exists('asset_version')) {
 $tenantSlugAttr = resolve_tenant_slug();
 $mainStylesPath = __DIR__ . '/../assets/css/estilos.css';
 $mainStylesVersion = asset_version($mainStylesPath);
+$themeVariablesCss = store_theme_css_variables();
 ?>
 <!doctype html>
 <html lang="es">
@@ -79,43 +80,43 @@ $mainStylesVersion = asset_version($mainStylesPath);
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
   <!--<link rel="stylesheet" href="/assets/css/estilos.css" />-->
   <link rel="stylesheet" href="/assets/css/estilos.css?v=<?php echo htmlspecialchars($mainStylesVersion, ENT_QUOTES, 'UTF-8'); ?>" />
-  <!-- Bootstrap does not require JS config for colors here -->
   <style>
     :root {
-      --bg-0: #0a0f14;
-      --bg-1: #0e1722;
-      --neon-0: #22d3ee;
-      --neon-1: #2dd4bf;
-      --neon-2: #34d399;
+<?php echo $themeVariablesCss; ?>
     }
     body {
       font-family: "Space Grotesk", "Oxanium", sans-serif;
-      background: radial-gradient(circle at top, #0c1522 0%, #0a0f14 50%, #080b10 100%);
+      background: radial-gradient(circle at top, var(--theme-body-glow) 0%, var(--theme-bg-main) 48%, var(--theme-bg-deep) 100%);
+      color: var(--theme-text);
     }
     .glow-ring {
-      box-shadow: 0 0 0.75rem rgba(34, 211, 238, 0.4), 0 0 2.2rem rgba(45, 212, 191, 0.2);
+      box-shadow: 0 0 0.75rem rgba(var(--theme-primary-rgb), 0.4), 0 0 2.2rem rgba(var(--theme-secondary-rgb), 0.2);
     }
-    /* Gaming-styled scrollbar for the menu (supports WebKit + Firefox) */
+    .theme-panel {
+      background: linear-gradient(135deg, rgba(var(--theme-bg-alt-rgb), 0.96), rgba(var(--theme-surface-rgb), 0.94));
+      border: 1px solid rgba(var(--theme-border-rgb), 0.64);
+      box-shadow: 0 0 22px rgba(var(--theme-primary-rgb), 0.16);
+    }
     #menu-panel {
       scrollbar-width: thin;
-      scrollbar-color: rgba(34, 211, 238, 0.45) transparent;
+      scrollbar-color: rgba(var(--theme-primary-rgb), 0.45) transparent;
     }
     #menu-panel::-webkit-scrollbar {
       width: 10px;
     }
     #menu-panel::-webkit-scrollbar-track {
-      background: linear-gradient(180deg, rgba(12, 21, 34, 0.9), rgba(8, 11, 16, 0.6));
+      background: linear-gradient(180deg, rgba(var(--theme-bg-alt-rgb), 0.9), rgba(var(--theme-bg-main-rgb), 0.62));
       border-radius: 999px;
-      border: 1px solid rgba(30, 41, 59, 0.7);
+      border: 1px solid rgba(var(--theme-border-rgb), 0.54);
     }
     #menu-panel::-webkit-scrollbar-thumb {
-      background: linear-gradient(180deg, rgba(34, 211, 238, 0.85), rgba(52, 211, 153, 0.85));
+      background: linear-gradient(180deg, rgba(var(--theme-primary-rgb), 0.88), rgba(var(--theme-secondary-rgb), 0.88));
       border-radius: 999px;
-      box-shadow: 0 0 12px rgba(34, 211, 238, 0.35);
-      border: 1px solid rgba(12, 21, 34, 0.9);
+      box-shadow: 0 0 12px rgba(var(--theme-primary-rgb), 0.35);
+      border: 1px solid rgba(var(--theme-bg-alt-rgb), 0.9);
     }
     #menu-panel::-webkit-scrollbar-thumb:hover {
-      background: linear-gradient(180deg, rgba(34, 211, 238, 1), rgba(52, 211, 153, 1));
+      background: linear-gradient(180deg, rgba(var(--theme-highlight-rgb), 1), rgba(var(--theme-secondary-rgb), 1));
     }
     @keyframes floaty {
       0%, 100% { transform: translateY(0); }
@@ -153,8 +154,8 @@ $mainStylesVersion = asset_version($mainStylesPath);
 </head>
 <body class="bg-dark text-light min-vh-100">
   <div class="position-relative min-vh-100 overflow-hidden">
-    <div class="position-absolute top-0 start-50 translate-middle-x rounded-circle" style="height:18rem;width:18rem;background:rgba(34,211,238,0.15);filter:blur(48px);pointer-events:none;"></div>
-    <div class="position-absolute bottom-0 end-0 rounded-circle" style="height:16rem;width:16rem;background:rgba(52,211,153,0.10);filter:blur(48px);pointer-events:none;"></div>
+    <div class="position-absolute top-0 start-50 translate-middle-x rounded-circle" style="height:18rem;width:18rem;background:rgba(var(--theme-primary-rgb),0.15);filter:blur(48px);pointer-events:none;"></div>
+    <div class="position-absolute bottom-0 end-0 rounded-circle" style="height:16rem;width:16rem;background:rgba(var(--theme-success-rgb),0.10);filter:blur(48px);pointer-events:none;"></div>
 
     <div class="container-lg store-shell position-relative pb-5 pt-4" data-tenant="<?php echo htmlspecialchars($tenantSlugAttr, ENT_QUOTES, "UTF-8"); ?>">
       <header class="site-header d-flex align-items-center justify-content-between gap-3">
@@ -165,31 +166,31 @@ $mainStylesVersion = asset_version($mainStylesPath);
         </button>
         <div class="site-brand d-flex align-items-center justify-content-center gap-3 flex-grow-1">
           <?php if ($brandLogo !== ''): ?>
-            <div class="rounded-4 overflow-hidden border border-info glow-ring flex-shrink-0" style="width:52px;height:52px;background:rgba(12,21,34,0.82);">
+            <div class="rounded-4 overflow-hidden border border-info glow-ring flex-shrink-0" style="width:52px;height:52px;background:rgba(var(--theme-bg-alt-rgb),0.82);">
               <img src="<?php echo htmlspecialchars($brandLogo, ENT_QUOTES, 'UTF-8'); ?>" alt="Logo de la tienda" class="w-100 h-100 object-fit-cover" />
             </div>
           <?php endif; ?>
           <div class="text-center text-sm-start">
             <p class="small text-uppercase text-info mb-0" style="letter-spacing:0.3em;"><?php echo htmlspecialchars($brandPrefix, ENT_QUOTES, 'UTF-8'); ?></p>
-            <h1 class="fw-bold mb-0" style="font-family:'Oxanium', 'Space Grotesk', sans-serif;font-size:1.25rem;color:#fff;"><?php echo htmlspecialchars($brandName, ENT_QUOTES, "UTF-8"); ?></h1>
+            <h1 class="fw-bold mb-0" style="font-family:'Oxanium', 'Space Grotesk', sans-serif;font-size:1.25rem;color:var(--theme-text);"><?php echo htmlspecialchars($brandName, ENT_QUOTES, "UTF-8"); ?></h1>
           </div>
         </div>
         <div id="auth-container" class="site-auth-container position-relative">
           <?php if (!$authUser): ?>
-            <button id="auth-trigger" type="button" class="site-auth-trigger d-flex align-items-center gap-2 neon-btn border border-info bg-dark px-2 py-1 text-uppercase fw-bold text-info shadow-sm" style="font-size:11px;box-shadow:0 0 8px #22d3ee, 0 0 2px #2dd4bf;transition:box-shadow 0.2s;min-width:120px;">
+            <button id="auth-trigger" type="button" class="site-auth-trigger d-flex align-items-center gap-2 neon-btn border border-info bg-dark px-2 py-1 text-uppercase fw-bold text-info shadow-sm" style="font-size:11px;box-shadow:0 0 8px rgba(var(--theme-primary-rgb),0.8), 0 0 2px rgba(var(--theme-secondary-rgb),0.8);transition:box-shadow 0.2s;min-width:120px;">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" style="width:18px;height:18px;">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 20.118a7.5 7.5 0 0115 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.5-1.632z" />
               </svg>
-              <span class="site-auth-label" style="text-shadow:0 0 4px #22d3ee, 0 0 1px #2dd4bf;">Iniciar Sesión / Registrarse</span>
+              <span class="site-auth-label" style="text-shadow:0 0 4px rgba(var(--theme-primary-rgb),0.92), 0 0 1px rgba(var(--theme-secondary-rgb),0.92);">Iniciar Sesión / Registrarse</span>
             </button>
-            <div id="auth-menu" class="position-absolute end-0 mt-2 z-3 d-none" style="min-width:160px;max-width:220px;box-shadow:0 0 16px #22d3ee, 0 0 4px #2dd4bf;border-radius:0.75rem;border:1.5px solid #22d3ee;background:#181f2a;padding:0.75rem;">
+            <div id="auth-menu" class="position-absolute end-0 mt-2 z-3 d-none" style="min-width:160px;max-width:220px;box-shadow:0 0 16px rgba(var(--theme-primary-rgb),0.72), 0 0 4px rgba(var(--theme-secondary-rgb),0.6);border-radius:0.75rem;border:1.5px solid var(--theme-primary);background:var(--theme-surface-alt);padding:0.75rem;">
               <button type="button" class="btn btn-info neon-btn-info w-100 rounded-3 border mb-2 fw-bold text-uppercase shadow-sm" style="font-size:12px;" data-auth-open="login">Iniciar sesión</button>
               <button type="button" class="btn btn-warning neon-btn w-100 rounded-3 border fw-bold text-uppercase shadow-sm" style="font-size:12px;" data-auth-open="register">Registrarse</button>
             </div>
           <?php else: ?>
-            <button id="user-trigger" type="button" class="btn btn-admin d-inline-flex align-items-center gap-3 rounded-pill px-3 py-2 shadow-sm border border-info" style="background:linear-gradient(90deg,#22d3ee 0%,#2dd4bf 100%);color:#081018;min-width:210px;box-shadow:0 0 16px rgba(34,211,238,0.28);">
-              <span id="user-trigger-initials" class="d-inline-flex align-items-center justify-content-center rounded-circle fw-bold" style="width:38px;height:38px;background:rgba(8,16,24,0.18);border:1px solid rgba(8,16,24,0.2);font-family:'Oxanium',sans-serif;">
+            <button id="user-trigger" type="button" class="btn btn-admin d-inline-flex align-items-center gap-3 rounded-pill px-3 py-2 shadow-sm border border-info" style="background:linear-gradient(90deg,var(--theme-primary) 0%,var(--theme-secondary) 100%);color:var(--theme-button-text);min-width:210px;box-shadow:0 0 16px rgba(var(--theme-primary-rgb),0.28);">
+              <span id="user-trigger-initials" class="d-inline-flex align-items-center justify-content-center rounded-circle fw-bold" style="width:38px;height:38px;background:rgba(var(--theme-bg-main-rgb),0.18);border:1px solid rgba(var(--theme-bg-main-rgb),0.2);font-family:'Oxanium',sans-serif;">
                 <?php echo htmlspecialchars($authUserInitials, ENT_QUOTES, 'UTF-8'); ?>
               </span>
               <span class="d-flex flex-column align-items-start text-start lh-sm flex-grow-1 overflow-hidden">
@@ -200,7 +201,7 @@ $mainStylesVersion = asset_version($mainStylesPath);
                 <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
               </svg>
             </button>
-            <div id="user-menu" class="position-absolute end-0 mt-2 z-3 d-none" style="min-width:240px;max-width:280px;box-shadow:0 0 16px #22d3ee, 0 0 4px #2dd4bf;border-radius:1rem;border:1.5px solid #22d3ee;background:#181f2a;padding:0.85rem;">
+            <div id="user-menu" class="position-absolute end-0 mt-2 z-3 d-none" style="min-width:240px;max-width:280px;box-shadow:0 0 16px rgba(var(--theme-primary-rgb),0.72), 0 0 4px rgba(var(--theme-secondary-rgb),0.6);border-radius:1rem;border:1.5px solid var(--theme-primary);background:var(--theme-surface-alt);padding:0.85rem;">
               <div class="px-2 pb-2 mb-2 border-bottom border-info-subtle">
                 <div id="user-menu-name" class="fw-bold text-light"><?php echo htmlspecialchars($authUserName, ENT_QUOTES, 'UTF-8'); ?></div>
                 <div id="user-menu-email" class="small text-info text-break"><?php echo htmlspecialchars($authUserEmail, ENT_QUOTES, 'UTF-8'); ?></div>
@@ -231,9 +232,9 @@ $mainStylesVersion = asset_version($mainStylesPath);
         </div>
       <?php endif; ?>
 
-      <div id="menu-overlay" class="position-fixed top-0 start-0 w-100 h-100 d-none" style="background:rgba(12,21,34,0.7);backdrop-filter:blur(4px);z-index:1040;"></div>
-      <nav id="menu-panel" class="position-fixed start-50 top-0 translate-middle-x d-none w-100" style="max-width:420px;max-height:calc(100vh - 96px);overflow-y:auto;border-radius:1.5rem;border:2px solid #22d3ee;background:rgba(14,23,34,0.97);padding:1.5rem;box-shadow:0 0 32px #22d3ee, 0 0 8px #2dd4bf;z-index:1050;">
-        <button id="menu-close" class="btn btn-outline-info rounded-circle position-absolute end-0 top-0 m-3 d-flex align-items-center justify-content-center" style="width:40px;height:40px;box-shadow:0 0 12px #22d3ee;z-index:1060;" aria-label="Cerrar menú">
+        <div id="menu-overlay" class="position-fixed top-0 start-0 w-100 h-100 d-none" style="background:var(--theme-overlay-strong);backdrop-filter:blur(4px);z-index:1040;"></div>
+        <nav id="menu-panel" class="position-fixed start-50 top-0 translate-middle-x d-none w-100" style="max-width:420px;max-height:calc(100vh - 96px);overflow-y:auto;border-radius:1.5rem;border:2px solid var(--theme-primary);background:var(--theme-panel-bg);padding:1.5rem;box-shadow:var(--theme-shadow-primary), var(--theme-shadow-secondary);z-index:1050;">
+          <button id="menu-close" class="btn btn-outline-info rounded-circle position-absolute end-0 top-0 m-3 d-flex align-items-center justify-content-center" style="width:40px;height:40px;box-shadow:0 0 12px var(--theme-primary);z-index:1060;" aria-label="Cerrar menú">
           <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor" class="bi bi-x" viewBox="0 0 16 16">
             <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
           </svg>
@@ -263,10 +264,10 @@ $mainStylesVersion = asset_version($mainStylesPath);
       </nav>
 
       <div id="auth-modal" class="position-fixed top-0 start-0 w-100 h-100 d-none d-flex align-items-center justify-content-center px-4" style="z-index:13000;">
-        <div class="position-absolute top-0 start-0 w-100 h-100" style="background:rgba(12,21,34,0.85);backdrop-filter:blur(6px);box-shadow:0 0 32px #22d3ee, 0 0 8px #2dd4bf;z-index:11000;" data-auth-close></div>
-        <div class="position-relative w-100 neon-modal" style="max-width:420px;border-radius:1.5rem;border:2px solid #22d3ee;background:linear-gradient(135deg,rgba(14,23,34,0.98) 80%,rgba(34,211,238,0.08) 100%);padding:2rem 1.5rem;box-shadow:0 0 32px #22d3ee, 0 0 8px #2dd4bf;animation:fadeUp 320ms ease-out both;z-index:12000;">
-          <button type="button" data-auth-close class="position-absolute" style="top:18px;right:18px;width:48px;height:48px;border-radius:50%;background:rgba(34,211,238,0.15);border:2px solid #22d3ee;display:flex;align-items:center;justify-content:center;z-index:13001;box-shadow:0 0 12px #22d3ee;" aria-label="Cerrar">
-            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="#22d3ee" stroke-width="2.5">
+        <div class="position-absolute top-0 start-0 w-100 h-100" style="background:var(--theme-overlay-soft);backdrop-filter:blur(6px);box-shadow:var(--theme-shadow-primary), var(--theme-shadow-secondary);z-index:11000;" data-auth-close></div>
+        <div class="position-relative w-100 neon-modal" style="max-width:420px;border-radius:1.5rem;border:2px solid var(--theme-primary);background:var(--theme-panel-gradient);padding:2rem 1.5rem;box-shadow:var(--theme-shadow-primary), var(--theme-shadow-secondary);animation:fadeUp 320ms ease-out both;z-index:12000;">
+          <button type="button" data-auth-close class="position-absolute" style="top:18px;right:18px;width:48px;height:48px;border-radius:50%;background:var(--theme-primary-soft);border:2px solid var(--theme-primary);display:flex;align-items:center;justify-content:center;z-index:13001;box-shadow:0 0 12px var(--theme-primary);" aria-label="Cerrar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="var(--theme-primary)" stroke-width="2.5">
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -274,7 +275,7 @@ $mainStylesVersion = asset_version($mainStylesPath);
           <div id="auth-login" class="d-grid gap-4">
             <div>
               <p class="small text-uppercase text-neon mb-0" style="letter-spacing:0.35em;">Cuenta de usuario</p>
-              <h2 class="mt-2 text-neon fw-bold" style="font-family:'Oxanium',sans-serif;font-size:2rem;text-shadow:0 0 8px #22d3ee;">Iniciar sesión</h2>
+              <h2 class="mt-2 text-neon fw-bold" style="font-family:'Oxanium',sans-serif;font-size:2rem;text-shadow:0 0 8px var(--theme-primary);">Iniciar sesión</h2>
             </div>
             <form action="/login.php" method="post" class="d-grid gap-4" novalidate>
               <div class="d-grid gap-3">
@@ -304,7 +305,7 @@ $mainStylesVersion = asset_version($mainStylesPath);
           <div id="auth-register" class="d-none d-grid gap-4">
             <div>
               <p class="small text-uppercase text-neon mb-0" style="letter-spacing:0.35em;">Cuenta</p>
-              <h2 class="mt-2 text-neon fw-bold" style="font-family:'Oxanium',sans-serif;font-size:2rem;text-shadow:0 0 8px #22d3ee;">Crear cuenta</h2>
+              <h2 class="mt-2 text-neon fw-bold" style="font-family:'Oxanium',sans-serif;font-size:2rem;text-shadow:0 0 8px var(--theme-primary);">Crear cuenta</h2>
               <p class="mt-1 small text-neon">Regístrate para empezar a operar en <?php echo htmlspecialchars($brandName, ENT_QUOTES, "UTF-8"); ?>.</p>
             </div>
             <form id="registro-form" class="d-grid gap-4" novalidate autocomplete="off">
@@ -340,9 +341,9 @@ $mainStylesVersion = asset_version($mainStylesPath);
 
       <?php if ($authUser): ?>
       <div id="user-orders-modal" class="position-fixed top-0 start-0 w-100 h-100 d-none d-flex align-items-start align-items-md-center justify-content-center px-3 py-3 overflow-auto" style="z-index:13100;">
-        <div class="position-absolute top-0 start-0 w-100 h-100" style="background:rgba(12,21,34,0.88);backdrop-filter:blur(6px);" data-user-close></div>
+        <div class="position-absolute top-0 start-0 w-100 h-100" style="background:var(--theme-overlay-soft);backdrop-filter:blur(6px);" data-user-close></div>
         <div class="position-relative w-100" style="max-width:820px;z-index:1;">
-          <div class="rounded-4 border border-info overflow-hidden" style="background:linear-gradient(135deg,rgba(14,23,34,0.98) 80%,rgba(34,211,238,0.08) 100%);box-shadow:0 0 32px rgba(34,211,238,0.22);">
+          <div class="rounded-4 border border-info overflow-hidden" style="background:var(--theme-panel-gradient);box-shadow:0 0 32px var(--theme-primary-glow);">
             <div class="d-flex align-items-center justify-content-between gap-3 px-4 py-3 border-bottom border-info-subtle">
               <div>
                 <div class="small text-uppercase text-info" style="letter-spacing:0.3em;">Mi cuenta</div>
@@ -357,8 +358,8 @@ $mainStylesVersion = asset_version($mainStylesPath);
               <div id="user-orders-loading" class="text-center py-5 text-info">Cargando pedidos...</div>
               <div id="user-orders-empty" class="d-none text-center py-5 text-secondary">Todavía no has realizado pedidos con esta cuenta.</div>
               <div id="user-orders-list" class="d-none">
-                <div class="table-responsive d-none d-md-block rounded-4 border border-info-subtle overflow-hidden" style="background:rgba(8,15,24,0.82);">
-                  <table class="table align-middle mb-0" style="--bs-table-bg:transparent;--bs-table-color:#e5f6ff;">
+                <div class="table-responsive d-none d-md-block rounded-4 border border-info-subtle overflow-hidden" style="background:var(--theme-bg-elevated);">
+                  <table class="table align-middle mb-0" style="--bs-table-bg:transparent;--bs-table-color:var(--theme-text);">
                     <thead>
                       <tr>
                         <th class="text-info text-uppercase small fw-bold border-bottom border-info-subtle bg-transparent">Pedido</th>
@@ -380,9 +381,9 @@ $mainStylesVersion = asset_version($mainStylesPath);
       </div>
 
       <div id="user-profile-modal" class="position-fixed top-0 start-0 w-100 h-100 d-none d-flex align-items-center justify-content-center px-3" style="z-index:13100;">
-        <div class="position-absolute top-0 start-0 w-100 h-100" style="background:rgba(12,21,34,0.88);backdrop-filter:blur(6px);" data-user-close></div>
+        <div class="position-absolute top-0 start-0 w-100 h-100" style="background:var(--theme-overlay-soft);backdrop-filter:blur(6px);" data-user-close></div>
         <div class="position-relative w-100" style="max-width:560px;z-index:1;">
-          <div class="rounded-4 border border-info overflow-hidden" style="background:linear-gradient(135deg,rgba(14,23,34,0.98) 80%,rgba(34,211,238,0.08) 100%);box-shadow:0 0 32px rgba(34,211,238,0.22);">
+          <div class="rounded-4 border border-info overflow-hidden" style="background:var(--theme-panel-gradient);box-shadow:0 0 32px var(--theme-primary-glow);">
             <div class="d-flex align-items-center justify-content-between gap-3 px-4 py-3 border-bottom border-info-subtle">
               <div>
                 <div class="small text-uppercase text-info" style="letter-spacing:0.3em;">Mi cuenta</div>

@@ -247,7 +247,7 @@ switch ($seccion) {
         require_once __DIR__ . '/includes/home_gallery.php';
         require_once __DIR__ . '/includes/payment_methods.php';
         $activeTab = $_GET['tab'] ?? 'correo';
-        if (!in_array($activeTab, ['correo', 'cabecera', 'sociales', 'api-banco', 'api-free-fire', 'galeria', 'metodos-pago'], true)) {
+        if (!in_array($activeTab, ['correo', 'cabecera', 'sociales', 'api-banco', 'api-free-fire', 'personalizar-colores', 'galeria', 'metodos-pago'], true)) {
             $activeTab = 'correo';
         }
 
@@ -286,7 +286,7 @@ switch ($seccion) {
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $activeTab = $_POST['config_section'] ?? $activeTab;
-            if (!in_array($activeTab, ['correo', 'cabecera', 'sociales', 'api-banco', 'api-free-fire', 'galeria', 'metodos-pago'], true)) {
+            if (!in_array($activeTab, ['correo', 'cabecera', 'sociales', 'api-banco', 'api-free-fire', 'personalizar-colores', 'galeria', 'metodos-pago'], true)) {
                 $activeTab = 'correo';
             }
 
@@ -413,6 +413,33 @@ switch ($seccion) {
                 store_config_upsert('ff_api_clave', $ffApiClave);
                 store_config_upsert('ff_api_tipo', $ffApiTipo);
                 admin_set_flash('success', 'Datos API Free Fire actualizados.');
+            }
+
+            if ($activeTab === 'personalizar-colores') {
+                if (isset($_POST['restore_theme_defaults'])) {
+                    if (!store_theme_restore_defaults()) {
+                        admin_set_flash('error', 'No se pudo restaurar la paleta base.');
+                    } else {
+                        admin_set_flash('success', 'La paleta editable fue restaurada desde los valores base.');
+                    }
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'personalizar-colores']);
+                }
+
+                $validation = store_theme_validate_payload($_POST);
+                if (!$validation['is_valid']) {
+                    admin_set_flash('error', implode(' ', $validation['errors']));
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'personalizar-colores']);
+                }
+
+                if (!store_theme_save_values($validation['data'])) {
+                    admin_set_flash('error', 'No se pudo guardar la paleta editable.');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'personalizar-colores']);
+                }
+
+                admin_set_flash('success', 'Paleta de colores actualizada.');
             }
 
             if ($activeTab === 'galeria') {

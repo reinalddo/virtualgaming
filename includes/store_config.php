@@ -1,7 +1,89 @@
 <?php
 
-function store_config_descriptions(): array {
+function store_theme_definitions(): array {
     return [
+        'theme_bg_main' => [
+            'label' => 'Fondo principal',
+            'default' => '#0A0F14',
+            'description' => 'Color base del fondo general de la tienda',
+        ],
+        'theme_bg_alt' => [
+            'label' => 'Fondo secundario',
+            'default' => '#0E1722',
+            'description' => 'Color usado en degradados y secciones secundarias',
+        ],
+        'theme_surface' => [
+            'label' => 'Superficie principal',
+            'default' => '#111827',
+            'description' => 'Color de tarjetas, paneles y modales',
+        ],
+        'theme_surface_alt' => [
+            'label' => 'Superficie alterna',
+            'default' => '#181F2A',
+            'description' => 'Color alterno para cabecera, dropdowns y paneles internos',
+        ],
+        'theme_primary' => [
+            'label' => 'Neón principal',
+            'default' => '#22D3EE',
+            'description' => 'Color principal del brillo, bordes y textos destacados',
+        ],
+        'theme_highlight' => [
+            'label' => 'Neón intenso',
+            'default' => '#00FFF7',
+            'description' => 'Color de realce para brillos y botones destacados',
+        ],
+        'theme_secondary' => [
+            'label' => 'Neón secundario',
+            'default' => '#2DD4BF',
+            'description' => 'Color secundario para degradados, hover y efectos',
+        ],
+        'theme_success' => [
+            'label' => 'Color de éxito',
+            'default' => '#34D399',
+            'description' => 'Color para acciones positivas y estados correctos',
+        ],
+        'theme_warning' => [
+            'label' => 'Color de advertencia',
+            'default' => '#F59E0B',
+            'description' => 'Color para alertas y estados de revisión',
+        ],
+        'theme_danger' => [
+            'label' => 'Color de error',
+            'default' => '#F87171',
+            'description' => 'Color para cancelaciones, errores y alertas críticas',
+        ],
+        'theme_text' => [
+            'label' => 'Texto principal',
+            'default' => '#F8FAFC',
+            'description' => 'Color principal del texto en la tienda',
+        ],
+        'theme_text_muted' => [
+            'label' => 'Texto secundario',
+            'default' => '#CBD5E1',
+            'description' => 'Color de textos secundarios, ayudas y descripciones',
+        ],
+        'theme_border' => [
+            'label' => 'Borde base',
+            'default' => '#164E63',
+            'description' => 'Color base de bordes, separadores y contenedores',
+        ],
+    ];
+}
+
+function store_theme_custom_key(string $baseKey): string {
+    if (str_starts_with($baseKey, 'theme_')) {
+        return 'theme_custom_' . substr($baseKey, 6);
+    }
+
+    return 'theme_custom_' . $baseKey;
+}
+
+function store_theme_custom_description(string $baseDescription): string {
+    return 'Copia editable: ' . $baseDescription;
+}
+
+function store_config_descriptions(): array {
+    $descriptions = [
         'correo_corporativo' => 'Correo usado para notificaciones',
         'smtp_host' => 'Host SMTP para envío de correos',
         'smtp_user' => 'Usuario SMTP',
@@ -23,10 +105,18 @@ function store_config_descriptions(): array {
         'ff_api_clave' => 'Clave para la API de Free Fire',
         'ff_api_tipo' => 'Tipo para la API de Free Fire',
     ];
+
+    foreach (store_theme_definitions() as $key => $definition) {
+        $description = (string) ($definition['description'] ?? 'Color del tema visual');
+        $descriptions[$key] = $description;
+        $descriptions[store_theme_custom_key($key)] = store_theme_custom_description($description);
+    }
+
+    return $descriptions;
 }
 
 function store_config_defaults(): array {
-    return [
+    $defaults = [
         'correo_corporativo' => '',
         'smtp_host' => '',
         'smtp_user' => '',
@@ -48,6 +138,244 @@ function store_config_defaults(): array {
         'ff_api_clave' => '',
         'ff_api_tipo' => 'recargaFreefire',
     ];
+
+    foreach (store_theme_definitions() as $key => $definition) {
+        $defaultValue = (string) ($definition['default'] ?? '#000000');
+        $defaults[$key] = $defaultValue;
+        $defaults[store_theme_custom_key($key)] = $defaultValue;
+    }
+
+    return $defaults;
+}
+
+function store_config_normalize_hex_color(string $value, string $fallback = '#000000'): string {
+    $normalized = strtoupper(trim($value));
+    if ($normalized === '') {
+        return strtoupper($fallback);
+    }
+
+    if ($normalized[0] !== '#') {
+        $normalized = '#' . $normalized;
+    }
+
+    if (!preg_match('/^#([A-F0-9]{3}|[A-F0-9]{6})$/', $normalized)) {
+        return strtoupper($fallback);
+    }
+
+    if (strlen($normalized) === 4) {
+        return '#'
+            . $normalized[1] . $normalized[1]
+            . $normalized[2] . $normalized[2]
+            . $normalized[3] . $normalized[3];
+    }
+
+    return $normalized;
+}
+
+function store_theme_base_values(bool $refresh = false): array {
+    $config = store_config_all($refresh);
+    $values = [];
+
+    foreach (store_theme_definitions() as $key => $definition) {
+        $values[$key] = store_config_normalize_hex_color(
+            (string) ($config[$key] ?? ''),
+            (string) ($definition['default'] ?? '#000000')
+        );
+    }
+
+    return $values;
+}
+
+function store_theme_values(bool $refresh = false): array {
+    $config = store_config_all($refresh);
+    $baseValues = store_theme_base_values($refresh);
+    $values = [];
+
+    foreach (store_theme_definitions() as $key => $definition) {
+        $customKey = store_theme_custom_key($key);
+        $values[$key] = store_config_normalize_hex_color(
+            (string) ($config[$customKey] ?? ''),
+            $baseValues[$key] ?? (string) ($definition['default'] ?? '#000000')
+        );
+    }
+
+    return $values;
+}
+
+function store_theme_validate_payload(array $input): array {
+    $data = [];
+    $errors = [];
+
+    foreach (store_theme_definitions() as $key => $definition) {
+        $rawValue = trim((string) ($input[$key] ?? ''));
+        if ($rawValue === '') {
+            $errors[] = 'Debes indicar un color para ' . strtolower((string) ($definition['label'] ?? $key)) . '.';
+            continue;
+        }
+
+        $normalized = store_config_normalize_hex_color($rawValue, '');
+        if ($normalized === '') {
+            $errors[] = 'El color de ' . strtolower((string) ($definition['label'] ?? $key)) . ' no es válido. Usa formato hexadecimal, por ejemplo: #22D3EE.';
+            continue;
+        }
+
+        $data[$key] = $normalized;
+    }
+
+    return [
+        'is_valid' => empty($errors),
+        'errors' => $errors,
+        'data' => $data,
+    ];
+}
+
+function store_theme_save_values(array $values): bool {
+    $descriptions = store_config_descriptions();
+
+    foreach (store_theme_definitions() as $baseKey => $definition) {
+        if (!array_key_exists($baseKey, $values)) {
+            continue;
+        }
+
+        $customKey = store_theme_custom_key($baseKey);
+        $description = $descriptions[$customKey] ?? store_theme_custom_description((string) ($definition['description'] ?? 'Color del tema visual'));
+        if (!store_config_upsert($customKey, (string) $values[$baseKey], $description)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function store_theme_restore_defaults(): bool {
+    return store_theme_save_values(store_theme_base_values(true));
+}
+
+function store_theme_hex_to_rgb(string $hex): array {
+    $normalized = store_config_normalize_hex_color($hex, '#000000');
+    return [
+        hexdec(substr($normalized, 1, 2)),
+        hexdec(substr($normalized, 3, 2)),
+        hexdec(substr($normalized, 5, 2)),
+    ];
+}
+
+function store_theme_rgb_string(string $hex): string {
+    $rgb = store_theme_hex_to_rgb($hex);
+    return implode(', ', $rgb);
+}
+
+function store_theme_rgba(string $hex, float $alpha): string {
+    $rgb = store_theme_hex_to_rgb($hex);
+    $safeAlpha = max(0, min(1, $alpha));
+    return 'rgba(' . implode(', ', $rgb) . ', ' . rtrim(rtrim(number_format($safeAlpha, 2, '.', ''), '0'), '.') . ')';
+}
+
+function store_theme_mix(string $baseHex, string $mixHex, float $ratio): string {
+    $base = store_theme_hex_to_rgb($baseHex);
+    $mix = store_theme_hex_to_rgb($mixHex);
+    $weight = max(0, min(1, $ratio));
+    $channels = [];
+
+    foreach ([0, 1, 2] as $index) {
+        $channels[$index] = (int) round(($base[$index] * (1 - $weight)) + ($mix[$index] * $weight));
+    }
+
+    return sprintf('#%02X%02X%02X', $channels[0], $channels[1], $channels[2]);
+}
+
+function store_theme_contrast_text(string $backgroundHex): string {
+    [$red, $green, $blue] = store_theme_hex_to_rgb($backgroundHex);
+    $luminance = ((0.299 * $red) + (0.587 * $green) + (0.114 * $blue)) / 255;
+    return $luminance > 0.6 ? '#081018' : '#F8FAFC';
+}
+
+function store_theme_css_variables(): string {
+    $theme = store_theme_values();
+    $bodyGlow = store_theme_mix($theme['theme_bg_alt'], '#123247', 0.18);
+    $bodyDeep = store_theme_mix($theme['theme_bg_main'], '#000000', 0.28);
+    $panelGlow = store_theme_mix($theme['theme_primary'], $theme['theme_secondary'], 0.25);
+    $panelBg = store_theme_rgba($theme['theme_bg_alt'], 0.97);
+    $panelGradient = 'linear-gradient(135deg, ' . store_theme_rgba($theme['theme_bg_alt'], 0.98) . ' 80%, ' . store_theme_rgba($theme['theme_primary'], 0.08) . ' 100%)';
+    $overlayStrong = store_theme_rgba('#0C1522', 0.7);
+    $overlaySoft = store_theme_rgba('#0C1522', 0.86);
+    $primarySoft = store_theme_rgba($theme['theme_primary'], 0.15);
+    $primaryGlow = store_theme_rgba($theme['theme_primary'], 0.22);
+    $bgElevated = store_theme_rgba('#081018', 0.82);
+    $buttonPrimaryMix = store_theme_mix($theme['theme_highlight'], $theme['theme_primary'], 0.5);
+    $buttonSecondaryMix = store_theme_mix($theme['theme_primary'], $theme['theme_secondary'], 0.5);
+
+    $variables = [
+        '--theme-bg-main' => $theme['theme_bg_main'],
+        '--theme-bg-alt' => $theme['theme_bg_alt'],
+        '--theme-bg-deep' => $bodyDeep,
+        '--theme-surface' => $theme['theme_surface'],
+        '--theme-surface-alt' => $theme['theme_surface_alt'],
+        '--theme-primary' => $theme['theme_primary'],
+        '--theme-highlight' => $theme['theme_highlight'],
+        '--theme-secondary' => $theme['theme_secondary'],
+        '--theme-success' => $theme['theme_success'],
+        '--theme-warning' => $theme['theme_warning'],
+        '--theme-danger' => $theme['theme_danger'],
+        '--theme-text' => $theme['theme_text'],
+        '--theme-text-muted' => $theme['theme_text_muted'],
+        '--theme-border' => $theme['theme_border'],
+        '--theme-body-glow' => $bodyGlow,
+        '--theme-panel-glow' => $panelGlow,
+        '--theme-panel-bg' => $panelBg,
+        '--theme-panel-gradient' => $panelGradient,
+        '--theme-overlay-strong' => $overlayStrong,
+        '--theme-overlay-soft' => $overlaySoft,
+        '--theme-primary-soft' => $primarySoft,
+        '--theme-primary-glow' => $primaryGlow,
+        '--theme-bg-elevated' => $bgElevated,
+        '--theme-shadow-primary' => '0 0 32px ' . store_theme_rgba($theme['theme_primary'], 0.95),
+        '--theme-shadow-secondary' => '0 0 8px ' . store_theme_rgba($theme['theme_secondary'], 0.9),
+        '--theme-primary-rgb' => store_theme_rgb_string($theme['theme_primary']),
+        '--theme-highlight-rgb' => store_theme_rgb_string($theme['theme_highlight']),
+        '--theme-secondary-rgb' => store_theme_rgb_string($theme['theme_secondary']),
+        '--theme-success-rgb' => store_theme_rgb_string($theme['theme_success']),
+        '--theme-warning-rgb' => store_theme_rgb_string($theme['theme_warning']),
+        '--theme-danger-rgb' => store_theme_rgb_string($theme['theme_danger']),
+        '--theme-text-rgb' => store_theme_rgb_string($theme['theme_text']),
+        '--theme-text-muted-rgb' => store_theme_rgb_string($theme['theme_text_muted']),
+        '--theme-border-rgb' => store_theme_rgb_string($theme['theme_border']),
+        '--theme-bg-main-rgb' => store_theme_rgb_string($theme['theme_bg_main']),
+        '--theme-bg-alt-rgb' => store_theme_rgb_string($theme['theme_bg_alt']),
+        '--theme-surface-rgb' => store_theme_rgb_string($theme['theme_surface']),
+        '--theme-surface-alt-rgb' => store_theme_rgb_string($theme['theme_surface_alt']),
+        '--theme-button-text' => store_theme_contrast_text($buttonSecondaryMix),
+        '--theme-button-text-strong' => store_theme_contrast_text($buttonPrimaryMix),
+        '--theme-success-text' => store_theme_contrast_text($theme['theme_success']),
+        '--theme-danger-text' => store_theme_contrast_text($theme['theme_danger']),
+        '--bs-body-bg' => $theme['theme_bg_main'],
+        '--bs-body-color' => $theme['theme_text'],
+        '--bs-dark' => $theme['theme_surface'],
+        '--bs-dark-rgb' => store_theme_rgb_string($theme['theme_surface']),
+        '--bs-info' => $theme['theme_primary'],
+        '--bs-info-rgb' => store_theme_rgb_string($theme['theme_primary']),
+        '--bs-success' => $theme['theme_success'],
+        '--bs-success-rgb' => store_theme_rgb_string($theme['theme_success']),
+        '--bs-warning' => $theme['theme_warning'],
+        '--bs-warning-rgb' => store_theme_rgb_string($theme['theme_warning']),
+        '--bs-danger' => $theme['theme_danger'],
+        '--bs-danger-rgb' => store_theme_rgb_string($theme['theme_danger']),
+        '--bs-secondary-color' => $theme['theme_text_muted'],
+        '--bs-secondary-color-rgb' => store_theme_rgb_string($theme['theme_text_muted']),
+        '--bs-border-color' => store_theme_rgba($theme['theme_border'], 0.68),
+        '--bs-border-color-translucent' => store_theme_rgba($theme['theme_border'], 0.28),
+        '--bs-heading-color' => $theme['theme_text'],
+        '--bs-emphasis-color' => $theme['theme_text'],
+        '--bs-link-color' => $theme['theme_primary'],
+        '--bs-link-hover-color' => $theme['theme_highlight'],
+    ];
+
+    $lines = [];
+    foreach ($variables as $name => $value) {
+        $lines[] = '      ' . $name . ': ' . $value . ';';
+    }
+
+    return implode("\n", $lines);
 }
 
 function store_config_db(): mysqli {
