@@ -288,11 +288,19 @@ $menuScript = <<<'SCRIPT'
     if (!input) {
       return;
     }
-    const icon = button ? button.querySelector("svg") : null;
     const showPassword = input.type === "password";
     input.type = showPassword ? "text" : "password";
-    if (icon) {
-      icon.classList.toggle("text-neon", showPassword);
+    if (button) {
+      const hiddenIcon = button.querySelector('[data-password-icon="hidden"]');
+      const visibleIcon = button.querySelector('[data-password-icon="visible"]');
+      if (hiddenIcon) {
+        hiddenIcon.classList.toggle("d-none", showPassword);
+      }
+      if (visibleIcon) {
+        visibleIcon.classList.toggle("d-none", !showPassword);
+      }
+      button.setAttribute("aria-pressed", showPassword ? "true" : "false");
+      button.setAttribute("aria-label", showPassword ? (button.dataset.passwordLabelHide || "Ocultar contraseña") : (button.dataset.passwordLabelShow || "Mostrar contraseña"));
     }
   };
 

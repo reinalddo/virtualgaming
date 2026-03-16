@@ -281,12 +281,16 @@ $mainStylesVersion = asset_version($mainStylesPath);
                 <label class="form-label small text-neon">Correo electrónico</label>
                 <input type="email" name="email" autocomplete="email" class="form-control rounded-3 bg-dark text-neon border border-info" placeholder="nombre@correo.com" />
                 <label class="form-label small text-neon">Contraseña</label>
-                <div class="relative">
+                <div class="position-relative">
                   <input type="password" name="password" autocomplete="current-password" class="form-control rounded-3 bg-dark text-neon border border-info pe-5" placeholder="Ingresa tu contraseña" id="login-password" />
-                  <button type="button" tabindex="-1" class="btn btn-link position-absolute end-0 top-50 translate-middle-y text-info" style="padding:0;" data-password-toggle="login-password">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                  <button type="button" class="btn position-absolute end-0 top-50 translate-middle-y d-inline-flex align-items-center justify-content-center text-info" style="width:46px;height:46px;border:none;background:transparent;box-shadow:none;" data-password-toggle="login-password" data-password-label-show="Mostrar contraseña" data-password-label-hide="Ocultar contraseña" aria-label="Mostrar contraseña" aria-pressed="false">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" data-password-icon="hidden">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12.001C3.226 16.273 7.322 19.5 12 19.5c1.658 0 3.237-.336 4.677-.947M6.228 6.228A9.956 9.956 0 0112 4.5c4.677 0 8.773 3.227 10.065 7.499a10.523 10.523 0 01-4.293 5.774M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       <path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18" />
+                    </svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" data-password-icon="visible" class="d-none">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.964-7.178z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                   </button>
                 </div>
@@ -312,12 +316,16 @@ $mainStylesVersion = asset_version($mainStylesPath);
                 <label class="form-label small text-neon">Número de teléfono</label>
                 <input type="tel" id="telefono" autocomplete="tel" class="form-control rounded-3 bg-dark text-neon border border-info" placeholder="+58 412 0000000" />
                 <label class="form-label small text-neon">Contraseña</label>
-                <div class="relative">
+                <div class="position-relative">
                   <input type="password" id="contrasena" autocomplete="new-password" class="form-control rounded-3 bg-dark text-neon border border-info pe-5" placeholder="Crea una contraseña segura" required />
-                  <button type="button" tabindex="-1" class="btn btn-link position-absolute end-0 top-50 translate-middle-y text-info" style="padding:0;" data-password-toggle="contrasena">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                  <button type="button" class="btn position-absolute end-0 top-50 translate-middle-y d-inline-flex align-items-center justify-content-center text-info" style="width:46px;height:46px;border:none;background:transparent;box-shadow:none;" data-password-toggle="contrasena" data-password-label-show="Mostrar contraseña" data-password-label-hide="Ocultar contraseña" aria-label="Mostrar contraseña" aria-pressed="false">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" data-password-icon="hidden">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12.001C3.226 16.273 7.322 19.5 12 19.5c1.658 0 3.237-.336 4.677-.947M6.228 6.228A9.956 9.956 0 0112 4.5c4.677 0 8.773 3.227 10.065 7.499a10.523 10.523 0 01-4.293 5.774M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       <path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18" />
+                    </svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" data-password-icon="visible" class="d-none">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.964-7.178z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                   </button>
                 </div>
