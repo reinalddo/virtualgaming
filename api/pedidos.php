@@ -1068,6 +1068,12 @@ function fetch_bank_movements(array $config): array {
     return $normalized;
 }
 
+function fetch_and_sync_bank_movements(mysqli $mysqli, array $config): array {
+    $movements = fetch_bank_movements($config);
+    sync_bank_movements($mysqli, $movements);
+    return $movements;
+}
+
 function sync_bank_movements(mysqli $mysqli, array $movements): void {
     if (empty($movements)) {
         return;
@@ -1163,6 +1169,56 @@ function find_matching_bank_movement(mysqli $mysqli, array $movements, string $r
     }
 
     return null;
+}
+
+function find_matching_bank_movement_with_retry(
+    mysqli $mysqli,
+    array $bankConfig,
+    string $reportedReference,
+    float $orderAmount,
+    int $requiredDigits,
+    int $orderId,
+    int $attempts = 2,
+    int $delaySeconds = 8,
+    ?array $initialMovements = null
+): array {
+    $attempts = max(1, $attempts);
+    $delaySeconds = max(0, $delaySeconds);
+    $latestMovements = is_array($initialMovements) ? $initialMovements : [];
+    $match = null;
+
+    for ($attempt = 1; $attempt <= $attempts; $attempt++) {
+        if ($attempt > 1 || empty($latestMovements)) {
+            $latestMovements = fetch_and_sync_bank_movements($mysqli, $bankConfig);
+        }
+
+        $match = find_matching_bank_movement(
+            $mysqli,
+            $latestMovements,
+            $reportedReference,
+            $orderAmount,
+            $requiredDigits,
+            $orderId
+        );
+
+        if ($match !== null) {
+            return [
+                'match' => $match,
+                'movements' => $latestMovements,
+                'attempts' => $attempt,
+            ];
+        }
+
+        if ($attempt < $attempts && $delaySeconds > 0) {
+            sleep($delaySeconds);
+        }
+    }
+
+    return [
+        'match' => null,
+        'movements' => $latestMovements,
+        'attempts' => $attempts,
+    ];
 }
 
 function explain_bank_movement_mismatch(array $movements, string $reportedReference, float $orderAmount, int $requiredDigits): array {
@@ -1928,16 +1984,16 @@ if ($action === 'submit_payment') {
     $bankFlowRequested = $orderSupportsBankApi || $methodSupportsBankApi;
     $usesBankValidation = $orderSupportsBankApi && $methodSupportsBankApi && $currencyMatchesOrder;
 
-    if ($bankFlowRequested) {
-        $bankConfig = [
-            'ff_bank_posicion' => store_config_get('ff_bank_posicion', '0'),
-            'ff_bank_token' => store_config_get('ff_bank_token', ''),
-            'ff_bank_clave' => store_config_get('ff_bank_clave', ''),
-        ];
+    $bankConfig = [
+        'ff_bank_posicion' => store_config_get('ff_bank_posicion', '0'),
+        'ff_bank_token' => store_config_get('ff_bank_token', ''),
+        'ff_bank_clave' => store_config_get('ff_bank_clave', ''),
+    ];
+    $bankMovements = [];
 
+    if ($bankFlowRequested) {
         try {
-            $bankMovements = fetch_bank_movements($bankConfig);
-            sync_bank_movements($mysqli, $bankMovements);
+            $bankMovements = fetch_and_sync_bank_movements($mysqli, $bankConfig);
         } catch (Throwable $e) {
             json_error($e->getMessage(), 502);
         }
@@ -1953,7 +2009,6 @@ if ($action === 'submit_payment') {
     }
 
     if ($usesBankValidation) {
-
         $matchingMovement = find_matching_bank_movement(
             $mysqli,
             $bankMovements,
@@ -1962,6 +2017,27 @@ if ($action === 'submit_payment') {
             $referenceDigitsLimit,
             $orderId
         );
+
+        if ($matchingMovement === null) {
+            try {
+                $retryResult = find_matching_bank_movement_with_retry(
+                    $mysqli,
+                    $bankConfig,
+                    $referenceNumber,
+                    (float) ($updatedOrder['precio'] ?? 0),
+                    $referenceDigitsLimit,
+                    $orderId,
+                    2,
+                    8,
+                    $bankMovements
+                );
+                $matchingMovement = $retryResult['match'];
+                $bankMovements = $retryResult['movements'];
+                error_log('TVG bank validation attempts for order #' . $orderId . ': ' . (int) ($retryResult['attempts'] ?? 1));
+            } catch (Throwable $e) {
+                json_error($e->getMessage(), 502);
+            }
+        }
 
         if ($matchingMovement !== null) {
             $verifiedReference = (string) ($matchingMovement['referencia'] ?? $referenceNumber);
@@ -2071,42 +2147,6 @@ if ($action === 'submit_payment') {
         }
 
         $mismatch = explain_bank_movement_mismatch($bankMovements, $referenceNumber, (float) ($updatedOrder['precio'] ?? 0), $referenceDigitsLimit);
-        if ($usesFreeFireApi) {
-            $cancelledStatus = 'cancelado';
-            $cancelStmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, telefono_contacto = ?, estado = ? WHERE id = ? AND estado = 'pendiente'");
-            if (!$cancelStmt) {
-                json_error('No se pudo cancelar el pedido tras la validación.', 500);
-            }
-            $cancelStmt->bind_param('sssi', $referenceNumber, $phone, $cancelledStatus, $orderId);
-            if (!$cancelStmt->execute()) {
-                $cancelStmt->close();
-                json_error('No se pudo actualizar el pedido tras no validar el pago.', 500);
-            }
-            $cancelStmt->close();
-
-            $cancelledOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
-            notify_payment_validation_failed_cancellation(
-                $mysqli,
-                $cancelledOrder,
-                $paymentMethodName,
-                $referenceNumber,
-                $phone
-            );
-
-            echo json_encode([
-                'ok' => true,
-                'message' => 'No pudimos validar el pago automáticamente. La orden fue cancelada.',
-                'order_id' => $orderId,
-                'estado' => 'cancelado',
-                'verified' => false,
-                'bank_checked' => true,
-                'reasons' => $mismatch['reasons'],
-                'reference_match' => $mismatch['reference_match'],
-                'amount_match' => $mismatch['amount_match'],
-            ]);
-            exit;
-        }
-
         $pendingOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
         notify_bank_payment_pending_mismatch(
             $mysqli,
@@ -2119,7 +2159,7 @@ if ($action === 'submit_payment') {
 
         echo json_encode([
             'ok' => true,
-                'message' => 'No pudimos confirmar automáticamente el pago. La orden sigue no verificada para que verifiques los datos e intentes nuevamente.',
+            'message' => 'No pudimos confirmar automáticamente el pago en este momento. La orden sigue no verificada; el movimiento bancario puede tardar unos minutos en reflejarse antes de reintentar.',
             'order_id' => $orderId,
             'estado' => 'pendiente',
             'verified' => false,
