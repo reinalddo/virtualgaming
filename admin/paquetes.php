@@ -3,6 +3,36 @@
 
 require_once '../includes/db_connect.php';
 
+function ensure_juego_paquetes_monto_ff_column(mysqli $mysqli): void {
+    $result = $mysqli->query("SHOW COLUMNS FROM juego_paquetes LIKE 'monto_ff'");
+    if (!($result instanceof mysqli_result) || $result->num_rows === 0) {
+        $mysqli->query("ALTER TABLE juego_paquetes ADD COLUMN monto_ff VARCHAR(20) NULL AFTER clave");
+    }
+}
+
+function free_fire_api_amount_options(): array {
+    return [
+        '1' => ['suggested_name' => 'FF_110', 'diamonds' => '110 diamantes'],
+        '2' => ['suggested_name' => 'FF_341', 'diamonds' => '341 diamantes'],
+        '3' => ['suggested_name' => 'FF_572', 'diamonds' => '572 diamantes'],
+        '4' => ['suggested_name' => 'FF_1166', 'diamonds' => '1166 diamantes'],
+        '5' => ['suggested_name' => 'FF_2376', 'diamonds' => '2376 diamantes'],
+        '6' => ['suggested_name' => 'FF_6138', 'diamonds' => '6138 diamantes'],
+    ];
+}
+
+function free_fire_api_amount_label(string $amount): string {
+    $options = free_fire_api_amount_options();
+    if (!isset($options[$amount])) {
+        return $amount;
+    }
+
+    $option = $options[$amount];
+    return $amount . ' - ' . $option['suggested_name'] . ' - ' . $option['diamonds'];
+}
+
+ensure_juego_paquetes_monto_ff_column($mysqli);
+
 $juego_id = 0;
 if (isset($_GET['juego'])) {
     $juego_id = intval($_GET['juego']);
@@ -13,6 +43,14 @@ if (isset($_GET['juego'])) {
     }
 }
 if ($juego_id <= 0) { die('Juego no especificado.'); }
+
+$juego = [];
+$res_juego = $mysqli->prepare("SELECT * FROM juegos WHERE id=?");
+$res_juego->bind_param('i', $juego_id);
+$res_juego->execute();
+$juego = $res_juego->get_result()->fetch_assoc();
+$freeFireApiOptions = free_fire_api_amount_options();
+$usesFreeFireApi = !empty($juego['api_free_fire']);
 
 // Procesar eliminación de paquete (antes de cualquier salida)
 if (isset($_GET['eliminar'])) {
@@ -41,6 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_paquete_id'])) {
     $edit_id = intval($_POST['edit_paquete_id']);
     $edit_nombre = trim($_POST['edit_nombre'] ?? '');
     $edit_clave = trim($_POST['edit_clave'] ?? '');
+    $edit_monto_ff = $usesFreeFireApi ? trim((string) ($_POST['edit_monto_ff'] ?? '')) : null;
     $edit_cantidad = intval($_POST['edit_cantidad'] ?? 0);
     $edit_precio = floatval($_POST['edit_precio'] ?? 0);
     $edit_imagen_icono = null;
@@ -58,11 +97,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_paquete_id'])) {
         }
     }
     if ($edit_imagen_icono) {
-        $stmt = $mysqli->prepare("UPDATE juego_paquetes SET nombre=?, clave=?, cantidad=?, precio=?, imagen_icono=? WHERE id=?");
-        $stmt->bind_param('ssidsi', $edit_nombre, $edit_clave, $edit_cantidad, $edit_precio, $edit_imagen_icono, $edit_id);
+        $stmt = $mysqli->prepare("UPDATE juego_paquetes SET nombre=?, clave=?, monto_ff=?, cantidad=?, precio=?, imagen_icono=? WHERE id=?");
+        $stmt->bind_param('sssidsi', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_cantidad, $edit_precio, $edit_imagen_icono, $edit_id);
     } else {
-        $stmt = $mysqli->prepare("UPDATE juego_paquetes SET nombre=?, clave=?, cantidad=?, precio=? WHERE id=?");
-        $stmt->bind_param('ssidi', $edit_nombre, $edit_clave, $edit_cantidad, $edit_precio, $edit_id);
+        $stmt = $mysqli->prepare("UPDATE juego_paquetes SET nombre=?, clave=?, monto_ff=?, cantidad=?, precio=? WHERE id=?");
+        $stmt->bind_param('sssidi', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_cantidad, $edit_precio, $edit_id);
     }
     $stmt->execute();
     header('Location: /admin/paquetes/' . $juego_id);
@@ -73,6 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_paquete_id'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['clave'], $_POST['cantidad'], $_POST['precio'])) {
     $nombre = trim($_POST['nombre']);
     $clave = trim($_POST['clave']);
+    $monto_ff = $usesFreeFireApi ? trim((string) ($_POST['monto_ff'] ?? '')) : null;
     $cantidad = intval($_POST['cantidad']);
     $precio = floatval($_POST['precio']);
     $imagen_icono = null;
@@ -89,23 +129,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['cla
             }
         }
     }
-    $stmt = $mysqli->prepare("INSERT INTO juego_paquetes (juego_id, nombre, clave, cantidad, precio, imagen_icono) VALUES (?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param('issids', $juego_id, $nombre, $clave, $cantidad, $precio, $imagen_icono);
+    $stmt = $mysqli->prepare("INSERT INTO juego_paquetes (juego_id, nombre, clave, monto_ff, cantidad, precio, imagen_icono) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param('isssids', $juego_id, $nombre, $clave, $monto_ff, $cantidad, $precio, $imagen_icono);
     $stmt->execute();
     header('Location: /admin/paquetes/' . $juego_id);
     exit;
 }
-
-// Listar paquetes existentes
-// Listar paquetes existentes
-// Listar paquetes existentes
-
-// Obtener datos del juego para mostrar nombre, imagen, etc.
-$juego = [];
-$res_juego = $mysqli->prepare("SELECT * FROM juegos WHERE id=?");
-$res_juego->bind_param('i', $juego_id);
-$res_juego->execute();
-$juego = $res_juego->get_result()->fetch_assoc();
 
 // Listar paquetes
 $res = $mysqli->prepare("SELECT * FROM juego_paquetes WHERE juego_id=?");
@@ -128,6 +157,17 @@ include '../includes/header.php';
             <label class="form-label text-neon">Clave interna</label>
             <input type="text" name="clave" placeholder="Clave" required class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;">
         </div>
+        <?php if ($usesFreeFireApi): ?>
+            <div class="col-md-6">
+                <label class="form-label text-neon">Montos (API)</label>
+                <select name="monto_ff" required class="form-select" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;">
+                    <option value="">Selecciona un monto API</option>
+                    <?php foreach ($freeFireApiOptions as $amount => $option): ?>
+                        <option value="<?= htmlspecialchars($amount, ENT_QUOTES, 'UTF-8') ?>">&#128142; <?= htmlspecialchars($option['suggested_name'], ENT_QUOTES, 'UTF-8') ?> - <?= htmlspecialchars($option['diamonds'], ENT_QUOTES, 'UTF-8') ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        <?php endif; ?>
         <div class="col-md-4" style="display:none;">
             <label class="form-label text-neon">Cantidad</label>
             <input type="number" name="cantidad_visible" min="0" placeholder="Cantidad" class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;" value="1">
@@ -155,6 +195,9 @@ include '../includes/header.php';
                     <th style="color:#22d3ee; background:#181f2a;">Icono</th>
                     <th style="color:#22d3ee; background:#181f2a;">Nombre</th>
                     <th style="color:#22d3ee; background:#181f2a;">Clave</th>
+                    <?php if ($usesFreeFireApi): ?>
+                        <th style="color:#22d3ee; background:#181f2a;">Monto FF</th>
+                    <?php endif; ?>
                     <th style="color:#22d3ee; background:#181f2a;">Precio</th>
                     <th style="color:#22d3ee; background:#181f2a;">Acciones</th>
                 </tr>
@@ -173,6 +216,9 @@ include '../includes/header.php';
                     </td>
                     <td class="fw-semibold text-neon" style="background:#181f2a; color:#22d3ee;"><?= htmlspecialchars($p['nombre']) ?></td>
                     <td style="background:#181f2a; color:#fff;"><?= htmlspecialchars($p['clave']) ?></td>
+                    <?php if ($usesFreeFireApi): ?>
+                        <td style="background:#181f2a; color:#fff;"><?= htmlspecialchars(!empty($p['monto_ff']) ? free_fire_api_amount_label((string) $p['monto_ff']) : '—') ?></td>
+                    <?php endif; ?>
                     <td class="text-neon" style="background:#181f2a; color:#22d3ee;">$<?= number_format($p['precio'], 2) ?></td>
                     <td style="background:#181f2a;" class="text-nowrap">
                         <a href="/admin/paquetes/<?= $juego_id ?>?editar=<?= $p['id'] ?>" class="btn neon-btn-info btn-sm me-2">Editar</a>
@@ -203,6 +249,9 @@ include '../includes/header.php';
                         </div>
                     </div>
                     <div style="color:#fff;"><span class="fw-semibold">Clave:</span> <?= htmlspecialchars($p['clave']) ?></div>
+                    <?php if ($usesFreeFireApi): ?>
+                        <div style="color:#fff;"><span class="fw-semibold">Monto FF:</span> <?= htmlspecialchars(!empty($p['monto_ff']) ? free_fire_api_amount_label((string) $p['monto_ff']) : '—') ?></div>
+                    <?php endif; ?>
                     <div class="text-neon" style="color:#22d3ee;"><span class="fw-semibold">Precio:</span> $<?= number_format($p['precio'], 2) ?></div>
                     <div class="mt-3 d-flex gap-2">
                         <a href="/admin/paquetes/<?= $juego_id ?>?editar=<?= $p['id'] ?>" class="btn neon-btn-info btn-sm flex-fill">Editar</a>
@@ -240,6 +289,17 @@ if (isset($_GET['editar'])) {
             <label class="form-label text-neon">Clave interna</label>
             <input type="text" name="edit_clave" value="<?= htmlspecialchars($paq_edit['clave']) ?>" required class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
         </div>
+        <?php if ($usesFreeFireApi): ?>
+            <div class="mb-3">
+                <label class="form-label text-neon">Montos (API)</label>
+                <select name="edit_monto_ff" required class="form-select" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
+                    <option value="">Selecciona un monto API</option>
+                    <?php foreach ($freeFireApiOptions as $amount => $option): ?>
+                        <option value="<?= htmlspecialchars($amount, ENT_QUOTES, 'UTF-8') ?>" <?= (string) ($paq_edit['monto_ff'] ?? '') === (string) $amount ? 'selected' : '' ?>>&#128142; <?= htmlspecialchars($option['suggested_name'], ENT_QUOTES, 'UTF-8') ?> - <?= htmlspecialchars($option['diamonds'], ENT_QUOTES, 'UTF-8') ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        <?php endif; ?>
         <div class="mb-3">
             <label class="form-label text-neon">Cantidad</label>
             <input type="number" name="edit_cantidad" value="<?= htmlspecialchars($paq_edit['cantidad']) ?>" required class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
