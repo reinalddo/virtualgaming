@@ -1177,7 +1177,7 @@ include __DIR__ . "/includes/header.php";
 
                   setPaymentFormDisabled(true);
                   setPaymentAlert('', 'info');
-                  setLoadingModalContent('Enviando orden...', 'Estamos validando y enviando tu comprobante. No cierres esta ventana.');
+                  setLoadingModalContent('Enviando orden...', 'Estamos registrando tu comprobante y procesando la orden según la moneda del pedido. No cierres esta ventana.');
                   setOverlayVisible(loadingModal, true);
                   fetch('/api/pedidos.php', {
                     method: 'POST',

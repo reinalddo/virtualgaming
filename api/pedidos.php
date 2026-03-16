@@ -1847,7 +1847,14 @@ if ($action === 'submit_payment') {
     if (!$method) {
         json_error('El método de pago seleccionado no está disponible.');
     }
-    if (strcasecmp((string) ($method['moneda_clave'] ?? ''), (string) ($order['moneda'] ?? '')) !== 0) {
+
+    $orderCurrencyCode = strtoupper(trim((string) ($order['moneda'] ?? '')));
+    $methodCurrencyCode = strtoupper(trim((string) ($method['moneda_clave'] ?? '')));
+    $orderSupportsBankApi = order_currency_uses_bank_api($orderCurrencyCode);
+    $methodSupportsBankApi = order_currency_uses_bank_api($methodCurrencyCode);
+    $currencyMatchesOrder = strcasecmp($methodCurrencyCode, $orderCurrencyCode) === 0;
+
+    if ($orderSupportsBankApi && !$currencyMatchesOrder) {
         json_error('El método de pago no corresponde a la moneda del pedido.');
     }
 
@@ -1876,7 +1883,7 @@ if ($action === 'submit_payment') {
     $paymentMethodName = (string) ($method['nombre'] ?? 'Método de pago');
     $brandingImages = email_branding_embedded_images();
     $usesFreeFireApi = game_uses_free_fire_api($mysqli, (int) ($updatedOrder['juego_id'] ?? 0));
-    $usesBankValidation = order_currency_uses_bank_api((string) ($updatedOrder['moneda'] ?? ''));
+    $usesBankValidation = $orderSupportsBankApi && $methodSupportsBankApi && $currencyMatchesOrder;
 
     if ($usesBankValidation) {
         $bankConfig = [
