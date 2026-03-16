@@ -61,6 +61,16 @@ function order_status_color(string $status): string {
   };
 }
 
+function order_status_label(string $status): string {
+  return match ($status) {
+    'pendiente' => 'No Verificado',
+    'pagado' => 'Verificado',
+    'enviado' => 'Enviado',
+    'cancelado' => 'Cancelado',
+    default => ucfirst($status),
+  };
+}
+
 function order_status_button_style(string $status, bool $isActive = false): string {
   $color = order_status_color($status);
   $background = $isActive ? $color : ($status === 'pendiente' ? 'rgba(255, 193, 7, 0.08)' : ($status === 'pagado' ? 'rgba(0, 255, 179, 0.08)' : ($status === 'enviado' ? 'rgba(33, 150, 243, 0.08)' : 'rgba(255, 0, 89, 0.08)')));
@@ -154,7 +164,7 @@ function order_status_button_style(string $status, bool $isActive = false): stri
     <div class="col-auto d-flex flex-wrap gap-2 justify-content-center" style="margin-bottom:0.5rem;">
       <?php foreach ($statuses as $st): ?>
         <button data-tab="<?= $st ?>" class="btn btn-outline-info rounded-pill px-4 py-2 fw-semibold tab-btn" type="button">
-          <?= ucfirst($st) ?>
+          <?= htmlspecialchars(order_status_label($st)) ?>
         </button>
       <?php endforeach; ?>
     </div>
@@ -190,7 +200,7 @@ function order_status_button_style(string $status, bool $isActive = false): stri
         <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
           <div style="display:flex; align-items:center; gap:0.75rem;">
             <span style="display:inline-block; height:10px; width:10px; border-radius:50%; background:<?= order_status_color($st) ?>;"></span>
-            <h2 style="font-size:1.2em; font-weight:bold; color:#00fff7;">Estado: <?= ucfirst($st) ?></h2>
+            <h2 style="font-size:1.2em; font-weight:bold; color:#00fff7;">Estado: <?= htmlspecialchars(order_status_label($st)) ?></h2>
           </div>
           <p data-total-label style="font-size:1em; color:#b2f6ff;">Total: <?= count($list) ?> pedidos</p>
         </div>
@@ -245,7 +255,7 @@ function order_status_button_style(string $status, bool $isActive = false): stri
                         <option value="" selected disabled>Cambiar estado...</option>
                         <?php foreach ($statuses as $opt): ?>
                           <?php if ($opt === $st) { continue; } ?>
-                          <option value="<?= $opt ?>"><?= ucfirst($opt) ?></option>
+                          <option value="<?= $opt ?>"><?= htmlspecialchars(order_status_label($opt)) ?></option>
                         <?php endforeach; ?>
                       </select>
                     </td>
@@ -287,7 +297,7 @@ function order_status_button_style(string $status, bool $isActive = false): stri
                       data-status="<?= $st ?>"
                       data-status-value="<?= $opt ?>"
                       style="<?= htmlspecialchars(order_status_button_style($opt, false)) ?>;<?= $opt === $st ? ' display:none;' : '' ?>"
-                    ><?= ucfirst($opt) ?></button>
+                    ><?= htmlspecialchars(order_status_label($opt)) ?></button>
                   <?php endforeach; ?>
                 </div>
               </div>
@@ -411,8 +421,8 @@ function order_status_button_style(string $status, bool $isActive = false): stri
   const adminLoadingModal = document.getElementById('admin-loading-modal');
   const STATUS_ORDER = ['pendiente', 'pagado', 'enviado', 'cancelado'];
   const STATUS_LABELS = {
-    pendiente: 'Pendiente',
-    pagado: 'Pagado',
+    pendiente: 'No Verificado',
+    pagado: 'Verificado',
     enviado: 'Enviado',
     cancelado: 'Cancelado'
   };

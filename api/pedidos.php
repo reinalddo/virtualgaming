@@ -560,6 +560,15 @@ function email_escape(?string $value): string {
     return htmlspecialchars((string) ($value ?? ''), ENT_QUOTES, 'UTF-8');
 }
 
+function order_visual_status_label(?string $status): string {
+    $normalized = strtolower(trim((string) $status));
+    return match ($normalized) {
+        'pendiente' => 'No Verificado',
+        'pagado' => 'Verificado',
+        default => trim((string) $status),
+    };
+}
+
 function app_base_url(): string {
     $https = $_SERVER['HTTPS'] ?? '';
     $scheme = (!empty($https) && $https !== 'off') ? 'https' : 'http';
@@ -692,7 +701,7 @@ function render_order_email(string $title, string $eyebrow, string $messageHtml,
     $referenceNumber = email_escape($orderData['reference_number'] ?? '');
     $phoneNumber = email_escape($orderData['phone'] ?? '');
     $coupon = trim((string) ($orderData['coupon'] ?? ''));
-    $status = email_escape($orderData['status'] ?? '');
+    $status = email_escape(order_visual_status_label($orderData['status'] ?? ''));
     $couponRow = $coupon !== ''
         ? '<tr><td style="padding:10px 0;color:#94a3b8;font-size:14px;border-bottom:1px solid #1e293b;">Cupón</td><td style="padding:10px 0;color:#e2e8f0;font-size:14px;text-align:right;border-bottom:1px solid #1e293b;">' . email_escape($coupon) . '</td></tr>'
         : '';
@@ -1185,7 +1194,7 @@ function cancel_expired_order(mysqli $mysqli, array $order): array {
     $adminEmail = resolve_admin_email($mysqli);
     $customerMessage = '<p style="margin:0 0 10px;">La orden superó el tiempo límite de 30 minutos sin confirmación de pago.</p>'
         . '<p style="margin:0;">El pedido fue cancelado automáticamente y deberás generar uno nuevo si deseas continuar con la compra.</p>';
-    $adminMessage = '<p style="margin:0 0 10px;">Una orden pendiente superó el tiempo límite de 30 minutos sin confirmación de pago.</p>'
+    $adminMessage = '<p style="margin:0 0 10px;">Una orden no verificada superó el tiempo límite de 30 minutos sin confirmación de pago.</p>'
         . '<p style="margin:0;">El pedido fue cancelado automáticamente por vencimiento.</p>';
     $customerHtml = render_order_email('Orden vencida', 'Cliente', $customerMessage, [
         'order_id' => $orderId,
@@ -1436,7 +1445,7 @@ function notify_free_fire_recharge_failure(
     $brandingImages = email_branding_embedded_images();
     $providerMessageText = '<p style="margin:0;">Respuesta del proveedor: <strong>' . email_escape($providerMessage) . '</strong></p>';
 
-    $customerHtml = render_order_email('Pago confirmado, recarga en revisión', 'Cliente',
+    $customerHtml = render_order_email('Pago verificado, recarga en revisión', 'Cliente',
         '<p style="margin:0 0 10px;">Tu pago sí fue validado automáticamente, pero la recarga no pudo completarse de forma inmediata.</p>'
         . '<p style="margin:0 0 10px;">Nuestro equipo ya fue notificado para revisar el caso manualmente.</p>'
         . $providerMessageText,
@@ -1453,13 +1462,13 @@ function notify_free_fire_recharge_failure(
             'payment_method' => $paymentMethodName,
             'reference_number' => $referenceNumber,
             'phone' => $phone,
-            'status' => 'Pagado',
+            'status' => 'Verificado',
         ],
         '#f59e0b'
     );
-    $adminHtml = render_order_email('Pago confirmado, recarga Free Fire fallida', 'Administrador',
+    $adminHtml = render_order_email('Pago verificado, recarga Free Fire fallida', 'Administrador',
         '<p style="margin:0 0 10px;">El pago fue validado automáticamente, pero la API de Free Fire no completó la recarga.</p>'
-        . '<p style="margin:0 0 10px;">El pedido quedó en estado pagado para revisión manual.</p>'
+        . '<p style="margin:0 0 10px;">El pedido quedó en estado verificado para revisión manual.</p>'
         . $providerMessageText,
         [
             'order_id' => $orderId,
@@ -1474,16 +1483,16 @@ function notify_free_fire_recharge_failure(
             'payment_method' => $paymentMethodName,
             'reference_number' => $referenceNumber,
             'phone' => $phone,
-            'status' => 'Pagado',
+            'status' => 'Verificado',
         ],
         '#f59e0b'
     );
 
     if (!empty($order['email']) && filter_var($order['email'], FILTER_VALIDATE_EMAIL)) {
-        send_app_mail((string) $order['email'], "Pago confirmado, recarga en revisión #{$orderId}", $customerHtml, null, $brandingImages);
+        send_app_mail((string) $order['email'], "Pago verificado, recarga en revisión #{$orderId}", $customerHtml, null, $brandingImages);
     }
     if ($adminEmail !== null) {
-        send_app_mail($adminEmail, "Recarga Free Fire pendiente de revisión #{$orderId}", $adminHtml, null, $brandingImages);
+        send_app_mail($adminEmail, "Recarga Free Fire en revisión #{$orderId}", $adminHtml, null, $brandingImages);
     }
 }
 
@@ -1504,7 +1513,7 @@ function notify_bank_payment_verified_paid(
 
     $customerHtml = render_order_email('Pago verificado', 'Cliente',
         '<p style="margin:0 0 10px;">Tu pago fue verificado automáticamente contra los movimientos bancarios.</p>'
-        . '<p style="margin:0;">La orden quedó en estado <strong style="color:#f59e0b;">Pagado</strong> para continuar con la gestión manual del producto.</p>',
+        . '<p style="margin:0;">La orden quedó en estado <strong style="color:#f59e0b;">Verificado</strong> para continuar con la gestión manual del producto.</p>',
         [
             'order_id' => $orderId,
             'game_name' => $order['juego_nombre'] ?? '',
@@ -1518,13 +1527,13 @@ function notify_bank_payment_verified_paid(
             'payment_method' => $paymentMethodName,
             'reference_number' => $referenceNumber,
             'phone' => $phone,
-            'status' => 'Pagado',
+            'status' => 'Verificado',
         ],
         '#f59e0b'
     );
     $adminHtml = render_order_email('Pago verificado automáticamente', 'Administrador',
         '<p style="margin:0 0 10px;">El pago del cliente fue validado automáticamente con la API bancaria.</p>'
-        . '<p style="margin:0;">La orden quedó en estado <strong style="color:#f59e0b;">Pagado</strong> para gestión manual.</p>',
+        . '<p style="margin:0;">La orden quedó en estado <strong style="color:#f59e0b;">Verificado</strong> para gestión manual.</p>',
         [
             'order_id' => $orderId,
             'game_name' => $order['juego_nombre'] ?? '',
@@ -1538,7 +1547,7 @@ function notify_bank_payment_verified_paid(
             'payment_method' => $paymentMethodName,
             'reference_number' => $referenceNumber,
             'phone' => $phone,
-            'status' => 'Pagado',
+            'status' => 'Verificado',
         ],
         '#f59e0b'
     );
@@ -1572,9 +1581,9 @@ function notify_bank_payment_pending_mismatch(
         $reasonHtml = '<ul style="margin:10px 0 0 18px;padding:0;color:#fecaca;">' . implode('', $items) . '</ul>';
     }
 
-    $customerHtml = render_order_email('Pago pendiente de validación', 'Cliente',
+    $customerHtml = render_order_email('Pago no verificado', 'Cliente',
         '<p style="margin:0 0 10px;">No pudimos confirmar automáticamente tu pago con los datos enviados.</p>'
-        . '<p style="margin:0 0 10px;">La orden se mantiene en estado <strong style="color:#22d3ee;">Pendiente</strong> para que puedas verificar la referencia e intentarlo nuevamente.</p>'
+        . '<p style="margin:0 0 10px;">La orden se mantiene en estado <strong style="color:#22d3ee;">No Verificado</strong> para que puedas verificar la referencia e intentarlo nuevamente.</p>'
         . $reasonHtml,
         [
             'order_id' => $orderId,
@@ -1589,13 +1598,13 @@ function notify_bank_payment_pending_mismatch(
             'payment_method' => $paymentMethodName,
             'reference_number' => $referenceNumber,
             'phone' => $phone,
-            'status' => 'Pendiente',
+            'status' => 'No Verificado',
         ],
         '#22d3ee'
     );
-    $adminHtml = render_order_email('Pago no validado automáticamente', 'Administrador',
+    $adminHtml = render_order_email('Pago no verificado automáticamente', 'Administrador',
         '<p style="margin:0 0 10px;">La API bancaria no encontró coincidencia para este pago reportado.</p>'
-        . '<p style="margin:0 0 10px;">La orden se mantiene en estado <strong style="color:#22d3ee;">Pendiente</strong>.</p>'
+        . '<p style="margin:0 0 10px;">La orden se mantiene en estado <strong style="color:#22d3ee;">No Verificado</strong>.</p>'
         . $reasonHtml,
         [
             'order_id' => $orderId,
@@ -1610,16 +1619,16 @@ function notify_bank_payment_pending_mismatch(
             'payment_method' => $paymentMethodName,
             'reference_number' => $referenceNumber,
             'phone' => $phone,
-            'status' => 'Pendiente',
+            'status' => 'No Verificado',
         ],
         '#22d3ee'
     );
 
     if (!empty($order['email']) && filter_var($order['email'], FILTER_VALIDATE_EMAIL)) {
-        send_app_mail((string) $order['email'], "Pago pendiente de validación #{$orderId}", $customerHtml, null, $brandingImages);
+        send_app_mail((string) $order['email'], "Pago no verificado #{$orderId}", $customerHtml, null, $brandingImages);
     }
     if ($adminEmail !== null) {
-        send_app_mail($adminEmail, "Pago no validado automáticamente #{$orderId}", $adminHtml, null, $brandingImages);
+        send_app_mail($adminEmail, "Pago no verificado automáticamente #{$orderId}", $adminHtml, null, $brandingImages);
     }
 }
 
@@ -1752,12 +1761,12 @@ if ($action === 'create') {
     $adminEmail = resolve_admin_email($mysqli);
     $defaultPaymentMethod = default_payment_method_for_currency($currency ?? '');
 
-    $customerMessage = '<p style="margin:0 0 10px;">Tu pedido fue creado correctamente y quedó pendiente de pago.</p>'
+    $customerMessage = '<p style="margin:0 0 10px;">Tu pedido fue creado correctamente y quedó no verificado hasta confirmar el pago.</p>'
         . '<p style="margin:0;">Debes realizar el pago usando el método disponible para la moneda seleccionada y luego enviar tu referencia desde la pantalla de pago para que el administrador pueda revisarla.</p>'
         . payment_method_details_html($defaultPaymentMethod);
     $adminMessage = '<p style="margin:0 0 10px;">Se generó un nuevo pedido y ya está disponible para revisión en el panel administrativo.</p>'
         . '<p style="margin:0;">Valida los datos del cliente y procede con la gestión correspondiente.</p>';
-    $customerHtml = render_order_email('Pedido creado, pendiente de pago', 'Cliente', $customerMessage, [
+    $customerHtml = render_order_email('Pedido creado, no verificado', 'Cliente', $customerMessage, [
         'order_id' => $order_id,
         'game_name' => $game_name,
         'pack_name' => $pack_name,
@@ -1768,7 +1777,7 @@ if ($action === 'create') {
         'email' => $email,
         'coupon' => $cupon,
         'payment_method' => $defaultPaymentMethod['nombre'] ?? '',
-        'status' => 'Pendiente de pago',
+        'status' => 'No Verificado',
     ]);
     $adminHtml = render_order_email('Nuevo pedido', 'Administrador', $adminMessage, [
         'order_id' => $order_id,
@@ -1780,10 +1789,10 @@ if ($action === 'create') {
         'user_identifier' => $user_identifier,
         'email' => $email,
         'coupon' => $cupon,
-        'status' => 'Pendiente',
+        'status' => 'No Verificado',
     ], '#34d399');
     $brandingImages = email_branding_embedded_images();
-    send_app_mail($email, "Pedido creado #{$order_id} - pendiente de pago", $customerHtml, null, $brandingImages);
+    send_app_mail($email, "Pedido creado #{$order_id} - no verificado", $customerHtml, null, $brandingImages);
     if ($adminEmail !== null) {
         send_app_mail($adminEmail, "Nuevo pedido #{$order_id}", $adminHtml, null, $brandingImages);
     }
@@ -1915,7 +1924,7 @@ if ($action === 'submit_payment') {
 
                 echo json_encode([
                     'ok' => true,
-                    'message' => 'Pago verificado automáticamente. Tu pedido quedó en estado pagado.',
+                    'message' => 'Pago verificado automáticamente. Tu pedido quedó en estado verificado.',
                     'order_id' => $orderId,
                     'estado' => 'pagado',
                     'verified' => true,
@@ -2048,7 +2057,7 @@ if ($action === 'submit_payment') {
 
         echo json_encode([
             'ok' => true,
-            'message' => 'No pudimos confirmar automáticamente el pago. La orden sigue pendiente para que verifiques los datos e intentes nuevamente.',
+                'message' => 'No pudimos confirmar automáticamente el pago. La orden sigue no verificada para que verifiques los datos e intentes nuevamente.',
             'order_id' => $orderId,
             'estado' => 'pendiente',
             'verified' => false,
@@ -2064,7 +2073,7 @@ if ($action === 'submit_payment') {
 
     $customerMessage = '<p style="margin:0 0 10px;">Recibimos tu pago reportado y ya quedó enviado al equipo administrativo para validación.</p>'
         . '<p style="margin:0;">Cuando el administrador lo revise y apruebe, te notificaremos el siguiente cambio de estado.</p>';
-    $adminMessage = '<p style="margin:0 0 10px;">El cliente reportó el pago de este pedido y quedó pendiente de aprobación administrativa.</p>'
+    $adminMessage = '<p style="margin:0 0 10px;">El cliente reportó el pago de este pedido y quedó no verificado hasta la aprobación administrativa.</p>'
         . '<p style="margin:0;">Valida la referencia y el teléfono de contacto antes de aprobar la orden.</p>';
 
     $customerHtml = render_order_email('Pago reportado', 'Cliente', $customerMessage, [
@@ -2095,7 +2104,7 @@ if ($action === 'submit_payment') {
         'payment_method' => $paymentMethodName,
         'reference_number' => $referenceNumber,
         'phone' => $phone,
-        'status' => 'Pago pendiente de aprobación',
+        'status' => 'No Verificado',
     ], '#f59e0b');
 
     if (!empty($updatedOrder['email']) && filter_var($updatedOrder['email'], FILTER_VALIDATE_EMAIL)) {
@@ -2107,7 +2116,7 @@ if ($action === 'submit_payment') {
 
     echo json_encode([
         'ok' => true,
-        'message' => 'Datos de pago enviados correctamente. Tu pedido sigue pendiente de verificación.',
+        'message' => 'Datos de pago enviados correctamente. Tu pedido sigue no verificado.',
         'order_id' => $orderId,
         'estado' => 'pendiente'
     ]);
