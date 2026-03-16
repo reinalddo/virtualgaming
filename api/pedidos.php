@@ -1487,6 +1487,142 @@ function notify_free_fire_recharge_failure(
     }
 }
 
+function notify_bank_payment_verified_paid(
+    mysqli $mysqli,
+    array $order,
+    string $paymentMethodName,
+    string $referenceNumber,
+    string $phone
+): void {
+    $orderId = (int) ($order['id'] ?? 0);
+    if ($orderId <= 0) {
+        return;
+    }
+
+    $adminEmail = resolve_admin_email($mysqli);
+    $brandingImages = email_branding_embedded_images();
+
+    $customerHtml = render_order_email('Pago verificado', 'Cliente',
+        '<p style="margin:0 0 10px;">Tu pago fue verificado automáticamente contra los movimientos bancarios.</p>'
+        . '<p style="margin:0;">La orden quedó en estado <strong style="color:#f59e0b;">Pagado</strong> para continuar con la gestión manual del producto.</p>',
+        [
+            'order_id' => $orderId,
+            'game_name' => $order['juego_nombre'] ?? '',
+            'pack_name' => $order['paquete_nombre'] ?? '',
+            'pack_amount' => $order['paquete_cantidad'] ?? '',
+            'currency' => $order['moneda'] ?? '',
+            'price' => number_format((float) ($order['precio'] ?? 0), 2, '.', ','),
+            'user_identifier' => $order['user_identifier'] ?? '',
+            'email' => $order['email'] ?? '',
+            'coupon' => $order['cupon'] ?? null,
+            'payment_method' => $paymentMethodName,
+            'reference_number' => $referenceNumber,
+            'phone' => $phone,
+            'status' => 'Pagado',
+        ],
+        '#f59e0b'
+    );
+    $adminHtml = render_order_email('Pago verificado automáticamente', 'Administrador',
+        '<p style="margin:0 0 10px;">El pago del cliente fue validado automáticamente con la API bancaria.</p>'
+        . '<p style="margin:0;">La orden quedó en estado <strong style="color:#f59e0b;">Pagado</strong> para gestión manual.</p>',
+        [
+            'order_id' => $orderId,
+            'game_name' => $order['juego_nombre'] ?? '',
+            'pack_name' => $order['paquete_nombre'] ?? '',
+            'pack_amount' => $order['paquete_cantidad'] ?? '',
+            'currency' => $order['moneda'] ?? '',
+            'price' => number_format((float) ($order['precio'] ?? 0), 2, '.', ','),
+            'user_identifier' => $order['user_identifier'] ?? '',
+            'email' => $order['email'] ?? '',
+            'coupon' => $order['cupon'] ?? null,
+            'payment_method' => $paymentMethodName,
+            'reference_number' => $referenceNumber,
+            'phone' => $phone,
+            'status' => 'Pagado',
+        ],
+        '#f59e0b'
+    );
+
+    if (!empty($order['email']) && filter_var($order['email'], FILTER_VALIDATE_EMAIL)) {
+        send_app_mail((string) $order['email'], "Pago verificado #{$orderId}", $customerHtml, null, $brandingImages);
+    }
+    if ($adminEmail !== null) {
+        send_app_mail($adminEmail, "Pago verificado automáticamente #{$orderId}", $adminHtml, null, $brandingImages);
+    }
+}
+
+function notify_bank_payment_pending_mismatch(
+    mysqli $mysqli,
+    array $order,
+    string $paymentMethodName,
+    string $referenceNumber,
+    string $phone,
+    array $reasons
+): void {
+    $orderId = (int) ($order['id'] ?? 0);
+    if ($orderId <= 0) {
+        return;
+    }
+
+    $adminEmail = resolve_admin_email($mysqli);
+    $brandingImages = email_branding_embedded_images();
+    $reasonHtml = '';
+    if (!empty($reasons)) {
+        $items = array_map(static fn ($reason) => '<li>' . email_escape((string) $reason) . '</li>', $reasons);
+        $reasonHtml = '<ul style="margin:10px 0 0 18px;padding:0;color:#fecaca;">' . implode('', $items) . '</ul>';
+    }
+
+    $customerHtml = render_order_email('Pago pendiente de validación', 'Cliente',
+        '<p style="margin:0 0 10px;">No pudimos confirmar automáticamente tu pago con los datos enviados.</p>'
+        . '<p style="margin:0 0 10px;">La orden se mantiene en estado <strong style="color:#22d3ee;">Pendiente</strong> para que puedas verificar la referencia e intentarlo nuevamente.</p>'
+        . $reasonHtml,
+        [
+            'order_id' => $orderId,
+            'game_name' => $order['juego_nombre'] ?? '',
+            'pack_name' => $order['paquete_nombre'] ?? '',
+            'pack_amount' => $order['paquete_cantidad'] ?? '',
+            'currency' => $order['moneda'] ?? '',
+            'price' => number_format((float) ($order['precio'] ?? 0), 2, '.', ','),
+            'user_identifier' => $order['user_identifier'] ?? '',
+            'email' => $order['email'] ?? '',
+            'coupon' => $order['cupon'] ?? null,
+            'payment_method' => $paymentMethodName,
+            'reference_number' => $referenceNumber,
+            'phone' => $phone,
+            'status' => 'Pendiente',
+        ],
+        '#22d3ee'
+    );
+    $adminHtml = render_order_email('Pago no validado automáticamente', 'Administrador',
+        '<p style="margin:0 0 10px;">La API bancaria no encontró coincidencia para este pago reportado.</p>'
+        . '<p style="margin:0 0 10px;">La orden se mantiene en estado <strong style="color:#22d3ee;">Pendiente</strong>.</p>'
+        . $reasonHtml,
+        [
+            'order_id' => $orderId,
+            'game_name' => $order['juego_nombre'] ?? '',
+            'pack_name' => $order['paquete_nombre'] ?? '',
+            'pack_amount' => $order['paquete_cantidad'] ?? '',
+            'currency' => $order['moneda'] ?? '',
+            'price' => number_format((float) ($order['precio'] ?? 0), 2, '.', ','),
+            'user_identifier' => $order['user_identifier'] ?? '',
+            'email' => $order['email'] ?? '',
+            'coupon' => $order['cupon'] ?? null,
+            'payment_method' => $paymentMethodName,
+            'reference_number' => $referenceNumber,
+            'phone' => $phone,
+            'status' => 'Pendiente',
+        ],
+        '#22d3ee'
+    );
+
+    if (!empty($order['email']) && filter_var($order['email'], FILTER_VALIDATE_EMAIL)) {
+        send_app_mail((string) $order['email'], "Pago pendiente de validación #{$orderId}", $customerHtml, null, $brandingImages);
+    }
+    if ($adminEmail !== null) {
+        send_app_mail($adminEmail, "Pago no validado automáticamente #{$orderId}", $adminHtml, null, $brandingImages);
+    }
+}
+
 $action = $_POST['action'] ?? $_GET['action'] ?? null;
 if (!$action) {
     json_error('Acción no especificada', 422);
@@ -1730,8 +1866,10 @@ if ($action === 'submit_payment') {
     $adminEmail = resolve_admin_email($mysqli);
     $paymentMethodName = (string) ($method['nombre'] ?? 'Método de pago');
     $brandingImages = email_branding_embedded_images();
+    $usesFreeFireApi = game_uses_free_fire_api($mysqli, (int) ($updatedOrder['juego_id'] ?? 0));
+    $usesBankValidation = order_currency_uses_bank_api((string) ($updatedOrder['moneda'] ?? ''));
 
-    if (order_currency_uses_bank_api((string) ($updatedOrder['moneda'] ?? '')) && game_uses_free_fire_api($mysqli, (int) ($updatedOrder['juego_id'] ?? 0))) {
+    if ($usesBankValidation) {
         $bankConfig = [
             'ff_bank_posicion' => store_config_get('ff_bank_posicion', '0'),
             'ff_bank_token' => store_config_get('ff_bank_token', ''),
@@ -1757,6 +1895,33 @@ if ($action === 'submit_payment') {
         if ($matchingMovement !== null) {
             $verifiedReference = (string) ($matchingMovement['referencia'] ?? $referenceNumber);
             link_movement_to_order($mysqli, $verifiedReference, $orderId);
+
+            if (!$usesFreeFireApi) {
+                $paidStatus = 'pagado';
+                $paidStmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, telefono_contacto = ?, estado = ? WHERE id = ? AND estado = 'pendiente'");
+                if (!$paidStmt) {
+                    json_error('No se pudo confirmar el pago automáticamente.', 500);
+                }
+                $paidStmt->bind_param('sssi', $verifiedReference, $phone, $paidStatus, $orderId);
+                if (!$paidStmt->execute()) {
+                    $paidStmt->close();
+                    json_error('No se pudo actualizar el pedido tras validar el pago.', 500);
+                }
+                $paidStmt->close();
+
+                $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+                register_influencer_coupon_sale($mysqli, $paidOrder);
+                notify_bank_payment_verified_paid($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone);
+
+                echo json_encode([
+                    'ok' => true,
+                    'message' => 'Pago verificado automáticamente. Tu pedido quedó en estado pagado.',
+                    'order_id' => $orderId,
+                    'estado' => 'pagado',
+                    'verified' => true,
+                ]);
+                exit;
+            }
 
             $montoFf = trim((string) ($updatedOrder['monto_ff'] ?? ''));
             $freeFireConfig = free_fire_api_config();
@@ -1834,34 +1999,60 @@ if ($action === 'submit_payment') {
             exit;
         }
 
-        $cancelledStatus = 'cancelado';
-        $cancelStmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, telefono_contacto = ?, estado = ? WHERE id = ? AND estado = 'pendiente'");
-        if (!$cancelStmt) {
-            json_error('No se pudo cancelar el pedido tras la validación.', 500);
-        }
-        $cancelStmt->bind_param('sssi', $referenceNumber, $phone, $cancelledStatus, $orderId);
-        if (!$cancelStmt->execute()) {
-            $cancelStmt->close();
-            json_error('No se pudo actualizar el pedido tras no validar el pago.', 500);
-        }
-        $cancelStmt->close();
-
-        $cancelledOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
         $mismatch = explain_bank_movement_mismatch($bankMovements, $referenceNumber, (float) ($updatedOrder['precio'] ?? 0), $referenceDigitsLimit);
-        notify_payment_validation_failed_cancellation(
+        if ($usesFreeFireApi) {
+            $cancelledStatus = 'cancelado';
+            $cancelStmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, telefono_contacto = ?, estado = ? WHERE id = ? AND estado = 'pendiente'");
+            if (!$cancelStmt) {
+                json_error('No se pudo cancelar el pedido tras la validación.', 500);
+            }
+            $cancelStmt->bind_param('sssi', $referenceNumber, $phone, $cancelledStatus, $orderId);
+            if (!$cancelStmt->execute()) {
+                $cancelStmt->close();
+                json_error('No se pudo actualizar el pedido tras no validar el pago.', 500);
+            }
+            $cancelStmt->close();
+
+            $cancelledOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+            notify_payment_validation_failed_cancellation(
+                $mysqli,
+                $cancelledOrder,
+                $paymentMethodName,
+                $referenceNumber,
+                $phone
+            );
+
+            echo json_encode([
+                'ok' => true,
+                'message' => 'No pudimos validar el pago automáticamente. La orden fue cancelada.',
+                'order_id' => $orderId,
+                'estado' => 'cancelado',
+                'verified' => false,
+                'bank_checked' => true,
+                'reasons' => $mismatch['reasons'],
+                'reference_match' => $mismatch['reference_match'],
+                'amount_match' => $mismatch['amount_match'],
+            ]);
+            exit;
+        }
+
+        $pendingOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+        notify_bank_payment_pending_mismatch(
             $mysqli,
-            $cancelledOrder,
+            $pendingOrder,
             $paymentMethodName,
             $referenceNumber,
-            $phone
+            $phone,
+            $mismatch['reasons']
         );
 
         echo json_encode([
             'ok' => true,
-            'message' => 'No pudimos validar el pago automáticamente. La orden fue cancelada.',
+            'message' => 'No pudimos confirmar automáticamente el pago. La orden sigue pendiente para que verifiques los datos e intentes nuevamente.',
             'order_id' => $orderId,
-            'estado' => 'cancelado',
+            'estado' => 'pendiente',
             'verified' => false,
+            'bank_checked' => true,
             'reasons' => $mismatch['reasons'],
             'reference_match' => $mismatch['reference_match'],
             'amount_match' => $mismatch['amount_match'],

@@ -1225,11 +1225,18 @@ include __DIR__ . "/includes/header.php";
                     }
 
                     if (nextState === 'pagado') {
-                      setPaymentAlert(data.message || 'El pago fue confirmado, pero la recarga requiere revisión.', 'warning');
-                      renderPaymentFailureDetails(data, reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
+                      setPaymentAlert(data.message || 'El pago fue confirmado correctamente.', 'success');
+                      clearPaymentSupportUi();
                       setPaymentFormDisabled(true);
                       clearPaymentTimer();
                       setCancelOrderButtonMode('close');
+                      return;
+                    }
+
+                    if (nextState === 'pendiente' && data && data.bank_checked) {
+                      setPaymentAlert(data.message || 'No pudimos confirmar automáticamente el pago.', 'danger');
+                      renderPaymentFailureDetails(data, reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
+                      setPaymentFormDisabled(false);
                       return;
                     }
 
