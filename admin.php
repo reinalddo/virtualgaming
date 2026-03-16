@@ -247,7 +247,7 @@ switch ($seccion) {
         require_once __DIR__ . '/includes/home_gallery.php';
         require_once __DIR__ . '/includes/payment_methods.php';
         $activeTab = $_GET['tab'] ?? 'correo';
-        if (!in_array($activeTab, ['correo', 'cabecera', 'sociales', 'api-free-fire', 'galeria', 'metodos-pago'], true)) {
+        if (!in_array($activeTab, ['correo', 'cabecera', 'sociales', 'api-banco', 'api-free-fire', 'galeria', 'metodos-pago'], true)) {
             $activeTab = 'correo';
         }
 
@@ -286,7 +286,7 @@ switch ($seccion) {
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $activeTab = $_POST['config_section'] ?? $activeTab;
-            if (!in_array($activeTab, ['correo', 'cabecera', 'sociales', 'api-free-fire', 'galeria', 'metodos-pago'], true)) {
+            if (!in_array($activeTab, ['correo', 'cabecera', 'sociales', 'api-banco', 'api-free-fire', 'galeria', 'metodos-pago'], true)) {
                 $activeTab = 'correo';
             }
 
@@ -381,29 +381,34 @@ switch ($seccion) {
                 admin_set_flash('success', 'Redes sociales actualizadas.');
             }
 
-            if ($activeTab === 'api-free-fire') {
+            if ($activeTab === 'api-banco') {
                 $ffBankPosicion = (string) intval($_POST['ff_bank_posicion'] ?? 0);
                 $ffBankToken = trim((string) ($_POST['ff_bank_token'] ?? ''));
                 $ffBankClave = trim((string) ($_POST['ff_bank_clave'] ?? ''));
-                $ffApiUsuario = trim((string) ($_POST['ff_api_usuario'] ?? ''));
-                $ffApiClave = trim((string) ($_POST['ff_api_clave'] ?? ''));
-                $ffApiTipo = trim((string) ($_POST['ff_api_tipo'] ?? 'recargaFreefire'));
 
                 if (!in_array($ffBankPosicion, ['0', '1', '2', '3', '4', '5'], true)) {
                     admin_set_flash('error', 'La Posicion debe estar entre 0 y 5.');
                     define('ADMIN_CONFIG_POST_HANDLED', true);
-                    admin_redirect('configuracion', ['tab' => 'api-free-fire']);
+                    admin_redirect('configuracion', ['tab' => 'api-banco']);
                 }
 
                 if ($ffBankClave !== '' && preg_match('/^[A-Za-z0-9._!-]+$/', $ffBankClave) !== 1) {
                     admin_set_flash('error', 'La Clave del banco solo puede contener letras, números y estos caracteres especiales: . - _ !, sin espacios.');
                     define('ADMIN_CONFIG_POST_HANDLED', true);
-                    admin_redirect('configuracion', ['tab' => 'api-free-fire']);
+                    admin_redirect('configuracion', ['tab' => 'api-banco']);
                 }
 
                 store_config_upsert('ff_bank_posicion', $ffBankPosicion);
                 store_config_upsert('ff_bank_token', $ffBankToken);
                 store_config_upsert('ff_bank_clave', $ffBankClave);
+                admin_set_flash('success', 'Datos de conexión del banco actualizados.');
+            }
+
+            if ($activeTab === 'api-free-fire') {
+                $ffApiUsuario = trim((string) ($_POST['ff_api_usuario'] ?? ''));
+                $ffApiClave = trim((string) ($_POST['ff_api_clave'] ?? ''));
+                $ffApiTipo = trim((string) ($_POST['ff_api_tipo'] ?? 'recargaFreefire'));
+
                 store_config_upsert('ff_api_usuario', $ffApiUsuario);
                 store_config_upsert('ff_api_clave', $ffApiClave);
                 store_config_upsert('ff_api_tipo', $ffApiTipo);

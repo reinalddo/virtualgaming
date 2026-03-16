@@ -8,7 +8,7 @@ require_once __DIR__ . '/includes/home_gallery.php';
 require_once __DIR__ . '/includes/payment_methods.php';
 
 $activeTab = defined('ADMIN_CONFIG_ACTIVE_TAB') ? ADMIN_CONFIG_ACTIVE_TAB : ($_GET['tab'] ?? 'correo');
-if (!in_array($activeTab, ['correo', 'cabecera', 'sociales', 'api-free-fire', 'galeria', 'metodos-pago'], true)) {
+if (!in_array($activeTab, ['correo', 'cabecera', 'sociales', 'api-banco', 'api-free-fire', 'galeria', 'metodos-pago'], true)) {
     $activeTab = 'correo';
 }
 
@@ -93,6 +93,15 @@ $galleryForm = [
     background: rgba(15, 23, 42, 0.72);
     box-shadow: inset 0 0 0 1px rgba(45, 212, 191, 0.08), 0 0 28px rgba(34, 211, 238, 0.08);
     padding: 0.5rem;
+  }
+  .neon-tabs-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .neon-tabs-item {
+    flex: 1 1 220px;
+    min-width: 220px;
   }
   .neon-tab-link {
     display: flex;
@@ -209,28 +218,36 @@ $galleryForm = [
     color: #9be7ff;
     background: rgba(34, 211, 238, 0.08);
   }
+  @media (max-width: 575.98px) {
+    .neon-tabs-item {
+      min-width: 100%;
+    }
+  }
 </style>
 <div class="container mt-5 mb-5">
   <div class="row justify-content-center">
     <div class="col-lg-10 col-xl-9">
       <div class="neon-tabs-wrap mb-4">
-        <div class="row g-2">
-          <div class="col-12 col-md-6 col-xl">
+        <div class="neon-tabs-grid">
+          <div class="neon-tabs-item">
             <a href="/admin/configuracion?tab=correo" class="neon-tab-link <?= $activeTab === 'correo' ? 'active' : '' ?>">Configuración de correo</a>
           </div>
-          <div class="col-12 col-md-6 col-xl">
+          <div class="neon-tabs-item">
             <a href="/admin/configuracion?tab=cabecera" class="neon-tab-link <?= $activeTab === 'cabecera' ? 'active' : '' ?>">Datos de cabecera</a>
           </div>
-          <div class="col-12 col-md-6 col-xl">
+          <div class="neon-tabs-item">
             <a href="/admin/configuracion?tab=sociales" class="neon-tab-link <?= $activeTab === 'sociales' ? 'active' : '' ?>">Redes Sociales</a>
           </div>
-          <div class="col-12 col-md-6 col-xl">
+          <div class="neon-tabs-item">
+            <a href="/admin/configuracion?tab=api-banco" class="neon-tab-link <?= $activeTab === 'api-banco' ? 'active' : '' ?>">Datos conexión Banco</a>
+          </div>
+          <div class="neon-tabs-item">
             <a href="/admin/configuracion?tab=api-free-fire" class="neon-tab-link <?= $activeTab === 'api-free-fire' ? 'active' : '' ?>">Datos API Free Fire</a>
           </div>
-          <div class="col-12 col-md-6 col-xl">
+          <div class="neon-tabs-item">
             <a href="/admin/configuracion?tab=galeria" class="neon-tab-link <?= $activeTab === 'galeria' ? 'active' : '' ?>">Galería</a>
           </div>
-          <div class="col-12 col-md-6 col-xl">
+          <div class="neon-tabs-item">
             <a href="/admin/configuracion?tab=metodos-pago" class="neon-tab-link <?= $activeTab === 'metodos-pago' ? 'active' : '' ?>">Métodos de Pago</a>
           </div>
         </div>
@@ -239,7 +256,7 @@ $galleryForm = [
       <div class="card neon-card mb-4">
         <div class="card-header text-center py-4" style="background: linear-gradient(90deg, #00fff7 0%, #34d399 100%); color: #181f2a; border-radius: 16px 16px 0 0;">
           <h2 class="h4 fw-bold mb-0" style="font-family: 'Oxanium', 'Montserrat', 'Arial', sans-serif; letter-spacing: 0.08em;">
-            <?php if ($activeTab === 'correo'): ?>Configuración de correo corporativo<?php elseif ($activeTab === 'cabecera'): ?>Datos de cabecera<?php elseif ($activeTab === 'sociales'): ?>Redes Sociales<?php elseif ($activeTab === 'api-free-fire'): ?>Datos API Free Fire<?php elseif ($activeTab === 'galeria'): ?>Galería principal del index<?php else: ?>Métodos de Pago<?php endif; ?>
+            <?php if ($activeTab === 'correo'): ?>Configuración de correo corporativo<?php elseif ($activeTab === 'cabecera'): ?>Datos de cabecera<?php elseif ($activeTab === 'sociales'): ?>Redes Sociales<?php elseif ($activeTab === 'api-banco'): ?>Datos conexión Banco<?php elseif ($activeTab === 'api-free-fire'): ?>Datos API Free Fire<?php elseif ($activeTab === 'galeria'): ?>Galería principal del index<?php else: ?>Métodos de Pago<?php endif; ?>
           </h2>
         </div>
         <div class="card-body p-4">
@@ -345,12 +362,12 @@ $galleryForm = [
               </div>
               <button type="submit" class="neon-btn w-100 py-3 mt-4">Guardar redes sociales</button>
             </form>
-          <?php elseif ($activeTab === 'api-free-fire'): ?>
+          <?php elseif ($activeTab === 'api-banco'): ?>
             <form method="post">
-              <input type="hidden" name="config_section" value="api-free-fire">
-              <div class="config-section-note mb-4">Configura aquí los datos de conexión requeridos para el banco y para la API de Free Fire.</div>
+              <input type="hidden" name="config_section" value="api-banco">
+              <div class="config-section-note mb-4">Configura aquí los datos de conexión al banco usados para verificar automáticamente los pagos.</div>
 
-              <div class="gallery-table-wrap mb-4">
+              <div class="gallery-table-wrap mb-2">
                 <h3 class="h5 fw-bold text-info mb-3">Datos para conexión al banco</h3>
                 <div class="row g-3">
                   <div class="col-md-4">
@@ -372,6 +389,13 @@ $galleryForm = [
                   </div>
                 </div>
               </div>
+
+              <button type="submit" class="neon-btn w-100 py-3 mt-4">Guardar datos de conexión del banco</button>
+            </form>
+          <?php elseif ($activeTab === 'api-free-fire'): ?>
+            <form method="post">
+              <input type="hidden" name="config_section" value="api-free-fire">
+              <div class="config-section-note mb-4">Configura aquí las credenciales usadas para ejecutar la recarga automática de Free Fire.</div>
 
               <div class="gallery-table-wrap mb-2">
                 <h3 class="h5 fw-bold text-info mb-3">Datos para API Free Fire</h3>
