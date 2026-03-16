@@ -1054,18 +1054,32 @@ function sync_bank_movements(mysqli $mysqli, array $movements): void {
     }
 
     foreach ($movements as $movement) {
-        $stmt->bind_param(
+        $reference = (string) ($movement['referencia'] ?? '');
+        $description = (string) ($movement['descripcion'] ?? '');
+        $rawDate = (string) ($movement['fecha_raw'] ?? '');
+        $movementDate = $movement['fecha_movimiento'] !== null ? (string) $movement['fecha_movimiento'] : null;
+        $type = (string) ($movement['tipo'] ?? '');
+        $amount = (float) ($movement['monto'] ?? 0);
+        $currency = (string) ($movement['moneda'] ?? 'VES');
+        $payloadJson = (string) ($movement['payload_json'] ?? '');
+
+        if (!$stmt->bind_param(
             'sssssdss',
-            $movement['referencia'],
-            $movement['descripcion'],
-            $movement['fecha_raw'],
-            $movement['fecha_movimiento'],
-            $movement['tipo'],
-            $movement['monto'],
-            $movement['moneda'],
-            $movement['payload_json']
-        );
-        $stmt->execute();
+            $reference,
+            $description,
+            $rawDate,
+            $movementDate,
+            $type,
+            $amount,
+            $currency,
+            $payloadJson
+        )) {
+            throw new RuntimeException('No se pudieron enlazar los datos del movimiento bancario: ' . $stmt->error);
+        }
+
+        if (!$stmt->execute()) {
+            throw new RuntimeException('No se pudo registrar el movimiento bancario ' . $reference . ': ' . $stmt->error);
+        }
     }
 
     $stmt->close();
