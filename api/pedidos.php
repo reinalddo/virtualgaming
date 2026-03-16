@@ -826,9 +826,30 @@ function fetch_active_payment_method(mysqli $mysqli, int $methodId): ?array {
     return $method ?: null;
 }
 
-function order_currency_uses_bank_api(?string $currencyCode): bool {
+function normalize_currency_code(?string $currencyCode): string {
     $normalized = strtoupper(trim((string) $currencyCode));
-    return in_array($normalized, ['BS', 'VES'], true);
+    if ($normalized === '') {
+        return '';
+    }
+
+    $normalized = str_replace(['.', ' ', '-', '_'], '', $normalized);
+    $normalized = str_replace(['Á', 'À', 'Ä', 'Â'], 'A', $normalized);
+    $normalized = str_replace(['É', 'È', 'Ë', 'Ê'], 'E', $normalized);
+    $normalized = str_replace(['Í', 'Ì', 'Ï', 'Î'], 'I', $normalized);
+    $normalized = str_replace(['Ó', 'Ò', 'Ö', 'Ô'], 'O', $normalized);
+    $normalized = str_replace(['Ú', 'Ù', 'Ü', 'Û'], 'U', $normalized);
+
+    $bankAliases = ['BS', 'BSS', 'VES', 'VEF', 'BOLIVAR', 'BOLIVARES', 'BOLIVARESBS', 'BOLIVARESVES'];
+    if (in_array($normalized, $bankAliases, true)) {
+        return 'VES';
+    }
+
+    return $normalized;
+}
+
+function order_currency_uses_bank_api(?string $currencyCode): bool {
+    $normalized = normalize_currency_code($currencyCode);
+    return $normalized === 'VES';
 }
 
 function game_uses_free_fire_api(mysqli $mysqli, int $gameId): bool {
@@ -1862,8 +1883,8 @@ if ($action === 'submit_payment') {
         json_error('El método de pago seleccionado no está disponible.');
     }
 
-    $orderCurrencyCode = strtoupper(trim((string) ($order['moneda'] ?? '')));
-    $methodCurrencyCode = strtoupper(trim((string) ($method['moneda_clave'] ?? '')));
+    $orderCurrencyCode = normalize_currency_code((string) ($order['moneda'] ?? ''));
+    $methodCurrencyCode = normalize_currency_code((string) ($method['moneda_clave'] ?? ''));
     $orderSupportsBankApi = order_currency_uses_bank_api($orderCurrencyCode);
     $methodSupportsBankApi = order_currency_uses_bank_api($methodCurrencyCode);
     $currencyMatchesOrder = strcasecmp($methodCurrencyCode, $orderCurrencyCode) === 0;
