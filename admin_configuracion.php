@@ -45,7 +45,8 @@ $themeValues = store_theme_values();
 $themeFieldGroups = [
   'Fondos y paneles' => ['theme_bg_main', 'theme_bg_alt', 'theme_surface', 'theme_surface_alt', 'theme_border'],
   'Neón y acciones' => ['theme_primary', 'theme_highlight', 'theme_secondary', 'theme_success'],
-  'Textos y estados' => ['theme_text', 'theme_text_muted', 'theme_warning', 'theme_danger'],
+  'Botones y paquetes' => ['theme_button_primary', 'theme_button_secondary', 'theme_button_surface'],
+  'Textos y estados' => ['theme_text', 'theme_text_muted', 'theme_price_text', 'theme_price_muted', 'theme_warning', 'theme_danger'],
 ];
 ?>
 <style>
@@ -80,19 +81,19 @@ $themeFieldGroups = [
     outline: none;
   }
   .neon-btn {
-    background: linear-gradient(90deg, #00fff7 0%, #34d399 100%);
-    color: #181f2a !important;
+    background: linear-gradient(90deg, var(--theme-button-primary) 0%, var(--theme-button-secondary) 100%);
+    color: var(--theme-button-text) !important;
     font-weight: bold;
     border-radius: 16px !important;
-    box-shadow: 0 0 16px #00fff7, 0 0 32px #34d39999;
+    box-shadow: 0 0 16px rgba(var(--theme-button-primary-rgb), 0.95), 0 0 32px rgba(var(--theme-button-secondary-rgb), 0.6);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     border: none;
     transition: background 0.2s, box-shadow 0.2s, transform 0.2s;
   }
   .neon-btn:hover {
-    background: linear-gradient(90deg, #34d399 0%, #00fff7 100%);
-    box-shadow: 0 0 32px #00fff7, 0 0 16px #34d39999;
+    background: linear-gradient(90deg, var(--theme-button-secondary) 0%, var(--theme-button-primary) 100%);
+    box-shadow: 0 0 32px rgba(var(--theme-button-primary-rgb), 0.95), 0 0 16px rgba(var(--theme-button-secondary-rgb), 0.6);
     transform: translateY(-1px);
   }
   .neon-tabs-wrap {

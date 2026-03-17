@@ -147,15 +147,15 @@ $accentMap = [
                   <span title="Popular" class="position-absolute top-0 end-0 text-success fs-4" style="text-shadow:0 0 4px #000;">★</span>
                 </div>
                 <div class="mt-2">
-                  <p class="fw-semibold d-flex align-items-center mb-1" style="font-size:1rem;">
+                  <p class="store-game-title fw-semibold d-flex align-items-center mb-1" style="font-size:1rem;">
                     <?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>
                   </p>
-                  <p class="small text-secondary mb-0">
+                  <p class="store-game-price-prefix small mb-0">
                     <?php if (!empty($game['imagen_paquete'])): ?>
                       <img src="/<?= htmlspecialchars($game['imagen_paquete'], ENT_QUOTES, 'UTF-8') ?>" alt="Paquete" class="img-fluid rounded me-1 align-middle" style="height:20px;width:20px;display:inline-block;" />
                     <?php endif; ?>
                     <?php if (!empty($game['min_price_label'])): ?>
-                      Desde <span class="text-info"><?= htmlspecialchars($game['min_price_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                      Desde <span class="store-game-price"><?= htmlspecialchars($game['min_price_label'], ENT_QUOTES, 'UTF-8') ?></span>
                     <?php endif; ?>
                   </p>
                 </div>
@@ -199,15 +199,15 @@ $accentMap = [
                   <?php endif; ?>
                 </div>
                 <div class="mt-2">
-                  <p class="fw-semibold d-flex align-items-center mb-1" style="font-size:1rem;">
+                  <p class="store-game-title fw-semibold d-flex align-items-center mb-1" style="font-size:1rem;">
                     <?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>
                   </p>
-                  <p class="small text-secondary mb-0">
+                  <p class="store-game-price-prefix small mb-0">
                     <?php if (!empty($game['imagen_paquete'])): ?>
                       <img src="/<?= htmlspecialchars($game['imagen_paquete'], ENT_QUOTES, 'UTF-8') ?>" alt="Paquete" class="img-fluid rounded me-1 align-middle" style="height:20px;width:20px;display:inline-block;" />
                     <?php endif; ?>
                     <?php if (!empty($game['min_price_label'])): ?>
-                      Desde <span class="text-info"><?= htmlspecialchars($game['min_price_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                      Desde <span class="store-game-price"><?= htmlspecialchars($game['min_price_label'], ENT_QUOTES, 'UTF-8') ?></span>
                     <?php endif; ?>
                   </p>
                 </div>

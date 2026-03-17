@@ -138,10 +138,10 @@ include __DIR__ . "/includes/header.php";
               <div class="pack-card-glow"></div>
             </div>
             <div class="pack-card-content">
-              <p class="pack-card-name mb-0 fw-semibold text-white"><?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?></p>
+              <p class="pack-card-name mb-0 fw-semibold"><?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?></p>
               <div class="pack-card-footer">
-                <span class="moneda-label text-info"><?= htmlspecialchars($clave_moneda) ?></span>
-                <span class="precio-label text-info">
+                <span class="moneda-label"><?= htmlspecialchars($clave_moneda) ?></span>
+                <span class="precio-label">
                   <?= number_format($precio_mostrar, 2, '.', ',') ?>
                 </span>
               </div>
@@ -484,14 +484,14 @@ include __DIR__ . "/includes/header.php";
     border-radius: 1.1rem;
     overflow: hidden;
     background:
-      radial-gradient(circle at top, rgba(34, 211, 238, 0.18), transparent 45%),
-      linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(10, 15, 24, 0.98));
+      radial-gradient(circle at top, rgba(var(--theme-button-primary-rgb), 0.18), transparent 45%),
+      linear-gradient(180deg, rgba(var(--theme-button-surface-rgb), 0.98), rgba(var(--theme-bg-main-rgb), 0.98));
     transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
   }
 
   .pack-card:hover {
     transform: translateY(-4px);
-    box-shadow: 0 1rem 2rem rgba(8, 145, 178, 0.2);
+    box-shadow: 0 1rem 2rem rgba(var(--theme-button-primary-rgb), 0.2);
   }
 
   .pack-card .card-body {
@@ -506,7 +506,7 @@ include __DIR__ . "/includes/header.php";
     justify-content: center;
     position: relative;
     overflow: hidden;
-    background: linear-gradient(180deg, rgba(10, 15, 24, 0.45), rgba(10, 15, 24, 0.05));
+    background: linear-gradient(180deg, rgba(var(--theme-bg-main-rgb), 0.45), rgba(var(--theme-bg-main-rgb), 0.05));
     flex-shrink: 0;
   }
 
@@ -526,7 +526,7 @@ include __DIR__ . "/includes/header.php";
   }
 
   .pack-card-placeholder {
-    color: #22d3ee;
+    color: var(--theme-button-primary);
     font-size: 1rem;
     font-weight: 700;
     letter-spacing: 0.18em;
@@ -540,6 +540,7 @@ include __DIR__ . "/includes/header.php";
   }
 
   .pack-card-name {
+    color: var(--theme-text);
     min-height: 2.4rem;
     display: flex;
     align-items: flex-start;
@@ -549,7 +550,7 @@ include __DIR__ . "/includes/header.php";
     width: 100%;
     font-size: 0.98rem;
     letter-spacing: 0.01em;
-    text-shadow: 0 0 10px rgba(34, 211, 238, 0.18);
+    text-shadow: 0 0 10px rgba(var(--theme-button-primary-rgb), 0.18);
   }
 
   .pack-card-footer {
@@ -557,11 +558,12 @@ include __DIR__ . "/includes/header.php";
     align-items: end;
     justify-content: space-between;
     gap: 0.65rem;
-    border-top: 1px solid rgba(34, 211, 238, 0.18);
+    border-top: 1px solid rgba(var(--theme-button-primary-rgb), 0.18);
     padding-top: 0.65rem;
   }
 
   .moneda-label {
+    color: var(--theme-price-muted);
     font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 0.16em;
@@ -570,22 +572,23 @@ include __DIR__ . "/includes/header.php";
   }
 
   .precio-label {
+    color: var(--theme-price-text);
     font-size: 1.1rem;
     font-weight: 800;
     line-height: 1;
-    text-shadow: 0 0 12px rgba(34, 211, 238, 0.28);
+    text-shadow: 0 0 12px rgba(var(--theme-price-text-rgb), 0.16);
   }
 
   .neon-selected {
-    box-shadow: 0 0 16px 4px #00fff7, 0 0 32px 8px #34d399;
-    border: 2px solid #00fff7 !important;
-    background: #181f2a !important;
+    box-shadow: 0 0 16px 4px rgba(var(--theme-button-primary-rgb), 0.95), 0 0 32px 8px rgba(var(--theme-button-secondary-rgb), 0.75);
+    border: 2px solid var(--theme-button-primary) !important;
+    background: var(--theme-surface-alt) !important;
     transition: box-shadow 0.2s, border-color 0.2s;
     z-index: 2;
   }
 
   .neon-selected .pack-card-footer {
-    border-top-color: rgba(52, 211, 153, 0.48);
+    border-top-color: rgba(var(--theme-button-secondary-rgb), 0.48);
   }
 
   @media (max-width: 575.98px) {

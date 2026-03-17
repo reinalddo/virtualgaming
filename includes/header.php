@@ -189,7 +189,7 @@ $themeVariablesCss = store_theme_css_variables();
               <button type="button" class="btn btn-warning neon-btn w-100 rounded-3 border fw-bold text-uppercase shadow-sm" style="font-size:12px;" data-auth-open="register">Registrarse</button>
             </div>
           <?php else: ?>
-            <button id="user-trigger" type="button" class="btn btn-admin d-inline-flex align-items-center gap-3 rounded-pill px-3 py-2 shadow-sm border border-info" style="background:linear-gradient(90deg,var(--theme-primary) 0%,var(--theme-secondary) 100%);color:var(--theme-button-text);min-width:210px;box-shadow:0 0 16px rgba(var(--theme-primary-rgb),0.28);">
+            <button id="user-trigger" type="button" class="btn btn-admin d-inline-flex align-items-center gap-3 rounded-pill px-3 py-2 shadow-sm border border-info" style="background:linear-gradient(90deg,var(--theme-button-primary) 0%,var(--theme-button-secondary) 100%);color:var(--theme-button-text);min-width:210px;box-shadow:0 0 16px rgba(var(--theme-button-primary-rgb),0.28);">
               <span id="user-trigger-initials" class="d-inline-flex align-items-center justify-content-center rounded-circle fw-bold" style="width:38px;height:38px;background:rgba(var(--theme-bg-main-rgb),0.18);border:1px solid rgba(var(--theme-bg-main-rgb),0.2);font-family:'Oxanium',sans-serif;">
                 <?php echo htmlspecialchars($authUserInitials, ENT_QUOTES, 'UTF-8'); ?>
               </span>

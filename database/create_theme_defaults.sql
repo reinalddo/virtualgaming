@@ -11,7 +11,12 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('theme_danger', '#F87171', 'Color para cancelaciones, errores y alertas críticas'),
 ('theme_text', '#F8FAFC', 'Color principal del texto en la tienda'),
 ('theme_text_muted', '#CBD5E1', 'Color de textos secundarios, ayudas y descripciones'),
-('theme_border', '#164E63', 'Color base de bordes, separadores y contenedores')
+('theme_price_text', '#22D3EE', 'Color del monto principal en precios de juegos y paquetes'),
+('theme_price_muted', '#94A3B8', 'Color del prefijo "Desde" y la moneda en precios de juegos y paquetes'),
+('theme_border', '#164E63', 'Color base de bordes, separadores y contenedores'),
+('theme_button_primary', '#22D3EE', 'Color principal para botones, acciones y llamadas principales'),
+('theme_button_secondary', '#2DD4BF', 'Color secundario para degradados y hover de botones'),
+('theme_button_surface', '#0E1722', 'Color base para botones oscuros, menú y tarjetas seleccionables')
 
 ON DUPLICATE KEY UPDATE
 valor = VALUES(valor),
@@ -42,7 +47,17 @@ SELECT 'theme_custom_text', valor, 'Copia editable: Color principal del texto en
 UNION ALL
 SELECT 'theme_custom_text_muted', valor, 'Copia editable: Color de textos secundarios, ayudas y descripciones' FROM configuracion_general WHERE clave = 'theme_text_muted'
 UNION ALL
+SELECT 'theme_custom_price_text', valor, 'Copia editable: Color del monto principal en precios de juegos y paquetes' FROM configuracion_general WHERE clave = 'theme_price_text'
+UNION ALL
+SELECT 'theme_custom_price_muted', valor, 'Copia editable: Color del prefijo "Desde" y la moneda en precios de juegos y paquetes' FROM configuracion_general WHERE clave = 'theme_price_muted'
+UNION ALL
 SELECT 'theme_custom_border', valor, 'Copia editable: Color base de bordes, separadores y contenedores' FROM configuracion_general WHERE clave = 'theme_border'
+UNION ALL
+SELECT 'theme_custom_button_primary', valor, 'Copia editable: Color principal para botones, acciones y llamadas principales' FROM configuracion_general WHERE clave = 'theme_button_primary'
+UNION ALL
+SELECT 'theme_custom_button_secondary', valor, 'Copia editable: Color secundario para degradados y hover de botones' FROM configuracion_general WHERE clave = 'theme_button_secondary'
+UNION ALL
+SELECT 'theme_custom_button_surface', valor, 'Copia editable: Color base para botones oscuros, menú y tarjetas seleccionables' FROM configuracion_general WHERE clave = 'theme_button_surface'
 ON DUPLICATE KEY UPDATE
 valor = VALUES(valor),
 descripcion = VALUES(descripcion);

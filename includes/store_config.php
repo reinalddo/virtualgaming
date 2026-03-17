@@ -62,10 +62,35 @@ function store_theme_definitions(): array {
             'default' => '#CBD5E1',
             'description' => 'Color de textos secundarios, ayudas y descripciones',
         ],
+        'theme_price_text' => [
+            'label' => 'Precio principal',
+            'default' => '#22D3EE',
+            'description' => 'Color del monto principal en precios de juegos y paquetes',
+        ],
+        'theme_price_muted' => [
+            'label' => 'Precio auxiliar',
+            'default' => '#94A3B8',
+            'description' => 'Color del prefijo "Desde" y la moneda en precios de juegos y paquetes',
+        ],
         'theme_border' => [
             'label' => 'Borde base',
             'default' => '#164E63',
             'description' => 'Color base de bordes, separadores y contenedores',
+        ],
+        'theme_button_primary' => [
+            'label' => 'Botón principal',
+            'default' => '#22D3EE',
+            'description' => 'Color principal para botones, acciones y llamadas principales',
+        ],
+        'theme_button_secondary' => [
+            'label' => 'Botón secundario',
+            'default' => '#2DD4BF',
+            'description' => 'Color secundario para degradados y hover de botones',
+        ],
+        'theme_button_surface' => [
+            'label' => 'Botón base oscuro',
+            'default' => '#0E1722',
+            'description' => 'Color base para botones oscuros, menú y tarjetas seleccionables',
         ],
     ];
 }
@@ -302,8 +327,10 @@ function store_theme_css_variables(): string {
     $primarySoft = store_theme_rgba($theme['theme_primary'], 0.15);
     $primaryGlow = store_theme_rgba($theme['theme_primary'], 0.22);
     $bgElevated = store_theme_rgba('#081018', 0.82);
-    $buttonPrimaryMix = store_theme_mix($theme['theme_highlight'], $theme['theme_primary'], 0.5);
-    $buttonSecondaryMix = store_theme_mix($theme['theme_primary'], $theme['theme_secondary'], 0.5);
+    $buttonPrimaryMix = store_theme_mix($theme['theme_button_primary'], $theme['theme_button_secondary'], 0.5);
+    $buttonSecondaryMix = store_theme_mix($theme['theme_button_secondary'], $theme['theme_button_primary'], 0.5);
+    $buttonSurfaceGlow = store_theme_mix($theme['theme_button_surface'], $theme['theme_button_primary'], 0.18);
+    $buttonSurfaceBorder = store_theme_mix($theme['theme_button_primary'], $theme['theme_button_secondary'], 0.35);
 
     $variables = [
         '--theme-bg-main' => $theme['theme_bg_main'],
@@ -319,7 +346,12 @@ function store_theme_css_variables(): string {
         '--theme-danger' => $theme['theme_danger'],
         '--theme-text' => $theme['theme_text'],
         '--theme-text-muted' => $theme['theme_text_muted'],
+        '--theme-price-text' => $theme['theme_price_text'],
+        '--theme-price-muted' => $theme['theme_price_muted'],
         '--theme-border' => $theme['theme_border'],
+        '--theme-button-primary' => $theme['theme_button_primary'],
+        '--theme-button-secondary' => $theme['theme_button_secondary'],
+        '--theme-button-surface' => $theme['theme_button_surface'],
         '--theme-body-glow' => $bodyGlow,
         '--theme-panel-glow' => $panelGlow,
         '--theme-panel-bg' => $panelBg,
@@ -329,16 +361,23 @@ function store_theme_css_variables(): string {
         '--theme-primary-soft' => $primarySoft,
         '--theme-primary-glow' => $primaryGlow,
         '--theme-bg-elevated' => $bgElevated,
+        '--theme-button-surface-glow' => $buttonSurfaceGlow,
+        '--theme-button-surface-border' => $buttonSurfaceBorder,
         '--theme-shadow-primary' => '0 0 32px ' . store_theme_rgba($theme['theme_primary'], 0.95),
         '--theme-shadow-secondary' => '0 0 8px ' . store_theme_rgba($theme['theme_secondary'], 0.9),
         '--theme-primary-rgb' => store_theme_rgb_string($theme['theme_primary']),
         '--theme-highlight-rgb' => store_theme_rgb_string($theme['theme_highlight']),
         '--theme-secondary-rgb' => store_theme_rgb_string($theme['theme_secondary']),
+        '--theme-button-primary-rgb' => store_theme_rgb_string($theme['theme_button_primary']),
+        '--theme-button-secondary-rgb' => store_theme_rgb_string($theme['theme_button_secondary']),
+        '--theme-button-surface-rgb' => store_theme_rgb_string($theme['theme_button_surface']),
         '--theme-success-rgb' => store_theme_rgb_string($theme['theme_success']),
         '--theme-warning-rgb' => store_theme_rgb_string($theme['theme_warning']),
         '--theme-danger-rgb' => store_theme_rgb_string($theme['theme_danger']),
         '--theme-text-rgb' => store_theme_rgb_string($theme['theme_text']),
         '--theme-text-muted-rgb' => store_theme_rgb_string($theme['theme_text_muted']),
+        '--theme-price-text-rgb' => store_theme_rgb_string($theme['theme_price_text']),
+        '--theme-price-muted-rgb' => store_theme_rgb_string($theme['theme_price_muted']),
         '--theme-border-rgb' => store_theme_rgb_string($theme['theme_border']),
         '--theme-bg-main-rgb' => store_theme_rgb_string($theme['theme_bg_main']),
         '--theme-bg-alt-rgb' => store_theme_rgb_string($theme['theme_bg_alt']),
@@ -346,6 +385,7 @@ function store_theme_css_variables(): string {
         '--theme-surface-alt-rgb' => store_theme_rgb_string($theme['theme_surface_alt']),
         '--theme-button-text' => store_theme_contrast_text($buttonSecondaryMix),
         '--theme-button-text-strong' => store_theme_contrast_text($buttonPrimaryMix),
+        '--theme-button-surface-text' => store_theme_contrast_text($theme['theme_button_surface']),
         '--theme-success-text' => store_theme_contrast_text($theme['theme_success']),
         '--theme-danger-text' => store_theme_contrast_text($theme['theme_danger']),
         '--bs-body-bg' => $theme['theme_bg_main'],

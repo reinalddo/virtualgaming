@@ -41,7 +41,12 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('theme_danger', '#F87171', 'Color para cancelaciones, errores y alertas críticas'),
 ('theme_text', '#F8FAFC', 'Color principal del texto en la tienda'),
 ('theme_text_muted', '#CBD5E1', 'Color de textos secundarios, ayudas y descripciones'),
+('theme_price_text', '#22D3EE', 'Color del monto principal en precios de juegos y paquetes'),
+('theme_price_muted', '#94A3B8', 'Color del prefijo "Desde" y la moneda en precios de juegos y paquetes'),
 ('theme_border', '#164E63', 'Color base de bordes, separadores y contenedores'),
+('theme_button_primary', '#22D3EE', 'Color principal para botones, acciones y llamadas principales'),
+('theme_button_secondary', '#2DD4BF', 'Color secundario para degradados y hover de botones'),
+('theme_button_surface', '#0E1722', 'Color base para botones oscuros, menú y tarjetas seleccionables'),
 ('theme_custom_bg_main', '#0A0F14', 'Copia editable: Color base del fondo general de la tienda'),
 ('theme_custom_bg_alt', '#0E1722', 'Copia editable: Color usado en degradados y secciones secundarias'),
 ('theme_custom_surface', '#111827', 'Copia editable: Color de tarjetas, paneles y modales'),
@@ -54,4 +59,9 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('theme_custom_danger', '#F87171', 'Copia editable: Color para cancelaciones, errores y alertas críticas'),
 ('theme_custom_text', '#F8FAFC', 'Copia editable: Color principal del texto en la tienda'),
 ('theme_custom_text_muted', '#CBD5E1', 'Copia editable: Color de textos secundarios, ayudas y descripciones'),
-('theme_custom_border', '#164E63', 'Copia editable: Color base de bordes, separadores y contenedores');
+('theme_custom_price_text', '#22D3EE', 'Copia editable: Color del monto principal en precios de juegos y paquetes'),
+('theme_custom_price_muted', '#94A3B8', 'Copia editable: Color del prefijo "Desde" y la moneda en precios de juegos y paquetes'),
+('theme_custom_border', '#164E63', 'Copia editable: Color base de bordes, separadores y contenedores'),
+('theme_custom_button_primary', '#22D3EE', 'Copia editable: Color principal para botones, acciones y llamadas principales'),
+('theme_custom_button_secondary', '#2DD4BF', 'Copia editable: Color secundario para degradados y hover de botones'),
+('theme_custom_button_surface', '#0E1722', 'Copia editable: Color base para botones oscuros, menú y tarjetas seleccionables');
