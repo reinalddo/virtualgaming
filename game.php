@@ -258,6 +258,15 @@ include __DIR__ . "/includes/header.php";
       </div>
     </div>
   </div>
+  <div id="payment-status-modal" class="modal fade app-overlay-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content bg-dark border-info text-center p-4">
+        <h4 id="payment-status-modal-title" class="fw-bold text-info mb-3">Estado de la operación</h4>
+        <p id="payment-status-modal-message" class="text-light mb-4 small">Tu solicitud fue procesada.</p>
+        <button type="button" id="payment-status-modal-accept" class="btn btn-info fw-bold px-4">Aceptar</button>
+      </div>
+    </div>
+  </div>
   <!-- Modal Cupón Bootstrap -->
   <div id="coupon-modal" class="modal fade app-overlay-modal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -347,6 +356,10 @@ include __DIR__ . "/includes/header.php";
 
   #loading-modal {
     z-index: 1105;
+  }
+
+  #payment-status-modal {
+    z-index: 1110;
   }
 
   .app-overlay-modal .modal-dialog {
@@ -677,6 +690,10 @@ include __DIR__ . "/includes/header.php";
   const loadingModal = document.getElementById('loading-modal');
   const loadingModalTitle = document.getElementById('loading-modal-title');
   const loadingModalMessage = document.getElementById('loading-modal-message');
+  const paymentStatusModal = document.getElementById('payment-status-modal');
+  const paymentStatusModalTitle = document.getElementById('payment-status-modal-title');
+  const paymentStatusModalMessage = document.getElementById('payment-status-modal-message');
+  const paymentStatusModalAccept = document.getElementById('payment-status-modal-accept');
   const modalCouponName = document.getElementById('modal-coupon-name');
   const modalYes = document.getElementById('modal-yes');
   const modalNo = document.getElementById('modal-no');
@@ -773,11 +790,24 @@ include __DIR__ . "/includes/header.php";
 
   function scrollPaymentModalToTop() {
     if (paymentModalContent) {
-      paymentModalContent.scrollTo({ top: 0, behavior: 'smooth' });
+      paymentModalContent.scrollTop = 0;
     }
     if (paymentModal) {
-      paymentModal.scrollTo({ top: 0, behavior: 'smooth' });
+      paymentModal.scrollTop = 0;
     }
+  }
+
+  function showPaymentStatusModal(title, message, type) {
+    if (paymentStatusModalTitle) {
+      paymentStatusModalTitle.textContent = title || 'Estado de la operación';
+      paymentStatusModalTitle.classList.remove('text-info', 'text-success', 'text-danger');
+      paymentStatusModalTitle.classList.add(type === 'success' ? 'text-success' : (type === 'danger' ? 'text-danger' : 'text-info'));
+    }
+    if (paymentStatusModalMessage) {
+      paymentStatusModalMessage.textContent = message || 'Tu solicitud fue procesada.';
+    }
+    scrollPaymentModalToTop();
+    setOverlayVisible(paymentStatusModal, true);
   }
 
   function showToast(msg, type) {
@@ -856,6 +886,13 @@ include __DIR__ . "/includes/header.php";
       paymentModalActions.className = 'd-none payment-support-actions mb-4';
       paymentModalActions.innerHTML = '';
     }
+  }
+
+  if (paymentStatusModalAccept) {
+    paymentStatusModalAccept.addEventListener('click', function() {
+      setOverlayVisible(paymentStatusModal, false);
+      scrollPaymentModalToTop();
+    });
   }
 
   function buildPaymentSupportWhatsappUrl(orderId, reference, totalText) {
@@ -1316,36 +1353,44 @@ include __DIR__ . "/includes/header.php";
 
                     const nextState = String((data && data.estado) || '').toLowerCase();
                     if (nextState === 'enviado') {
-                      setPaymentAlert(data.message || 'La recarga fue procesada correctamente.', 'success');
+                      const successMessage = data.message || 'La recarga fue procesada correctamente.';
+                      setPaymentAlert(successMessage, 'success');
                       clearPaymentSupportUi();
                       setPaymentFormDisabled(true);
                       clearPaymentTimer();
                       setCancelOrderButtonMode('close');
+                      showPaymentStatusModal('Operación exitosa', successMessage, 'success');
                       return;
                     }
 
                     if (nextState === 'cancelado') {
-                      setPaymentAlert(data.message || 'La orden fue cancelada.', 'danger');
+                      const cancelMessage = data.message || 'La orden fue cancelada.';
+                      setPaymentAlert(cancelMessage, 'danger');
                       renderPaymentFailureDetails(data, reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
                       setPaymentFormDisabled(true);
                       clearPaymentTimer();
                       setCancelOrderButtonMode('close');
+                      showPaymentStatusModal('No se pudo completar la operación', cancelMessage, 'danger');
                       return;
                     }
 
                     if (nextState === 'pagado') {
-                      setPaymentAlert(data.message || 'El pago fue confirmado correctamente.', 'success');
+                      const paidMessage = data.message || 'El pago fue confirmado correctamente.';
+                      setPaymentAlert(paidMessage, 'success');
                       clearPaymentSupportUi();
                       setPaymentFormDisabled(true);
                       clearPaymentTimer();
                       setCancelOrderButtonMode('close');
+                      showPaymentStatusModal('Operación exitosa', paidMessage, 'success');
                       return;
                     }
 
                     if (nextState === 'pendiente' && data && data.bank_checked) {
-                      setPaymentAlert(data.message || 'No pudimos validar el pago automáticamente.', 'danger');
+                      const pendingMessage = data.message || 'No pudimos validar el pago automáticamente.';
+                      setPaymentAlert(pendingMessage, 'danger');
                       renderPaymentFailureDetails(data, reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
                       setPaymentFormDisabled(false);
+                      showPaymentStatusModal('Revisión requerida', pendingMessage, 'danger');
                       return;
                     }
 
@@ -1354,9 +1399,11 @@ include __DIR__ . "/includes/header.php";
                   })
                   .catch((error) => {
                     setOverlayVisible(loadingModal, false);
-                    setPaymentAlert(error.message || 'No se pudo validar el pago por respuesta del servidor.', 'danger');
-                    renderPaymentServerFailure(error.message || 'No se pudo validar el pago por respuesta del servidor.', reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
+                    const errorMessage = error.message || 'No se pudo validar el pago por respuesta del servidor.';
+                    setPaymentAlert(errorMessage, 'danger');
+                    renderPaymentServerFailure(errorMessage, reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
                     setPaymentFormDisabled(false);
+                    showPaymentStatusModal('No se pudo completar la validación', errorMessage, 'danger');
                     if (activePaymentOrder && activePaymentOrder.expiresAtMs <= Date.now()) {
                       expireActiveOrder();
                     }
