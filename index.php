@@ -2,7 +2,7 @@
 require_once __DIR__ . "/includes/db_connect.php";
 require_once __DIR__ . "/includes/store_config.php";
 require_once __DIR__ . "/includes/home_gallery.php";
-$pageTitle = store_config_get('nombre_tienda', 'TVirtualGaming') . " | Tienda de monedas digitales";
+$pageTitle = store_config_get('nombre_tienda', 'TVirtualGaming') . " | " . store_config_get('nombre_tienda_subtitulo', 'Tienda de monedas digitales');
 include __DIR__ . "/includes/header.php";
 home_gallery_ensure_table();
 $galleryItems = home_gallery_all();

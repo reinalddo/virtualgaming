@@ -303,12 +303,13 @@ switch ($seccion) {
             if ($activeTab === 'cabecera') {
                 $nombrePrefijo = trim((string) ($_POST['nombre_prefijo'] ?? ''));
                 $nombreTienda = trim((string) ($_POST['nombre_tienda'] ?? ''));
+                $nombreTiendaSubtitulo = trim((string) ($_POST['nombre_tienda_subtitulo'] ?? ''));
                 $currentLogo = store_config_get('logo_tienda', '');
                 $nextLogo = $currentLogo;
                 $hasUpload = isset($_FILES['logo_tienda']) && (($_FILES['logo_tienda']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
 
-                if ($nombrePrefijo === '' || $nombreTienda === '') {
-                    admin_set_flash('error', 'Completa el nombre prefijo y el nombre de la tienda.');
+                if ($nombrePrefijo === '' || $nombreTienda === '' || $nombreTiendaSubtitulo === '') {
+                    admin_set_flash('error', 'Completa el nombre prefijo, el nombre de la tienda y el subtítulo del navegador.');
                     define('ADMIN_CONFIG_POST_HANDLED', true);
                     admin_redirect('configuracion', ['tab' => 'cabecera']);
                 }
@@ -329,6 +330,7 @@ switch ($seccion) {
 
                 store_config_upsert('nombre_prefijo', $nombrePrefijo);
                 store_config_upsert('nombre_tienda', $nombreTienda);
+                store_config_upsert('nombre_tienda_subtitulo', $nombreTiendaSubtitulo);
                 if ($nextLogo === '') {
                     store_config_delete('logo_tienda');
                 } else {

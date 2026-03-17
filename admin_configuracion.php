@@ -410,6 +410,11 @@ $themeFieldGroups = [
                     <input type="text" name="nombre_tienda" value="<?= htmlspecialchars($cfg['nombre_tienda'] ?? 'TVirtualGaming') ?>" required class="form-control" placeholder="TVirtualGaming">
                   </div>
                   <div class="mb-3">
+                    <label class="form-label">Subtítulo del navegador / instalación</label>
+                    <input type="text" name="nombre_tienda_subtitulo" value="<?= htmlspecialchars($cfg['nombre_tienda_subtitulo'] ?? 'Tienda de monedas digitales') ?>" required class="form-control" placeholder="Tienda de monedas digitales">
+                    <div class="form-text mt-2">Este texto se usa en el título del inicio y puede aparecer en el aviso de instalar la app en el navegador.</div>
+                  </div>
+                  <div class="mb-3">
                     <label class="form-label">Logo tienda</label>
                     <input type="file" name="logo_tienda" accept="image/png,image/jpeg,image/webp,image/gif" class="form-control">
                     <div class="form-text mt-2">Formatos permitidos: JPG, PNG, WEBP o GIF. Tamaño máximo: 2 MB.</div>

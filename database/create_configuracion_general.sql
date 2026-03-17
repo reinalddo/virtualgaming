@@ -17,6 +17,7 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('smtp_secure', 'tls', 'Tipo de seguridad SMTP'),
 ('nombre_prefijo', 'TIENDA', 'Texto superior del encabezado de la tienda'),
 ('nombre_tienda', 'TVirtualGaming', 'Nombre principal visible de la tienda'),
+('nombre_tienda_subtitulo', 'Tienda de monedas digitales', 'Texto complementario usado en el título del inicio y en la instalación de la app'),
 ('logo_tienda', '', 'Ruta del logo visible en el encabezado'),
 ('facebook', '', 'URL de Facebook de la tienda'),
 ('instagram', '', 'URL de Instagram de la tienda'),
