@@ -683,6 +683,7 @@ include __DIR__ . "/includes/header.php";
   const modalCancel = document.getElementById('modal-cancel');
   const applyCouponButton = document.getElementById('apply-coupon-btn');
   const paymentModal = document.getElementById('payment-modal');
+  const paymentModalContent = paymentModal ? paymentModal.querySelector('.payment-modal-content') : null;
   const paymentModalAlert = document.getElementById('payment-modal-alert');
   const paymentModalReasons = document.getElementById('payment-modal-reasons');
   const paymentModalActions = document.getElementById('payment-modal-actions');
@@ -770,6 +771,15 @@ include __DIR__ . "/includes/header.php";
     }
   }
 
+  function scrollPaymentModalToTop() {
+    if (paymentModalContent) {
+      paymentModalContent.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    if (paymentModal) {
+      paymentModal.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
   function showToast(msg, type) {
     const toast = document.createElement('div');
     toast.textContent = msg;
@@ -834,6 +844,7 @@ include __DIR__ . "/includes/header.php";
     }
     paymentModalAlert.textContent = message;
     paymentModalAlert.className = `alert mb-3 alert-${type || 'info'}`;
+    scrollPaymentModalToTop();
   }
 
   function clearPaymentSupportUi() {
@@ -927,6 +938,7 @@ include __DIR__ . "/includes/header.php";
       paymentModalActions.className = 'payment-support-actions mb-4';
       paymentModalActions.innerHTML = `<a href="${escapePaymentHtml(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="payment-support-link">Contactar al administrador por WhatsApp</a>`;
     }
+    scrollPaymentModalToTop();
   }
 
   function renderPaymentServerFailure(errorMessage, reference, totalText) {
@@ -934,6 +946,7 @@ include __DIR__ . "/includes/header.php";
       failure_type: 'server_or_data_mismatch',
       reasons: [errorMessage || 'No se recibió una respuesta válida del servidor bancario.']
     }, reference, totalText);
+    scrollPaymentModalToTop();
   }
 
   function setCancelOrderButtonMode(mode) {
@@ -1098,6 +1111,7 @@ include __DIR__ . "/includes/header.php";
     clearPaymentSupportUi();
     setCancelOrderButtonMode('cancel');
     setOverlayVisible(paymentModal, true);
+    scrollPaymentModalToTop();
     clearPaymentTimer();
     updatePaymentTimer();
     paymentTimerInterval = setInterval(updatePaymentTimer, 1000);
