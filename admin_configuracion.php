@@ -46,6 +46,7 @@ $themeFieldGroups = [
   'Fondos y paneles' => ['theme_bg_main', 'theme_bg_alt', 'theme_surface', 'theme_surface_alt', 'theme_border'],
   'Neón y acciones' => ['theme_primary', 'theme_highlight', 'theme_secondary', 'theme_success'],
   'Botones y paquetes' => ['theme_button_primary', 'theme_button_secondary', 'theme_button_surface'],
+  'Botones flotantes' => ['theme_float_whatsapp_bg', 'theme_float_whatsapp_text', 'theme_float_channel_bg', 'theme_float_channel_text'],
   'Textos y estados' => ['theme_text', 'theme_text_muted', 'theme_price_text', 'theme_price_muted', 'theme_warning', 'theme_danger'],
 ];
 ?>

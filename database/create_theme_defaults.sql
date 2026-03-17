@@ -16,7 +16,11 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('theme_border', '#164E63', 'Color base de bordes, separadores y contenedores'),
 ('theme_button_primary', '#22D3EE', 'Color principal para botones, acciones y llamadas principales'),
 ('theme_button_secondary', '#2DD4BF', 'Color secundario para degradados y hover de botones'),
-('theme_button_surface', '#0E1722', 'Color base para botones oscuros, menú y tarjetas seleccionables')
+('theme_button_surface', '#0E1722', 'Color base para botones oscuros, menú y tarjetas seleccionables'),
+('theme_float_whatsapp_bg', '#22C55E', 'Color principal del botón flotante de WhatsApp'),
+('theme_float_whatsapp_text', '#F8FAFC', 'Color del texto e icono del botón flotante de WhatsApp'),
+('theme_float_channel_bg', '#1F2937', 'Color principal del botón flotante del canal de difusión'),
+('theme_float_channel_text', '#F8FAFC', 'Color del texto e icono del botón flotante del canal de difusión')
 
 ON DUPLICATE KEY UPDATE
 valor = VALUES(valor),
@@ -58,6 +62,14 @@ UNION ALL
 SELECT 'theme_custom_button_secondary', valor, 'Copia editable: Color secundario para degradados y hover de botones' FROM configuracion_general WHERE clave = 'theme_button_secondary'
 UNION ALL
 SELECT 'theme_custom_button_surface', valor, 'Copia editable: Color base para botones oscuros, menú y tarjetas seleccionables' FROM configuracion_general WHERE clave = 'theme_button_surface'
+UNION ALL
+SELECT 'theme_custom_float_whatsapp_bg', valor, 'Copia editable: Color principal del botón flotante de WhatsApp' FROM configuracion_general WHERE clave = 'theme_float_whatsapp_bg'
+UNION ALL
+SELECT 'theme_custom_float_whatsapp_text', valor, 'Copia editable: Color del texto e icono del botón flotante de WhatsApp' FROM configuracion_general WHERE clave = 'theme_float_whatsapp_text'
+UNION ALL
+SELECT 'theme_custom_float_channel_bg', valor, 'Copia editable: Color principal del botón flotante del canal de difusión' FROM configuracion_general WHERE clave = 'theme_float_channel_bg'
+UNION ALL
+SELECT 'theme_custom_float_channel_text', valor, 'Copia editable: Color del texto e icono del botón flotante del canal de difusión' FROM configuracion_general WHERE clave = 'theme_float_channel_text'
 ON DUPLICATE KEY UPDATE
 valor = VALUES(valor),
 descripcion = VALUES(descripcion);

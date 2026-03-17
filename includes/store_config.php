@@ -92,6 +92,26 @@ function store_theme_definitions(): array {
             'default' => '#0E1722',
             'description' => 'Color base para botones oscuros, menú y tarjetas seleccionables',
         ],
+        'theme_float_whatsapp_bg' => [
+            'label' => 'Flotante WhatsApp',
+            'default' => '#22C55E',
+            'description' => 'Color principal del botón flotante de WhatsApp',
+        ],
+        'theme_float_whatsapp_text' => [
+            'label' => 'Texto WhatsApp',
+            'default' => '#F8FAFC',
+            'description' => 'Color del texto e icono del botón flotante de WhatsApp',
+        ],
+        'theme_float_channel_bg' => [
+            'label' => 'Flotante canal',
+            'default' => '#1F2937',
+            'description' => 'Color principal del botón flotante del canal de difusión',
+        ],
+        'theme_float_channel_text' => [
+            'label' => 'Texto canal',
+            'default' => '#F8FAFC',
+            'description' => 'Color del texto e icono del botón flotante del canal de difusión',
+        ],
     ];
 }
 
@@ -352,6 +372,10 @@ function store_theme_css_variables(): string {
         '--theme-button-primary' => $theme['theme_button_primary'],
         '--theme-button-secondary' => $theme['theme_button_secondary'],
         '--theme-button-surface' => $theme['theme_button_surface'],
+        '--theme-float-whatsapp-bg' => $theme['theme_float_whatsapp_bg'],
+        '--theme-float-whatsapp-text' => $theme['theme_float_whatsapp_text'],
+        '--theme-float-channel-bg' => $theme['theme_float_channel_bg'],
+        '--theme-float-channel-text' => $theme['theme_float_channel_text'],
         '--theme-body-glow' => $bodyGlow,
         '--theme-panel-glow' => $panelGlow,
         '--theme-panel-bg' => $panelBg,
@@ -371,6 +395,10 @@ function store_theme_css_variables(): string {
         '--theme-button-primary-rgb' => store_theme_rgb_string($theme['theme_button_primary']),
         '--theme-button-secondary-rgb' => store_theme_rgb_string($theme['theme_button_secondary']),
         '--theme-button-surface-rgb' => store_theme_rgb_string($theme['theme_button_surface']),
+        '--theme-float-whatsapp-bg-rgb' => store_theme_rgb_string($theme['theme_float_whatsapp_bg']),
+        '--theme-float-whatsapp-text-rgb' => store_theme_rgb_string($theme['theme_float_whatsapp_text']),
+        '--theme-float-channel-bg-rgb' => store_theme_rgb_string($theme['theme_float_channel_bg']),
+        '--theme-float-channel-text-rgb' => store_theme_rgb_string($theme['theme_float_channel_text']),
         '--theme-success-rgb' => store_theme_rgb_string($theme['theme_success']),
         '--theme-warning-rgb' => store_theme_rgb_string($theme['theme_warning']),
         '--theme-danger-rgb' => store_theme_rgb_string($theme['theme_danger']),

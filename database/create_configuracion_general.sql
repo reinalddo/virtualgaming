@@ -47,6 +47,10 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('theme_button_primary', '#22D3EE', 'Color principal para botones, acciones y llamadas principales'),
 ('theme_button_secondary', '#2DD4BF', 'Color secundario para degradados y hover de botones'),
 ('theme_button_surface', '#0E1722', 'Color base para botones oscuros, menú y tarjetas seleccionables'),
+('theme_float_whatsapp_bg', '#22C55E', 'Color principal del botón flotante de WhatsApp'),
+('theme_float_whatsapp_text', '#F8FAFC', 'Color del texto e icono del botón flotante de WhatsApp'),
+('theme_float_channel_bg', '#1F2937', 'Color principal del botón flotante del canal de difusión'),
+('theme_float_channel_text', '#F8FAFC', 'Color del texto e icono del botón flotante del canal de difusión'),
 ('theme_custom_bg_main', '#0A0F14', 'Copia editable: Color base del fondo general de la tienda'),
 ('theme_custom_bg_alt', '#0E1722', 'Copia editable: Color usado en degradados y secciones secundarias'),
 ('theme_custom_surface', '#111827', 'Copia editable: Color de tarjetas, paneles y modales'),
@@ -64,4 +68,8 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('theme_custom_border', '#164E63', 'Copia editable: Color base de bordes, separadores y contenedores'),
 ('theme_custom_button_primary', '#22D3EE', 'Copia editable: Color principal para botones, acciones y llamadas principales'),
 ('theme_custom_button_secondary', '#2DD4BF', 'Copia editable: Color secundario para degradados y hover de botones'),
-('theme_custom_button_surface', '#0E1722', 'Copia editable: Color base para botones oscuros, menú y tarjetas seleccionables');
+('theme_custom_button_surface', '#0E1722', 'Copia editable: Color base para botones oscuros, menú y tarjetas seleccionables'),
+('theme_custom_float_whatsapp_bg', '#22C55E', 'Copia editable: Color principal del botón flotante de WhatsApp'),
+('theme_custom_float_whatsapp_text', '#F8FAFC', 'Copia editable: Color del texto e icono del botón flotante de WhatsApp'),
+('theme_custom_float_channel_bg', '#1F2937', 'Copia editable: Color principal del botón flotante del canal de difusión'),
+('theme_custom_float_channel_text', '#F8FAFC', 'Copia editable: Color del texto e icono del botón flotante del canal de difusión');
