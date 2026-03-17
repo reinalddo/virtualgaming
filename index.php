@@ -81,10 +81,131 @@ $accentMap = [
 ];
 ?>
 
+      <style>
+        .promo-section-mobile,
+        .featured-section-mobile {
+          position: relative;
+        }
+        .promo-slider-shell {
+          position: relative;
+        }
+        .promo-slider-track {
+          display: flex;
+          gap: 0.75rem;
+          overflow-x: auto;
+          scroll-snap-type: x mandatory;
+          scroll-behavior: smooth;
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+          overscroll-behavior-x: contain;
+          touch-action: pan-x pinch-zoom;
+        }
+        .promo-slider-track::-webkit-scrollbar {
+          display: none;
+        }
+        .promo-slide-card {
+          position: relative;
+          flex-shrink: 0;
+          width: 100%;
+          min-width: 82%;
+          height: 220px;
+          overflow: hidden;
+          border-radius: 1.5rem;
+          scroll-snap-align: start;
+        }
+        .promo-slide-image,
+        .featured-banner-image {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          opacity: 0.86;
+        }
+        .promo-slide-overlay,
+        .featured-banner-overlay {
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(90deg, rgba(12, 21, 34, 0.9), rgba(12, 21, 34, 0.3), transparent);
+        }
+        .promo-slide-content,
+        .featured-banner-content {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          padding-inline: 1.5rem;
+        }
+        .promo-dots {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+        .promo-dot {
+          appearance: none;
+          border: 0;
+          padding: 0;
+          width: 16px;
+          height: 6px;
+          border-radius: 999px;
+          background: #334155;
+          transition: width 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .promo-dot.is-active {
+          width: 24px;
+          background: #22d3ee;
+          box-shadow: 0 0 14px rgba(34, 211, 238, 0.3);
+        }
+        .featured-banner-card {
+          position: relative;
+          display: block;
+          overflow: hidden;
+          border-radius: 1.5rem;
+          text-decoration: none;
+        }
+        .featured-banner-image {
+          height: 140px;
+        }
+        @media (min-width: 768px) {
+          .promo-slide-card {
+            height: 250px;
+          }
+          .featured-banner-image {
+            height: 160px;
+          }
+        }
+        @media (max-width: 767.98px) {
+          .promo-section-mobile,
+          .featured-section-mobile {
+            width: calc(100% + var(--bs-gutter-x, 1.5rem));
+            margin-left: calc(var(--bs-gutter-x, 1.5rem) * -0.5);
+            margin-right: calc(var(--bs-gutter-x, 1.5rem) * -0.5);
+          }
+          .promo-slider-track {
+            gap: 0;
+          }
+          .promo-slide-card,
+          .featured-banner-card {
+            min-width: 100%;
+            width: 100%;
+            border-radius: 0;
+          }
+          .promo-slide-card {
+            height: min(62vw, 320px);
+          }
+          .featured-banner-image {
+            height: min(44vw, 220px);
+          }
+          .promo-slide-content,
+          .featured-banner-content {
+            padding-inline: 1rem;
+          }
+        }
+      </style>
+
       <?php if (!empty($banners)): ?>
-        <section class="mt-4" style="animation: fadeUp 650ms ease-out both;">
-          <div class="position-relative">
-            <div id="promo-slider" class="d-flex gap-3 overflow-auto rounded-4 border bg-dark p-2" style="scroll-snap-type:x mandatory;">
+        <section class="mt-4 promo-section-mobile" style="animation: fadeUp 650ms ease-out both;">
+          <div class="promo-slider-shell">
+            <div id="promo-slider" class="promo-slider-track">
               <?php foreach ($banners as $banner): ?>
                 <?php
                   $accent = $banner["accent"] ?? "cyan";
@@ -93,10 +214,10 @@ $accentMap = [
                   $bannerUrl = trim((string) ($banner['url'] ?? ''));
                   $bannerTarget = !empty($banner['open_in_new_tab']) ? '_blank' : '_self';
                 ?>
-                <<?= $bannerUrl !== '' ? 'a' : 'article' ?> class="position-relative flex-shrink-0 w-100 text-decoration-none" style="height:220px;min-width:80%;scroll-snap-align:start;overflow:hidden;border-radius:1.5rem;border:1px solid #334155;"<?= $bannerUrl !== '' ? ' href="' . htmlspecialchars($bannerUrl, ENT_QUOTES, 'UTF-8') . '" target="' . htmlspecialchars($bannerTarget, ENT_QUOTES, 'UTF-8') . '"' . ($bannerTarget === '_blank' ? ' rel="noopener noreferrer"' : '') : '' ?>>
-                  <img src="<?php echo htmlspecialchars($banner["image"], ENT_QUOTES, "UTF-8"); ?>" alt="<?php echo htmlspecialchars($banner["title"], ENT_QUOTES, "UTF-8"); ?>" class="img-fluid w-100 h-100 object-fit-cover" style="opacity:0.85;" />
-                  <div class="position-absolute top-0 start-0 w-100 h-100" style="background:linear-gradient(90deg,rgba(12,21,34,0.9),rgba(12,21,34,0.3),transparent);"></div>
-                  <div class="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column justify-content-center px-4">
+                <<?= $bannerUrl !== '' ? 'a' : 'article' ?> class="promo-slide-card text-decoration-none"<?= $bannerUrl !== '' ? ' href="' . htmlspecialchars($bannerUrl, ENT_QUOTES, 'UTF-8') . '" target="' . htmlspecialchars($bannerTarget, ENT_QUOTES, 'UTF-8') . '"' . ($bannerTarget === '_blank' ? ' rel="noopener noreferrer"' : '') : '' ?>>
+                  <img src="<?php echo htmlspecialchars($banner["image"], ENT_QUOTES, "UTF-8"); ?>" alt="<?php echo htmlspecialchars($banner["title"], ENT_QUOTES, "UTF-8"); ?>" class="promo-slide-image" />
+                  <div class="promo-slide-overlay"></div>
+                  <div class="promo-slide-content">
                     <p class="small text-uppercase text-info mb-0" style="letter-spacing:0.35em;">
                       <?php echo htmlspecialchars($banner["label"], ENT_QUOTES, "UTF-8"); ?>
                     </p>
@@ -110,10 +231,10 @@ $accentMap = [
                 </<?= $bannerUrl !== '' ? 'a' : 'article' ?>>
               <?php endforeach; ?>
             </div>
-            <div id="promo-dots" class="mt-3 d-flex align-items-center gap-2">
+            <div id="promo-dots" class="promo-dots mt-3">
               <?php foreach ($banners as $index => $banner): ?>
                 <?php $isActive = $index === 0; ?>
-                <button type="button" class="btn p-0" style="height:6px;width:<?php echo $isActive ? '24px' : '16px'; ?>;background:<?php echo $isActive ? '#22d3ee' : '#334155'; ?>;border-radius:1rem;transition:all 0.2s;" data-index="<?php echo $index; ?>" aria-label="Banner <?php echo $index + 1; ?>"></button>
+                <button type="button" class="promo-dot<?php echo $isActive ? ' is-active' : ''; ?>" data-index="<?php echo $index; ?>" aria-label="Banner <?php echo $index + 1; ?>" aria-current="<?php echo $isActive ? 'true' : 'false'; ?>"></button>
               <?php endforeach; ?>
             </div>
             <div class="position-absolute top-0 start-0 end-0 h-100 d-none d-md-flex align-items-center justify-content-between" style="pointer-events:none;">
@@ -166,15 +287,15 @@ $accentMap = [
       </section>
 
       <?php if (!empty($featured)): ?>
-        <section class="mt-5">
+        <section class="mt-5 featured-section-mobile">
           <?php
             $featuredUrl = trim((string) ($featured['url'] ?? ''));
             $featuredTarget = !empty($featured['open_in_new_tab']) ? '_blank' : '_self';
           ?>
-          <<?= $featuredUrl !== '' ? 'a' : 'div' ?> class="position-relative overflow-hidden rounded-4 border bg-dark d-block text-decoration-none"<?= $featuredUrl !== '' ? ' href="' . htmlspecialchars($featuredUrl, ENT_QUOTES, 'UTF-8') . '" target="' . htmlspecialchars($featuredTarget, ENT_QUOTES, 'UTF-8') . '"' . ($featuredTarget === '_blank' ? ' rel="noopener noreferrer"' : '') : '' ?>>
-            <img src="<?php echo htmlspecialchars($featured["image"], ENT_QUOTES, "UTF-8"); ?>" alt="<?php echo htmlspecialchars($featured["title"], ENT_QUOTES, "UTF-8"); ?>" class="img-fluid w-100" style="height:140px;object-fit:cover;opacity:0.85;" />
-            <div class="position-absolute top-0 start-0 w-100 h-100" style="background:linear-gradient(90deg,rgba(12,21,34,0.85),rgba(12,21,34,0.4),transparent);"></div>
-            <div class="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column justify-content-center px-4">
+          <<?= $featuredUrl !== '' ? 'a' : 'div' ?> class="featured-banner-card"<?= $featuredUrl !== '' ? ' href="' . htmlspecialchars($featuredUrl, ENT_QUOTES, 'UTF-8') . '" target="' . htmlspecialchars($featuredTarget, ENT_QUOTES, 'UTF-8') . '"' . ($featuredTarget === '_blank' ? ' rel="noopener noreferrer"' : '') : '' ?>>
+            <img src="<?php echo htmlspecialchars($featured["image"], ENT_QUOTES, "UTF-8"); ?>" alt="<?php echo htmlspecialchars($featured["title"], ENT_QUOTES, "UTF-8"); ?>" class="featured-banner-image" />
+            <div class="featured-banner-overlay"></div>
+            <div class="featured-banner-content">
               <p class="small text-uppercase text-info mb-0" style="letter-spacing:0.35em;"><?php echo htmlspecialchars($featured["label"], ENT_QUOTES, "UTF-8"); ?></p>
               <h3 class="mt-1 fw-bold" style="font-family:'Oxanium',sans-serif;font-size:1.25rem;"><?php echo htmlspecialchars($featured["title"], ENT_QUOTES, "UTF-8"); ?></h3>
               <p class="mt-1 small text-secondary"><?php echo htmlspecialchars($featured["subtitle"], ENT_QUOTES, "UTF-8"); ?></p>
@@ -232,28 +353,33 @@ $pageScripts = [
     return;
   }
 
+  let currentIndex = 0;
+  let scrollTimeout;
+  let autoplayId;
+  let isPaused = false;
+  let touchStartX = null;
+  let lastTouchX = null;
+
+  const normalizeIndex = (index) => {
+    const total = slides.length;
+    return total ? ((index % total) + total) % total : 0;
+  };
+
   const setActiveDot = (index) => {
+    currentIndex = normalizeIndex(index);
     dots.forEach((dot, idx) => {
-      if (idx === index) {
-        dot.classList.add("bg-cyan-400", "w-6");
-        dot.classList.remove("bg-slate-700", "w-4");
-      } else {
-        dot.classList.add("bg-slate-700", "w-4");
-        dot.classList.remove("bg-cyan-400", "w-6");
-      }
+      const isActive = idx === currentIndex;
+      dot.classList.toggle("is-active", isActive);
+      dot.setAttribute("aria-current", isActive ? "true" : "false");
     });
   };
 
-  const getActiveIndex = () => {
-    const sliderRect = slider.getBoundingClientRect();
-    const centerX = sliderRect.left + sliderRect.width / 2;
+  const getClosestIndex = () => {
     let closestIndex = 0;
     let closestDistance = Infinity;
 
     slides.forEach((slide, index) => {
-      const rect = slide.getBoundingClientRect();
-      const slideCenter = rect.left + rect.width / 2;
-      const distance = Math.abs(centerX - slideCenter);
+      const distance = Math.abs(slider.scrollLeft - slide.offsetLeft);
       if (distance < closestDistance) {
         closestDistance = distance;
         closestIndex = index;
@@ -263,21 +389,20 @@ $pageScripts = [
     return closestIndex;
   };
 
-  const scrollToIndex = (index) => {
-    const target = slides[index];
+  const scrollToIndex = (index, behavior = "smooth") => {
+    const targetIndex = normalizeIndex(index);
+    const target = slides[targetIndex];
     if (target) {
-      slider.scrollTo({ left: target.offsetLeft - slider.offsetLeft, behavior: "smooth" });
+      slider.scrollTo({ left: target.offsetLeft, behavior });
+      setActiveDot(targetIndex);
     }
   };
 
-  let scrollTimeout;
-  let autoplayId;
-  let isPaused = false;
   slider.addEventListener("scroll", () => {
     window.clearTimeout(scrollTimeout);
     scrollTimeout = window.setTimeout(() => {
-      setActiveDot(getActiveIndex());
-    }, 80);
+      setActiveDot(getClosestIndex());
+    }, 70);
   });
 
   dots.forEach((dot) => {
@@ -288,10 +413,8 @@ $pageScripts = [
 
   document.querySelectorAll("[data-action]").forEach((button) => {
     button.addEventListener("click", () => {
-      const current = getActiveIndex();
-      const nextIndex = button.dataset.action === "next" ? current + 1 : current - 1;
-      const boundedIndex = Math.max(0, Math.min(slides.length - 1, nextIndex));
-      scrollToIndex(boundedIndex);
+      const nextIndex = button.dataset.action === "next" ? currentIndex + 1 : currentIndex - 1;
+      scrollToIndex(nextIndex);
     });
   });
 
@@ -299,9 +422,7 @@ $pageScripts = [
     if (autoplayId || slides.length <= 1) return;
     autoplayId = window.setInterval(() => {
       if (isPaused) return;
-      const current = getActiveIndex();
-      const nextIndex = current === slides.length - 1 ? 0 : current + 1;
-      scrollToIndex(nextIndex);
+      scrollToIndex(currentIndex + 1);
     }, 4500);
   };
 
@@ -313,12 +434,36 @@ $pageScripts = [
     isPaused = false;
   });
 
-  slider.addEventListener("touchstart", () => {
+  slider.addEventListener("touchstart", (event) => {
     isPaused = true;
+    touchStartX = event.changedTouches[0]?.clientX ?? null;
+    lastTouchX = touchStartX;
+  }, { passive: true });
+
+  slider.addEventListener("touchmove", (event) => {
+    lastTouchX = event.changedTouches[0]?.clientX ?? lastTouchX;
   }, { passive: true });
 
   slider.addEventListener("touchend", () => {
     isPaused = false;
+    if (touchStartX !== null && lastTouchX !== null) {
+      const deltaX = touchStartX - lastTouchX;
+      if (Math.abs(deltaX) >= 40) {
+        if (currentIndex === slides.length - 1 && deltaX > 0) {
+          scrollToIndex(0);
+        } else if (currentIndex === 0 && deltaX < 0) {
+          scrollToIndex(slides.length - 1);
+        }
+      }
+    }
+    touchStartX = null;
+    lastTouchX = null;
+  });
+
+  slider.addEventListener("touchcancel", () => {
+    isPaused = false;
+    touchStartX = null;
+    lastTouchX = null;
   });
 
   slider.addEventListener("focusin", () => {
@@ -329,9 +474,35 @@ $pageScripts = [
     isPaused = false;
   });
 
+  const observer = new IntersectionObserver((entries) => {
+    let bestIndex = null;
+    let bestRatio = 0;
+
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) {
+        return;
+      }
+      const index = slides.indexOf(entry.target);
+      if (index !== -1 && entry.intersectionRatio > bestRatio) {
+        bestRatio = entry.intersectionRatio;
+        bestIndex = index;
+      }
+    });
+
+    if (bestIndex !== null) {
+      setActiveDot(bestIndex);
+    }
+  }, {
+    root: slider,
+    threshold: [0.55, 0.75, 0.95]
+  });
+
+  slides.forEach((slide) => observer.observe(slide));
+
   if (dots.length) {
     setActiveDot(0);
   }
+  scrollToIndex(0, "auto");
   startAutoplay();
   })();
 </script>
