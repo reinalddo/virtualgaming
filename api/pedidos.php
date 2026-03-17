@@ -1150,6 +1150,10 @@ function movement_is_available_for_order(mysqli $mysqli, string $reference, int 
     return $linkedOrderId === 0 || $linkedOrderId === $orderId;
 }
 
+function bank_amount_matches_order_total(float $movementAmount, float $orderAmount): bool {
+    return (int) $movementAmount === (int) $orderAmount;
+}
+
 function find_matching_bank_movement(mysqli $mysqli, array $movements, string $reportedReference, float $orderAmount, int $requiredDigits, int $orderId): ?array {
     foreach ($movements as $movement) {
         $reference = (string) ($movement['referencia'] ?? '');
@@ -1159,7 +1163,7 @@ function find_matching_bank_movement(mysqli $mysqli, array $movements, string $r
         if (!movement_reference_matches($reference, $reportedReference, $requiredDigits)) {
             continue;
         }
-        if (abs(((float) ($movement['monto'] ?? 0)) - $orderAmount) > 0.009) {
+        if (!bank_amount_matches_order_total((float) ($movement['monto'] ?? 0), $orderAmount)) {
             continue;
         }
         if (!movement_is_available_for_order($mysqli, $reference, $orderId)) {
@@ -1231,7 +1235,7 @@ function explain_bank_movement_mismatch(array $movements, string $reportedRefere
         if ($reference !== '' && movement_reference_matches($reference, $reportedReference, $requiredDigits)) {
             $referenceMatch = true;
         }
-        if (abs($amount - $orderAmount) <= 0.009) {
+        if (bank_amount_matches_order_total($amount, $orderAmount)) {
             $amountMatch = true;
         }
     }
