@@ -306,7 +306,7 @@ include __DIR__ . "/includes/header.php";
           <label for="payment-phone-input" class="form-label text-info">Número de teléfono real para contactarte</label>
           <input type="tel" id="payment-phone-input" class="form-control bg-dark text-info border-info" autocomplete="tel" placeholder="Ej: 04121234567">
         </div>
-        <button type="button" id="payment-submit-btn" class="btn btn-info w-100 fw-bold text-uppercase py-3">Pagado / Enviar orden</button>
+        <button type="button" id="payment-submit-btn" class="btn btn-info w-100 fw-bold text-uppercase py-3">Pagado / Recargar</button>
         <button type="button" id="payment-cancel-order-btn" class="btn btn-danger w-100 fw-bold text-uppercase py-3 mt-3">Cancelar Orden</button>
       </div>
     </div>
@@ -337,6 +337,7 @@ include __DIR__ . "/includes/header.php";
     padding: 1rem;
     background: rgba(5, 10, 20, 0.78);
     backdrop-filter: blur(4px);
+    overflow-y: auto;
   }
 
   .app-overlay-modal.is-visible {
@@ -360,6 +361,10 @@ include __DIR__ . "/includes/header.php";
   .payment-modal-content {
     position: relative;
     padding: 1.25rem;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     border-radius: 1.5rem;
     background: linear-gradient(180deg, rgba(31, 41, 55, 0.98), rgba(17, 24, 39, 0.98));
     box-shadow: 0 0 28px rgba(34, 211, 238, 0.16);
@@ -427,6 +432,35 @@ include __DIR__ . "/includes/header.php";
     background: rgba(127, 29, 29, 0.12);
   }
 
+  .payment-reasons-title {
+    color: #f8fafc;
+    font-weight: 700;
+    margin-bottom: 0.45rem;
+  }
+
+  .payment-reasons-summary {
+    color: #e2e8f0;
+    margin-bottom: 0.75rem;
+    line-height: 1.55;
+  }
+
+  .payment-reasons-steps {
+    margin: 0;
+    padding-left: 1.15rem;
+    color: #e2e8f0;
+  }
+
+  .payment-reasons-steps li + li {
+    margin-top: 0.4rem;
+  }
+
+  .payment-reasons-caption {
+    margin-top: 0.85rem;
+    color: #fecaca;
+    font-size: 0.92rem;
+    font-weight: 700;
+  }
+
   .payment-reasons-card ul {
     margin: 0.65rem 0 0;
     padding-left: 1.15rem;
@@ -465,8 +499,21 @@ include __DIR__ . "/includes/header.php";
   }
 
   @media (max-width: 575.98px) {
+    .app-overlay-modal {
+      align-items: flex-start;
+      padding: 0.55rem;
+    }
+
+    .app-overlay-modal .modal-dialog,
+    .payment-modal-dialog {
+      width: min(100%, 34rem) !important;
+      margin: 0 auto;
+    }
+
     .payment-modal-content {
       padding: 1rem;
+      max-height: calc(100vh - 1.1rem);
+      border-radius: 1.1rem;
     }
 
     .payment-expiration-banner {
@@ -823,10 +870,56 @@ include __DIR__ . "/includes/header.php";
 
   function renderPaymentFailureDetails(data, reference, totalText) {
     clearPaymentSupportUi();
+    const failureType = String((data && data.failure_type) || 'server_or_data_mismatch');
     const reasons = Array.isArray(data && data.reasons) ? data.reasons.filter(Boolean) : [];
+    let title = 'No pudimos validar el pago automáticamente';
+    let summary = 'La validación no se pudo completar con la respuesta actual del servidor bancario.';
+    let steps = [
+      'Espera 1 o 2 minutos y vuelve a intentar la validación en esta misma ventana.',
+      'Si ya te debitaron el pago y sigue sin validarse, contacta al administrador por WhatsApp y envía el comprobante.'
+    ];
+
+    if (failureType === 'reference_mismatch') {
+      title = 'La referencia no coincide';
+      summary = 'La referencia ingresada no aparece igual en la respuesta del banco.';
+      steps = [
+        'Revisa que hayas escrito exactamente los dígitos solicitados de la referencia bancaria.',
+        'Si la transferencia es reciente, espera 1 o 2 minutos y vuelve a intentar.',
+        'Si el comprobante está correcto y el problema continúa, contacta al administrador por WhatsApp.'
+      ];
+    } else if (failureType === 'amount_mismatch') {
+      title = 'El monto no coincide';
+      summary = 'La referencia sí se encontró, pero el monto recibido por el banco no coincide con el total esperado del pedido.';
+      steps = [
+        'Verifica que el monto transferido corresponda al total del pedido.',
+        'Si el banco aún no refleja el monto correcto, espera 1 o 2 minutos y vuelve a intentar.',
+        'Si el cobro fue correcto y continúa el problema, contacta al administrador por WhatsApp con tu comprobante.'
+      ];
+    } else if (failureType === 'server_partial_response') {
+      title = 'El servidor respondió con datos incompletos';
+      summary = 'Detectamos coincidencias parciales, pero el banco no devolvió una validación completa en el mismo movimiento.';
+      steps = [
+        'Espera 1 o 2 minutos y vuelve a intentar la validación.',
+        'Si el problema persiste, contacta al administrador por WhatsApp y envía el comprobante para revisión manual.'
+      ];
+    }
+
     if (paymentModalReasons && reasons.length) {
       paymentModalReasons.className = 'payment-reasons-card mb-3';
-      paymentModalReasons.innerHTML = `<div class="fw-bold text-danger">No pudimos validar la orden automáticamente</div><ul>${reasons.map((reason) => `<li>${escapePaymentHtml(reason)}</li>`).join('')}</ul>`;
+      paymentModalReasons.innerHTML = `
+        <div class="payment-reasons-title">${escapePaymentHtml(title)}</div>
+        <div class="payment-reasons-summary">${escapePaymentHtml(summary)}</div>
+        <ol class="payment-reasons-steps">${steps.map((step) => `<li>${escapePaymentHtml(step)}</li>`).join('')}</ol>
+        <div class="payment-reasons-caption">Detalle detectado por el sistema:</div>
+        <ul>${reasons.map((reason) => `<li>${escapePaymentHtml(reason)}</li>`).join('')}</ul>
+      `;
+    } else if (paymentModalReasons) {
+      paymentModalReasons.className = 'payment-reasons-card mb-3';
+      paymentModalReasons.innerHTML = `
+        <div class="payment-reasons-title">${escapePaymentHtml(title)}</div>
+        <div class="payment-reasons-summary">${escapePaymentHtml(summary)}</div>
+        <ol class="payment-reasons-steps">${steps.map((step) => `<li>${escapePaymentHtml(step)}</li>`).join('')}</ol>
+      `;
     }
 
     const whatsappUrl = buildPaymentSupportWhatsappUrl(activePaymentOrder ? activePaymentOrder.orderId : '', reference, totalText);
@@ -834,6 +927,13 @@ include __DIR__ . "/includes/header.php";
       paymentModalActions.className = 'payment-support-actions mb-4';
       paymentModalActions.innerHTML = `<a href="${escapePaymentHtml(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="payment-support-link">Contactar al administrador por WhatsApp</a>`;
     }
+  }
+
+  function renderPaymentServerFailure(errorMessage, reference, totalText) {
+    renderPaymentFailureDetails({
+      failure_type: 'server_or_data_mismatch',
+      reasons: [errorMessage || 'No se recibió una respuesta válida del servidor bancario.']
+    }, reference, totalText);
   }
 
   function setCancelOrderButtonMode(mode) {
@@ -1201,14 +1301,6 @@ include __DIR__ . "/includes/header.php";
                     setOverlayVisible(loadingModal, false);
 
                     const nextState = String((data && data.estado) || '').toLowerCase();
-                    let toastVariant = 'success';
-                    if (nextState === 'cancelado') {
-                      toastVariant = 'error';
-                    } else if (nextState === 'pendiente') {
-                      toastVariant = 'info';
-                    }
-
-                    showToast(data.message || 'Datos de pago enviados correctamente.', toastVariant);
                     if (nextState === 'enviado') {
                       setPaymentAlert(data.message || 'La recarga fue procesada correctamente.', 'success');
                       clearPaymentSupportUi();
@@ -1237,7 +1329,7 @@ include __DIR__ . "/includes/header.php";
                     }
 
                     if (nextState === 'pendiente' && data && data.bank_checked) {
-                      setPaymentAlert(data.message || 'No pudimos confirmar automáticamente el pago.', 'danger');
+                      setPaymentAlert(data.message || 'No pudimos validar el pago automáticamente.', 'danger');
                       renderPaymentFailureDetails(data, reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
                       setPaymentFormDisabled(false);
                       return;
@@ -1248,7 +1340,8 @@ include __DIR__ . "/includes/header.php";
                   })
                   .catch((error) => {
                     setOverlayVisible(loadingModal, false);
-                    setPaymentAlert(error.message || 'No se pudieron guardar los datos del pago.', 'danger');
+                    setPaymentAlert(error.message || 'No se pudo validar el pago por respuesta del servidor.', 'danger');
+                    renderPaymentServerFailure(error.message || 'No se pudo validar el pago por respuesta del servidor.', reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
                     setPaymentFormDisabled(false);
                     if (activePaymentOrder && activePaymentOrder.expiresAtMs <= Date.now()) {
                       expireActiveOrder();

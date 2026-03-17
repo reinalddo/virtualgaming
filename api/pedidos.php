@@ -1154,6 +1154,19 @@ function bank_amount_matches_order_total(float $movementAmount, float $orderAmou
     return (int) $movementAmount === (int) $orderAmount;
 }
 
+function bank_mismatch_failure_type(bool $referenceMatch, bool $amountMatch): string {
+    if (!$referenceMatch && $amountMatch) {
+        return 'reference_mismatch';
+    }
+    if ($referenceMatch && !$amountMatch) {
+        return 'amount_mismatch';
+    }
+    if ($referenceMatch && $amountMatch) {
+        return 'server_partial_response';
+    }
+    return 'server_or_data_mismatch';
+}
+
 function find_matching_bank_movement(mysqli $mysqli, array $movements, string $reportedReference, float $orderAmount, int $requiredDigits, int $orderId): ?array {
     foreach ($movements as $movement) {
         $reference = (string) ($movement['referencia'] ?? '');
@@ -1254,6 +1267,7 @@ function explain_bank_movement_mismatch(array $movements, string $reportedRefere
     return [
         'reference_match' => $referenceMatch,
         'amount_match' => $amountMatch,
+        'failure_type' => bank_mismatch_failure_type($referenceMatch, $amountMatch),
         'reasons' => $reasons,
     ];
 }
@@ -1999,7 +2013,7 @@ if ($action === 'submit_payment') {
         try {
             $bankMovements = fetch_and_sync_bank_movements($mysqli, $bankConfig);
         } catch (Throwable $e) {
-            json_error($e->getMessage(), 502);
+            json_error('No pudimos validar el pago por respuesta del servidor bancario. Espera un momento y vuelve a intentarlo, o contacta al administrador si ya te debitaron el pago.', 502);
         }
 
         if (!$usesBankValidation) {
@@ -2031,15 +2045,15 @@ if ($action === 'submit_payment') {
                     (float) ($updatedOrder['precio'] ?? 0),
                     $referenceDigitsLimit,
                     $orderId,
-                    2,
-                    8,
+                    3,
+                    5,
                     $bankMovements
                 );
                 $matchingMovement = $retryResult['match'];
                 $bankMovements = $retryResult['movements'];
                 error_log('TVG bank validation attempts for order #' . $orderId . ': ' . (int) ($retryResult['attempts'] ?? 1));
             } catch (Throwable $e) {
-                json_error($e->getMessage(), 502);
+                json_error('No pudimos validar el pago por respuesta del servidor bancario. Espera un momento y vuelve a intentarlo, o contacta al administrador si ya te debitaron el pago.', 502);
             }
         }
 
@@ -2163,7 +2177,7 @@ if ($action === 'submit_payment') {
 
         echo json_encode([
             'ok' => true,
-            'message' => 'No pudimos confirmar automáticamente el pago en este momento. La orden sigue no verificada; el movimiento bancario puede tardar unos minutos en reflejarse antes de reintentar.',
+            'message' => 'No pudimos validar el pago automáticamente en este momento.',
             'order_id' => $orderId,
             'estado' => 'pendiente',
             'verified' => false,
@@ -2171,6 +2185,7 @@ if ($action === 'submit_payment') {
             'reasons' => $mismatch['reasons'],
             'reference_match' => $mismatch['reference_match'],
             'amount_match' => $mismatch['amount_match'],
+            'failure_type' => $mismatch['failure_type'],
         ]);
         exit;
     }
