@@ -27,6 +27,7 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('inicio_popup_tab_habilitado', '1', 'Activa o desactiva globalmente el tab y la función de la ventana inicial'),
 ('inicio_popup_activo', '1', 'Activa o desactiva la aparición de la ventana inicial en el index'),
 ('inicio_popup_frecuencia', 'per_session', 'Frecuencia con la que debe aparecer la ventana inicial en el index'),
+('inicio_popup_nombre_canal', 'DanisA Gamer Store', 'Nombre visible del canal en la ventana inicial'),
 ('ff_bank_posicion', '0', 'Posicion para la conexion al banco de Free Fire'),
 ('ff_bank_token', '', 'Token para la conexion al banco de Free Fire'),
 ('ff_bank_clave', '', 'Clave para la conexion al banco de Free Fire'),

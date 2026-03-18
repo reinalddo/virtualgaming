@@ -575,6 +575,10 @@ $themeFieldGroups = [
                       <input class="form-check-input" type="checkbox" role="switch" id="inicioPopupActivo" name="inicio_popup_activo" value="1" <?= ($cfg['inicio_popup_activo'] ?? '1') === '1' ? 'checked' : '' ?>>
                       <label class="form-check-label fw-semibold" for="inicioPopupActivo">Mostrar ventana inicial en el inicio</label>
                     </div>
+                    <div class="mb-4">
+                      <label class="form-label">Nombre del canal</label>
+                      <input type="text" name="inicio_popup_nombre_canal" value="<?= htmlspecialchars($cfg['inicio_popup_nombre_canal'] ?? 'DanisA Gamer Store', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="DanisA Gamer Store" required>
+                    </div>
                     <div>
                       <label class="form-label">Frecuencia de aparición</label>
                       <select name="inicio_popup_frecuencia" class="form-select">
@@ -588,9 +592,8 @@ $themeFieldGroups = [
                 <div class="col-lg-5">
                   <div class="config-section-note h-100">
                     <div class="fw-semibold text-info mb-2">Resumen</div>
-                    <div class="small">Canal mostrado: DanisA Gamer Store.</div>
+                    <div class="small">Canal mostrado: <?= htmlspecialchars($cfg['inicio_popup_nombre_canal'] ?? 'DanisA Gamer Store', ENT_QUOTES, 'UTF-8') ?>.</div>
                     <div class="small mt-2">Enlace usado: <?= !empty($cfg['whatsapp_channel']) ? htmlspecialchars($cfg['whatsapp_channel'], ENT_QUOTES, 'UTF-8') : 'No configurado aún en Redes Sociales' ?></div>
-                    <div class="small mt-2">La variable global <strong>inicio_popup_tab_habilitado</strong> de la tabla <strong>configuracion_general</strong> permite ocultar este tab y desactivar la función en toda la tienda.</div>
                   </div>
                 </div>
               </div>
