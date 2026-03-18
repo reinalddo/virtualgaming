@@ -361,13 +361,87 @@ function apply_coupon_to_price(float $price, array $coupon): float {
 }
 
 function json_error(string $message, int $code = 400): void {
+    json_response(['ok' => false, 'message' => $message], $code);
+}
+
+function json_response(array $payload, int $code = 200, ?callable $afterSend = null): void {
     http_response_code($code);
+    $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        http_response_code(500);
+        $json = json_encode([
+            'ok' => false,
+            'message' => 'No se pudo generar una respuesta JSON válida.',
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{"ok":false,"message":"No se pudo generar una respuesta JSON válida."}';
+    }
+
     if (ob_get_length()) {
         ob_clean();
     }
-    echo json_encode(['ok' => false, 'message' => $message]);
+
+    header('Content-Type: application/json');
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        @session_write_close();
+    }
+
+    ignore_user_abort(true);
+    echo $json;
+
+    if (function_exists('fastcgi_finish_request')) {
+        fastcgi_finish_request();
+    } else {
+        while (ob_get_level() > 0) {
+            @ob_end_flush();
+        }
+        flush();
+    }
+
+    if ($afterSend !== null) {
+        try {
+            $afterSend();
+        } catch (Throwable $e) {
+            error_log('TVG background task error: ' . $e->getMessage());
+        }
+    }
+
     exit;
 }
+
+set_exception_handler(static function (Throwable $e): void {
+    error_log('TVG pedidos uncaught exception: ' . $e->getMessage());
+    json_response([
+        'ok' => false,
+        'message' => 'Ocurrió un error interno al procesar la solicitud.',
+    ], 500);
+});
+
+register_shutdown_function(static function (): void {
+    $error = error_get_last();
+    if (!$error) {
+        return;
+    }
+
+    $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+    if (!in_array($error['type'] ?? 0, $fatalTypes, true)) {
+        return;
+    }
+
+    error_log('TVG pedidos fatal shutdown: ' . ($error['message'] ?? 'Fatal error'));
+
+    if (!headers_sent()) {
+        http_response_code(500);
+        if (ob_get_length()) {
+            ob_clean();
+        }
+        echo json_encode([
+            'ok' => false,
+            'message' => 'Ocurrió un error fatal al procesar la solicitud.',
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+});
 
 function inline_embedded_images_for_html(string $html, array $embeddedImages): string {
     foreach ($embeddedImages as $image) {
@@ -1913,7 +1987,7 @@ if ($action === 'create') {
         send_app_mail($adminEmail, "Nuevo pedido #{$order_id}", $adminHtml, null, $brandingImages);
     }
 
-    echo json_encode([
+    json_response([
         'ok' => true,
         'message' => 'Pedido registrado',
         'order_id' => $order_id,
@@ -1922,7 +1996,6 @@ if ($action === 'create') {
         'expires_at' => order_expiration_iso($storedOrder),
         'remaining_seconds' => max(0, order_expiration_timestamp($storedOrder) - time())
     ]);
-    exit;
 }
 
 if ($action === 'submit_payment') {
@@ -2075,17 +2148,16 @@ if ($action === 'submit_payment') {
                 $paidStmt->close();
 
                 $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
-                register_influencer_coupon_sale($mysqli, $paidOrder);
-                notify_bank_payment_verified_paid($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone);
-
-                echo json_encode([
+                json_response([
                     'ok' => true,
                     'message' => 'Pago verificado automáticamente. Tu pedido quedó en estado verificado.',
                     'order_id' => $orderId,
                     'estado' => 'pagado',
                     'verified' => true,
-                ]);
-                exit;
+                ], 200, static function () use ($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone): void {
+                    register_influencer_coupon_sale($mysqli, $paidOrder);
+                    notify_bank_payment_verified_paid($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone);
+                });
             }
 
             $montoFf = trim((string) ($updatedOrder['monto_ff'] ?? ''));
@@ -2120,10 +2192,7 @@ if ($action === 'submit_payment') {
                 $verifyStmt->close();
 
                 $verifiedOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
-                register_influencer_coupon_sale($mysqli, $verifiedOrder);
-                notify_free_fire_recharge_success($mysqli, $verifiedOrder, $paymentMethodName, $verifiedReference, $phone, $providerReference, $providerMessage);
-
-                echo json_encode([
+                json_response([
                     'ok' => true,
                     'message' => 'Pago verificado y recarga Free Fire procesada correctamente.',
                     'order_id' => $orderId,
@@ -2131,8 +2200,10 @@ if ($action === 'submit_payment') {
                     'verified' => true,
                     'provider_reference' => $providerReference,
                     'provider_message' => $providerMessage,
-                ]);
-                exit;
+                ], 200, static function () use ($mysqli, $verifiedOrder, $paymentMethodName, $verifiedReference, $phone, $providerReference, $providerMessage): void {
+                    register_influencer_coupon_sale($mysqli, $verifiedOrder);
+                    notify_free_fire_recharge_success($mysqli, $verifiedOrder, $paymentMethodName, $verifiedReference, $phone, $providerReference, $providerMessage);
+                });
             }
 
             $paidStatus = 'pagado';
@@ -2148,10 +2219,7 @@ if ($action === 'submit_payment') {
             $paidStmt->close();
 
             $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
-            register_influencer_coupon_sale($mysqli, $paidOrder);
-            notify_free_fire_recharge_failure($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerMessage);
-
-            echo json_encode([
+            json_response([
                 'ok' => true,
                 'message' => 'El pago fue verificado, pero la recarga Free Fire no pudo completarse automáticamente. Nuestro equipo revisará tu pedido.',
                 'order_id' => $orderId,
@@ -2160,22 +2228,15 @@ if ($action === 'submit_payment') {
                 'reasons' => [$providerMessage],
                 'provider_reference' => $providerReference,
                 'provider_message' => $providerMessage,
-            ]);
-            exit;
+            ], 200, static function () use ($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerMessage): void {
+                register_influencer_coupon_sale($mysqli, $paidOrder);
+                notify_free_fire_recharge_failure($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerMessage);
+            });
         }
 
         $mismatch = explain_bank_movement_mismatch($bankMovements, $referenceNumber, (float) ($updatedOrder['precio'] ?? 0), $referenceDigitsLimit);
         $pendingOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
-        notify_bank_payment_pending_mismatch(
-            $mysqli,
-            $pendingOrder,
-            $paymentMethodName,
-            $referenceNumber,
-            $phone,
-            $mismatch['reasons']
-        );
-
-        echo json_encode([
+        json_response([
             'ok' => true,
             'message' => 'No pudimos validar el pago automáticamente en este momento.',
             'order_id' => $orderId,
@@ -2186,11 +2247,17 @@ if ($action === 'submit_payment') {
             'reference_match' => $mismatch['reference_match'],
             'amount_match' => $mismatch['amount_match'],
             'failure_type' => $mismatch['failure_type'],
-        ]);
-        exit;
+        ], 200, static function () use ($mysqli, $pendingOrder, $paymentMethodName, $referenceNumber, $phone, $mismatch): void {
+            notify_bank_payment_pending_mismatch(
+                $mysqli,
+                $pendingOrder,
+                $paymentMethodName,
+                $referenceNumber,
+                $phone,
+                $mismatch['reasons']
+            );
+        });
     }
-
-    register_influencer_coupon_sale($mysqli, $updatedOrder);
 
     $customerMessage = '<p style="margin:0 0 10px;">Recibimos tu pago reportado y ya quedó enviado al equipo administrativo para validación.</p>'
         . '<p style="margin:0;">Cuando el administrador lo revise y apruebe, te notificaremos el siguiente cambio de estado.</p>';
@@ -2228,20 +2295,20 @@ if ($action === 'submit_payment') {
         'status' => 'No Verificado',
     ], '#f59e0b');
 
-    if (!empty($updatedOrder['email']) && filter_var($updatedOrder['email'], FILTER_VALIDATE_EMAIL)) {
-        send_app_mail((string) $updatedOrder['email'], "Pago reportado #{$orderId}", $customerHtml, null, $brandingImages);
-    }
-    if ($adminEmail !== null) {
-        send_app_mail($adminEmail, "Pago reportado #{$orderId}", $adminHtml, null, $brandingImages);
-    }
-
-    echo json_encode([
+    json_response([
         'ok' => true,
         'message' => 'Datos de pago enviados correctamente. Tu pedido sigue no verificado.',
         'order_id' => $orderId,
         'estado' => 'pendiente'
-    ]);
-    exit;
+    ], 200, static function () use ($mysqli, $updatedOrder, $adminEmail, $customerHtml, $adminHtml, $brandingImages, $orderId): void {
+        register_influencer_coupon_sale($mysqli, $updatedOrder);
+        if (!empty($updatedOrder['email']) && filter_var($updatedOrder['email'], FILTER_VALIDATE_EMAIL)) {
+            send_app_mail((string) $updatedOrder['email'], "Pago reportado #{$orderId}", $customerHtml, null, $brandingImages);
+        }
+        if ($adminEmail !== null) {
+            send_app_mail($adminEmail, "Pago reportado #{$orderId}", $adminHtml, null, $brandingImages);
+        }
+    });
 }
 
 if ($action === 'expire_order') {
@@ -2255,32 +2322,29 @@ if ($action === 'expire_order') {
     }
 
     if (($order['estado'] ?? '') !== 'pendiente') {
-        echo json_encode([
+        json_response([
             'ok' => true,
             'expired' => ($order['estado'] ?? '') === 'cancelado',
             'message' => 'El pedido ya fue procesado previamente.',
             'estado' => $order['estado'] ?? ''
         ]);
-        exit;
     }
 
     if (!order_is_expired($order)) {
-        echo json_encode([
+        json_response([
             'ok' => true,
             'expired' => false,
             'message' => 'La orden aún sigue activa.',
             'remaining_seconds' => max(0, order_expiration_timestamp($order) - time())
         ]);
-        exit;
     }
 
     $result = cancel_expired_order($mysqli, $order);
-    echo json_encode([
+    json_response([
         'ok' => true,
         'expired' => true,
         'message' => $result['message']
     ]);
-    exit;
 }
 
 if ($action === 'cancel_order') {
@@ -2299,13 +2363,12 @@ if ($action === 'cancel_order') {
         json_error($result['message'], 409);
     }
 
-    echo json_encode([
+    json_response([
         'ok' => true,
         'message' => $result['message'],
         'estado' => 'cancelado',
         'order_id' => $orderId,
     ]);
-    exit;
 }
 
 if ($action === 'update_status') {
@@ -2376,11 +2439,7 @@ if ($action === 'update_status') {
         send_app_mail($adminEmail, "Pedido #{$order_id} cambiado a {$new_status}", $adminStatusHtml, null, $brandingImages);
     }
 
-    if (ob_get_length()) {
-        ob_clean();
-    }
-    echo json_encode(['ok' => true, 'message' => 'Estado actualizado', 'estado' => $new_status, 'order_id' => $order_id]);
-    exit;
+    json_response(['ok' => true, 'message' => 'Estado actualizado', 'estado' => $new_status, 'order_id' => $order_id]);
 }
 
 json_error('Acción no soportada', 422);
