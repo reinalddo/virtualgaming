@@ -447,6 +447,66 @@ body {
   }
 }
 
+@media (max-width: 399.98px) {
+  .site-header {
+    align-items: center !important;
+  }
+
+  .site-header > #menu-toggle {
+    order: 1;
+    flex: 0 0 auto;
+  }
+
+  .site-auth-container {
+    order: 2;
+    width: auto;
+    max-width: calc(100% - 56px);
+    margin-left: auto;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .site-auth-trigger,
+  #user-trigger {
+    min-width: 0 !important;
+    max-width: 100%;
+    margin-left: 0 !important;
+  }
+
+  .site-brand {
+    order: 3;
+    flex: 0 0 100%;
+    justify-content: center;
+    padding-top: 0.6rem;
+    padding-inline: 0;
+    text-align: center !important;
+  }
+
+  .site-brand > div {
+    text-align: center !important;
+  }
+
+  #user-trigger {
+    min-width: min(216px, calc(100vw - 92px)) !important;
+    padding-left: 0.85rem !important;
+    padding-right: 0.85rem !important;
+    gap: 0.6rem !important;
+  }
+
+  .site-auth-trigger {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    font-size: 10px !important;
+  }
+
+  .site-auth-label,
+  #user-trigger-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
 .pack-card {
   min-height: 12.5rem;
   border-width: 1px;
