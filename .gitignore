@@ -1,3 +1,4 @@
-/assets/
+/assets/*
+!/assets/css/
 includes/db_connect.php
 includes/db.php
