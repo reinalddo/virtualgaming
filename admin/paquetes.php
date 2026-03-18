@@ -10,6 +10,13 @@ function ensure_juego_paquetes_monto_ff_column(mysqli $mysqli): void {
     }
 }
 
+function ensure_juego_paquetes_activo_column(mysqli $mysqli): void {
+    $result = $mysqli->query("SHOW COLUMNS FROM juego_paquetes LIKE 'activo'");
+    if (!($result instanceof mysqli_result) || $result->num_rows === 0) {
+        $mysqli->query("ALTER TABLE juego_paquetes ADD COLUMN activo TINYINT(1) DEFAULT 1 NULL AFTER imagen_icono");
+    }
+}
+
 function free_fire_api_amount_options(): array {
     return [
         '1' => ['suggested_name' => 'FF_110', 'diamonds' => '110 diamantes'],
@@ -32,6 +39,7 @@ function free_fire_api_amount_label(string $amount): string {
 }
 
 ensure_juego_paquetes_monto_ff_column($mysqli);
+ensure_juego_paquetes_activo_column($mysqli);
 
 $juego_id = 0;
 if (isset($_GET['juego'])) {
@@ -51,6 +59,18 @@ $res_juego->execute();
 $juego = $res_juego->get_result()->fetch_assoc();
 $freeFireApiOptions = free_fire_api_amount_options();
 $usesFreeFireApi = !empty($juego['api_free_fire']);
+
+if (isset($_GET['toggle_activo'])) {
+    $toggleId = intval($_GET['toggle_activo']);
+    if ($toggleId > 0) {
+        $stmtToggle = $mysqli->prepare("UPDATE juego_paquetes SET activo = IF(COALESCE(activo, 1) = 1, 0, 1) WHERE id = ? AND juego_id = ?");
+        $stmtToggle->bind_param('ii', $toggleId, $juego_id);
+        $stmtToggle->execute();
+        $stmtToggle->close();
+    }
+    header('Location: /admin/paquetes/' . $juego_id);
+    exit;
+}
 
 // Procesar eliminación de paquete (antes de cualquier salida)
 if (isset($_GET['eliminar'])) {
@@ -82,6 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_paquete_id'])) {
     $edit_monto_ff = $usesFreeFireApi ? trim((string) ($_POST['edit_monto_ff'] ?? '')) : null;
     $edit_cantidad = intval($_POST['edit_cantidad'] ?? 0);
     $edit_precio = floatval($_POST['edit_precio'] ?? 0);
+    $edit_activo = isset($_POST['edit_activo']) ? 1 : 0;
     $edit_imagen_icono = null;
     if (isset($_FILES['edit_imagen_icono']) && $_FILES['edit_imagen_icono']['error'] === UPLOAD_ERR_OK) {
         $ext = strtolower(pathinfo($_FILES['edit_imagen_icono']['name'], PATHINFO_EXTENSION));
@@ -97,11 +118,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_paquete_id'])) {
         }
     }
     if ($edit_imagen_icono) {
-        $stmt = $mysqli->prepare("UPDATE juego_paquetes SET nombre=?, clave=?, monto_ff=?, cantidad=?, precio=?, imagen_icono=? WHERE id=?");
-        $stmt->bind_param('sssidsi', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_cantidad, $edit_precio, $edit_imagen_icono, $edit_id);
+        $stmt = $mysqli->prepare("UPDATE juego_paquetes SET nombre=?, clave=?, monto_ff=?, cantidad=?, precio=?, imagen_icono=?, activo=? WHERE id=?");
+        $stmt->bind_param('sssidsii', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_cantidad, $edit_precio, $edit_imagen_icono, $edit_activo, $edit_id);
     } else {
-        $stmt = $mysqli->prepare("UPDATE juego_paquetes SET nombre=?, clave=?, monto_ff=?, cantidad=?, precio=? WHERE id=?");
-        $stmt->bind_param('sssidi', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_cantidad, $edit_precio, $edit_id);
+        $stmt = $mysqli->prepare("UPDATE juego_paquetes SET nombre=?, clave=?, monto_ff=?, cantidad=?, precio=?, activo=? WHERE id=?");
+        $stmt->bind_param('sssidii', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_cantidad, $edit_precio, $edit_activo, $edit_id);
     }
     $stmt->execute();
     header('Location: /admin/paquetes/' . $juego_id);
@@ -115,6 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['cla
     $monto_ff = $usesFreeFireApi ? trim((string) ($_POST['monto_ff'] ?? '')) : null;
     $cantidad = intval($_POST['cantidad']);
     $precio = floatval($_POST['precio']);
+    $activo = isset($_POST['activo']) ? 1 : 0;
     $imagen_icono = null;
     if (isset($_FILES['imagen_icono']) && $_FILES['imagen_icono']['error'] === UPLOAD_ERR_OK) {
         $ext = strtolower(pathinfo($_FILES['imagen_icono']['name'], PATHINFO_EXTENSION));
@@ -129,8 +151,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['cla
             }
         }
     }
-    $stmt = $mysqli->prepare("INSERT INTO juego_paquetes (juego_id, nombre, clave, monto_ff, cantidad, precio, imagen_icono) VALUES (?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param('isssids', $juego_id, $nombre, $clave, $monto_ff, $cantidad, $precio, $imagen_icono);
+    $stmt = $mysqli->prepare("INSERT INTO juego_paquetes (juego_id, nombre, clave, monto_ff, cantidad, precio, imagen_icono, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param('isssidsi', $juego_id, $nombre, $clave, $monto_ff, $cantidad, $precio, $imagen_icono, $activo);
     $stmt->execute();
     header('Location: /admin/paquetes/' . $juego_id);
     exit;
@@ -181,6 +203,12 @@ include '../includes/header.php';
             <label class="form-label text-neon">Icono del paquete</label>
             <input type="file" name="imagen_icono" accept="image/*" class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;" onchange="previewNuevoPaqueteImg(event)">
         </div>
+        <div class="col-12">
+            <div class="form-check mt-2">
+                <input type="checkbox" name="activo" class="form-check-input" id="paqueteActivoCheck" checked>
+                <label class="form-check-label text-neon" for="paqueteActivoCheck">Paquete activo / publicado</label>
+            </div>
+        </div>
         <div class="col-12 text-center">
             <img id="preview-nuevo-paquete-img" src="#" alt="Previsualización" style="display:none;max-width:120px;max-height:120px;border-radius:0.75rem;box-shadow:0 0 0.5rem #22d3ee55;border:2px solid #22d3ee;background:#222c3a;" />
         </div>
@@ -198,6 +226,7 @@ include '../includes/header.php';
                     <?php if ($usesFreeFireApi): ?>
                         <th style="color:#22d3ee; background:#181f2a;">Monto FF</th>
                     <?php endif; ?>
+                    <th style="color:#22d3ee; background:#181f2a;">Activo</th>
                     <th style="color:#22d3ee; background:#181f2a;">Precio</th>
                     <th style="color:#22d3ee; background:#181f2a;">Acciones</th>
                 </tr>
@@ -219,6 +248,14 @@ include '../includes/header.php';
                     <?php if ($usesFreeFireApi): ?>
                         <td style="background:#181f2a; color:#fff;"><?= htmlspecialchars(!empty($p['monto_ff']) ? free_fire_api_amount_label((string) $p['monto_ff']) : '—') ?></td>
                     <?php endif; ?>
+                    <td class="text-center" style="background:#181f2a;">
+                        <form method="get" action="/admin/paquetes/<?= $juego_id ?>" class="m-0 d-inline-block">
+                            <input type="hidden" name="toggle_activo" value="<?= (int) $p['id'] ?>">
+                            <div class="form-check form-switch d-inline-flex justify-content-center mb-0">
+                                <input class="form-check-input" type="checkbox" <?= !isset($p['activo']) || !empty($p['activo']) ? 'checked' : '' ?> onchange="this.form.submit()" aria-label="Activar o desactivar paquete <?= htmlspecialchars($p['nombre'], ENT_QUOTES, 'UTF-8') ?>">
+                            </div>
+                        </form>
+                    </td>
                     <td class="text-neon" style="background:#181f2a; color:#22d3ee;">$<?= number_format($p['precio'], 2) ?></td>
                     <td style="background:#181f2a;" class="text-nowrap">
                         <a href="/admin/paquetes/<?= $juego_id ?>?editar=<?= $p['id'] ?>" class="btn neon-btn-info btn-sm me-2">Editar</a>
@@ -246,6 +283,15 @@ include '../includes/header.php';
                         <div>
                             <div class="fw-bold text-neon" style="font-size:1.1rem; color:#22d3ee;"><?= htmlspecialchars($p['nombre']) ?></div>
                             <div class="text-muted" style="font-size:0.85rem; color:#b2f6ff;">ID: <?= $p['id'] ?></div>
+                            <div class="mt-2">
+                                <form method="get" action="/admin/paquetes/<?= $juego_id ?>" class="m-0 d-inline-flex align-items-center gap-2">
+                                    <input type="hidden" name="toggle_activo" value="<?= (int) $p['id'] ?>">
+                                    <div class="form-check form-switch mb-0">
+                                        <input class="form-check-input" type="checkbox" <?= !isset($p['activo']) || !empty($p['activo']) ? 'checked' : '' ?> onchange="this.form.submit()" aria-label="Activar o desactivar paquete <?= htmlspecialchars($p['nombre'], ENT_QUOTES, 'UTF-8') ?>">
+                                    </div>
+                                    <span style="color:#b2f6ff;font-size:0.85rem;"><?= !isset($p['activo']) || !empty($p['activo']) ? 'Activo' : 'Inactivo' ?></span>
+                                </form>
+                            </div>
                         </div>
                     </div>
                     <div style="color:#fff;"><span class="fw-semibold">Clave:</span> <?= htmlspecialchars($p['clave']) ?></div>
@@ -307,6 +353,10 @@ if (isset($_GET['editar'])) {
         <div class="mb-3">
             <label class="form-label text-neon">Precio USD</label>
             <input type="number" step="0.01" name="edit_precio" value="<?= htmlspecialchars($paq_edit['precio']) ?>" required class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
+        </div>
+        <div class="form-check mb-3">
+            <input type="checkbox" name="edit_activo" class="form-check-input" id="editPaqueteActivoCheck" <?= !isset($paq_edit['activo']) || !empty($paq_edit['activo']) ? 'checked' : '' ?>>
+            <label class="form-check-label text-neon" for="editPaqueteActivoCheck">Paquete activo / publicado</label>
         </div>
         <div class="mb-3">
             <label class="form-label text-neon">Icono actual:</label><br>

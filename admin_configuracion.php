@@ -163,14 +163,14 @@ $themeFieldGroups = [
     aspect-ratio: 1 / 1;
   }
   .gallery-image-preview {
-    aspect-ratio: 16 / 6;
+    aspect-ratio: 1280 / 500;
     max-width: none;
   }
   .header-logo-preview img,
   .gallery-image-preview img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
     display: block;
   }
   .header-logo-empty,
@@ -557,7 +557,7 @@ $themeFieldGroups = [
             <form method="post" enctype="multipart/form-data">
               <input type="hidden" name="config_section" value="galeria">
               <input type="hidden" name="gallery_id" value="<?= $galleryEditItem ? (int) $galleryEditItem['id'] : 0 ?>">
-              <div class="config-section-note mb-4">Administra el slider principal del index. Si marcas un elemento como destacado, también aparecerá en el bloque inferior y se desmarcará cualquier otro destacado existente.</div>
+              <div class="config-section-note mb-4">Administra el slider principal del index. Si marcas un elemento como destacado, también aparecerá en el bloque inferior y se desmarcará cualquier otro destacado existente. Recomendación: sube imágenes en tamaño 1280x500px para obtener el mejor resultado tanto en desktop como en responsive.</div>
               <div class="row g-4 align-items-start">
                 <div class="col-12">
                   <label class="form-label d-block">Vista previa de imagen</label>
@@ -568,21 +568,21 @@ $themeFieldGroups = [
                       <span class="gallery-image-empty" id="gallery-image-preview-empty">Sin imagen</span>
                     <?php endif; ?>
                   </div>
-                  <div class="form-text">La vista previa usa proporción horizontal para que se acerque a cómo se verá en el inicio.</div>
+                  <div class="form-text">La vista previa usa proporción 1280x500 para acercarse a cómo se verá en el inicio.</div>
                 </div>
                 <div class="col-lg-8">
                   <div class="row g-3">
                     <div class="col-12">
                       <label class="form-label">Título</label>
-                      <input type="text" name="titulo" value="<?= htmlspecialchars($galleryForm['titulo']) ?>" required class="form-control" placeholder="Bienvenida">
+                      <input type="text" name="titulo" value="<?= htmlspecialchars($galleryForm['titulo']) ?>" class="form-control" placeholder="Bienvenida">
                     </div>
                     <div class="col-md-6">
                       <label class="form-label">Descripción 1</label>
-                      <input type="text" name="descripcion1" value="<?= htmlspecialchars($galleryForm['descripcion1']) ?>" required class="form-control" placeholder="+10% en tu primera compra">
+                      <input type="text" name="descripcion1" value="<?= htmlspecialchars($galleryForm['descripcion1']) ?>" class="form-control" placeholder="+10% en tu primera compra">
                     </div>
                     <div class="col-md-6">
                       <label class="form-label">Descripción 2</label>
-                      <input type="text" name="descripcion2" value="<?= htmlspecialchars($galleryForm['descripcion2']) ?>" required class="form-control" placeholder="Usa el código START10">
+                      <input type="text" name="descripcion2" value="<?= htmlspecialchars($galleryForm['descripcion2']) ?>" class="form-control" placeholder="Usa el código START10">
                     </div>
                     <div class="col-md-7">
                       <label class="form-label">URL</label>
@@ -599,7 +599,7 @@ $themeFieldGroups = [
                     <div class="col-12">
                       <label class="form-label">Imagen</label>
                       <input type="file" name="imagen" id="gallery-image-input" accept="image/png,image/jpeg,image/webp,image/gif" class="form-control" <?= $galleryEditItem ? '' : 'required' ?>>
-                      <div class="form-text">Formatos permitidos: JPG, PNG, WEBP o GIF. Tamaño máximo: 4 MB.</div>
+                      <div class="form-text">Formatos permitidos: JPG, PNG, WEBP o GIF. Tamaño máximo: 4 MB. Tamaño recomendado: 1280x500px.</div>
                     </div>
                     <div class="col-12">
                       <div class="form-check">

@@ -108,23 +108,25 @@ $accentMap = [
           flex-shrink: 0;
           width: 100%;
           min-width: 82%;
-          height: 220px;
+          aspect-ratio: 1280 / 500;
           overflow: hidden;
           border-radius: 1.5rem;
           scroll-snap-align: start;
+          background: rgba(8, 15, 24, 0.88);
         }
         .promo-slide-image,
         .featured-banner-image {
           width: 100%;
           height: 100%;
-          object-fit: cover;
-          opacity: 0.86;
+          object-fit: contain;
+          object-position: center center;
+          display: block;
         }
         .promo-slide-overlay,
         .featured-banner-overlay {
           position: absolute;
           inset: 0;
-          background: linear-gradient(90deg, rgba(12, 21, 34, 0.9), rgba(12, 21, 34, 0.3), transparent);
+          background: transparent;
         }
         .promo-slide-content,
         .featured-banner-content {
@@ -134,6 +136,17 @@ $accentMap = [
           flex-direction: column;
           justify-content: center;
           padding-inline: 1.5rem;
+        }
+        .promo-slide-content > p,
+        .promo-slide-content > h2,
+        .featured-banner-content > p,
+        .featured-banner-content > h3 {
+          text-shadow: 0 2px 10px rgba(3, 7, 18, 0.82), 0 0 18px rgba(3, 7, 18, 0.45);
+        }
+        .promo-slide-content .small.text-secondary,
+        .featured-banner-content .small.text-secondary {
+          color: #e2e8f0 !important;
+          text-shadow: 0 2px 8px rgba(3, 7, 18, 0.9), 0 0 14px rgba(3, 7, 18, 0.4);
         }
         .promo-dots {
           display: flex;
@@ -161,16 +174,15 @@ $accentMap = [
           overflow: hidden;
           border-radius: 1.5rem;
           text-decoration: none;
+          background: rgba(8, 15, 24, 0.88);
         }
         .featured-banner-image {
-          height: 140px;
+          aspect-ratio: 1280 / 500;
         }
         @media (min-width: 768px) {
-          .promo-slide-card {
-            height: 250px;
-          }
+          .promo-slide-card,
           .featured-banner-image {
-            height: 160px;
+            aspect-ratio: 1280 / 500;
           }
         }
         @media (max-width: 767.98px) {
@@ -189,11 +201,9 @@ $accentMap = [
             width: 100%;
             border-radius: 0;
           }
-          .promo-slide-card {
-            height: min(62vw, 320px);
-          }
+          .promo-slide-card,
           .featured-banner-image {
-            height: min(44vw, 220px);
+            aspect-ratio: 1280 / 500;
           }
           .promo-slide-content,
           .featured-banner-content {

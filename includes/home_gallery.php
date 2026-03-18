@@ -174,15 +174,6 @@ function home_gallery_validate_form(array $input, array $files, ?array $existing
     $destacado = isset($input['destacado']) ? 1 : 0;
     $errores = [];
 
-    if ($titulo === '') {
-        $errores[] = 'El título es obligatorio.';
-    }
-    if ($descripcion1 === '') {
-        $errores[] = 'La descripción 1 es obligatoria.';
-    }
-    if ($descripcion2 === '') {
-        $errores[] = 'La descripción 2 es obligatoria.';
-    }
     if ($url !== '' && filter_var($url, FILTER_VALIDATE_URL) === false) {
         $errores[] = 'La URL debe ser válida.';
     }
