@@ -8,7 +8,12 @@ require_once __DIR__ . '/includes/home_gallery.php';
 require_once __DIR__ . '/includes/payment_methods.php';
 
 $activeTab = defined('ADMIN_CONFIG_ACTIVE_TAB') ? ADMIN_CONFIG_ACTIVE_TAB : ($_GET['tab'] ?? 'correo');
-if (!in_array($activeTab, ['correo', 'cabecera', 'sociales', 'api-banco', 'api-free-fire', 'personalizar-colores', 'galeria', 'metodos-pago'], true)) {
+$startupPopupTabEnabled = store_config_get('inicio_popup_tab_habilitado', '1') === '1';
+$allowedTabs = ['correo', 'cabecera', 'sociales', 'api-banco', 'api-free-fire', 'personalizar-colores', 'galeria', 'metodos-pago'];
+if ($startupPopupTabEnabled) {
+  $allowedTabs[] = 'ventana-inicial';
+}
+if (!in_array($activeTab, $allowedTabs, true)) {
     $activeTab = 'correo';
 }
 
@@ -47,6 +52,7 @@ $themeFieldGroups = [
   'Neón y acciones' => ['theme_primary', 'theme_highlight', 'theme_secondary', 'theme_success'],
   'Botones y paquetes' => ['theme_button_primary', 'theme_button_secondary', 'theme_button_surface'],
   'Botones flotantes' => ['theme_float_whatsapp_bg', 'theme_float_whatsapp_text', 'theme_float_channel_bg', 'theme_float_channel_text'],
+  'Ventana inicial' => ['theme_startup_popup_surface', 'theme_startup_popup_border', 'theme_startup_popup_accent', 'theme_startup_popup_chip', 'theme_startup_popup_button_text'],
   'Textos y estados' => ['theme_text', 'theme_text_muted', 'theme_price_text', 'theme_price_muted', 'theme_warning', 'theme_danger'],
 ];
 ?>
@@ -344,6 +350,11 @@ $themeFieldGroups = [
           <div class="neon-tabs-item">
             <a href="/admin/configuracion?tab=personalizar-colores" class="neon-tab-link <?= $activeTab === 'personalizar-colores' ? 'active' : '' ?>">Personalizar Colores</a>
           </div>
+          <?php if ($startupPopupTabEnabled): ?>
+            <div class="neon-tabs-item">
+              <a href="/admin/configuracion?tab=ventana-inicial" class="neon-tab-link <?= $activeTab === 'ventana-inicial' ? 'active' : '' ?>">Ventana Inicial</a>
+            </div>
+          <?php endif; ?>
           <div class="neon-tabs-item">
             <a href="/admin/configuracion?tab=galeria" class="neon-tab-link <?= $activeTab === 'galeria' ? 'active' : '' ?>">Galería</a>
           </div>
@@ -356,7 +367,7 @@ $themeFieldGroups = [
       <div class="card neon-card mb-4">
         <div class="card-header text-center py-4" style="background: linear-gradient(90deg, var(--theme-highlight) 0%, var(--theme-success) 100%); color: var(--theme-button-text-strong); border-radius: 16px 16px 0 0;">
           <h2 class="h4 fw-bold mb-0" style="font-family: 'Oxanium', 'Montserrat', 'Arial', sans-serif; letter-spacing: 0.08em;">
-            <?php if ($activeTab === 'correo'): ?>Configuración de correo corporativo<?php elseif ($activeTab === 'cabecera'): ?>Datos de cabecera<?php elseif ($activeTab === 'sociales'): ?>Redes Sociales<?php elseif ($activeTab === 'api-banco'): ?>Datos conexión Banco<?php elseif ($activeTab === 'api-free-fire'): ?>Datos API Free Fire<?php elseif ($activeTab === 'personalizar-colores'): ?>Personalizar Colores<?php elseif ($activeTab === 'galeria'): ?>Galería principal del index<?php else: ?>Métodos de Pago<?php endif; ?>
+            <?php if ($activeTab === 'correo'): ?>Configuración de correo corporativo<?php elseif ($activeTab === 'cabecera'): ?>Datos de cabecera<?php elseif ($activeTab === 'sociales'): ?>Redes Sociales<?php elseif ($activeTab === 'api-banco'): ?>Datos conexión Banco<?php elseif ($activeTab === 'api-free-fire'): ?>Datos API Free Fire<?php elseif ($activeTab === 'personalizar-colores'): ?>Personalizar Colores<?php elseif ($activeTab === 'ventana-inicial'): ?>Ventana Inicial<?php elseif ($activeTab === 'galeria'): ?>Galería principal del index<?php else: ?>Métodos de Pago<?php endif; ?>
           </h2>
         </div>
         <div class="card-body p-4">
@@ -552,6 +563,38 @@ $themeFieldGroups = [
                 <button type="submit" class="neon-btn py-3">Guardar paleta de colores</button>
                 <button type="submit" name="restore_theme_defaults" value="1" class="btn theme-reset-btn" onclick="return confirm('Esto reemplazará la paleta editable actual por los valores base. ¿Deseas continuar?');">Restaurar a default</button>
               </div>
+            </form>
+          <?php elseif ($activeTab === 'ventana-inicial'): ?>
+            <form method="post">
+              <input type="hidden" name="config_section" value="ventana-inicial">
+              <div class="config-section-note mb-4">Controla la ventana emergente inicial del index. El botón principal usa automáticamente el enlace configurado en Redes Sociales, en el campo Whatsapp Channel.</div>
+              <div class="row g-4 align-items-start">
+                <div class="col-lg-7">
+                  <div class="gallery-table-wrap">
+                    <div class="form-check form-switch mb-4">
+                      <input class="form-check-input" type="checkbox" role="switch" id="inicioPopupActivo" name="inicio_popup_activo" value="1" <?= ($cfg['inicio_popup_activo'] ?? '1') === '1' ? 'checked' : '' ?>>
+                      <label class="form-check-label fw-semibold" for="inicioPopupActivo">Mostrar ventana inicial en el inicio</label>
+                    </div>
+                    <div>
+                      <label class="form-label">Frecuencia de aparición</label>
+                      <select name="inicio_popup_frecuencia" class="form-select">
+                        <option value="always" <?= ($cfg['inicio_popup_frecuencia'] ?? 'per_session') === 'always' ? 'selected' : '' ?>>Siempre que se navegue en el inicio</option>
+                        <option value="per_entry" <?= ($cfg['inicio_popup_frecuencia'] ?? 'per_session') === 'per_entry' ? 'selected' : '' ?>>1 vez cada vez que se entre a la tienda</option>
+                        <option value="per_session" <?= ($cfg['inicio_popup_frecuencia'] ?? 'per_session') === 'per_session' ? 'selected' : '' ?>>1 vez por sesion</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-lg-5">
+                  <div class="config-section-note h-100">
+                    <div class="fw-semibold text-info mb-2">Resumen</div>
+                    <div class="small">Canal mostrado: DanisA Gamer Store.</div>
+                    <div class="small mt-2">Enlace usado: <?= !empty($cfg['whatsapp_channel']) ? htmlspecialchars($cfg['whatsapp_channel'], ENT_QUOTES, 'UTF-8') : 'No configurado aún en Redes Sociales' ?></div>
+                    <div class="small mt-2">La variable global <strong>inicio_popup_tab_habilitado</strong> de la tabla <strong>configuracion_general</strong> permite ocultar este tab y desactivar la función en toda la tienda.</div>
+                  </div>
+                </div>
+              </div>
+              <button type="submit" class="neon-btn w-100 py-3 mt-4">Guardar ventana inicial</button>
             </form>
           <?php elseif ($activeTab === 'galeria'): ?>
             <form method="post" enctype="multipart/form-data">

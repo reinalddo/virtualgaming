@@ -246,8 +246,13 @@ switch ($seccion) {
         require_once __DIR__ . '/includes/store_config.php';
         require_once __DIR__ . '/includes/home_gallery.php';
         require_once __DIR__ . '/includes/payment_methods.php';
+        $startupPopupTabEnabled = store_config_get('inicio_popup_tab_habilitado', '1') === '1';
         $activeTab = $_GET['tab'] ?? 'correo';
-        if (!in_array($activeTab, ['correo', 'cabecera', 'sociales', 'api-banco', 'api-free-fire', 'personalizar-colores', 'galeria', 'metodos-pago'], true)) {
+        $allowedTabs = ['correo', 'cabecera', 'sociales', 'api-banco', 'api-free-fire', 'personalizar-colores', 'galeria', 'metodos-pago'];
+        if ($startupPopupTabEnabled) {
+            $allowedTabs[] = 'ventana-inicial';
+        }
+        if (!in_array($activeTab, $allowedTabs, true)) {
             $activeTab = 'correo';
         }
 
@@ -286,7 +291,7 @@ switch ($seccion) {
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $activeTab = $_POST['config_section'] ?? $activeTab;
-            if (!in_array($activeTab, ['correo', 'cabecera', 'sociales', 'api-banco', 'api-free-fire', 'personalizar-colores', 'galeria', 'metodos-pago'], true)) {
+            if (!in_array($activeTab, $allowedTabs, true)) {
                 $activeTab = 'correo';
             }
 
@@ -442,6 +447,21 @@ switch ($seccion) {
                 }
 
                 admin_set_flash('success', 'Paleta de colores actualizada.');
+            }
+
+            if ($activeTab === 'ventana-inicial') {
+                $popupEnabled = isset($_POST['inicio_popup_activo']) ? '1' : '0';
+                $popupFrequency = trim((string) ($_POST['inicio_popup_frecuencia'] ?? 'per_session'));
+
+                if (!in_array($popupFrequency, ['always', 'per_entry', 'per_session'], true)) {
+                    admin_set_flash('error', 'Selecciona una frecuencia válida para la ventana inicial.');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'ventana-inicial']);
+                }
+
+                store_config_upsert('inicio_popup_activo', $popupEnabled);
+                store_config_upsert('inicio_popup_frecuencia', $popupFrequency);
+                admin_set_flash('success', 'Configuración de la ventana inicial actualizada.');
             }
 
             if ($activeTab === 'galeria') {

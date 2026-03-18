@@ -112,6 +112,31 @@ function store_theme_definitions(): array {
             'default' => '#F8FAFC',
             'description' => 'Color del texto e icono del botón flotante del canal de difusión',
         ],
+        'theme_startup_popup_surface' => [
+            'label' => 'Ventana inicial fondo',
+            'default' => '#140D0E',
+            'description' => 'Color base del panel principal de la ventana inicial',
+        ],
+        'theme_startup_popup_border' => [
+            'label' => 'Ventana inicial borde',
+            'default' => '#3D1C1A',
+            'description' => 'Color del borde y contornos de la ventana inicial',
+        ],
+        'theme_startup_popup_accent' => [
+            'label' => 'Ventana inicial acento',
+            'default' => '#25D366',
+            'description' => 'Color del icono principal, resaltes y brillo de la ventana inicial',
+        ],
+        'theme_startup_popup_chip' => [
+            'label' => 'Ventana inicial insignia',
+            'default' => '#0E2B1B',
+            'description' => 'Color de fondo para la insignia superior de la ventana inicial',
+        ],
+        'theme_startup_popup_button_text' => [
+            'label' => 'Ventana inicial texto botón',
+            'default' => '#F8FAFC',
+            'description' => 'Color del texto e icono del botón principal de la ventana inicial',
+        ],
     ];
 }
 
@@ -144,6 +169,9 @@ function store_config_descriptions(): array {
         'whatsapp' => 'Número o enlace de WhatsApp de la tienda',
         'mensaje_whatsapp' => 'Mensaje predefinido para el botón flotante de WhatsApp',
         'whatsapp_channel' => 'URL del canal de WhatsApp de la tienda',
+        'inicio_popup_tab_habilitado' => 'Activa o desactiva globalmente el tab y la función de la ventana inicial',
+        'inicio_popup_activo' => 'Activa o desactiva la aparición de la ventana inicial en el index',
+        'inicio_popup_frecuencia' => 'Frecuencia con la que debe aparecer la ventana inicial en el index',
         'ff_bank_posicion' => 'Posicion para la conexion al banco de Free Fire',
         'ff_bank_token' => 'Token para la conexion al banco de Free Fire',
         'ff_bank_clave' => 'Clave para la conexion al banco de Free Fire',
@@ -178,6 +206,9 @@ function store_config_defaults(): array {
         'whatsapp' => '',
         'mensaje_whatsapp' => '',
         'whatsapp_channel' => '',
+        'inicio_popup_tab_habilitado' => '1',
+        'inicio_popup_activo' => '1',
+        'inicio_popup_frecuencia' => 'per_session',
         'ff_bank_posicion' => '0',
         'ff_bank_token' => '',
         'ff_bank_clave' => '',
@@ -378,6 +409,11 @@ function store_theme_css_variables(): string {
         '--theme-float-whatsapp-text' => $theme['theme_float_whatsapp_text'],
         '--theme-float-channel-bg' => $theme['theme_float_channel_bg'],
         '--theme-float-channel-text' => $theme['theme_float_channel_text'],
+        '--theme-startup-popup-surface' => $theme['theme_startup_popup_surface'],
+        '--theme-startup-popup-border' => $theme['theme_startup_popup_border'],
+        '--theme-startup-popup-accent' => $theme['theme_startup_popup_accent'],
+        '--theme-startup-popup-chip' => $theme['theme_startup_popup_chip'],
+        '--theme-startup-popup-button-text' => $theme['theme_startup_popup_button_text'],
         '--theme-body-glow' => $bodyGlow,
         '--theme-panel-glow' => $panelGlow,
         '--theme-panel-bg' => $panelBg,
@@ -401,6 +437,11 @@ function store_theme_css_variables(): string {
         '--theme-float-whatsapp-text-rgb' => store_theme_rgb_string($theme['theme_float_whatsapp_text']),
         '--theme-float-channel-bg-rgb' => store_theme_rgb_string($theme['theme_float_channel_bg']),
         '--theme-float-channel-text-rgb' => store_theme_rgb_string($theme['theme_float_channel_text']),
+        '--theme-startup-popup-surface-rgb' => store_theme_rgb_string($theme['theme_startup_popup_surface']),
+        '--theme-startup-popup-border-rgb' => store_theme_rgb_string($theme['theme_startup_popup_border']),
+        '--theme-startup-popup-accent-rgb' => store_theme_rgb_string($theme['theme_startup_popup_accent']),
+        '--theme-startup-popup-chip-rgb' => store_theme_rgb_string($theme['theme_startup_popup_chip']),
+        '--theme-startup-popup-button-text-rgb' => store_theme_rgb_string($theme['theme_startup_popup_button_text']),
         '--theme-success-rgb' => store_theme_rgb_string($theme['theme_success']),
         '--theme-warning-rgb' => store_theme_rgb_string($theme['theme_warning']),
         '--theme-danger-rgb' => store_theme_rgb_string($theme['theme_danger']),
@@ -462,6 +503,7 @@ function store_config_all(bool $refresh = false): array {
     static $cache = null;
 
     if ($refresh || $cache === null) {
+        store_config_ensure_defaults();
         $cache = store_config_defaults();
         $mysqli = store_config_db();
         $res = $mysqli->query('SELECT clave, valor FROM configuracion_general');
@@ -473,6 +515,34 @@ function store_config_all(bool $refresh = false): array {
     }
 
     return $cache;
+}
+
+function store_config_ensure_defaults(): void {
+    static $ensuring = false;
+    static $done = false;
+
+    if ($done || $ensuring) {
+        return;
+    }
+
+    $ensuring = true;
+    $mysqli = store_config_db();
+    $descriptions = store_config_descriptions();
+
+    foreach (store_config_defaults() as $key => $value) {
+        $description = $descriptions[$key] ?? null;
+        $stmt = $mysqli->prepare('INSERT IGNORE INTO configuracion_general (clave, valor, descripcion) VALUES (?, ?, ?)');
+        if (!$stmt) {
+            continue;
+        }
+
+        $stmt->bind_param('sss', $key, $value, $description);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    $ensuring = false;
+    $done = true;
 }
 
 function store_config_get(string $key, ?string $default = null): string {

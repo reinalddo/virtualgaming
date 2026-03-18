@@ -1,8 +1,30 @@
 <?php
+if (session_status() !== PHP_SESSION_ACTIVE) {
+  session_start();
+}
+
 require_once __DIR__ . "/includes/db_connect.php";
 require_once __DIR__ . "/includes/store_config.php";
 require_once __DIR__ . "/includes/home_gallery.php";
 $pageTitle = store_config_get('nombre_tienda', 'TVirtualGaming') . " | " . store_config_get('nombre_tienda_subtitulo', 'Tienda de monedas digitales');
+$startupPopupTabEnabled = store_config_get('inicio_popup_tab_habilitado', '1') === '1';
+$startupPopupEnabled = $startupPopupTabEnabled && store_config_get('inicio_popup_activo', '1') === '1';
+$startupPopupFrequency = store_config_get('inicio_popup_frecuencia', 'per_session');
+if (!in_array($startupPopupFrequency, ['always', 'per_entry', 'per_session'], true)) {
+  $startupPopupFrequency = 'per_session';
+}
+$startupPopupChannelUrl = store_config_normalize_social_url(store_config_get('whatsapp_channel', ''));
+$startupPopupChannelValid = store_config_is_valid_social_url($startupPopupChannelUrl);
+$startupPopupShouldRender = $startupPopupEnabled && $startupPopupChannelValid;
+$startupPopupShouldOpen = false;
+if ($startupPopupShouldRender) {
+  if ($startupPopupFrequency === 'per_session') {
+    $startupPopupShouldOpen = empty($_SESSION['startup_popup_seen']);
+    $_SESSION['startup_popup_seen'] = 1;
+  } else {
+    $startupPopupShouldOpen = true;
+  }
+}
 include __DIR__ . "/includes/header.php";
 home_gallery_ensure_table();
 $galleryItems = home_gallery_all();
@@ -82,6 +104,187 @@ $accentMap = [
 ?>
 
       <style>
+        body.startup-popup-open {
+          overflow: hidden;
+        }
+        .startup-popup-shell {
+          position: fixed;
+          inset: 0;
+          z-index: 1080;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 1rem;
+          background: radial-gradient(circle at top, rgba(var(--theme-startup-popup-accent-rgb), 0.16), rgba(0, 0, 0, 0) 34%), rgba(2, 6, 12, 0.74);
+          backdrop-filter: blur(12px);
+        }
+        .startup-popup-shell.is-hidden {
+          display: none;
+        }
+        .startup-popup-card {
+          position: relative;
+          width: min(100%, 360px);
+          padding: 1.1rem 1.1rem 1.2rem;
+          border-radius: 28px;
+          border: 1px solid rgba(var(--theme-startup-popup-border-rgb), 0.95);
+          background:
+            radial-gradient(circle at top, rgba(var(--theme-startup-popup-accent-rgb), 0.12), transparent 30%),
+            linear-gradient(180deg, rgba(var(--theme-startup-popup-surface-rgb), 0.98), rgba(12, 10, 10, 0.98));
+          box-shadow: 0 24px 80px rgba(0, 0, 0, 0.58), 0 0 48px rgba(var(--theme-startup-popup-accent-rgb), 0.16), inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+          overflow: hidden;
+        }
+        .startup-popup-card::before {
+          content: "";
+          position: absolute;
+          inset: auto -10% -12% -10%;
+          height: 140px;
+          background: radial-gradient(circle, rgba(var(--theme-startup-popup-accent-rgb), 0.18), transparent 70%);
+          pointer-events: none;
+        }
+        .startup-popup-close {
+          position: absolute;
+          top: 12px;
+          right: 12px;
+          width: 32px;
+          height: 32px;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.05);
+          color: rgba(255, 255, 255, 0.58);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+        }
+        .startup-popup-close:hover {
+          background: rgba(255, 255, 255, 0.1);
+          color: rgba(255, 255, 255, 0.88);
+          transform: scale(1.03);
+        }
+        .startup-popup-logo {
+          width: 76px;
+          height: 76px;
+          margin: 0 auto;
+          border-radius: 999px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--theme-startup-popup-button-text);
+          background: linear-gradient(180deg, rgba(var(--theme-startup-popup-accent-rgb), 0.92), rgba(var(--theme-startup-popup-accent-rgb), 0.82));
+          box-shadow: 0 0 0 8px rgba(var(--theme-startup-popup-accent-rgb), 0.08), 0 0 28px rgba(var(--theme-startup-popup-accent-rgb), 0.34);
+        }
+        .startup-popup-badge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          margin: 1rem auto 0;
+          padding: 0.28rem 0.85rem;
+          border-radius: 999px;
+          border: 1px solid rgba(var(--theme-startup-popup-accent-rgb), 0.24);
+          background: linear-gradient(180deg, rgba(var(--theme-startup-popup-chip-rgb), 0.96), rgba(var(--theme-startup-popup-chip-rgb), 0.78));
+          color: rgba(var(--theme-startup-popup-accent-rgb), 0.94);
+          font-size: 0.66rem;
+          font-weight: 800;
+          letter-spacing: 0.24em;
+          text-transform: uppercase;
+        }
+        .startup-popup-title {
+          margin: 1rem 0 0;
+          color: #f7f7f7;
+          font-family: 'Oxanium', 'Space Grotesk', sans-serif;
+          font-size: 2rem;
+          line-height: 1.08;
+          text-align: center;
+          font-weight: 700;
+        }
+        .startup-popup-title strong {
+          display: block;
+          color: rgba(var(--theme-startup-popup-accent-rgb), 0.98);
+        }
+        .startup-popup-subtitle {
+          margin: 0.9rem auto 0;
+          max-width: 270px;
+          color: rgba(248, 250, 252, 0.62);
+          text-align: center;
+          font-size: 0.95rem;
+          line-height: 1.45;
+        }
+        .startup-popup-list {
+          display: grid;
+          gap: 0.7rem;
+          margin: 1.2rem 0 0;
+          padding: 0;
+          list-style: none;
+        }
+        .startup-popup-list-item {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          min-height: 50px;
+          padding: 0.8rem 0.95rem;
+          border-radius: 14px;
+          border: 1px solid rgba(var(--theme-startup-popup-border-rgb), 0.72);
+          background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.02));
+          color: rgba(248, 250, 252, 0.88);
+          box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.015);
+        }
+        .startup-popup-list-icon {
+          font-size: 1.15rem;
+          line-height: 1;
+          width: 22px;
+          text-align: center;
+          flex: 0 0 22px;
+        }
+        .startup-popup-list-text {
+          font-size: 0.92rem;
+          line-height: 1.3;
+          color: rgba(248, 250, 252, 0.82);
+        }
+        .startup-popup-link {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.7rem;
+          width: 100%;
+          margin-top: 1.35rem;
+          padding: 0.95rem 1rem;
+          border-radius: 16px;
+          border: 0;
+          background: linear-gradient(180deg, rgba(var(--theme-startup-popup-accent-rgb), 1), rgba(var(--theme-startup-popup-accent-rgb), 0.88));
+          color: var(--theme-startup-popup-button-text);
+          font-size: 1rem;
+          font-weight: 800;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          text-decoration: none;
+          box-shadow: 0 16px 30px rgba(var(--theme-startup-popup-accent-rgb), 0.22), 0 0 18px rgba(var(--theme-startup-popup-accent-rgb), 0.22);
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .startup-popup-link:hover {
+          color: var(--theme-startup-popup-button-text);
+          transform: translateY(-1px);
+        }
+        .startup-popup-dismiss {
+          display: block;
+          margin-top: 0.85rem;
+          border: 0;
+          background: transparent;
+          width: 100%;
+          color: rgba(248, 250, 252, 0.38);
+          font-size: 0.92rem;
+        }
+        @media (max-width: 420px) {
+          .startup-popup-shell {
+            padding: 0.75rem;
+          }
+          .startup-popup-card {
+            border-radius: 24px;
+            padding: 1rem 1rem 1.15rem;
+          }
+          .startup-popup-title {
+            font-size: 1.8rem;
+          }
+        }
         .promo-section-mobile,
         .featured-section-mobile {
           position: relative;
@@ -211,6 +414,43 @@ $accentMap = [
           }
         }
       </style>
+
+      <?php if ($startupPopupShouldRender): ?>
+        <div id="startup-popup" class="startup-popup-shell is-hidden" data-frequency="<?= htmlspecialchars($startupPopupFrequency, ENT_QUOTES, 'UTF-8') ?>" data-should-open="<?= $startupPopupShouldOpen ? '1' : '0' ?>" aria-hidden="true">
+          <div class="startup-popup-card">
+            <button type="button" class="startup-popup-close" id="startup-popup-close" aria-label="Cerrar ventana inicial">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+              </svg>
+            </button>
+            <div class="startup-popup-logo" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="40" height="40" fill="currentColor" role="img"><path d="M20.52 3.48A11.8 11.8 0 0 0 12.08 0C5.54 0 .22 5.32.22 11.86c0 2.09.55 4.13 1.58 5.93L0 24l6.39-1.67a11.8 11.8 0 0 0 5.69 1.45h.01c6.54 0 11.86-5.32 11.86-11.86 0-3.17-1.23-6.16-3.43-8.44ZM12.09 21.76h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.79.99 1.01-3.69-.23-.38A9.87 9.87 0 0 1 2.2 11.86C2.2 6.4 6.63 1.98 12.08 1.98c2.64 0 5.12 1.03 6.98 2.91a9.8 9.8 0 0 1 2.88 6.98c0 5.45-4.43 9.89-9.85 9.89Zm5.42-7.41c-.3-.15-1.76-.87-2.03-.97-.27-.1-.46-.15-.66.15-.2.3-.76.97-.93 1.17-.17.2-.34.22-.64.07-.3-.15-1.27-.47-2.41-1.49-.89-.8-1.49-1.79-1.67-2.09-.17-.3-.02-.47.13-.62.13-.13.3-.34.44-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.66-1.59-.9-2.17-.24-.58-.48-.5-.66-.5h-.56c-.2 0-.52.08-.79.37-.27.3-1.05 1.03-1.05 2.52 0 1.49 1.08 2.92 1.23 3.12.15.2 2.11 3.23 5.12 4.52.72.31 1.29.49 1.73.63.73.23 1.39.2 1.91.12.58-.09 1.76-.72 2.01-1.42.25-.69.25-1.29.17-1.42-.07-.12-.27-.2-.57-.35Z"/></svg>
+            </div>
+            <div class="startup-popup-badge">Canal oficial</div>
+            <h2 class="startup-popup-title">Unete al canal de <strong>DanisA Gamer Store</strong></h2>
+            <p class="startup-popup-subtitle">Recibe ofertas exclusivas, promociones y novedades directamente en tu WhatsApp.</p>
+            <ul class="startup-popup-list">
+              <li class="startup-popup-list-item">
+                <span class="startup-popup-list-icon" aria-hidden="true">🎮</span>
+                <span class="startup-popup-list-text">Nuevos juegos y productos disponibles</span>
+              </li>
+              <li class="startup-popup-list-item">
+                <span class="startup-popup-list-icon" aria-hidden="true">🔥</span>
+                <span class="startup-popup-list-text">Promociones y codigos de descuento</span>
+              </li>
+              <li class="startup-popup-list-item">
+                <span class="startup-popup-list-icon" aria-hidden="true">⚡</span>
+                <span class="startup-popup-list-text">Avisos de mantenimiento y novedades</span>
+              </li>
+            </ul>
+            <a href="<?= htmlspecialchars($startupPopupChannelUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" class="startup-popup-link" id="startup-popup-link">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M20.52 3.48A11.8 11.8 0 0 0 12.08 0C5.54 0 .22 5.32.22 11.86c0 2.09.55 4.13 1.58 5.93L0 24l6.39-1.67a11.8 11.8 0 0 0 5.69 1.45h.01c6.54 0 11.86-5.32 11.86-11.86 0-3.17-1.23-6.16-3.43-8.44ZM12.09 21.76h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.79.99 1.01-3.69-.23-.38A9.87 9.87 0 0 1 2.2 11.86C2.2 6.4 6.63 1.98 12.08 1.98c2.64 0 5.12 1.03 6.98 2.91a9.8 9.8 0 0 1 2.88 6.98c0 5.45-4.43 9.89-9.85 9.89Zm5.42-7.41c-.3-.15-1.76-.87-2.03-.97-.27-.1-.46-.15-.66.15-.2.3-.76.97-.93 1.17-.17.2-.34.22-.64.07-.3-.15-1.27-.47-2.41-1.49-.89-.8-1.49-1.79-1.67-2.09-.17-.3-.02-.47.13-.62.13-.13.3-.34.44-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.66-1.59-.9-2.17-.24-.58-.48-.5-.66-.5h-.56c-.2 0-.52.08-.79.37-.27.3-1.05 1.03-1.05 2.52 0 1.49 1.08 2.92 1.23 3.12.15.2 2.11 3.23 5.12 4.52.72.31 1.29.49 1.73.63.73.23 1.39.2 1.91.12.58-.09 1.76-.72 2.01-1.42.25-.69.25-1.29.17-1.42-.07-.12-.27-.2-.57-.35Z"/></svg>
+              <span>Unirse al canal</span>
+            </a>
+            <button type="button" class="startup-popup-dismiss" id="startup-popup-dismiss">Ahora no</button>
+          </div>
+        </div>
+      <?php endif; ?>
 
       <?php if (!empty($banners)): ?>
         <section class="mt-4 promo-section-mobile" style="animation: fadeUp 650ms ease-out both;">
@@ -350,6 +590,71 @@ $accentMap = [
 
 <?php
 $pageScripts = [
+  <<<'SCRIPT'
+<script>
+  (() => {
+    const popup = document.getElementById("startup-popup");
+    if (!popup) {
+      return;
+    }
+
+    const closeButton = document.getElementById("startup-popup-close");
+    const dismissButton = document.getElementById("startup-popup-dismiss");
+    const popupFrequency = popup.dataset.frequency || "per_session";
+    const popupShouldOpen = popup.dataset.shouldOpen === "1";
+    const perEntryStorageKey = "vg_startup_popup_seen";
+
+    const hidePopup = () => {
+      popup.classList.add("is-hidden");
+      popup.setAttribute("aria-hidden", "true");
+      document.body.classList.remove("startup-popup-open");
+    };
+
+    const showPopup = () => {
+      popup.classList.remove("is-hidden");
+      popup.setAttribute("aria-hidden", "false");
+      document.body.classList.add("startup-popup-open");
+    };
+
+    let mustShow = popupShouldOpen;
+    if (popupFrequency === "per_entry") {
+      mustShow = window.sessionStorage.getItem(perEntryStorageKey) !== "1";
+      if (mustShow) {
+        window.sessionStorage.setItem(perEntryStorageKey, "1");
+      }
+    }
+
+    if (popupFrequency === "always") {
+      mustShow = true;
+    }
+
+    if (mustShow) {
+      showPopup();
+    } else {
+      hidePopup();
+    }
+
+    [closeButton, dismissButton].forEach((button) => {
+      if (!button) {
+        return;
+      }
+      button.addEventListener("click", hidePopup);
+    });
+
+    popup.addEventListener("click", (event) => {
+      if (event.target === popup) {
+        hidePopup();
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !popup.classList.contains("is-hidden")) {
+        hidePopup();
+      }
+    });
+  })();
+</script>
+SCRIPT,
   <<<'SCRIPT'
 <script>
   (() => {
