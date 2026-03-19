@@ -127,30 +127,30 @@ $accentMap = [
         }
         .startup-popup-card {
           position: relative;
-          width: min(100%, 360px);
-          padding: 1.1rem 1.1rem 1.2rem;
-          border-radius: 28px;
+          width: min(100%, 292px);
+          padding: 0.82rem 0.82rem 0.92rem;
+          border-radius: 22px;
           border: 1px solid rgba(var(--theme-startup-popup-border-rgb), 0.95);
           background:
             radial-gradient(circle at top, rgba(var(--theme-startup-popup-accent-rgb), 0.12), transparent 30%),
             linear-gradient(180deg, rgba(var(--theme-startup-popup-surface-rgb), 0.98), rgba(12, 10, 10, 0.98));
-          box-shadow: 0 24px 80px rgba(0, 0, 0, 0.58), 0 0 48px rgba(var(--theme-startup-popup-accent-rgb), 0.16), inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+          box-shadow: 0 18px 62px rgba(0, 0, 0, 0.58), 0 0 36px rgba(var(--theme-startup-popup-accent-rgb), 0.16), inset 0 0 0 1px rgba(255, 255, 255, 0.03);
           overflow: hidden;
         }
         .startup-popup-card::before {
           content: "";
           position: absolute;
           inset: auto -10% -12% -10%;
-          height: 140px;
+          height: 110px;
           background: radial-gradient(circle, rgba(var(--theme-startup-popup-accent-rgb), 0.18), transparent 70%);
           pointer-events: none;
         }
         .startup-popup-close {
           position: absolute;
-          top: 12px;
-          right: 12px;
-          width: 32px;
-          height: 32px;
+          top: 10px;
+          right: 10px;
+          width: 28px;
+          height: 28px;
           border: 1px solid rgba(255, 255, 255, 0.08);
           border-radius: 999px;
           background: rgba(255, 255, 255, 0.05);
@@ -166,8 +166,8 @@ $accentMap = [
           transform: scale(1.03);
         }
         .startup-popup-logo {
-          width: 76px;
-          height: 76px;
+          width: 58px;
+          height: 58px;
           margin: 0 auto;
           border-radius: 999px;
           display: flex;
@@ -175,29 +175,29 @@ $accentMap = [
           justify-content: center;
           color: var(--theme-startup-popup-button-text);
           background: linear-gradient(180deg, rgba(var(--theme-startup-popup-accent-rgb), 0.92), rgba(var(--theme-startup-popup-accent-rgb), 0.82));
-          box-shadow: 0 0 0 8px rgba(var(--theme-startup-popup-accent-rgb), 0.08), 0 0 28px rgba(var(--theme-startup-popup-accent-rgb), 0.34);
+          box-shadow: 0 0 0 6px rgba(var(--theme-startup-popup-accent-rgb), 0.08), 0 0 22px rgba(var(--theme-startup-popup-accent-rgb), 0.34);
         }
         .startup-popup-badge {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          margin: 1rem auto 0;
-          padding: 0.28rem 0.85rem;
+          margin: 0.78rem auto 0;
+          padding: 0.22rem 0.68rem;
           border-radius: 999px;
           border: 1px solid rgba(var(--theme-startup-popup-accent-rgb), 0.24);
           background: linear-gradient(180deg, rgba(var(--theme-startup-popup-chip-rgb), 0.96), rgba(var(--theme-startup-popup-chip-rgb), 0.78));
           color: rgba(var(--theme-startup-popup-accent-rgb), 0.94);
-          font-size: 0.66rem;
+          font-size: 0.54rem;
           font-weight: 800;
-          letter-spacing: 0.24em;
+          letter-spacing: 0.18em;
           text-transform: uppercase;
         }
         .startup-popup-title {
-          margin: 1rem 0 0;
+          margin: 0.78rem 0 0;
           color: #f7f7f7;
           font-family: 'Oxanium', 'Space Grotesk', sans-serif;
-          font-size: 2rem;
-          line-height: 1.08;
+          font-size: 1.55rem;
+          line-height: 1.06;
           text-align: center;
           font-weight: 700;
         }
@@ -206,62 +206,62 @@ $accentMap = [
           color: rgba(var(--theme-startup-popup-accent-rgb), 0.98);
         }
         .startup-popup-subtitle {
-          margin: 0.9rem auto 0;
-          max-width: 270px;
+          margin: 0.7rem auto 0;
+          max-width: 220px;
           color: rgba(248, 250, 252, 0.62);
           text-align: center;
-          font-size: 0.95rem;
-          line-height: 1.45;
+          font-size: 0.76rem;
+          line-height: 1.4;
         }
         .startup-popup-list {
           display: grid;
-          gap: 0.7rem;
-          margin: 1.2rem 0 0;
+          gap: 0.55rem;
+          margin: 0.92rem 0 0;
           padding: 0;
           list-style: none;
         }
         .startup-popup-list-item {
           display: flex;
           align-items: center;
-          gap: 0.75rem;
-          min-height: 50px;
-          padding: 0.8rem 0.95rem;
-          border-radius: 14px;
+          gap: 0.58rem;
+          min-height: 40px;
+          padding: 0.62rem 0.72rem;
+          border-radius: 11px;
           border: 1px solid rgba(var(--theme-startup-popup-border-rgb), 0.72);
           background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.02));
           color: rgba(248, 250, 252, 0.88);
           box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.015);
         }
         .startup-popup-list-icon {
-          font-size: 1.15rem;
+          font-size: 0.92rem;
           line-height: 1;
-          width: 22px;
+          width: 18px;
           text-align: center;
-          flex: 0 0 22px;
+          flex: 0 0 18px;
         }
         .startup-popup-list-text {
-          font-size: 0.92rem;
-          line-height: 1.3;
+          font-size: 0.76rem;
+          line-height: 1.22;
           color: rgba(248, 250, 252, 0.82);
         }
         .startup-popup-link {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          gap: 0.7rem;
+          gap: 0.54rem;
           width: 100%;
-          margin-top: 1.35rem;
-          padding: 0.95rem 1rem;
-          border-radius: 16px;
+          margin-top: 1rem;
+          padding: 0.74rem 0.82rem;
+          border-radius: 13px;
           border: 0;
           background: linear-gradient(180deg, rgba(var(--theme-startup-popup-accent-rgb), 1), rgba(var(--theme-startup-popup-accent-rgb), 0.88));
           color: var(--theme-startup-popup-button-text);
-          font-size: 1rem;
+          font-size: 0.82rem;
           font-weight: 800;
-          letter-spacing: 0.1em;
+          letter-spacing: 0.08em;
           text-transform: uppercase;
           text-decoration: none;
-          box-shadow: 0 16px 30px rgba(var(--theme-startup-popup-accent-rgb), 0.22), 0 0 18px rgba(var(--theme-startup-popup-accent-rgb), 0.22);
+          box-shadow: 0 12px 24px rgba(var(--theme-startup-popup-accent-rgb), 0.22), 0 0 14px rgba(var(--theme-startup-popup-accent-rgb), 0.22);
           transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
         .startup-popup-link:hover {
@@ -270,23 +270,23 @@ $accentMap = [
         }
         .startup-popup-dismiss {
           display: block;
-          margin-top: 0.85rem;
+          margin-top: 0.68rem;
           border: 0;
           background: transparent;
           width: 100%;
           color: rgba(248, 250, 252, 0.38);
-          font-size: 0.92rem;
+          font-size: 0.76rem;
         }
         @media (max-width: 420px) {
           .startup-popup-shell {
-            padding: 0.75rem;
+            padding: 0.62rem;
           }
           .startup-popup-card {
-            border-radius: 24px;
-            padding: 1rem 1rem 1.15rem;
+            border-radius: 20px;
+            padding: 0.78rem 0.78rem 0.92rem;
           }
           .startup-popup-title {
-            font-size: 1.8rem;
+            font-size: 1.42rem;
           }
         }
         .promo-section-mobile,
@@ -428,7 +428,7 @@ $accentMap = [
               </svg>
             </button>
             <div class="startup-popup-logo" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="40" height="40" fill="currentColor" role="img"><path d="M20.52 3.48A11.8 11.8 0 0 0 12.08 0C5.54 0 .22 5.32.22 11.86c0 2.09.55 4.13 1.58 5.93L0 24l6.39-1.67a11.8 11.8 0 0 0 5.69 1.45h.01c6.54 0 11.86-5.32 11.86-11.86 0-3.17-1.23-6.16-3.43-8.44ZM12.09 21.76h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.79.99 1.01-3.69-.23-.38A9.87 9.87 0 0 1 2.2 11.86C2.2 6.4 6.63 1.98 12.08 1.98c2.64 0 5.12 1.03 6.98 2.91a9.8 9.8 0 0 1 2.88 6.98c0 5.45-4.43 9.89-9.85 9.89Zm5.42-7.41c-.3-.15-1.76-.87-2.03-.97-.27-.1-.46-.15-.66.15-.2.3-.76.97-.93 1.17-.17.2-.34.22-.64.07-.3-.15-1.27-.47-2.41-1.49-.89-.8-1.49-1.79-1.67-2.09-.17-.3-.02-.47.13-.62.13-.13.3-.34.44-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.66-1.59-.9-2.17-.24-.58-.48-.5-.66-.5h-.56c-.2 0-.52.08-.79.37-.27.3-1.05 1.03-1.05 2.52 0 1.49 1.08 2.92 1.23 3.12.15.2 2.11 3.23 5.12 4.52.72.31 1.29.49 1.73.63.73.23 1.39.2 1.91.12.58-.09 1.76-.72 2.01-1.42.25-.69.25-1.29.17-1.42-.07-.12-.27-.2-.57-.35Z"/></svg>
+              <svg viewBox="0 0 24 24" width="30" height="30" fill="currentColor" role="img"><path d="M20.52 3.48A11.8 11.8 0 0 0 12.08 0C5.54 0 .22 5.32.22 11.86c0 2.09.55 4.13 1.58 5.93L0 24l6.39-1.67a11.8 11.8 0 0 0 5.69 1.45h.01c6.54 0 11.86-5.32 11.86-11.86 0-3.17-1.23-6.16-3.43-8.44ZM12.09 21.76h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.79.99 1.01-3.69-.23-.38A9.87 9.87 0 0 1 2.2 11.86C2.2 6.4 6.63 1.98 12.08 1.98c2.64 0 5.12 1.03 6.98 2.91a9.8 9.8 0 0 1 2.88 6.98c0 5.45-4.43 9.89-9.85 9.89Zm5.42-7.41c-.3-.15-1.76-.87-2.03-.97-.27-.1-.46-.15-.66.15-.2.3-.76.97-.93 1.17-.17.2-.34.22-.64.07-.3-.15-1.27-.47-2.41-1.49-.89-.8-1.49-1.79-1.67-2.09-.17-.3-.02-.47.13-.62.13-.13.3-.34.44-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.66-1.59-.9-2.17-.24-.58-.48-.5-.66-.5h-.56c-.2 0-.52.08-.79.37-.27.3-1.05 1.03-1.05 2.52 0 1.49 1.08 2.92 1.23 3.12.15.2 2.11 3.23 5.12 4.52.72.31 1.29.49 1.73.63.73.23 1.39.2 1.91.12.58-.09 1.76-.72 2.01-1.42.25-.69.25-1.29.17-1.42-.07-.12-.27-.2-.57-.35Z"/></svg>
             </div>
             <div class="startup-popup-badge">Canal oficial</div>
             <h2 class="startup-popup-title">Unete al canal de <strong><?= htmlspecialchars($startupPopupChannelName, ENT_QUOTES, 'UTF-8') ?></strong></h2>
@@ -448,7 +448,7 @@ $accentMap = [
               </li>
             </ul>
             <a href="<?= htmlspecialchars($startupPopupChannelUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" class="startup-popup-link" id="startup-popup-link">
-              <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M20.52 3.48A11.8 11.8 0 0 0 12.08 0C5.54 0 .22 5.32.22 11.86c0 2.09.55 4.13 1.58 5.93L0 24l6.39-1.67a11.8 11.8 0 0 0 5.69 1.45h.01c6.54 0 11.86-5.32 11.86-11.86 0-3.17-1.23-6.16-3.43-8.44ZM12.09 21.76h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.79.99 1.01-3.69-.23-.38A9.87 9.87 0 0 1 2.2 11.86C2.2 6.4 6.63 1.98 12.08 1.98c2.64 0 5.12 1.03 6.98 2.91a9.8 9.8 0 0 1 2.88 6.98c0 5.45-4.43 9.89-9.85 9.89Zm5.42-7.41c-.3-.15-1.76-.87-2.03-.97-.27-.1-.46-.15-.66.15-.2.3-.76.97-.93 1.17-.17.2-.34.22-.64.07-.3-.15-1.27-.47-2.41-1.49-.89-.8-1.49-1.79-1.67-2.09-.17-.3-.02-.47.13-.62.13-.13.3-.34.44-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.66-1.59-.9-2.17-.24-.58-.48-.5-.66-.5h-.56c-.2 0-.52.08-.79.37-.27.3-1.05 1.03-1.05 2.52 0 1.49 1.08 2.92 1.23 3.12.15.2 2.11 3.23 5.12 4.52.72.31 1.29.49 1.73.63.73.23 1.39.2 1.91.12.58-.09 1.76-.72 2.01-1.42.25-.69.25-1.29.17-1.42-.07-.12-.27-.2-.57-.35Z"/></svg>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M20.52 3.48A11.8 11.8 0 0 0 12.08 0C5.54 0 .22 5.32.22 11.86c0 2.09.55 4.13 1.58 5.93L0 24l6.39-1.67a11.8 11.8 0 0 0 5.69 1.45h.01c6.54 0 11.86-5.32 11.86-11.86 0-3.17-1.23-6.16-3.43-8.44ZM12.09 21.76h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.79.99 1.01-3.69-.23-.38A9.87 9.87 0 0 1 2.2 11.86C2.2 6.4 6.63 1.98 12.08 1.98c2.64 0 5.12 1.03 6.98 2.91a9.8 9.8 0 0 1 2.88 6.98c0 5.45-4.43 9.89-9.85 9.89Zm5.42-7.41c-.3-.15-1.76-.87-2.03-.97-.27-.1-.46-.15-.66.15-.2.3-.76.97-.93 1.17-.17.2-.34.22-.64.07-.3-.15-1.27-.47-2.41-1.49-.89-.8-1.49-1.79-1.67-2.09-.17-.3-.02-.47.13-.62.13-.13.3-.34.44-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.66-1.59-.9-2.17-.24-.58-.48-.5-.66-.5h-.56c-.2 0-.52.08-.79.37-.27.3-1.05 1.03-1.05 2.52 0 1.49 1.08 2.92 1.23 3.12.15.2 2.11 3.23 5.12 4.52.72.31 1.29.49 1.73.63.73.23 1.39.2 1.91.12.58-.09 1.76-.72 2.01-1.42.25-.69.25-1.29.17-1.42-.07-.12-.27-.2-.57-.35Z"/></svg>
               <span>Unirse al canal</span>
             </a>
             <button type="button" class="startup-popup-dismiss" id="startup-popup-dismiss">Ahora no</button>
