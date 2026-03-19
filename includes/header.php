@@ -2,6 +2,11 @@
 if (session_status() !== PHP_SESSION_ACTIVE) {
   session_start();
 }
+
+$scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/'));
+if ($scriptDir === '/' || $scriptDir === '.') {
+  $scriptDir = '';
+}
 require_once __DIR__ . '/store_config.php';
 require_once __DIR__ . '/tenant.php';
 
@@ -333,7 +338,7 @@ $themeVariablesCss = store_theme_css_variables();
               </div>
               <button type="submit" id="registro-btn" class="btn btn-info neon-btn-info w-100 rounded-3 px-4 py-2 fw-bold text-uppercase shadow">Registrarse ahora</button>
             </form>
-            <script src="/registro.js?v=<?php echo date('YmdHis'); ?>"></script>
+            <script src="<?php echo htmlspecialchars($scriptDir . '/registro.js?v=' . date('YmdHis'), ENT_QUOTES, 'UTF-8'); ?>" data-register-endpoint="<?php echo htmlspecialchars($scriptDir . '/register_user.php', ENT_QUOTES, 'UTF-8'); ?>" data-login-url="<?php echo htmlspecialchars($scriptDir . '/login.php', ENT_QUOTES, 'UTF-8'); ?>"></script>
             <button type="button" data-auth-switch="login" class="btn btn-link w-100 small fw-bold text-neon">¿Ya tienes una cuenta? Inicia sesión</button>
           </div>
         </div>
