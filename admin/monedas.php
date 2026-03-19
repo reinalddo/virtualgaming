@@ -5,6 +5,26 @@
 //error_reporting(E_ALL);
 // admin/monedas.php - Gestión de monedas (CRUD)
 require_once '../includes/db_connect.php';
+require_once '../includes/currency.php';
+
+currency_ensure_schema();
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_decimals_id'])) {
+    $id = intval($_POST['toggle_decimals_id']);
+    $mostrarDecimales = isset($_POST['mostrar_decimales']) ? 1 : 0;
+
+    if ($id > 0) {
+        $stmt = $mysqli->prepare('UPDATE monedas SET mostrar_decimales = ? WHERE id = ? LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('ii', $mostrarDecimales, $id);
+            $stmt->execute();
+            $stmt->close();
+        }
+    }
+
+    header('Location: monedas.php');
+    exit;
+}
 
 // Procesar formulario de creación
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['clave'], $_POST['tasa'])) {
@@ -74,6 +94,7 @@ $monedas = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
                     <th style="color:#00fff7; background:#181f2a;">Nombre</th>
                     <th style="color:#00fff7; background:#181f2a;">Clave</th>
                     <th style="color:#00fff7; background:#181f2a;">Tasa</th>
+                    <th style="color:#00fff7; background:#181f2a;">Decimales</th>
                     <th style="color:#00fff7; background:#181f2a;">Base</th>
                     <th style="color:#00fff7; background:#181f2a;">Acciones</th>
                 </tr>
@@ -86,6 +107,11 @@ $monedas = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
                     <td><input type="text" name="editar_nombre" value="<?= htmlspecialchars($m['nombre']) ?>" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;"></td>
                     <td><input type="text" name="editar_clave" value="<?= htmlspecialchars($m['clave']) ?>" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;"></td>
                     <td><input type="number" step="0.000001" name="editar_tasa" value="<?= htmlspecialchars($m['tasa']) ?>" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;"></td>
+                    <td>
+                        <div class="form-check d-flex justify-content-center align-items-center" style="min-height:38px;">
+                            <input class="form-check-input" type="checkbox" disabled <?= !empty($m['mostrar_decimales']) ? 'checked' : '' ?>>
+                        </div>
+                    </td>
                     <td>No</td>
                     <td>
                         <input type="hidden" name="editar_id" value="<?= $m['id'] ?>">
@@ -97,6 +123,14 @@ $monedas = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
                 <td style="background:#181f2a; color:#00fff7;"><?= htmlspecialchars($m['nombre']) ?></td>
                 <td style="background:#181f2a; color:#00fff7;"><?= htmlspecialchars($m['clave']) ?></td>
                 <td style="background:#181f2a; color:#00fff7;"><?= htmlspecialchars($m['tasa']) ?></td>
+                <td style="background:#181f2a; color:#00fff7;">
+                    <form method="post" class="d-flex justify-content-center align-items-center m-0">
+                        <input type="hidden" name="toggle_decimals_id" value="<?= (int) $m['id'] ?>">
+                        <div class="form-check form-switch m-0">
+                            <input class="form-check-input" type="checkbox" name="mostrar_decimales" value="1" <?= !empty($m['mostrar_decimales']) ? 'checked' : '' ?> onchange="this.form.submit()" aria-label="Mostrar decimales en <?= htmlspecialchars($m['clave'], ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
+                    </form>
+                </td>
                 <td style="background:#181f2a; color:#00fff7;"><?= $m['es_base'] ? '<span style=\'color:#00fff7;\'>Sí</span>' : 'No' ?></td>
                 <td style="background:#181f2a;"><?php if (!$m['es_base']): ?><a href="?editar=<?= $m['id'] ?>" style="color:#00fff7; text-decoration:underline; margin-right:1em; display:inline-block;">Editar</a><a href="?eliminar=<?= $m['id'] ?>" onclick="return confirm('¿Eliminar moneda?')" style="color:#ff0059; text-decoration:underline; display:inline-block; margin-left:0.25rem;">Eliminar</a><?php else: ?>-<?php endif; ?></td>
                 <?php endif; ?>
@@ -114,6 +148,15 @@ $monedas = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
                 <span style="font-size:1em; color:#b2f6ff;"><?= htmlspecialchars($m['clave']) ?></span>
             </div>
             <div style="color:#fff; margin-bottom:0.3em;"><span style="color:#00fff7; font-weight:bold;">Tasa:</span> <?= htmlspecialchars($m['tasa']) ?></div>
+            <div style="color:#fff; margin-bottom:0.3em;">
+                <span style="color:#00fff7; font-weight:bold;">Mostrar decimales:</span>
+                <form method="post" class="d-inline-flex align-items-center ms-2 m-0">
+                    <input type="hidden" name="toggle_decimals_id" value="<?= (int) $m['id'] ?>">
+                    <div class="form-check form-switch m-0">
+                        <input class="form-check-input" type="checkbox" name="mostrar_decimales" value="1" <?= !empty($m['mostrar_decimales']) ? 'checked' : '' ?> onchange="this.form.submit()" aria-label="Mostrar decimales en <?= htmlspecialchars($m['clave'], ENT_QUOTES, 'UTF-8') ?>">
+                    </div>
+                </form>
+            </div>
             <div style="color:#fff; margin-bottom:0.3em;"><span style="color:#00fff7; font-weight:bold;">Base:</span> <?= $m['es_base'] ? '<span style=\'color:#00fff7;\'>Sí</span>' : 'No' ?></div>
             <div style="display:flex; margin-top:1rem; gap:1rem; flex-wrap:wrap;">
                 <?php if (!$m['es_base']): ?>

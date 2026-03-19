@@ -3,6 +3,9 @@ session_start();
 header('Content-Type: application/json');
 
 require_once __DIR__ . '/../includes/db_connect.php';
+require_once __DIR__ . '/../includes/currency.php';
+
+currency_ensure_schema();
 
 function account_json_error(string $message, int $status = 400): void {
     http_response_code($status);
@@ -84,7 +87,7 @@ if ($action === 'orders') {
                 'paquete_nombre' => (string) ($row['paquete_nombre'] ?? ''),
                 'paquete_cantidad' => (string) ($row['paquete_cantidad'] ?? ''),
                 'moneda' => (string) ($row['moneda'] ?? ''),
-                'precio' => number_format((float) ($row['precio'] ?? 0), 2, '.', ','),
+                'precio' => currency_format_amount_by_code((float) ($row['precio'] ?? 0), (string) ($row['moneda'] ?? '')),
                 'email' => (string) ($row['email'] ?? ''),
                 'estado' => (string) ($row['estado'] ?? 'pendiente'),
                 'creado_en' => (string) ($row['creado_en'] ?? ''),

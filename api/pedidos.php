@@ -8,9 +8,11 @@ header('Content-Type: application/json');
 error_reporting(E_ALL);
 
 require_once __DIR__ . '/../includes/db_connect.php';
+require_once __DIR__ . '/../includes/currency.php';
 require_once __DIR__ . '/../includes/influencer_coupons.php';
 require_once __DIR__ . '/../includes/payment_methods.php';
 require_once __DIR__ . '/../includes/store_config.php';
+currency_ensure_schema();
 payment_methods_ensure_table();
 
 function ensure_pedidos_table(mysqli $mysqli): void {
@@ -358,6 +360,10 @@ function apply_coupon_to_price(float $price, array $coupon): float {
         $discounted = max(0, $price - ($price * ($value / 100)));
     }
     return $discounted;
+}
+
+function format_order_price_value(float $price, string $currencyCode): string {
+    return currency_format_amount($price, currency_find_by_code($currencyCode));
 }
 
 function json_error(string $message, int $code = 400): void {
@@ -1893,7 +1899,6 @@ if ($action === 'create') {
     if ($package_id <= 0) $missing[] = 'package_id';
     if (!$pack_name) $missing[] = 'pack_name';
     if (!$currency) $missing[] = 'currency';
-    if (!$price || $price <= 0) $missing[] = 'price';
     if (!$user_identifier) $missing[] = 'user_identifier';
     if (!$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) $missing[] = 'email';
     if (!empty($missing)) {
@@ -1902,6 +1907,16 @@ if ($action === 'create') {
 
     if (!$selectedPackage) {
         json_error('El paquete seleccionado no existe para este juego.');
+    }
+
+    $selectedCurrency = currency_find_by_code((string) $currency);
+    if (!$selectedCurrency) {
+        json_error('La moneda seleccionada no es válida.');
+    }
+    $currency = currency_normalize_code((string) ($selectedCurrency['clave'] ?? $currency));
+    $price = currency_convert_from_base((float) ($selectedPackage['precio'] ?? 0), $selectedCurrency);
+    if ($price <= 0) {
+        json_error('El paquete seleccionado no tiene un precio válido para la moneda elegida.');
     }
 
     if (game_uses_free_fire_api($mysqli, (int) $game_id) && $monto_ff === null) {
@@ -1914,11 +1929,7 @@ if ($action === 'create') {
         if (!$couponData) {
             json_error('Cupón inválido o vencido');
         }
-        // Solo aplicar el cupón si el precio recibido es el base
-        $precio_base = floatval($_POST['pack_base'] ?? 0);
-        if ($precio_base > 0 && abs($price - $precio_base) < 0.01) {
-            $price = apply_coupon_to_price($price, $couponData);
-        }
+        $price = currency_apply_amount_rule(apply_coupon_to_price($price, $couponData), $selectedCurrency);
         // Registrar uso del cupón (best effort)
         if (isset($couponData['id'])) {
             $upd = $mysqli->prepare("UPDATE cupones SET usos_actuales = COALESCE(usos_actuales,0) + 1 WHERE id = ?");
@@ -1962,7 +1973,7 @@ if ($action === 'create') {
         'pack_name' => $pack_name,
         'pack_amount' => $pack_amount_text,
         'currency' => $currency,
-        'price' => number_format($price, 2, '.', ','),
+        'price' => format_order_price_value((float) $price, $currency),
         'user_identifier' => $user_identifier,
         'email' => $email,
         'coupon' => $cupon,
@@ -1975,7 +1986,7 @@ if ($action === 'create') {
         'pack_name' => $pack_name,
         'pack_amount' => $pack_amount_text,
         'currency' => $currency,
-        'price' => number_format($price, 2, '.', ','),
+        'price' => format_order_price_value((float) $price, $currency),
         'user_identifier' => $user_identifier,
         'email' => $email,
         'coupon' => $cupon,

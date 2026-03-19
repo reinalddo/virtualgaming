@@ -3,6 +3,8 @@ header('Content-Type: application/json');
 // Manejo global de errores de conexión
 try {
     require_once __DIR__ . '/../includes/db_connect.php';
+    require_once __DIR__ . '/../includes/currency.php';
+    currency_ensure_schema();
     if (!isset($mysqli) || $mysqli->connect_errno) {
         throw new Exception('Error de conexión a la base de datos: ' . ($mysqli->connect_error ?? 'Desconocido'));
     }
@@ -27,6 +29,9 @@ function is_valid_coupon_code(string $value): bool {
 $codeInput = isset($_POST['code']) ? trim($_POST['code']) : '';
 $code = normalize_coupon_code($codeInput);
 $pack_price = isset($_POST['pack_price']) ? floatval($_POST['pack_price']) : 0;
+$currencyCode = isset($_POST['currency']) ? trim((string) $_POST['currency']) : '';
+$currency = currency_find_by_code($currencyCode);
+$pack_price = currency_apply_amount_rule($pack_price, $currency);
 
 if ($code === '') {
     $errorMsg = date('Y-m-d H:i:s') . " | ERROR: Cupón vacío.\n";
@@ -84,7 +89,8 @@ if ($cupon['tipo_descuento'] === 'porcentaje') {
     $descuento = floatval($cupon['valor_descuento']);
 }
 
-$nuevo_total = max(0, $pack_price - $descuento);
+$nuevo_total = currency_apply_amount_rule(max(0, $pack_price - $descuento), $currency);
+$descuento = currency_apply_amount_rule(max(0, $pack_price - $nuevo_total), $currency);
 
 echo json_encode([
     'success' => true,

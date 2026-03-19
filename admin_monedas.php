@@ -1,6 +1,9 @@
 <?php
 // Gestión de monedas: listar, crear, editar, eliminar, conversión
 require_once 'includes/db_connect.php';
+require_once 'includes/currency.php';
+
+currency_ensure_schema();
 
 // Listar monedas
 function listar_monedas($mysqli) {
@@ -35,7 +38,7 @@ function eliminar_moneda($mysqli, $id) {
 
 // Conversión de moneda
 function convertir_precio($precio_usd, $tasa) {
-    return round($precio_usd * $tasa, 2);
+    return currency_apply_amount_rule($precio_usd * $tasa, ['tasa' => $tasa, 'mostrar_decimales' => 1]);
 }
 
 // Ejemplo de uso (puedes eliminar esto en producción)

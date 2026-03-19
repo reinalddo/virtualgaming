@@ -1,7 +1,9 @@
 <?php
 require_once __DIR__ . "/includes/db_connect.php";
 require_once __DIR__ . "/includes/store_config.php";
+require_once __DIR__ . "/includes/currency.php";
 require_once __DIR__ . "/includes/payment_methods.php";
+currency_ensure_schema();
 $paymentSupportWhatsappBase = store_config_whatsapp_link(store_config_get('whatsapp', ''));
 $loggedUserEmail = '';
 if (session_status() !== PHP_SESSION_ACTIVE) {
@@ -114,8 +116,9 @@ include __DIR__ . "/includes/header.php";
       }
       foreach ($paquetes as $pack):
         $precio_base = floatval($pack['precio']);
-        $precio_mostrar = $moneda_actual ? $precio_base * floatval($moneda_actual['tasa']) : $precio_base;
+        $precio_mostrar = $moneda_actual ? currency_convert_from_base($precio_base, $moneda_actual) : currency_apply_amount_rule($precio_base, null);
         $clave_moneda = $moneda_actual['clave'] ?? 'USD';
+        $mostrarDecimales = $moneda_actual ? currency_should_show_decimals($moneda_actual) : true;
     ?>
       <div class="col">
         <button type="button" class="pack-card card border-info bg-dark text-start w-100 h-100 shadow-sm"
@@ -123,7 +126,8 @@ include __DIR__ . "/includes/header.php";
           data-base="<?= htmlspecialchars($precio_base) ?>"
           data-name="<?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?>"
           data-cantidad="<?= htmlspecialchars($pack['cantidad'], ENT_QUOTES, 'UTF-8') ?>"
-          data-price="<?= number_format($precio_mostrar, 2, '.', '') ?>"
+          data-price-value="<?= htmlspecialchars((string) $precio_mostrar, ENT_QUOTES, 'UTF-8') ?>"
+          data-show-decimals="<?= $mostrarDecimales ? '1' : '0' ?>"
           data-moneda="<?= htmlspecialchars($clave_moneda) ?>">
           <div class="card-body p-0 d-flex flex-column">
             <?php 
@@ -142,7 +146,7 @@ include __DIR__ . "/includes/header.php";
               <div class="pack-card-footer">
                 <span class="moneda-label"><?= htmlspecialchars($clave_moneda) ?></span>
                 <span class="precio-label">
-                  <?= number_format($precio_mostrar, 2, '.', ',') ?>
+                  <?= currency_format_amount($precio_mostrar, $moneda_actual) ?>
                 </span>
               </div>
             </div>
@@ -157,6 +161,7 @@ include __DIR__ . "/includes/header.php";
       $monedas_js[$m['id']] = [
         'tasa' => floatval($m['tasa']),
         'clave' => $m['clave'],
+        'mostrar_decimales' => !empty($m['mostrar_decimales']),
       ];
     }
   ?>
@@ -165,15 +170,31 @@ include __DIR__ . "/includes/header.php";
     let monedaActualId = "<?= $moneda_actual['id'] ?? '' ?>";
     let monedaActualClave = "<?= $moneda_actual['clave'] ?? 'USD' ?>";
     let monedaActualTasa = <?= $moneda_actual['tasa'] ?? 1 ?>;
+    let monedaActualMostrarDecimales = <?= $moneda_actual ? (currency_should_show_decimals($moneda_actual) ? 'true' : 'false') : 'true' ?>;
     const monedaSelect = document.getElementById('moneda-select');
     const packCards = Array.from(document.querySelectorAll('.pack-card'));
+    const normalizeCurrencyAmount = (amount, showDecimals) => {
+      const numericAmount = Number(amount || 0);
+      if (!Number.isFinite(numericAmount)) {
+        return 0;
+      }
+      return showDecimals ? Number(numericAmount.toFixed(2)) : Math.trunc(numericAmount);
+    };
+    const formatCurrencyAmount = (amount, showDecimals) => {
+      const normalized = normalizeCurrencyAmount(amount, showDecimals);
+      return normalized.toLocaleString('en-US', {
+        minimumFractionDigits: showDecimals ? 2 : 0,
+        maximumFractionDigits: showDecimals ? 2 : 0,
+      });
+    };
     function updatePackPrices() {
       packCards.forEach(card => {
         const base = parseFloat(card.getAttribute('data-base'));
-        const precio = base * monedaActualTasa;
-        card.querySelector('.precio-label').textContent = precio.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        const precio = normalizeCurrencyAmount(base * monedaActualTasa, monedaActualMostrarDecimales);
+        card.querySelector('.precio-label').textContent = formatCurrencyAmount(precio, monedaActualMostrarDecimales);
         card.querySelector('.moneda-label').textContent = monedaActualClave;
-        card.setAttribute('data-price', precio.toFixed(2).replace(/,/g, ''));
+        card.setAttribute('data-price-value', String(precio));
+        card.setAttribute('data-show-decimals', monedaActualMostrarDecimales ? '1' : '0');
         card.setAttribute('data-moneda', monedaActualClave);
       });
     }
@@ -202,7 +223,7 @@ include __DIR__ . "/includes/header.php";
         <div class="card bg-dark border-info mb-2">
           <div class="card-body">
             <p class="small text-secondary mb-1">Total</p>
-            <p id="selected-price" class="fw-bold text-info fs-5"><?= $moneda_actual['clave'] ?? 'Bs.' ?> 0.00</p>
+            <p id="selected-price" class="fw-bold text-info fs-5"><?= ($moneda_actual['clave'] ?? 'Bs.') . ' ' . currency_format_amount(0, $moneda_actual) ?></p>
           </div>
         </div>
       </div>
@@ -723,6 +744,7 @@ include __DIR__ . "/includes/header.php";
   const paymentCancelConfirmButton = document.getElementById('payment-cancel-confirm-btn');
   let lastFocusedElement = null;
   let activePack = null;
+  let selectedTotalValue = 0;
   let couponApplied = false;
   let couponValue = '';
   let activePaymentOrder = null;
@@ -1158,10 +1180,11 @@ include __DIR__ . "/includes/header.php";
   function updatePackPrices() {
     packCards.forEach(card => {
       const base = parseFloat(card.getAttribute('data-base'));
-      const precio = base * monedaActualTasa;
-      card.querySelector('.precio-label').textContent = precio.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      const precio = normalizeCurrencyAmount(base * monedaActualTasa, monedaActualMostrarDecimales);
+      card.querySelector('.precio-label').textContent = formatCurrencyAmount(precio, monedaActualMostrarDecimales);
       card.querySelector('.moneda-label').textContent = monedaActualClave;
-      card.setAttribute('data-price', precio.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+      card.setAttribute('data-price-value', String(precio));
+      card.setAttribute('data-show-decimals', monedaActualMostrarDecimales ? '1' : '0');
       card.setAttribute('data-moneda', monedaActualClave);
     });
   }
@@ -1188,10 +1211,12 @@ include __DIR__ . "/includes/header.php";
   function updateResumenCompra(pack) {
     if (pack) {
       selectedPack.textContent = pack.name;
-      selectedPrice.textContent = `${pack.moneda} ${pack.price}`;
+      selectedTotalValue = normalizeCurrencyAmount(pack.priceValue, pack.showDecimals);
+      selectedPrice.textContent = `${pack.moneda} ${formatCurrencyAmount(selectedTotalValue, pack.showDecimals)}`;
     } else {
+      selectedTotalValue = 0;
       selectedPack.textContent = 'Ninguno';
-      selectedPrice.textContent = `${monedaActualClave} 0.00`;
+      selectedPrice.textContent = `${monedaActualClave} ${formatCurrencyAmount(0, monedaActualMostrarDecimales)}`;
     }
   }
   packCards2.forEach((card) => {
@@ -1203,9 +1228,10 @@ include __DIR__ . "/includes/header.php";
       activePack = {
         id: card.dataset.packageId,
         name: card.dataset.name,
-        price: card.dataset.price,
+        priceValue: Number(card.dataset.priceValue || 0),
         moneda: card.dataset.moneda,
-        cantidad: card.dataset.cantidad
+        cantidad: card.dataset.cantidad,
+        showDecimals: card.dataset.showDecimals === '1'
       };
       updateResumenCompra(activePack);
       updateButtonState();
@@ -1417,6 +1443,7 @@ include __DIR__ . "/includes/header.php";
                   monedaActualId = selectedOption.value;
                   monedaActualClave = selectedOption.dataset.clave || 'USD';
                   monedaActualTasa = parseFloat(selectedOption.dataset.tasa || '1');
+                  monedaActualMostrarDecimales = Boolean(monedas[monedaActualId] && monedas[monedaActualId].mostrar_decimales);
                   updatePackPrices();
 
                   if (activePack) {
@@ -1425,9 +1452,10 @@ include __DIR__ . "/includes/header.php";
                       activePack = {
                         id: selectedCard.dataset.packageId,
                         name: selectedCard.dataset.name,
-                        price: selectedCard.dataset.price,
+                        priceValue: Number(selectedCard.dataset.priceValue || 0),
                         moneda: selectedCard.dataset.moneda,
-                        cantidad: selectedCard.dataset.cantidad
+                        cantidad: selectedCard.dataset.cantidad,
+                        showDecimals: selectedCard.dataset.showDecimals === '1'
                       };
                       updateResumenCompra(activePack);
                     }
@@ -1459,7 +1487,7 @@ include __DIR__ . "/includes/header.php";
                   return;
                 }
                 // Aseguramos que el precio sea un número puro
-                const precioNumerico = typeof pack.price === 'string' ? pack.price.replace(/,/g, '') : pack.price;
+                const precioNumerico = String(normalizeCurrencyAmount(pack.priceValue, pack.showDecimals));
                 console.log('Enviando cupón:', cupon, 'Precio:', precioNumerico);
                 if (!cupon) {
                   showToast('Ingresa un cupón.', 'error');
@@ -1468,14 +1496,15 @@ include __DIR__ . "/includes/header.php";
                 fetch('../api/validar_cupon.php', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                  body: `code=${encodeURIComponent(cupon)}&pack_price=${encodeURIComponent(precioNumerico)}`
+                  body: `code=${encodeURIComponent(cupon)}&pack_price=${encodeURIComponent(precioNumerico)}&currency=${encodeURIComponent(pack.moneda || '')}`
                 })
                 .then(res => res.json())
                 .then(data => {
                   console.log('Respuesta backend:', data);
                   if (data.success) {
-                    selectedPrice.textContent = `${pack.moneda} ${data.nuevo_total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-                    showToast(data.message + ` Descuento: ${data.descuento.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`,'success');
+                    selectedTotalValue = normalizeCurrencyAmount(data.nuevo_total, pack.showDecimals);
+                    selectedPrice.textContent = `${pack.moneda} ${formatCurrencyAmount(selectedTotalValue, pack.showDecimals)}`;
+                    showToast(data.message + ` Descuento: ${formatCurrencyAmount(data.descuento, pack.showDecimals)}`,'success');
                     couponInput.disabled = true;
                     applyCouponButton.disabled = true;
                     couponApplied = true;
@@ -1574,7 +1603,9 @@ include __DIR__ . "/includes/header.php";
                 let precioFinal = selectedPrice.textContent.replace(/[^\d.]/g, '');
                 // Si no hay cupón aplicado, usar el precio base del paquete
                 if (!couponApplied || !couponVal) {
-                  precioFinal = typeof pack.price === 'string' ? pack.price.replace(/,/g, '') : pack.price;
+                  precioFinal = String(normalizeCurrencyAmount(pack.priceValue, pack.showDecimals));
+                } else {
+                  precioFinal = String(normalizeCurrencyAmount(selectedTotalValue, pack.showDecimals));
                 }
                 const pedidoData = {
                   action: 'create',
@@ -1585,7 +1616,7 @@ include __DIR__ . "/includes/header.php";
                   pack_amount: pack.cantidad || '',
                   currency: pack.moneda || '',
                   price: precioFinal,
-                  pack_base: typeof pack.price === 'string' ? pack.price.replace(/,/g, '') : pack.price,
+                  pack_base: String(normalizeCurrencyAmount(pack.priceValue, pack.showDecimals)),
                   user_identifier: userId,
                   email: email,
                   coupon: couponApplied ? couponVal : '',
@@ -1612,7 +1643,7 @@ include __DIR__ . "/includes/header.php";
                       applyCouponButton.disabled = false;
                       couponApplied = false;
                       selectedPack.textContent = 'Ninguno';
-                      selectedPrice.textContent = `${monedaActualClave} 0.00`;
+                      selectedPrice.textContent = `${monedaActualClave} ${formatCurrencyAmount(0, monedaActualMostrarDecimales)}`;
                       return;
                     } else {
                       showToast('Error de red al registrar pedido', 'error');

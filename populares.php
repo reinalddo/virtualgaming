@@ -1,6 +1,8 @@
 
 <?php
 require_once __DIR__ . "/includes/db_connect.php";
+require_once __DIR__ . "/includes/currency.php";
+currency_ensure_schema();
 $pageTitle = "TVirtualGaming | Juegos populares";
 include __DIR__ . "/includes/header.php";
 
@@ -44,16 +46,16 @@ $popularGames = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
                 $resPaq = $mysqli->query("SELECT precio FROM juego_paquetes WHERE juego_id=" . intval($game['id']) . " ORDER BY precio ASC LIMIT 1");
                 $paq = $resPaq ? $resPaq->fetch_assoc() : null;
                 if ($paq) {
-                  $resMon = $mysqli->query("SELECT tasa, clave FROM monedas WHERE id=" . intval($game['moneda_fija_id']) . " LIMIT 1");
+                  $resMon = $mysqli->query("SELECT tasa, clave, mostrar_decimales FROM monedas WHERE id=" . intval($game['moneda_fija_id']) . " LIMIT 1");
                   $mon = $resMon ? $resMon->fetch_assoc() : null;
                   if ($mon) {
-                    $min_precio_bs = $paq['precio'] * floatval($mon['tasa']);
+                    $min_precio_bs = currency_convert_from_base((float) $paq['precio'], $mon);
                   }
                 }
               }
             ?>
             <?php if ($min_precio_bs !== null && isset($mon['clave'])): ?>
-              Desde <span class="text-info"><?= htmlspecialchars(strtoupper($mon['clave'])) ?> <?= number_format($min_precio_bs, 2, '.', ',') ?></span>
+              Desde <span class="text-info"><?= htmlspecialchars(strtoupper($mon['clave'])) ?> <?= currency_format_amount((float) $min_precio_bs, $mon) ?></span>
             <?php endif; ?>
           </p>
         </div>

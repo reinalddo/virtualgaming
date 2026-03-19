@@ -5,7 +5,9 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 
 require_once __DIR__ . "/includes/db_connect.php";
 require_once __DIR__ . "/includes/store_config.php";
+require_once __DIR__ . "/includes/currency.php";
 require_once __DIR__ . "/includes/home_gallery.php";
+currency_ensure_schema();
 $pageTitle = store_config_get('nombre_tienda', 'TVirtualGaming') . " | " . store_config_get('nombre_tienda_subtitulo', 'Tienda de monedas digitales');
 $startupPopupTabEnabled = store_config_get('inicio_popup_tab_habilitado', '1') === '1';
 $startupPopupEnabled = $startupPopupTabEnabled && store_config_get('inicio_popup_activo', '1') === '1';
@@ -73,12 +75,13 @@ if (!empty($galleryFeatured)) {
 }
 
 $gameCurrencyMap = [];
-$resCurrencies = $mysqli->query("SELECT id, tasa, clave FROM monedas");
+$resCurrencies = $mysqli->query("SELECT id, tasa, clave, mostrar_decimales FROM monedas");
 if ($resCurrencies instanceof mysqli_result) {
   while ($currency = $resCurrencies->fetch_assoc()) {
     $gameCurrencyMap[(int) $currency['id']] = [
       'tasa' => (float) ($currency['tasa'] ?? 0),
       'clave' => (string) ($currency['clave'] ?? ''),
+      'mostrar_decimales' => (int) ($currency['mostrar_decimales'] ?? 1),
     ];
   }
 }
@@ -98,7 +101,8 @@ if ($resGames instanceof mysqli_result) {
     $currencyId = (int) ($game['moneda_fija_id'] ?? 0);
     if ($currencyId > 0 && isset($gameCurrencyMap[$currencyId])) {
       $currency = $gameCurrencyMap[$currencyId];
-      $minPriceLabel = strtoupper($currency['clave']) . ' ' . number_format(((float) ($game['precio_minimo'] ?? 0)) * $currency['tasa'], 2, '.', ',');
+      $convertedPrice = currency_convert_from_base((float) ($game['precio_minimo'] ?? 0), $currency);
+      $minPriceLabel = strtoupper($currency['clave']) . ' ' . currency_format_amount($convertedPrice, $currency);
     }
 
     $game['paquetes_total'] = (int) ($game['paquetes_total'] ?? 0);
