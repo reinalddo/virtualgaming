@@ -355,6 +355,8 @@ switch ($seccion) {
                 $whatsapp = store_config_normalize_whatsapp((string) ($_POST['whatsapp'] ?? ''));
                 $whatsappMessage = store_config_normalize_whatsapp_message((string) ($_POST['mensaje_whatsapp'] ?? ''));
                 $whatsappChannel = store_config_normalize_social_url((string) ($_POST['whatsapp_channel'] ?? ''));
+                $googleClientId = trim((string) ($_POST['google_client_id'] ?? ''));
+                $googleClientSecret = trim((string) ($_POST['google_client_secret'] ?? ''));
 
                 if ($facebook !== '' && !store_config_is_valid_social_url($facebook)) {
                     admin_set_flash('error', 'El enlace de Facebook no es válido. Usa una URL completa con http:// o https://');
@@ -385,6 +387,8 @@ switch ($seccion) {
                 store_config_upsert('whatsapp', $whatsapp);
                 store_config_upsert('mensaje_whatsapp', $whatsappMessage);
                 store_config_upsert('whatsapp_channel', $whatsappChannel);
+                store_config_upsert('google_client_id', $googleClientId);
+                store_config_upsert('google_client_secret', $googleClientSecret);
                 admin_set_flash('success', 'Redes sociales actualizadas.');
             }
 

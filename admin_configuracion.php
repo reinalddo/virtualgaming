@@ -6,6 +6,7 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 require_once __DIR__ . '/includes/store_config.php';
 require_once __DIR__ . '/includes/home_gallery.php';
 require_once __DIR__ . '/includes/payment_methods.php';
+require_once __DIR__ . '/includes/google_oauth.php';
 
 $activeTab = defined('ADMIN_CONFIG_ACTIVE_TAB') ? ADMIN_CONFIG_ACTIVE_TAB : ($_GET['tab'] ?? 'correo');
 $startupPopupTabEnabled = store_config_get('inicio_popup_tab_habilitado', '1') === '1';
@@ -65,6 +66,7 @@ if (($cfg['inicio_popup_video_activo'] ?? '0') === '1') {
 $startupPopupVideoUrl = store_config_normalize_youtube_url((string) ($cfg['inicio_popup_video_url'] ?? ''));
 $startupPopupChannelUrl = store_config_normalize_social_url((string) ($cfg['whatsapp_channel'] ?? ''));
 $startupPopupChannelReady = store_config_is_valid_social_url($startupPopupChannelUrl);
+$googleCallbackUrl = google_oauth_callback_url();
 ?>
 <style>
   .neon-card {
@@ -484,6 +486,19 @@ $startupPopupChannelReady = store_config_is_valid_social_url($startupPopupChanne
                   <label class="form-label">Mensaje del botón de Whatsapp</label>
                   <textarea name="mensaje_whatsapp" rows="3" class="form-control" placeholder="Hola, quiero información sobre sus productos."><?= htmlspecialchars($cfg['mensaje_whatsapp'] ?? '', ENT_QUOTES, 'UTF-8') ?></textarea>
                   <div class="form-text">Este texto se enviará automáticamente al abrir el flotante de WhatsApp.</div>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Google Client ID</label>
+                  <input type="text" name="google_client_id" value="<?= htmlspecialchars($cfg['google_client_id'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="xxxxxxxx.apps.googleusercontent.com">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Google Client Secret</label>
+                  <input type="password" name="google_client_secret" value="<?= htmlspecialchars($cfg['google_client_secret'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="GOCSPX-...">
+                </div>
+                <div class="col-12">
+                  <label class="form-label">Callback autorizado para Google Cloud</label>
+                  <input type="text" value="<?= htmlspecialchars($googleCallbackUrl, ENT_QUOTES, 'UTF-8') ?>" class="form-control" readonly>
+                  <div class="form-text">Copia esta URL exactamente en Google Cloud Console > OAuth 2.0 Client IDs > Authorized redirect URIs.</div>
                 </div>
               </div>
               <button type="submit" class="neon-btn w-100 py-3 mt-4">Guardar redes sociales</button>

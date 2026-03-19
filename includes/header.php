@@ -9,6 +9,7 @@ if ($scriptDir === '/' || $scriptDir === '.') {
 }
 require_once __DIR__ . '/store_config.php';
 require_once __DIR__ . '/tenant.php';
+require_once __DIR__ . '/google_oauth.php';
 
 if (!isset($brandPrefix)) {
   $brandPrefix = store_config_get('nombre_prefijo', 'TIENDA');
@@ -64,6 +65,8 @@ $tenantSlugAttr = resolve_tenant_slug();
 $mainStylesPath = __DIR__ . '/../assets/css/estilos.css';
 $mainStylesVersion = asset_version($mainStylesPath);
 $themeVariablesCss = store_theme_css_variables();
+$googleAuthEnabled = google_oauth_is_configured();
+$googleAuthLoginUrl = $googleAuthEnabled ? google_oauth_login_url() : '';
 ?>
 <!doctype html>
 <html lang="es">
@@ -304,6 +307,24 @@ $themeVariablesCss = store_theme_css_variables();
               <button type="submit" class="btn btn-info neon-btn-info w-100 rounded-3 px-4 py-2 fw-bold text-uppercase shadow">Iniciar sesión</button>
               <a href="/reset.php" class="d-block w-100 text-center small fw-bold text-neon">¿Has olvidado la contraseña?</a>
             </form>
+            <?php if ($googleAuthEnabled): ?>
+              <div class="d-grid gap-3">
+                <div class="d-flex align-items-center gap-3 small text-neon" aria-hidden="true">
+                  <span class="flex-grow-1" style="height:1px;background:rgba(var(--theme-primary-rgb),0.32);"></span>
+                  <span>o</span>
+                  <span class="flex-grow-1" style="height:1px;background:rgba(var(--theme-primary-rgb),0.32);"></span>
+                </div>
+                <a href="<?php echo htmlspecialchars($googleAuthLoginUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn w-100 rounded-3 px-4 py-2 fw-bold shadow-sm d-inline-flex align-items-center justify-content-center gap-2" style="background:#ffffff;color:#111827;border:1px solid rgba(255,255,255,0.78);">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true">
+                    <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303C33.654 32.657 29.233 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.27 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/>
+                    <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.27 4 24 4c-7.682 0-14.289 4.337-17.694 10.691z"/>
+                    <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.143 35.091 26.715 36 24 36c-5.212 0-9.62-3.329-11.283-7.946l-6.522 5.025C9.56 39.556 16.618 44 24 44z"/>
+                    <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.793 2.238-2.231 4.166-4.084 5.571.001-.001 6.19 5.238 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/>
+                  </svg>
+                  <span>Continuar con Google</span>
+                </a>
+              </div>
+            <?php endif; ?>
             <button type="button" data-auth-switch="register" class="btn btn-link w-100 small fw-semibold text-info">¿No tienes una cuenta? Regístrate ahora</button>
           </div>
 
@@ -338,6 +359,24 @@ $themeVariablesCss = store_theme_css_variables();
               </div>
               <button type="submit" id="registro-btn" class="btn btn-info neon-btn-info w-100 rounded-3 px-4 py-2 fw-bold text-uppercase shadow">Registrarse ahora</button>
             </form>
+            <?php if ($googleAuthEnabled): ?>
+              <div class="d-grid gap-3">
+                <div class="d-flex align-items-center gap-3 small text-neon" aria-hidden="true">
+                  <span class="flex-grow-1" style="height:1px;background:rgba(var(--theme-primary-rgb),0.32);"></span>
+                  <span>o</span>
+                  <span class="flex-grow-1" style="height:1px;background:rgba(var(--theme-primary-rgb),0.32);"></span>
+                </div>
+                <a href="<?php echo htmlspecialchars($googleAuthLoginUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn w-100 rounded-3 px-4 py-2 fw-bold shadow-sm d-inline-flex align-items-center justify-content-center gap-2" style="background:#ffffff;color:#111827;border:1px solid rgba(255,255,255,0.78);">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true">
+                    <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303C33.654 32.657 29.233 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.27 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/>
+                    <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.27 4 24 4c-7.682 0-14.289 4.337-17.694 10.691z"/>
+                    <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.143 35.091 26.715 36 24 36c-5.212 0-9.62-3.329-11.283-7.946l-6.522 5.025C9.56 39.556 16.618 44 24 44z"/>
+                    <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.793 2.238-2.231 4.166-4.084 5.571.001-.001 6.19 5.238 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/>
+                  </svg>
+                  <span>Registrarme con Google</span>
+                </a>
+              </div>
+            <?php endif; ?>
             <script src="<?php echo htmlspecialchars($scriptDir . '/registro.js?v=' . date('YmdHis'), ENT_QUOTES, 'UTF-8'); ?>" data-register-endpoint="<?php echo htmlspecialchars($scriptDir . '/register_user.php', ENT_QUOTES, 'UTF-8'); ?>" data-login-url="<?php echo htmlspecialchars($scriptDir . '/login.php', ENT_QUOTES, 'UTF-8'); ?>"></script>
             <button type="button" data-auth-switch="login" class="btn btn-link w-100 small fw-bold text-neon">¿Ya tienes una cuenta? Inicia sesión</button>
           </div>

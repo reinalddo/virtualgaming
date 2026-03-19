@@ -24,6 +24,8 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('whatsapp', '', 'Número o enlace de WhatsApp de la tienda'),
 ('mensaje_whatsapp', '', 'Mensaje predefinido para el botón flotante de WhatsApp'),
 ('whatsapp_channel', '', 'URL del canal de WhatsApp de la tienda'),
+('google_client_id', '', 'Client ID de Google para login y registro social'),
+('google_client_secret', '', 'Client Secret de Google para login y registro social'),
 ('inicio_popup_tab_habilitado', '1', 'Activa o desactiva globalmente el tab y la función de la ventana inicial'),
 ('inicio_popup_activo', '1', 'Activa o desactiva la aparición de la ventana inicial en el index'),
 ('inicio_popup_video_activo', '0', 'Activa o desactiva la aparición de la ventana inicial con video en el index'),
