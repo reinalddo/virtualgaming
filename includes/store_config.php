@@ -137,6 +137,31 @@ function store_theme_definitions(): array {
             'default' => '#F8FAFC',
             'description' => 'Color del texto e icono del botón principal de la ventana inicial',
         ],
+        'theme_startup_video_popup_surface' => [
+            'label' => 'Ventana video fondo',
+            'default' => '#1A2233',
+            'description' => 'Color base del panel principal de la ventana inicial con video',
+        ],
+        'theme_startup_video_popup_border' => [
+            'label' => 'Ventana video borde',
+            'default' => '#314462',
+            'description' => 'Color del borde y contornos de la ventana inicial con video',
+        ],
+        'theme_startup_video_popup_accent' => [
+            'label' => 'Ventana video acento',
+            'default' => '#F87171',
+            'description' => 'Color de detalles destacados y botón de cierre de la ventana inicial con video',
+        ],
+        'theme_startup_video_popup_button_bg' => [
+            'label' => 'Ventana video botón',
+            'default' => '#25D366',
+            'description' => 'Color principal del botón del canal en la ventana inicial con video',
+        ],
+        'theme_startup_video_popup_button_text' => [
+            'label' => 'Ventana video texto botón',
+            'default' => '#F8FAFC',
+            'description' => 'Color del texto e icono del botón principal de la ventana inicial con video',
+        ],
     ];
 }
 
@@ -171,8 +196,10 @@ function store_config_descriptions(): array {
         'whatsapp_channel' => 'URL del canal de WhatsApp de la tienda',
         'inicio_popup_tab_habilitado' => 'Activa o desactiva globalmente el tab y la función de la ventana inicial',
         'inicio_popup_activo' => 'Activa o desactiva la aparición de la ventana inicial en el index',
+        'inicio_popup_video_activo' => 'Activa o desactiva la aparición de la ventana inicial con video en el index',
         'inicio_popup_frecuencia' => 'Frecuencia con la que debe aparecer la ventana inicial en el index',
         'inicio_popup_nombre_canal' => 'Nombre visible del canal en la ventana inicial',
+        'inicio_popup_video_url' => 'Enlace de YouTube usado en la ventana inicial con video',
         'ff_bank_posicion' => 'Posicion para la conexion al banco de Free Fire',
         'ff_bank_token' => 'Token para la conexion al banco de Free Fire',
         'ff_bank_clave' => 'Clave para la conexion al banco de Free Fire',
@@ -209,8 +236,10 @@ function store_config_defaults(): array {
         'whatsapp_channel' => '',
         'inicio_popup_tab_habilitado' => '1',
         'inicio_popup_activo' => '1',
+        'inicio_popup_video_activo' => '0',
         'inicio_popup_frecuencia' => 'per_session',
         'inicio_popup_nombre_canal' => 'DanisA Gamer Store',
+        'inicio_popup_video_url' => '',
         'ff_bank_posicion' => '0',
         'ff_bank_token' => '',
         'ff_bank_clave' => '',
@@ -416,6 +445,11 @@ function store_theme_css_variables(): string {
         '--theme-startup-popup-accent' => $theme['theme_startup_popup_accent'],
         '--theme-startup-popup-chip' => $theme['theme_startup_popup_chip'],
         '--theme-startup-popup-button-text' => $theme['theme_startup_popup_button_text'],
+        '--theme-startup-video-popup-surface' => $theme['theme_startup_video_popup_surface'],
+        '--theme-startup-video-popup-border' => $theme['theme_startup_video_popup_border'],
+        '--theme-startup-video-popup-accent' => $theme['theme_startup_video_popup_accent'],
+        '--theme-startup-video-popup-button-bg' => $theme['theme_startup_video_popup_button_bg'],
+        '--theme-startup-video-popup-button-text' => $theme['theme_startup_video_popup_button_text'],
         '--theme-body-glow' => $bodyGlow,
         '--theme-panel-glow' => $panelGlow,
         '--theme-panel-bg' => $panelBg,
@@ -444,6 +478,11 @@ function store_theme_css_variables(): string {
         '--theme-startup-popup-accent-rgb' => store_theme_rgb_string($theme['theme_startup_popup_accent']),
         '--theme-startup-popup-chip-rgb' => store_theme_rgb_string($theme['theme_startup_popup_chip']),
         '--theme-startup-popup-button-text-rgb' => store_theme_rgb_string($theme['theme_startup_popup_button_text']),
+        '--theme-startup-video-popup-surface-rgb' => store_theme_rgb_string($theme['theme_startup_video_popup_surface']),
+        '--theme-startup-video-popup-border-rgb' => store_theme_rgb_string($theme['theme_startup_video_popup_border']),
+        '--theme-startup-video-popup-accent-rgb' => store_theme_rgb_string($theme['theme_startup_video_popup_accent']),
+        '--theme-startup-video-popup-button-bg-rgb' => store_theme_rgb_string($theme['theme_startup_video_popup_button_bg']),
+        '--theme-startup-video-popup-button-text-rgb' => store_theme_rgb_string($theme['theme_startup_video_popup_button_text']),
         '--theme-success-rgb' => store_theme_rgb_string($theme['theme_success']),
         '--theme-warning-rgb' => store_theme_rgb_string($theme['theme_warning']),
         '--theme-danger-rgb' => store_theme_rgb_string($theme['theme_danger']),
@@ -558,6 +597,71 @@ function store_config_get(string $key, ?string $default = null): string {
 
 function store_config_normalize_social_url(string $value): string {
     return trim($value);
+}
+
+function store_config_extract_youtube_video_id(string $value): string {
+    $candidate = trim($value);
+    if ($candidate === '') {
+        return '';
+    }
+
+    if (preg_match('/^[A-Za-z0-9_-]{11}$/', $candidate) === 1) {
+        return $candidate;
+    }
+
+    if (filter_var($candidate, FILTER_VALIDATE_URL) === false) {
+        return '';
+    }
+
+    $host = strtolower((string) parse_url($candidate, PHP_URL_HOST));
+    $host = preg_replace('/^(www|m)\./', '', $host);
+    $path = trim((string) parse_url($candidate, PHP_URL_PATH), '/');
+
+    if ($host === 'youtu.be') {
+        $segments = $path === '' ? [] : explode('/', $path);
+        $videoId = $segments[0] ?? '';
+        return preg_match('/^[A-Za-z0-9_-]{11}$/', $videoId) === 1 ? $videoId : '';
+    }
+
+    if (!in_array($host, ['youtube.com', 'youtube-nocookie.com'], true)) {
+        return '';
+    }
+
+    if ($path === 'watch') {
+        parse_str((string) parse_url($candidate, PHP_URL_QUERY), $queryParams);
+        $videoId = trim((string) ($queryParams['v'] ?? ''));
+        return preg_match('/^[A-Za-z0-9_-]{11}$/', $videoId) === 1 ? $videoId : '';
+    }
+
+    $segments = $path === '' ? [] : explode('/', $path);
+    if (count($segments) >= 2 && in_array($segments[0], ['shorts', 'embed', 'live'], true)) {
+        $videoId = trim((string) $segments[1]);
+        return preg_match('/^[A-Za-z0-9_-]{11}$/', $videoId) === 1 ? $videoId : '';
+    }
+
+    return '';
+}
+
+function store_config_normalize_youtube_url(string $value): string {
+    $videoId = store_config_extract_youtube_video_id($value);
+    if ($videoId === '') {
+        return '';
+    }
+
+    return 'https://www.youtube.com/watch?v=' . $videoId;
+}
+
+function store_config_is_valid_youtube_url(string $value): bool {
+    return store_config_extract_youtube_video_id($value) !== '';
+}
+
+function store_config_youtube_embed_url(string $value): string {
+    $videoId = store_config_extract_youtube_video_id($value);
+    if ($videoId === '') {
+        return '';
+    }
+
+    return 'https://www.youtube-nocookie.com/embed/' . $videoId . '?rel=0&modestbranding=1&playsinline=1';
 }
 
 function store_config_is_valid_social_url(string $value): bool {

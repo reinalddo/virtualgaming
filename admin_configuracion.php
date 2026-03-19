@@ -53,8 +53,18 @@ $themeFieldGroups = [
   'Botones y paquetes' => ['theme_button_primary', 'theme_button_secondary', 'theme_button_surface'],
   'Botones flotantes' => ['theme_float_whatsapp_bg', 'theme_float_whatsapp_text', 'theme_float_channel_bg', 'theme_float_channel_text'],
   'Ventana inicial' => ['theme_startup_popup_surface', 'theme_startup_popup_border', 'theme_startup_popup_accent', 'theme_startup_popup_chip', 'theme_startup_popup_button_text'],
+  'Ventana inicial con video' => ['theme_startup_video_popup_surface', 'theme_startup_video_popup_border', 'theme_startup_video_popup_accent', 'theme_startup_video_popup_button_bg', 'theme_startup_video_popup_button_text'],
   'Textos y estados' => ['theme_text', 'theme_text_muted', 'theme_price_text', 'theme_price_muted', 'theme_warning', 'theme_danger'],
 ];
+$startupPopupMode = 'none';
+if (($cfg['inicio_popup_video_activo'] ?? '0') === '1') {
+  $startupPopupMode = 'video';
+} elseif (($cfg['inicio_popup_activo'] ?? '1') === '1') {
+  $startupPopupMode = 'normal';
+}
+$startupPopupVideoUrl = store_config_normalize_youtube_url((string) ($cfg['inicio_popup_video_url'] ?? ''));
+$startupPopupChannelUrl = store_config_normalize_social_url((string) ($cfg['whatsapp_channel'] ?? ''));
+$startupPopupChannelReady = store_config_is_valid_social_url($startupPopupChannelUrl);
 ?>
 <style>
   .neon-card {
@@ -567,17 +577,43 @@ $themeFieldGroups = [
           <?php elseif ($activeTab === 'ventana-inicial'): ?>
             <form method="post">
               <input type="hidden" name="config_section" value="ventana-inicial">
-              <div class="config-section-note mb-4">Controla la ventana emergente inicial del index. El botón principal usa automáticamente el enlace configurado en Redes Sociales, en el campo Whatsapp Channel.</div>
+              <div class="config-section-note mb-4">Controla la ventana emergente inicial del index. Puedes mostrar la ventana normal, la ventana con video o ninguna, pero nunca ambas al mismo tiempo. El botón principal usa automáticamente el enlace configurado en Redes Sociales, en el campo Whatsapp Channel.</div>
               <div class="row g-4 align-items-start">
                 <div class="col-lg-7">
                   <div class="gallery-table-wrap">
-                    <div class="form-check form-switch mb-4">
-                      <input class="form-check-input" type="checkbox" role="switch" id="inicioPopupActivo" name="inicio_popup_activo" value="1" <?= ($cfg['inicio_popup_activo'] ?? '1') === '1' ? 'checked' : '' ?>>
-                      <label class="form-check-label fw-semibold" for="inicioPopupActivo">Mostrar ventana inicial en el inicio</label>
+                    <div class="mb-4">
+                      <label class="form-label d-block">Tipo de ventana inicial</label>
+                      <div class="d-grid gap-3">
+                        <label class="rounded-4 border p-3" style="border-color: rgba(34, 211, 238, 0.24); background: rgba(15, 23, 42, 0.48);">
+                          <div class="form-check mb-0">
+                            <input class="form-check-input" type="radio" name="inicio_popup_modo" id="inicioPopupModeNone" value="none" <?= $startupPopupMode === 'none' ? 'checked' : '' ?>>
+                            <span class="form-check-label fw-semibold">No mostrar ninguna ventana inicial</span>
+                          </div>
+                        </label>
+                        <label class="rounded-4 border p-3" style="border-color: rgba(34, 211, 238, 0.24); background: rgba(15, 23, 42, 0.48);">
+                          <div class="form-check mb-0">
+                            <input class="form-check-input" type="radio" name="inicio_popup_modo" id="inicioPopupModeNormal" value="normal" <?= $startupPopupMode === 'normal' ? 'checked' : '' ?>>
+                            <span class="form-check-label fw-semibold">Mostrar ventana inicial normal</span>
+                          </div>
+                        </label>
+                        <label class="rounded-4 border p-3" style="border-color: rgba(34, 211, 238, 0.24); background: rgba(15, 23, 42, 0.48);">
+                          <div class="form-check mb-0">
+                            <input class="form-check-input" type="radio" name="inicio_popup_modo" id="inicioPopupModeVideo" value="video" <?= $startupPopupMode === 'video' ? 'checked' : '' ?>>
+                            <span class="form-check-label fw-semibold">Mostrar ventana inicial con video</span>
+                          </div>
+                          <div class="form-text mt-2">Esta opción solo puede activarse cuando el enlace de YouTube esté completo y válido.</div>
+                        </label>
+                      </div>
                     </div>
                     <div class="mb-4">
                       <label class="form-label">Nombre del canal</label>
-                      <input type="text" name="inicio_popup_nombre_canal" value="<?= htmlspecialchars($cfg['inicio_popup_nombre_canal'] ?? 'DanisA Gamer Store', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="DanisA Gamer Store" required>
+                      <input type="text" name="inicio_popup_nombre_canal" value="<?= htmlspecialchars($cfg['inicio_popup_nombre_canal'] ?? 'DanisA Gamer Store', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="DanisA Gamer Store">
+                      <div class="form-text">Este nombre se usa en la ventana inicial normal.</div>
+                    </div>
+                    <div class="mb-4">
+                      <label class="form-label">Enlace de YouTube para la ventana con video</label>
+                      <input type="url" name="inicio_popup_video_url" id="inicioPopupVideoUrl" value="<?= htmlspecialchars($startupPopupVideoUrl, ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="https://www.youtube.com/shorts/...">
+                      <div class="form-text">Acepta enlaces de YouTube Shorts, watch, embed o youtu.be. Si este campo está vacío, la ventana con video no puede seleccionarse.</div>
                     </div>
                     <div>
                       <label class="form-label">Frecuencia de aparición</label>
@@ -592,8 +628,10 @@ $themeFieldGroups = [
                 <div class="col-lg-5">
                   <div class="config-section-note h-100">
                     <div class="fw-semibold text-info mb-2">Resumen</div>
-                    <div class="small">Canal mostrado: <?= htmlspecialchars($cfg['inicio_popup_nombre_canal'] ?? 'DanisA Gamer Store', ENT_QUOTES, 'UTF-8') ?>.</div>
-                    <div class="small mt-2">Enlace usado: <?= !empty($cfg['whatsapp_channel']) ? htmlspecialchars($cfg['whatsapp_channel'], ENT_QUOTES, 'UTF-8') : 'No configurado aún en Redes Sociales' ?></div>
+                    <div class="small">Modo seleccionado: <?php if ($startupPopupMode === 'normal'): ?>Ventana normal<?php elseif ($startupPopupMode === 'video'): ?>Ventana con video<?php else: ?>Ninguna<?php endif; ?>.</div>
+                    <div class="small mt-2">Canal mostrado: <?= htmlspecialchars($cfg['inicio_popup_nombre_canal'] ?? 'DanisA Gamer Store', ENT_QUOTES, 'UTF-8') ?>.</div>
+                    <div class="small mt-2">Enlace del canal: <?= $startupPopupChannelReady ? htmlspecialchars($startupPopupChannelUrl, ENT_QUOTES, 'UTF-8') : 'No configurado aún en Redes Sociales' ?></div>
+                    <div class="small mt-2">Video de YouTube: <?= $startupPopupVideoUrl !== '' ? htmlspecialchars($startupPopupVideoUrl, ENT_QUOTES, 'UTF-8') : 'No configurado' ?></div>
                   </div>
                 </div>
               </div>
@@ -922,6 +960,26 @@ $themeFieldGroups = [
     });
 
     renderPreview(originalSrc);
+  })();
+
+  (() => {
+    const noneOption = document.getElementById('inicioPopupModeNone');
+    const videoOption = document.getElementById('inicioPopupModeVideo');
+    const videoUrlInput = document.getElementById('inicioPopupVideoUrl');
+    if (!noneOption || !videoOption || !videoUrlInput) {
+      return;
+    }
+
+    const syncVideoModeAvailability = () => {
+      const hasVideoUrl = videoUrlInput.value.trim() !== '';
+      videoOption.disabled = !hasVideoUrl;
+      if (!hasVideoUrl && videoOption.checked) {
+        noneOption.checked = true;
+      }
+    };
+
+    videoUrlInput.addEventListener('input', syncVideoModeAvailability);
+    syncVideoModeAvailability();
   })();
 </script>
 <?php if (!defined('ADMIN_LAYOUT_EMBEDDED')) include __DIR__ . '/includes/footer.php'; ?>

@@ -450,9 +450,17 @@ switch ($seccion) {
             }
 
             if ($activeTab === 'ventana-inicial') {
-                $popupEnabled = isset($_POST['inicio_popup_activo']) ? '1' : '0';
+                $popupMode = trim((string) ($_POST['inicio_popup_modo'] ?? 'none'));
                 $popupFrequency = trim((string) ($_POST['inicio_popup_frecuencia'] ?? 'per_session'));
                 $popupChannelName = trim((string) ($_POST['inicio_popup_nombre_canal'] ?? 'DanisA Gamer Store'));
+                $popupVideoUrl = store_config_normalize_youtube_url((string) ($_POST['inicio_popup_video_url'] ?? ''));
+                $channelUrl = store_config_normalize_social_url(store_config_get('whatsapp_channel', ''));
+
+                if (!in_array($popupMode, ['none', 'normal', 'video'], true)) {
+                    admin_set_flash('error', 'Selecciona un modo válido para la ventana inicial.');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'ventana-inicial']);
+                }
 
                 if (!in_array($popupFrequency, ['always', 'per_entry', 'per_session'], true)) {
                     admin_set_flash('error', 'Selecciona una frecuencia válida para la ventana inicial.');
@@ -460,15 +468,29 @@ switch ($seccion) {
                     admin_redirect('configuracion', ['tab' => 'ventana-inicial']);
                 }
 
-                if ($popupChannelName === '') {
+                if ($popupMode === 'normal' && $popupChannelName === '') {
                     admin_set_flash('error', 'Debes indicar el nombre del canal para la ventana inicial.');
                     define('ADMIN_CONFIG_POST_HANDLED', true);
                     admin_redirect('configuracion', ['tab' => 'ventana-inicial']);
                 }
 
-                store_config_upsert('inicio_popup_activo', $popupEnabled);
+                if ($popupMode !== 'none' && !store_config_is_valid_social_url($channelUrl)) {
+                    admin_set_flash('error', 'Debes configurar primero un enlace válido en Redes Sociales > Whatsapp Channel para usar cualquier ventana inicial.');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'ventana-inicial']);
+                }
+
+                if ($popupMode === 'video' && $popupVideoUrl === '') {
+                    admin_set_flash('error', 'Debes indicar un enlace válido de YouTube para activar la ventana inicial con video.');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'ventana-inicial']);
+                }
+
+                store_config_upsert('inicio_popup_activo', $popupMode === 'normal' ? '1' : '0');
+                store_config_upsert('inicio_popup_video_activo', $popupMode === 'video' ? '1' : '0');
                 store_config_upsert('inicio_popup_frecuencia', $popupFrequency);
-                store_config_upsert('inicio_popup_nombre_canal', $popupChannelName);
+                store_config_upsert('inicio_popup_nombre_canal', $popupChannelName !== '' ? $popupChannelName : 'DanisA Gamer Store');
+                store_config_upsert('inicio_popup_video_url', $popupVideoUrl);
                 admin_set_flash('success', 'Configuración de la ventana inicial actualizada.');
             }
 
