@@ -2,6 +2,8 @@
   "tenant": {
     "slug": "default",
     "domains": [
+      "virtualgaming.tvirtualshop.com",
+      "www.virtualgaming.tvirtualshop.com",
       "default"
     ]
   },
@@ -10,9 +12,9 @@
   },
   "database": {
     "host": "localhost",
-    "name": "tvirtualgaming",
-    "user": "root",
-    "password": "",
+    "name": "u680460687_virtualgaming",
+    "user": "u680460687_virtualgaming",
+    "password": "*7qp?n*kW",
     "charset": "utf8mb4"
   }
 }
