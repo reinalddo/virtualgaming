@@ -1,6 +1,7 @@
 <?php
 if (session_status() !== PHP_SESSION_ACTIVE) {
-  session_start();
+  require_once __DIR__ . '/includes/tenant.php';
+  tenant_start_session();
 }
 
 require_once __DIR__ . "/includes/db_connect.php";
@@ -625,14 +626,14 @@ $accentMap = [
       <section class="mt-5">
         <div class="d-flex align-items-center justify-content-between">
           <h2 class="fw-bold" style="font-family:'Oxanium',sans-serif;font-size:1.1rem;">Juegos populares</h2>
-          <a href="/populares" class="small fw-semibold text-info text-uppercase">Ver todo</a>
+          <a href="<?= htmlspecialchars(app_path('/populares'), ENT_QUOTES, 'UTF-8') ?>" class="small fw-semibold text-info text-uppercase">Ver todo</a>
         </div>
         <div class="mt-4 row row-cols-2 row-cols-sm-3 row-cols-lg-4 g-3">
           <?php foreach ($popularGames as $game): ?>
             <div class="col">
-              <a href="/juego/<?= urlencode($game['id']) ?>" class="d-block rounded-4 border bg-dark p-2 h-100 text-decoration-none">
+              <a href="<?= htmlspecialchars(app_path('/juego/' . urlencode((string) $game['id'])), ENT_QUOTES, 'UTF-8') ?>" class="d-block rounded-4 border bg-dark p-2 h-100 text-decoration-none">
                 <div class="position-relative overflow-hidden rounded-3" style="aspect-ratio:1/1;">
-                  <img src="/<?= htmlspecialchars($game['imagen'] ?? '', ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="img-fluid w-100 h-100 object-fit-cover" style="aspect-ratio:1/1;" />
+                  <img src="<?= htmlspecialchars(app_path('/' . ltrim((string) ($game['imagen'] ?? ''), '/')), ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="img-fluid w-100 h-100 object-fit-cover" style="aspect-ratio:1/1;" />
                   <span title="Popular" class="position-absolute top-0 end-0 text-success fs-4" style="text-shadow:0 0 4px #000;">★</span>
                 </div>
                 <div class="mt-2">
@@ -641,7 +642,7 @@ $accentMap = [
                   </p>
                   <p class="store-game-price-prefix small mb-0">
                     <?php if (!empty($game['imagen_paquete'])): ?>
-                      <img src="/<?= htmlspecialchars($game['imagen_paquete'], ENT_QUOTES, 'UTF-8') ?>" alt="Paquete" class="img-fluid rounded me-1 align-middle" style="height:20px;width:20px;display:inline-block;" />
+                      <img src="<?= htmlspecialchars(app_path('/' . ltrim((string) $game['imagen_paquete'], '/')), ENT_QUOTES, 'UTF-8') ?>" alt="Paquete" class="img-fluid rounded me-1 align-middle" style="height:20px;width:20px;display:inline-block;" />
                     <?php endif; ?>
                     <?php if (!empty($game['min_price_label'])): ?>
                       Desde <span class="store-game-price"><?= htmlspecialchars($game['min_price_label'], ENT_QUOTES, 'UTF-8') ?></span>
@@ -675,14 +676,14 @@ $accentMap = [
       <section class="mt-5">
         <div class="d-flex align-items-center justify-content-between">
           <h2 class="fw-bold" style="font-family:'Oxanium',sans-serif;font-size:1.1rem;">Más juegos</h2>
-          <a href="/juegos" class="small fw-semibold text-info text-uppercase">Explorar</a>
+          <a href="<?= htmlspecialchars(app_path('/juegos'), ENT_QUOTES, 'UTF-8') ?>" class="small fw-semibold text-info text-uppercase">Explorar</a>
         </div>
         <div class="mt-4 row row-cols-2 row-cols-sm-3 row-cols-lg-4 g-3">
           <?php foreach ($moreGames as $game): ?>
             <div class="col">
-              <a href="/juego/<?= urlencode($game['id']) ?>" class="d-block rounded-4 border bg-dark p-2 h-100 text-decoration-none">
+              <a href="<?= htmlspecialchars(app_path('/juego/' . urlencode((string) $game['id'])), ENT_QUOTES, 'UTF-8') ?>" class="d-block rounded-4 border bg-dark p-2 h-100 text-decoration-none">
                 <div class="position-relative overflow-hidden rounded-3" style="aspect-ratio:1/1;">
-                  <img src="/<?= htmlspecialchars($game['imagen'] ?? '', ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="img-fluid w-100 h-100 object-fit-cover" style="aspect-ratio:1/1;" />
+                  <img src="<?= htmlspecialchars(app_path('/' . ltrim((string) ($game['imagen'] ?? ''), '/')), ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="img-fluid w-100 h-100 object-fit-cover" style="aspect-ratio:1/1;" />
                   <?php if (!empty($game['popular'])): ?>
                     <span title="Popular" class="position-absolute top-0 end-0 text-success fs-4" style="text-shadow:0 0 4px #000;">★</span>
                   <?php endif; ?>
@@ -693,7 +694,7 @@ $accentMap = [
                   </p>
                   <p class="store-game-price-prefix small mb-0">
                     <?php if (!empty($game['imagen_paquete'])): ?>
-                      <img src="/<?= htmlspecialchars($game['imagen_paquete'], ENT_QUOTES, 'UTF-8') ?>" alt="Paquete" class="img-fluid rounded me-1 align-middle" style="height:20px;width:20px;display:inline-block;" />
+                      <img src="<?= htmlspecialchars(app_path('/' . ltrim((string) $game['imagen_paquete'], '/')), ENT_QUOTES, 'UTF-8') ?>" alt="Paquete" class="img-fluid rounded me-1 align-middle" style="height:20px;width:20px;display:inline-block;" />
                     <?php endif; ?>
                     <?php if (!empty($game['min_price_label'])): ?>
                       Desde <span class="store-game-price"><?= htmlspecialchars($game['min_price_label'], ENT_QUOTES, 'UTF-8') ?></span>

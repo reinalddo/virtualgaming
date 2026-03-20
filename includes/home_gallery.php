@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/tenant.php';
+
 function home_gallery_db(): mysqli {
     global $mysqli;
 
@@ -101,7 +103,7 @@ function home_gallery_featured(): ?array {
 }
 
 function home_gallery_is_managed_image_path(string $relativePath): bool {
-    return str_starts_with($relativePath, '/assets/img/gallery/');
+    return tenant_is_managed_path($relativePath, 'gallery');
 }
 
 function home_gallery_delete_image_file(string $relativePath): void {
@@ -109,8 +111,8 @@ function home_gallery_delete_image_file(string $relativePath): void {
         return;
     }
 
-    $absolutePath = dirname(__DIR__) . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
-    if (is_file($absolutePath)) {
+    $absolutePath = tenant_resolve_public_path($relativePath);
+    if ($absolutePath !== null && is_file($absolutePath)) {
         @unlink($absolutePath);
     }
 }
@@ -150,7 +152,7 @@ function home_gallery_store_image_upload(array $file): array {
         return ['success' => false, 'message' => 'Formato de imagen no permitido. Usa JPG, PNG, WEBP o GIF.'];
     }
 
-    $targetDir = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'img' . DIRECTORY_SEPARATOR . 'gallery';
+    $targetDir = tenant_upload_absolute_dir('gallery');
     if (!is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
         return ['success' => false, 'message' => 'No se pudo crear la carpeta de galería.'];
     }
@@ -162,7 +164,7 @@ function home_gallery_store_image_upload(array $file): array {
         return ['success' => false, 'message' => 'No se pudo guardar la imagen de galería en el servidor.'];
     }
 
-    return ['success' => true, 'path' => '/assets/img/gallery/' . $fileName];
+    return ['success' => true, 'path' => tenant_upload_public_path('gallery', $fileName, true)];
 }
 
 function home_gallery_validate_form(array $input, array $files, ?array $existing = null): array {

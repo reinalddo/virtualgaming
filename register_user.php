@@ -1,10 +1,9 @@
 <?php
 header('Content-Type: application/json');
 
-// Detectar el tenant según el dominio
-$host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-$tenant = preg_replace('/[^a-zA-Z0-9_\-]/', '', strtolower($host));
-$usersFile = __DIR__ . "/tenants/{$tenant}/users.json";
+require_once __DIR__ . '/includes/tenant.php';
+
+$tenant = resolve_tenant_slug();
 
 // Recibe los datos del POST
 $data = json_decode(file_get_contents('php://input'), true);

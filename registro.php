@@ -37,7 +37,7 @@ $users[] = $user;
 auth_save_users($tenantSlug, $users);
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
-  session_start();
+  tenant_start_session();
 }
 
 $_SESSION["auth_user"] = [

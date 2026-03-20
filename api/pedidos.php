@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/../includes/tenant.php';
+tenant_start_session();
 if (ob_get_level() === 0) {
     ob_start();
 }
@@ -1866,7 +1867,7 @@ if ($action === 'create') {
         }
         $cupon = normalize_coupon_code($cuponInput);
     }
-    $tenant_slug = sanitize_str($_POST['tenant_slug'] ?? null, 80);
+    $tenant_slug = resolve_tenant_slug();
 
     $missing = [];
     if (!$game_name && $game_id) {

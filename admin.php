@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/includes/tenant.php';
+tenant_start_session();
 
 // Verificar si el usuario es admin
 if (!isset($_SESSION['auth_user']) || ($_SESSION['auth_user']['rol'] ?? '') !== 'admin') {
@@ -31,7 +32,7 @@ function admin_set_flash(string $type, string $message): void {
 }
 
 function admin_redirect(string $section, array $query = []): void {
-    $target = '/admin/' . $section;
+    $target = app_path('/admin/' . $section);
     if (!empty($query)) {
         $target .= '?' . http_build_query($query);
     }

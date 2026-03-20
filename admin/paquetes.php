@@ -2,6 +2,39 @@
 // admin/paquetes.php - Gestión de paquetes de un juego
 
 require_once '../includes/db_connect.php';
+require_once '../includes/tenant.php';
+
+function admin_package_store_upload(array $file): ?string {
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        return null;
+    }
+
+    $ext = strtolower(pathinfo((string) ($file['name'] ?? ''), PATHINFO_EXTENSION));
+    $permitidas = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    if (!in_array($ext, $permitidas, true)) {
+        return null;
+    }
+
+    $dir = tenant_upload_absolute_dir('paquetes');
+    if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+        return null;
+    }
+
+    $fileName = uniqid('paquete_', true) . '.' . $ext;
+    $destination = $dir . DIRECTORY_SEPARATOR . $fileName;
+    if (!move_uploaded_file((string) ($file['tmp_name'] ?? ''), $destination)) {
+        return null;
+    }
+
+    return tenant_upload_public_path('paquetes', $fileName, false);
+}
+
+function admin_package_delete_upload(?string $path): void {
+    $absolutePath = tenant_resolve_public_path((string) $path);
+    if ($absolutePath !== null && is_file($absolutePath)) {
+        @unlink($absolutePath);
+    }
+}
 
 function ensure_juego_paquetes_monto_ff_column(mysqli $mysqli): void {
     $result = $mysqli->query("SHOW COLUMNS FROM juego_paquetes LIKE 'monto_ff'");
@@ -87,8 +120,8 @@ if (isset($_GET['eliminar'])) {
     $stmt->bind_param('ii', $del_id, $juego_id);
     $stmt->execute();
     // Borrar la imagen física si existe y no está vacía
-    if ($img_path && file_exists('../' . $img_path)) {
-        unlink('../' . $img_path);
+    if ($img_path) {
+        admin_package_delete_upload((string) $img_path);
     }
     header('Location: /admin/paquetes/' . $juego_id);
     exit;
@@ -103,20 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_paquete_id'])) {
     $edit_cantidad = intval($_POST['edit_cantidad'] ?? 0);
     $edit_precio = floatval($_POST['edit_precio'] ?? 0);
     $edit_activo = isset($_POST['edit_activo']) ? 1 : 0;
-    $edit_imagen_icono = null;
-    if (isset($_FILES['edit_imagen_icono']) && $_FILES['edit_imagen_icono']['error'] === UPLOAD_ERR_OK) {
-        $ext = strtolower(pathinfo($_FILES['edit_imagen_icono']['name'], PATHINFO_EXTENSION));
-        $permitidas = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-        if (in_array($ext, $permitidas)) {
-            $dir = '../assets/img/paquetes/';
-            if (!is_dir($dir)) mkdir($dir, 0777, true);
-            $nombre_archivo = uniqid('paquete_') . '.' . $ext;
-            $destino = $dir . $nombre_archivo;
-            if (move_uploaded_file($_FILES['edit_imagen_icono']['tmp_name'], $destino)) {
-                $edit_imagen_icono = 'assets/img/paquetes/' . $nombre_archivo;
-            }
-        }
-    }
+    $edit_imagen_icono = admin_package_store_upload($_FILES['edit_imagen_icono'] ?? []);
     if ($edit_imagen_icono) {
         $stmt = $mysqli->prepare("UPDATE juego_paquetes SET nombre=?, clave=?, monto_ff=?, cantidad=?, precio=?, imagen_icono=?, activo=? WHERE id=?");
         $stmt->bind_param('sssidsii', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_cantidad, $edit_precio, $edit_imagen_icono, $edit_activo, $edit_id);
@@ -137,20 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['cla
     $cantidad = intval($_POST['cantidad']);
     $precio = floatval($_POST['precio']);
     $activo = isset($_POST['activo']) ? 1 : 0;
-    $imagen_icono = null;
-    if (isset($_FILES['imagen_icono']) && $_FILES['imagen_icono']['error'] === UPLOAD_ERR_OK) {
-        $ext = strtolower(pathinfo($_FILES['imagen_icono']['name'], PATHINFO_EXTENSION));
-        $permitidas = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-        if (in_array($ext, $permitidas)) {
-            $dir = '../assets/img/paquetes/';
-            if (!is_dir($dir)) mkdir($dir, 0777, true);
-            $nombre_archivo = uniqid('paquete_') . '.' . $ext;
-            $destino = $dir . $nombre_archivo;
-            if (move_uploaded_file($_FILES['imagen_icono']['tmp_name'], $destino)) {
-                $imagen_icono = 'assets/img/paquetes/' . $nombre_archivo;
-            }
-        }
-    }
+    $imagen_icono = admin_package_store_upload($_FILES['imagen_icono'] ?? []);
     $stmt = $mysqli->prepare("INSERT INTO juego_paquetes (juego_id, nombre, clave, monto_ff, cantidad, precio, imagen_icono, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
     $stmt->bind_param('isssidsi', $juego_id, $nombre, $clave, $monto_ff, $cantidad, $precio, $imagen_icono, $activo);
     $stmt->execute();

@@ -1,5 +1,9 @@
 <?php
+require_once __DIR__ . '/tenant.php';
 require_once __DIR__ . '/store_config.php';
+
+$accountApiUrl = app_path('/api/account.php');
+$accountApiUrlJs = json_encode($accountApiUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
 $facebookUrl = store_config_normalize_social_url(store_config_get('facebook', ''));
 $instagramUrl = store_config_normalize_social_url(store_config_get('instagram', ''));
@@ -220,7 +224,7 @@ $menuScript = <<<'SCRIPT'
     userOrdersLoading.textContent = "Cargando pedidos...";
 
     try {
-      const response = await fetch("/api/account.php?action=orders", {
+      const response = await fetch((window.__TVG_API_ACCOUNT || __ACCOUNT_API_URL__) + "?action=orders", {
         credentials: "same-origin",
         headers: { "Accept": "application/json" },
       });
@@ -420,7 +424,7 @@ $menuScript = <<<'SCRIPT'
       }
 
       try {
-        const response = await fetch("/api/account.php", {
+        const response = await fetch(window.__TVG_API_ACCOUNT || __ACCOUNT_API_URL__, {
           method: "POST",
           body: formData,
           credentials: "same-origin",
@@ -445,6 +449,7 @@ $menuScript = <<<'SCRIPT'
   }
 </script>
 SCRIPT;
+$menuScript = str_replace('__ACCOUNT_API_URL__', $accountApiUrlJs, $menuScript);
 ?>
     </div>
   </div>

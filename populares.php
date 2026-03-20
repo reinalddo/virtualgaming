@@ -17,7 +17,7 @@ $popularGames = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
       <p class="text-xs uppercase tracking-[0.35em] text-cyan-300/70">seleccionados</p>
       <h2 class="game-section-title">Juegos populares</h2>
     </div>
-    <a href="/juegos" class="text-xs font-semibold uppercase tracking-wide text-cyan-300">Ver todo</a>
+    <a href="<?= htmlspecialchars(app_path('/juegos'), ENT_QUOTES, 'UTF-8') ?>" class="text-xs font-semibold uppercase tracking-wide text-cyan-300">Ver todo</a>
   </div>
   <div class="mt-4 row row-cols-2 row-cols-sm-3 row-cols-lg-4 g-3">
     <?php foreach ($popularGames as $game): ?>
@@ -27,9 +27,9 @@ $popularGames = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
         if ($paqCount == 0) continue;
       ?>
       <div class="col">
-        <a href="/juego/<?= urlencode($game['id']) ?>" class="d-block rounded-4 border bg-dark p-2 h-100 text-decoration-none">
+        <a href="<?= htmlspecialchars(app_path('/juego/' . urlencode((string) $game['id'])), ENT_QUOTES, 'UTF-8') ?>" class="d-block rounded-4 border bg-dark p-2 h-100 text-decoration-none">
         <div class="position-relative overflow-hidden rounded-3" style="aspect-ratio:1/1;">
-          <img src="/<?= htmlspecialchars($game['imagen'] ?? '', ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="img-fluid w-100 h-100 object-fit-cover" style="aspect-ratio:1/1;" />
+          <img src="<?= htmlspecialchars(app_path('/' . ltrim((string) ($game['imagen'] ?? ''), '/')), ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($game['nombre'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="img-fluid w-100 h-100 object-fit-cover" style="aspect-ratio:1/1;" />
           <span title="Popular" class="position-absolute top-0 end-0 text-success fs-4" style="text-shadow:0 0 4px #000;">★</span>
         </div>
         <div class="mt-2">
@@ -38,7 +38,7 @@ $popularGames = $res ? $res->fetch_all(MYSQLI_ASSOC) : [];
           </p>
           <p class="small text-secondary mb-0">
             <?php if (!empty($game['imagen_paquete'])): ?>
-              <img src="/<?= htmlspecialchars($game['imagen_paquete'], ENT_QUOTES, 'UTF-8') ?>" alt="Paquete" class="img-fluid rounded me-1 align-middle" style="height:20px;width:20px;display:inline-block;" />
+              <img src="<?= htmlspecialchars(app_path('/' . ltrim((string) $game['imagen_paquete'], '/')), ENT_QUOTES, 'UTF-8') ?>" alt="Paquete" class="img-fluid rounded me-1 align-middle" style="height:20px;width:20px;display:inline-block;" />
             <?php endif; ?>
             <?php
               $min_precio_bs = null;

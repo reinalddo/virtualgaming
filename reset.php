@@ -29,7 +29,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   }
 
   auth_set_flash("success", "Si el correo existe, enviamos instrucciones para restablecer la contraseña.");
-  header("Location: /reset.php");
+  header("Location: " . app_path('/reset.php'));
   exit;
 }
 
@@ -43,7 +43,7 @@ include __DIR__ . "/includes/header.php";
             <h2 class="mt-2 font-oxanium text-2xl font-semibold">Restablecer contraseña</h2>
             <p class="mt-1 text-xs text-slate-400">Ingresa tu correo para recibir instrucciones.</p>
           </div>
-          <form action="/reset.php" method="post" class="mt-4 space-y-4" novalidate>
+          <form action="<?= htmlspecialchars(app_path('/reset.php'), ENT_QUOTES, 'UTF-8') ?>" method="post" class="mt-4 space-y-4" novalidate>
             <label class="block text-xs text-slate-400">Correo electrónico</label>
             <input type="email" name="email" autocomplete="email" class="w-full rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400/70" placeholder="nombre@correo.com" />
             <button type="submit" class="w-full rounded-xl border border-sky-400/30 bg-sky-500/80 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-sky-400">Enviar instrucciones</button>

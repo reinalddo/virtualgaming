@@ -1,8 +1,9 @@
 <?php
+require_once __DIR__ . "/includes/tenant.php";
 require_once __DIR__ . "/includes/db_connect.php";
 
 if ($_SERVER["REQUEST_METHOD"] !== "POST") {
-  header("Location: /");
+  header("Location: " . app_path('/'));
   exit;
 }
 
@@ -10,9 +11,9 @@ $email = strtolower(trim($_POST["email"] ?? ""));
 $password = (string) ($_POST["password"] ?? "");
 
 if ($email === "" || $password === "") {
-  session_start();
+  tenant_start_session();
   $_SESSION["auth_flash"] = ["type" => "error", "message" => "Completa el correo y la contraseña."];
-  header("Location: /");
+  header("Location: " . app_path('/'));
   exit;
 }
 
@@ -24,13 +25,13 @@ $user = $res ? $res->fetch_assoc() : null;
 $stmt->close();
 
 if ($user === null || empty($user["password"]) || !password_verify($password, $user["password"])) {
-  session_start();
+  tenant_start_session();
   $_SESSION["auth_flash"] = ["type" => "error", "message" => "Credenciales inválidas."];
-  header("Location: /");
+  header("Location: " . app_path('/'));
   exit;
 }
 
-session_start();
+tenant_start_session();
 $_SESSION["auth_user"] = [
   "id" => $user["id"],
   "email" => $user["email"],
@@ -41,8 +42,8 @@ $_SESSION["auth_user"] = [
 $_SESSION["auth_flash"] = ["type" => "success", "message" => "Inicio de sesión exitoso."];
 
 if (($user["rol"] ?? "") === "admin") {
-  header("Location: /admin/dashboard");
+  header("Location: " . app_path('/admin/dashboard'));
   exit;
 }
-header("Location: /");
+header("Location: " . app_path('/'));
 exit;

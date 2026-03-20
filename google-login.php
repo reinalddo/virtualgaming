@@ -1,7 +1,8 @@
 <?php
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
-    session_start();
+    require_once __DIR__ . '/includes/tenant.php';
+    tenant_start_session();
 }
 
 require_once __DIR__ . '/includes/store_config.php';

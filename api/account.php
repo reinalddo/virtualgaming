@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/../includes/tenant.php';
+tenant_start_session();
 header('Content-Type: application/json');
 
 require_once __DIR__ . '/../includes/db_connect.php';

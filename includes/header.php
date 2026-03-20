@@ -1,6 +1,7 @@
 <?php
+require_once __DIR__ . '/tenant.php';
 if (session_status() !== PHP_SESSION_ACTIVE) {
-  session_start();
+  tenant_start_session();
 }
 
 $scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/'));
@@ -8,7 +9,6 @@ if ($scriptDir === '/' || $scriptDir === '.') {
   $scriptDir = '';
 }
 require_once __DIR__ . '/store_config.php';
-require_once __DIR__ . '/tenant.php';
 require_once __DIR__ . '/google_oauth.php';
 
 if (!isset($brandPrefix)) {
@@ -62,6 +62,19 @@ if (!function_exists('asset_version')) {
 }
 
 $tenantSlugAttr = resolve_tenant_slug();
+$homeUrl = app_path('/');
+$popularUrl = app_path('/populares');
+$gamesUrl = app_path('/juegos');
+$logoutUrl = app_path('/logout');
+$loginUrl = app_path('/login.php');
+$resetUrl = app_path('/reset.php');
+$adminDashboardUrl = app_path('/admin/dashboard');
+$adminGamesUrl = app_path('/admin/juegos');
+$adminCurrenciesUrl = app_path('/admin/monedas');
+$adminOrdersUrl = app_path('/admin/pedidos');
+$adminUsersUrl = app_path('/admin/usuarios');
+$adminCouponsUrl = app_path('/admin/cupones');
+$adminConfigUrl = app_path('/admin/configuracion');
 $mainStylesPath = __DIR__ . '/../assets/css/estilos.css';
 $mainStylesVersion = asset_version($mainStylesPath);
 $themeVariablesCss = store_theme_css_variables();
@@ -136,6 +149,9 @@ $googleAuthLoginUrl = $googleAuthEnabled ? google_oauth_login_url() : '';
     }
   </style>
   <script>
+    window.__TVG_BASE_PATH = <?php echo json_encode(app_base_path(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
+    window.__TVG_API_PEDIDOS = <?php echo json_encode(app_path('/api/pedidos.php'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
+    window.__TVG_API_ACCOUNT = <?php echo json_encode(app_path('/api/account.php'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
     document.addEventListener('DOMContentLoaded', function() {
       var menuToggle = document.getElementById('menu-toggle');
       var menuPanel = document.getElementById('menu-panel');
@@ -216,7 +232,7 @@ $googleAuthLoginUrl = $googleAuthEnabled ? google_oauth_login_url() : '';
               </div>
               <button type="button" class="btn btn-admin w-100 rounded-3 border mb-2 fw-semibold" data-user-open="orders">Ver Pedidos</button>
               <button type="button" class="btn btn-outline-info w-100 rounded-3 border mb-2 fw-semibold" data-user-open="profile">Datos Usuario</button>
-              <a href="/logout" class="btn btn-danger w-100 rounded-3 border fw-semibold">Cerrar sesión</a>
+              <a href="<?php echo htmlspecialchars($logoutUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-danger w-100 rounded-3 border fw-semibold">Cerrar sesión</a>
             </div>
           <?php endif; ?>
         </div>
@@ -251,22 +267,22 @@ $googleAuthLoginUrl = $googleAuthEnabled ? google_oauth_login_url() : '';
           <p class="small text-uppercase text-secondary mb-0" style="letter-spacing:0.35em;">Menu</p>
         </div>
         <div class="mt-4 d-grid gap-2">
-          <a href="/" class="btn btn-dark border rounded-3 px-4 py-3 fw-semibold">Inicio</a>
-          <a href="/populares" class="btn btn-dark border rounded-3 px-4 py-3 fw-semibold">Juegos populares</a>
-          <a href="/juegos" class="btn btn-dark border rounded-3 px-4 py-3 fw-semibold">Juegos</a>
+          <a href="<?php echo htmlspecialchars($homeUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-dark border rounded-3 px-4 py-3 fw-semibold">Inicio</a>
+          <a href="<?php echo htmlspecialchars($popularUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-dark border rounded-3 px-4 py-3 fw-semibold">Juegos populares</a>
+          <a href="<?php echo htmlspecialchars($gamesUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-dark border rounded-3 px-4 py-3 fw-semibold">Juegos</a>
           <?php if ($authUser): ?>
             <?php if ($authUserRole === 'admin'): ?>
               <hr class="my-2 border-slate-700">
-              <a href="/admin/dashboard" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Dashboard</a>
-              <a href="/admin/juegos" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Juegos</a>
-              <a href="/admin/monedas" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Monedas</a>
-              <a href="/admin/pedidos" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Pedidos</a>
-              <a href="/admin/usuarios" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Usuarios</a>
-              <a href="/admin/cupones" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Cupones</a>
-              <a href="/admin/configuracion" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Configuración</a>
-              <a href="/admin/dashboard" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Ir al Admin</a>
+              <a href="<?php echo htmlspecialchars($adminDashboardUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Dashboard</a>
+              <a href="<?php echo htmlspecialchars($adminGamesUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Juegos</a>
+              <a href="<?php echo htmlspecialchars($adminCurrenciesUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Monedas</a>
+              <a href="<?php echo htmlspecialchars($adminOrdersUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Pedidos</a>
+              <a href="<?php echo htmlspecialchars($adminUsersUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Usuarios</a>
+              <a href="<?php echo htmlspecialchars($adminCouponsUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Cupones</a>
+              <a href="<?php echo htmlspecialchars($adminConfigUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Configuración</a>
+              <a href="<?php echo htmlspecialchars($adminDashboardUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Ir al Admin</a>
             <?php endif; ?>
-            <a href="/logout" class="btn btn-danger border rounded-3 px-4 py-3 fw-semibold">Cerrar sesión</a>
+            <a href="<?php echo htmlspecialchars($logoutUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-danger border rounded-3 px-4 py-3 fw-semibold">Cerrar sesión</a>
           <?php endif; ?>
         </div>
       </nav>
@@ -285,7 +301,7 @@ $googleAuthLoginUrl = $googleAuthEnabled ? google_oauth_login_url() : '';
               <p class="small text-uppercase text-neon mb-0" style="letter-spacing:0.35em;">Cuenta de usuario</p>
               <h2 class="mt-2 text-neon fw-bold" style="font-family:'Oxanium',sans-serif;font-size:2rem;text-shadow:0 0 8px var(--theme-primary);">Iniciar sesión</h2>
             </div>
-            <form action="/login.php" method="post" class="d-grid gap-4" novalidate>
+            <form action="<?php echo htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8'); ?>" method="post" class="d-grid gap-4" novalidate>
               <div class="d-grid gap-3">
                 <label class="form-label small text-neon">Correo electrónico</label>
                 <input type="email" name="email" autocomplete="email" class="form-control rounded-3 bg-dark text-neon border border-info" placeholder="nombre@correo.com" />
@@ -305,7 +321,7 @@ $googleAuthLoginUrl = $googleAuthEnabled ? google_oauth_login_url() : '';
                 </div>
               </div>
               <button type="submit" class="btn btn-info neon-btn-info w-100 rounded-3 px-4 py-2 fw-bold text-uppercase shadow">Iniciar sesión</button>
-              <a href="/reset.php" class="d-block w-100 text-center small fw-bold text-neon">¿Has olvidado la contraseña?</a>
+              <a href="<?php echo htmlspecialchars($resetUrl, ENT_QUOTES, 'UTF-8'); ?>" class="d-block w-100 text-center small fw-bold text-neon">¿Has olvidado la contraseña?</a>
             </form>
             <?php if ($googleAuthEnabled): ?>
               <div class="d-grid gap-3">

@@ -1,7 +1,11 @@
 {
   "tenant": {
-    "slug": "tvirtualgaming",
+    "slug": "virtualgaming",
     "domains": [
+      "virtualgaming.tvirtualshop.com",
+      "virtualgaming",
+      "localhost",
+      "127.0.0.1",
       "tvirtualgaming.tvirtualshop.com"
     ]
   },
@@ -10,8 +14,8 @@
   },
   "database": {
     "host": "localhost",
-    "name": "tvirtualgaming_prod",
-    "user": "tvirtualgaming_user",
+    "name": "tvirtualgaming",
+    "user": "root",
     "password": "",
     "charset": "utf8mb4"
   }

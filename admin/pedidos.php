@@ -1,7 +1,8 @@
 <?php
-session_start();
+require_once __DIR__ . '/../includes/tenant.php';
+tenant_start_session();
 if (!isset($_SESSION['auth_user']) || ($_SESSION['auth_user']['rol'] ?? '') !== 'admin') {
-    header('Location: /login.php');
+  header('Location: ' . app_path('/login.php'));
     exit();
 }
 
@@ -546,7 +547,7 @@ function order_status_button_style(string $status, bool $isActive = false): stri
     fd.append('order_id', orderId);
     fd.append('estado', newStatus);
 
-    const res = await fetch('/api/pedidos.php', { method: 'POST', body: fd });
+    const res = await fetch(window.__TVG_API_PEDIDOS || '/api/pedidos.php', { method: 'POST', body: fd });
     const txt = await res.text();
     let data;
     try {

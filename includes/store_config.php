@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/tenant.php';
+
 function store_theme_definitions(): array {
     return [
         'theme_bg_main' => [
@@ -776,7 +778,7 @@ function store_config_delete(string $key): bool {
 }
 
 function store_config_is_managed_logo_path(string $relativePath): bool {
-    return str_starts_with($relativePath, '/assets/img/store/');
+    return tenant_is_managed_path($relativePath, 'store');
 }
 
 function store_config_delete_logo_file(string $relativePath): void {
@@ -784,8 +786,8 @@ function store_config_delete_logo_file(string $relativePath): void {
         return;
     }
 
-    $absolutePath = dirname(__DIR__) . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
-    if (is_file($absolutePath)) {
+    $absolutePath = tenant_resolve_public_path($relativePath);
+    if ($absolutePath !== null && is_file($absolutePath)) {
         @unlink($absolutePath);
     }
 }
@@ -825,7 +827,7 @@ function store_config_store_logo_upload(array $file): array {
         return ['success' => false, 'message' => 'Formato de logo no permitido. Usa JPG, PNG, WEBP o GIF.'];
     }
 
-    $targetDir = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'img' . DIRECTORY_SEPARATOR . 'store';
+    $targetDir = tenant_upload_absolute_dir('store');
     if (!is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
         return ['success' => false, 'message' => 'No se pudo crear la carpeta del logo.'];
     }
@@ -837,5 +839,5 @@ function store_config_store_logo_upload(array $file): array {
         return ['success' => false, 'message' => 'No se pudo guardar el logo en el servidor.'];
     }
 
-    return ['success' => true, 'path' => '/assets/img/store/' . $fileName];
+    return ['success' => true, 'path' => tenant_upload_public_path('store', $fileName, true)];
 }

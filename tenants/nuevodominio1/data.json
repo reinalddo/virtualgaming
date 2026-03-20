@@ -1,8 +1,9 @@
 {
   "tenant": {
-    "slug": "tvirtualgaming",
+    "slug": "nuevodominio1",
     "domains": [
-      "tvirtualgaming.tvirtualshop.com"
+      "nuevodominio1.com",
+      "www.nuevodominio1.com"
     ]
   },
   "brand": {
@@ -10,8 +11,8 @@
   },
   "database": {
     "host": "localhost",
-    "name": "tvirtualgaming_prod",
-    "user": "tvirtualgaming_user",
+    "name": "tvirtualgaming_nuevodominio1",
+    "user": "root",
     "password": "",
     "charset": "utf8mb4"
   }

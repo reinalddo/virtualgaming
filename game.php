@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . "/includes/tenant.php";
 require_once __DIR__ . "/includes/db_connect.php";
 require_once __DIR__ . "/includes/store_config.php";
 require_once __DIR__ . "/includes/currency.php";
@@ -7,7 +8,7 @@ currency_ensure_schema();
 $paymentSupportWhatsappBase = store_config_whatsapp_link(store_config_get('whatsapp', ''));
 $loggedUserEmail = '';
 if (session_status() !== PHP_SESSION_ACTIVE) {
-  session_start();
+  tenant_start_session();
 }
 if (!empty($_SESSION['auth_user']['email'])) {
   $loggedUserEmail = (string) $_SESSION['auth_user']['email'];
@@ -50,7 +51,7 @@ include __DIR__ . "/includes/header.php";
   <div class="row align-items-center">
     <div class="col-auto">
       <div class="rounded-4 border border-info bg-dark position-relative overflow-hidden" style="width:64px; height:64px;">
-        <img src="/<?= htmlspecialchars($game["imagen"] ?? '', ENT_QUOTES, "UTF-8") ?>" alt="<?= htmlspecialchars($game["nombre"] ?? '', ENT_QUOTES, "UTF-8") ?>" class="w-100 h-100 object-fit-cover" />
+        <img src="<?= htmlspecialchars(app_path('/' . ltrim((string) ($game["imagen"] ?? ''), '/')), ENT_QUOTES, "UTF-8") ?>" alt="<?= htmlspecialchars($game["nombre"] ?? '', ENT_QUOTES, "UTF-8") ?>" class="w-100 h-100 object-fit-cover" />
         <?php if (!empty($game['popular'])): ?>
           <span title="Popular" class="position-absolute top-0 end-0 text-success fs-4" style="right:8px;top:8px;">★</span>
         <?php endif; ?>
@@ -135,7 +136,7 @@ include __DIR__ . "/includes/header.php";
             ?>
             <div class="pack-card-media">
               <?php if ($img_paquete): ?>
-                <img src="/<?= htmlspecialchars($img_paquete, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?>" class="pack-card-image" />
+                <img src="<?= htmlspecialchars(app_path('/' . ltrim((string) $img_paquete, '/')), ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?>" class="pack-card-image" />
               <?php else: ?>
                 <span class="pack-card-placeholder">PK</span>
               <?php endif; ?>
@@ -1113,7 +1114,7 @@ include __DIR__ . "/includes/header.php";
     setPaymentFormDisabled(true);
     setPaymentAlert('La orden expiró. Estamos cancelando el pedido y notificando por correo.', 'danger');
     try {
-      const response = await fetch('/api/pedidos.php', {
+      const response = await fetch(window.__TVG_API_PEDIDOS || '/api/pedidos.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: `action=expire_order&order_id=${encodeURIComponent(activePaymentOrder.orderId)}`
@@ -1299,7 +1300,7 @@ include __DIR__ . "/includes/header.php";
                     return;
                   }
                   paymentCancelConfirmButton.disabled = true;
-                  fetch('/api/pedidos.php', {
+                  fetch(window.__TVG_API_PEDIDOS || '/api/pedidos.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: `action=cancel_order&order_id=${encodeURIComponent(activePaymentOrder.orderId)}`
@@ -1359,7 +1360,7 @@ include __DIR__ . "/includes/header.php";
                   setPaymentAlert('', 'info');
                   setLoadingModalContent('Enviando orden...', 'Estamos registrando tu comprobante y procesando la orden según la moneda del pedido. No cierres esta ventana.');
                   setOverlayVisible(loadingModal, true);
-                  fetch('/api/pedidos.php', {
+                  fetch(window.__TVG_API_PEDIDOS || '/api/pedidos.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: [
@@ -1625,7 +1626,7 @@ include __DIR__ . "/includes/header.php";
                 btn.disabled = true;
                 setLoadingModalContent('Procesando pedido...', 'Estamos registrando tu pedido para abrir el formulario de pago.');
                 setOverlayVisible(loadingModal, true);
-                fetch('/api/pedidos.php', {
+                fetch(window.__TVG_API_PEDIDOS || '/api/pedidos.php', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                   body: Object.keys(pedidoData).map(k => `${encodeURIComponent(k)}=${encodeURIComponent(pedidoData[k])}`).join('&')

@@ -1,5 +1,6 @@
 <?php
 
+require_once __DIR__ . '/tenant.php';
 require_once __DIR__ . '/store_config.php';
 
 function google_oauth_base_url(): string {
@@ -37,7 +38,7 @@ function google_oauth_is_configured(): bool {
 
 function google_oauth_generate_state(): string {
     if (session_status() !== PHP_SESSION_ACTIVE) {
-        session_start();
+        tenant_start_session();
     }
 
     $state = bin2hex(random_bytes(16));
@@ -47,7 +48,7 @@ function google_oauth_generate_state(): string {
 
 function google_oauth_validate_state(?string $state): bool {
     if (session_status() !== PHP_SESSION_ACTIVE) {
-        session_start();
+        tenant_start_session();
     }
 
     $expected = (string) ($_SESSION['google_oauth_state'] ?? '');

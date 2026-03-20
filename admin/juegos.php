@@ -1,6 +1,39 @@
 <?php
 // admin/juegos.php - Gestión de juegos y características
 require_once '../includes/db_connect.php';
+require_once '../includes/tenant.php';
+
+function admin_game_store_upload(array $file, string $prefix): ?string {
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        return null;
+    }
+
+    $ext = strtolower(pathinfo((string) ($file['name'] ?? ''), PATHINFO_EXTENSION));
+    $permitidas = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    if (!in_array($ext, $permitidas, true)) {
+        return null;
+    }
+
+    $dir = tenant_upload_absolute_dir('juegos');
+    if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+        return null;
+    }
+
+    $fileName = uniqid($prefix, true) . '.' . $ext;
+    $destination = $dir . DIRECTORY_SEPARATOR . $fileName;
+    if (!move_uploaded_file((string) ($file['tmp_name'] ?? ''), $destination)) {
+        return null;
+    }
+
+    return tenant_upload_public_path('juegos', $fileName, false);
+}
+
+function admin_game_delete_upload(?string $path): void {
+    $absolutePath = tenant_resolve_public_path((string) $path);
+    if ($absolutePath !== null && is_file($absolutePath)) {
+        @unlink($absolutePath);
+    }
+}
 
 function ensure_juegos_api_free_fire_column(mysqli $mysqli): void {
     $result = $mysqli->query("SHOW COLUMNS FROM juegos LIKE 'api_free_fire'");
@@ -40,8 +73,8 @@ if (isset($_GET['eliminar'])) {
     $stmt_paq->execute();
     $res_paq = $stmt_paq->get_result();
     while ($row = $res_paq->fetch_assoc()) {
-        if ($row['imagen_icono'] && file_exists('../' . $row['imagen_icono'])) {
-            unlink('../' . $row['imagen_icono']);
+        if (!empty($row['imagen_icono'])) {
+            admin_game_delete_upload((string) $row['imagen_icono']);
         }
     }
     $stmt_paq->close();
@@ -60,8 +93,8 @@ if (isset($_GET['eliminar'])) {
     $stmt_img->bind_result($img_juego);
     $stmt_img->fetch();
     $stmt_img->close();
-    if ($img_juego && file_exists('../' . $img_juego)) {
-        unlink('../' . $img_juego);
+    if ($img_juego) {
+        admin_game_delete_upload((string) $img_juego);
     }
     // Eliminar el juego
     $stmt = $mysqli->prepare("DELETE FROM juegos WHERE id=?");
@@ -79,34 +112,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_juego_submit'], 
     $edit_api_free_fire = isset($_POST['edit_api_free_fire']) ? 1 : 0;
     $edit_activo = isset($_POST['edit_activo']) ? 1 : 0;
     $edit_moneda_fija_id = isset($_POST['edit_moneda_fija_id']) && $_POST['edit_moneda_fija_id'] !== '' ? intval($_POST['edit_moneda_fija_id']) : null;
-    $edit_imagen = null;
-    $edit_imagen_paquete = null;
-    if (isset($_FILES['edit_imagen']) && $_FILES['edit_imagen']['error'] === UPLOAD_ERR_OK) {
-        $ext = strtolower(pathinfo($_FILES['edit_imagen']['name'], PATHINFO_EXTENSION));
-        $permitidas = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-        if (in_array($ext, $permitidas)) {
-            $dir = '../assets/img/juegos/';
-            if (!is_dir($dir)) mkdir($dir, 0777, true);
-            $nombre_archivo = uniqid('juego_') . '.' . $ext;
-            $destino = $dir . $nombre_archivo;
-            if (move_uploaded_file($_FILES['edit_imagen']['tmp_name'], $destino)) {
-                $edit_imagen = 'assets/img/juegos/' . $nombre_archivo;
-            }
-        }
-    }
-    if (isset($_FILES['edit_imagen_paquete']) && $_FILES['edit_imagen_paquete']['error'] === UPLOAD_ERR_OK) {
-        $ext = strtolower(pathinfo($_FILES['edit_imagen_paquete']['name'], PATHINFO_EXTENSION));
-        $permitidas = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-        if (in_array($ext, $permitidas)) {
-            $dir = '../assets/img/juegos/';
-            if (!is_dir($dir)) mkdir($dir, 0777, true);
-            $nombre_archivo = uniqid('juegopaq_') . '.' . $ext;
-            $destino = $dir . $nombre_archivo;
-            if (move_uploaded_file($_FILES['edit_imagen_paquete']['tmp_name'], $destino)) {
-                $edit_imagen_paquete = 'assets/img/juegos/' . $nombre_archivo;
-            }
-        }
-    }
+    $edit_imagen = admin_game_store_upload($_FILES['edit_imagen'] ?? [], 'juego_');
+    $edit_imagen_paquete = admin_game_store_upload($_FILES['edit_imagen_paquete'] ?? [], 'juegopaq_');
     if ($edit_imagen && $edit_imagen_paquete) {
         $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, imagen=?, imagen_paquete=?, popular=?, api_free_fire=?, activo=?, moneda_fija_id=? WHERE id=?");
         $stmt->bind_param('ssssiiiii', $edit_nombre, $edit_descripcion, $edit_imagen, $edit_imagen_paquete, $edit_popular, $edit_api_free_fire, $edit_activo, $edit_moneda_fija_id, $edit_id);
@@ -133,34 +140,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['des
     $popular = isset($_POST['popular']) ? 1 : 0;
     $api_free_fire = isset($_POST['api_free_fire']) ? 1 : 0;
     $activo = isset($_POST['activo']) ? 1 : 0;
-    $imagen = null;
-    $imagen_paquete = null;
-    if (isset($_FILES['imagen']) && $_FILES['imagen']['error'] === UPLOAD_ERR_OK) {
-        $ext = strtolower(pathinfo($_FILES['imagen']['name'], PATHINFO_EXTENSION));
-        $permitidas = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-        if (in_array($ext, $permitidas)) {
-            $dir = '../assets/img/juegos/';
-            if (!is_dir($dir)) mkdir($dir, 0777, true);
-            $nombre_archivo = uniqid('juego_') . '.' . $ext;
-            $destino = $dir . $nombre_archivo;
-            if (move_uploaded_file($_FILES['imagen']['tmp_name'], $destino)) {
-                $imagen = 'assets/img/juegos/' . $nombre_archivo;
-            }
-        }
-    }
-    if (isset($_FILES['imagen_paquete']) && $_FILES['imagen_paquete']['error'] === UPLOAD_ERR_OK) {
-        $ext = strtolower(pathinfo($_FILES['imagen_paquete']['name'], PATHINFO_EXTENSION));
-        $permitidas = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-        if (in_array($ext, $permitidas)) {
-            $dir = '../assets/img/juegos/';
-            if (!is_dir($dir)) mkdir($dir, 0777, true);
-            $nombre_archivo = uniqid('juegopaq_') . '.' . $ext;
-            $destino = $dir . $nombre_archivo;
-            if (move_uploaded_file($_FILES['imagen_paquete']['tmp_name'], $destino)) {
-                $imagen_paquete = 'assets/img/juegos/' . $nombre_archivo;
-            }
-        }
-    }
+    $imagen = admin_game_store_upload($_FILES['imagen'] ?? [], 'juego_');
+    $imagen_paquete = admin_game_store_upload($_FILES['imagen_paquete'] ?? [], 'juegopaq_');
     $stmt = $mysqli->prepare("INSERT INTO juegos (nombre, imagen, imagen_paquete, descripcion, moneda_fija_id, popular, api_free_fire, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
     $stmt->bind_param('ssssiiii', $nombre, $imagen, $imagen_paquete, $descripcion, $moneda_fija_id, $popular, $api_free_fire, $activo);
     $stmt->execute();
@@ -604,20 +585,7 @@ if ($resPaquetes instanceof mysqli_result) {
         $edit_id = intval($_POST['edit_juego_id']);
         $edit_nombre = trim($_POST['edit_nombre']);
         $edit_descripcion = trim($_POST['edit_descripcion']);
-        $edit_imagen = null;
-        if (isset($_FILES['edit_imagen']) && $_FILES['edit_imagen']['error'] === UPLOAD_ERR_OK) {
-            $ext = strtolower(pathinfo($_FILES['edit_imagen']['name'], PATHINFO_EXTENSION));
-            $permitidas = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-            if (in_array($ext, $permitidas)) {
-                $dir = '../assets/img/juegos/';
-                if (!is_dir($dir)) mkdir($dir, 0777, true);
-                $nombre_archivo = uniqid('juego_') . '.' . $ext;
-                $destino = $dir . $nombre_archivo;
-                if (move_uploaded_file($_FILES['edit_imagen']['tmp_name'], $destino)) {
-                    $edit_imagen = 'assets/img/juegos/' . $nombre_archivo;
-                }
-            }
-        }
+        $edit_imagen = admin_game_store_upload($_FILES['edit_imagen'] ?? [], 'juego_');
         if ($edit_imagen) {
             $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, imagen=? WHERE id=?");
             $stmt->bind_param('sssi', $edit_nombre, $edit_descripcion, $edit_imagen, $edit_id);
