@@ -107,7 +107,7 @@ try {
     }
 
     if ($role === 'empleado') {
-        header('Location: ' . app_path('/admin/pedidos'));
+        header('Location: ' . app_path('/admin/dashboard'));
         exit;
     }
 

@@ -233,7 +233,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
     password VARCHAR(255) NOT NULL,
     nombre VARCHAR(120) DEFAULT NULL,
     email VARCHAR(180) DEFAULT NULL,
-    rol ENUM('admin','usuario') NOT NULL DEFAULT 'usuario',
+    rol ENUM('admin','empleado','usuario') NOT NULL DEFAULT 'usuario',
     reset_requested_at DATETIME DEFAULT NULL,
     creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uq_usuarios_username (username),
@@ -242,6 +242,11 @@ CREATE TABLE IF NOT EXISTS usuarios (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 SQL;
 bootstrap_exec($mysqli, $usersSql, 'No se pudo asegurar la tabla usuarios');
+bootstrap_exec(
+    $mysqli,
+    "ALTER TABLE usuarios MODIFY rol ENUM('admin','empleado','usuario') NOT NULL DEFAULT 'usuario'",
+    'No se pudo actualizar el enum del rol en usuarios'
+);
 
 $currenciesSql = <<<'SQL'
 CREATE TABLE IF NOT EXISTS monedas (

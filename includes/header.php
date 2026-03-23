@@ -10,6 +10,7 @@ if ($scriptDir === '/' || $scriptDir === '.') {
 }
 require_once __DIR__ . '/store_config.php';
 require_once __DIR__ . '/google_oauth.php';
+require_once __DIR__ . '/auth.php';
 
 if (!isset($brandPrefix)) {
   $brandPrefix = store_config_get('nombre_prefijo', 'TIENDA');
@@ -31,12 +32,12 @@ if ($pageDescription === '') {
   $pageDescription = 'Compra monedas y recargas digitales en TVirtualGaming. Recibe ofertas, promociones y novedades directamente en tu WhatsApp.';
 }
 
-$authUser = $_SESSION['auth_user'] ?? null;
+$authUser = auth_sync_session_user();
 $authUserName = trim((string) (($authUser['full_name'] ?? $authUser['nombre'] ?? $authUser['email'] ?? 'Usuario')));
 $authUserEmail = trim((string) ($authUser['email'] ?? ''));
-$authUserRole = trim((string) ($authUser['rol'] ?? ''));
+$authUserRole = strtolower(trim((string) ($authUser['rol'] ?? '')));
 $authUserCanAccessAdmin = in_array($authUserRole, ['admin', 'empleado'], true);
-$authUserAdminHome = $authUserRole === 'empleado' ? app_path('/admin/pedidos') : app_path('/admin/dashboard');
+$authUserAdminHome = app_path('/admin/dashboard');
 $authUserInitials = 'US';
 if ($authUserName !== '') {
   $nameParts = preg_split('/\s+/', $authUserName);
@@ -84,6 +85,7 @@ $adminDashboardUrl = app_path('/admin/dashboard');
 $adminGamesUrl = app_path('/admin/juegos');
 $adminCurrenciesUrl = app_path('/admin/monedas');
 $adminOrdersUrl = app_path('/admin/pedidos');
+$adminMovementsUrl = app_path('/admin/movimientos');
 $adminUsersUrl = app_path('/admin/usuarios');
 $adminCouponsUrl = app_path('/admin/cupones');
 $adminConfigUrl = app_path('/admin/configuracion');
@@ -315,9 +317,10 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
           <?php if ($authUser): ?>
             <?php if ($authUserCanAccessAdmin): ?>
               <hr class="my-2 border-slate-700">
+              <a href="<?php echo htmlspecialchars($adminDashboardUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Dashboard</a>
               <a href="<?php echo htmlspecialchars($adminOrdersUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Pedidos</a>
+              <a href="<?php echo htmlspecialchars($adminMovementsUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Movimientos</a>
               <?php if ($authUserRole === 'admin'): ?>
-                <a href="<?php echo htmlspecialchars($adminDashboardUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Dashboard</a>
                 <a href="<?php echo htmlspecialchars($adminGamesUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Juegos</a>
                 <a href="<?php echo htmlspecialchars($adminCurrenciesUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Monedas</a>
                 <a href="<?php echo htmlspecialchars($adminUsersUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Usuarios</a>

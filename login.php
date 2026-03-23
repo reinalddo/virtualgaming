@@ -54,7 +54,7 @@ if (($user["rol"] ?? "") === "admin") {
   exit;
 }
 if (($user["rol"] ?? "") === "empleado") {
-  header("Location: " . app_path('/admin/pedidos'));
+  header("Location: " . app_path('/admin/dashboard'));
   exit;
 }
 header("Location: " . app_path('/'));

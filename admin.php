@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/includes/tenant.php';
+require_once __DIR__ . '/includes/auth.php';
 tenant_start_session();
 
 function admin_allowed_roles(): array {
@@ -7,7 +8,7 @@ function admin_allowed_roles(): array {
 }
 
 function admin_default_section_for_role(string $role): string {
-    return $role === 'empleado' ? 'pedidos' : 'dashboard';
+    return 'dashboard';
 }
 
 function admin_user_can_access_section(string $role, string $section): bool {
@@ -16,14 +17,15 @@ function admin_user_can_access_section(string $role, string $section): bool {
     }
 
     if ($role === 'empleado') {
-        return in_array($section, ['pedidos'], true);
+        return in_array($section, ['dashboard', 'pedidos', 'movimientos'], true);
     }
 
     return false;
 }
 
-$adminUserRole = trim((string) ($_SESSION['auth_user']['rol'] ?? ''));
-if (!isset($_SESSION['auth_user']) || !in_array($adminUserRole, admin_allowed_roles(), true)) {
+$adminUser = auth_sync_session_user();
+$adminUserRole = trim((string) ($adminUser['rol'] ?? ''));
+if (!$adminUser || !in_array($adminUserRole, admin_allowed_roles(), true)) {
     header('Location: ' . app_path('/login.php'));
     exit();
 }
@@ -82,6 +84,288 @@ function admin_normalize_influencer_payment_filter($value): string {
 function admin_normalize_date_filter($value): ?string {
     $date = trim((string) $value);
     return preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) === 1 ? $date : null;
+}
+
+function admin_normalize_positive_page($value): int {
+    $page = (int) $value;
+    return $page > 0 ? $page : 1;
+}
+
+function admin_normalize_per_page($value, int $default = 15): int {
+    $perPage = (int) $value;
+    return in_array($perPage, [15, 30, 50], true) ? $perPage : $default;
+}
+
+function admin_normalize_sort_direction($value, string $default = 'desc'): string {
+    $direction = strtolower(trim((string) $value));
+    return in_array($direction, ['asc', 'desc'], true) ? $direction : $default;
+}
+
+function admin_normalize_movement_sort_column($value): string {
+    $column = trim((string) $value);
+    $allowed = ['referencia', 'descripcion', 'fecha_movimiento', 'monto', 'moneda'];
+    return in_array($column, $allowed, true) ? $column : 'fecha_movimiento';
+}
+
+function admin_normalize_movement_checked_filter($value): string {
+    $filter = trim((string) $value);
+    $allowed = ['no_verificados', 'verificados', 'todos'];
+    return in_array($filter, $allowed, true) ? $filter : 'no_verificados';
+}
+
+function admin_normalize_movement_order_link_filter($value): string {
+    $filter = trim((string) $value);
+    $allowed = ['todos', 'con_pedido', 'sin_pedido'];
+    return in_array($filter, $allowed, true) ? $filter : 'todos';
+}
+
+function admin_build_url(string $path, array $query = []): string {
+    $query = array_filter($query, static function ($value) {
+        return $value !== null && $value !== '';
+    });
+
+    if (empty($query)) {
+        return $path;
+    }
+
+    return $path . '?' . http_build_query($query);
+}
+
+function admin_is_ajax_request(): bool {
+    $requestedWith = strtolower(trim((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')));
+    $accept = strtolower(trim((string) ($_SERVER['HTTP_ACCEPT'] ?? '')));
+
+    return $requestedWith === 'xmlhttprequest' || str_contains($accept, 'application/json');
+}
+
+function admin_movement_query_from_input(array $input): array {
+    $query = [];
+
+    $reference = trim((string) ($input['referencia'] ?? ''));
+    if ($reference !== '') {
+        $query['referencia'] = $reference;
+    }
+
+    $dateFrom = admin_normalize_date_filter($input['fecha_desde'] ?? null);
+    if ($dateFrom !== null) {
+        $query['fecha_desde'] = $dateFrom;
+    }
+
+    $dateTo = admin_normalize_date_filter($input['fecha_hasta'] ?? null);
+    if ($dateTo !== null) {
+        $query['fecha_hasta'] = $dateTo;
+    }
+
+    $currency = strtoupper(trim((string) ($input['moneda'] ?? '')));
+    if ($currency !== '' && preg_match('/^[A-Z0-9_-]{1,20}$/', $currency) === 1) {
+        $query['moneda'] = $currency;
+    }
+
+    $query['estado_verificacion'] = admin_normalize_movement_checked_filter($input['estado_verificacion'] ?? 'no_verificados');
+    $query['pedido_relacionado'] = admin_normalize_movement_order_link_filter($input['pedido_relacionado'] ?? 'todos');
+    $query['orden'] = admin_normalize_movement_sort_column($input['orden'] ?? 'fecha_movimiento');
+    $query['direccion'] = admin_normalize_sort_direction($input['direccion'] ?? 'desc');
+    $query['por_pagina'] = admin_normalize_per_page($input['por_pagina'] ?? 15);
+    $query['pagina'] = admin_normalize_positive_page($input['pagina'] ?? 1);
+
+    return $query;
+}
+
+function admin_parse_bank_movement_datetime(?string $value): ?string {
+    $raw = trim((string) $value);
+    if ($raw === '') {
+        return null;
+    }
+
+    $normalized = str_ireplace([' a. m.', ' p. m.', ' a.m.', ' p.m.', ' am', ' pm'], [' AM', ' PM', ' AM', ' PM', ' AM', ' PM'], $raw);
+    $date = DateTime::createFromFormat('d/m/Y h:i:s A', $normalized)
+        ?: DateTime::createFromFormat('d/m/Y h:i A', $normalized)
+        ?: DateTime::createFromFormat('d/m/Y H:i:s', $normalized)
+        ?: DateTime::createFromFormat('d/m/Y H:i', $normalized);
+
+    return $date ? $date->format('Y-m-d H:i:s') : null;
+}
+
+function admin_normalize_bank_amount($value): float {
+    if (is_numeric($value)) {
+        return round((float) $value, 2);
+    }
+
+    $clean = str_replace([',', ' '], '', (string) $value);
+    return is_numeric($clean) ? round((float) $clean, 2) : 0.0;
+}
+
+function admin_http_get_json(string $url, int $timeout = 20, bool $verifySsl = true): array {
+    $body = null;
+
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_CONNECTTIMEOUT => $timeout,
+            CURLOPT_TIMEOUT => $timeout,
+            CURLOPT_SSL_VERIFYPEER => $verifySsl,
+            CURLOPT_SSL_VERIFYHOST => $verifySsl ? 2 : 0,
+        ]);
+        $response = curl_exec($ch);
+        $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($response === false) {
+            throw new RuntimeException('No se pudo consultar la API bancaria: ' . $error);
+        }
+
+        if ($status >= 400) {
+            throw new RuntimeException('La API bancaria respondió con código HTTP ' . $status . '.');
+        }
+
+        $body = $response;
+    } else {
+        $context = stream_context_create([
+            'http' => [
+                'method' => 'GET',
+                'timeout' => $timeout,
+                'ignore_errors' => true,
+            ],
+            'ssl' => [
+                'verify_peer' => $verifySsl,
+                'verify_peer_name' => $verifySsl,
+            ],
+        ]);
+        $response = @file_get_contents($url, false, $context);
+        if ($response === false) {
+            throw new RuntimeException('No se pudo consultar la API bancaria.');
+        }
+        $body = $response;
+    }
+
+    $data = json_decode((string) $body, true);
+    if (!is_array($data)) {
+        throw new RuntimeException('La API bancaria no devolvió un JSON válido.');
+    }
+
+    return $data;
+}
+
+function admin_fetch_bank_movements_from_api(array $config): array {
+    $position = trim((string) ($config['ff_bank_posicion'] ?? ''));
+    $token = trim((string) ($config['ff_bank_token'] ?? ''));
+    $password = trim((string) ($config['ff_bank_clave'] ?? ''));
+
+    if ($position === '' || $token === '' || $password === '') {
+        throw new RuntimeException('La conexión automática para pagos en Bs/VES no está configurada completamente.');
+    }
+
+    $url = 'https://pagonorte.net/recargas/movimientos.jsp?' . http_build_query([
+        'posicion' => $position,
+        'token' => $token,
+        'password' => $password,
+    ]);
+
+    $data = admin_http_get_json($url, 20, false);
+    $movements = $data['movimientos'] ?? null;
+    if (!is_array($movements)) {
+        throw new RuntimeException('La API bancaria no devolvió la lista de movimientos esperada.');
+    }
+
+    $normalized = [];
+    foreach ($movements as $movement) {
+        if (!is_array($movement)) {
+            continue;
+        }
+
+        $reference = trim((string) ($movement['referencia'] ?? ''));
+        if ($reference === '') {
+            continue;
+        }
+
+        $normalized[] = [
+            'referencia' => substr($reference, 0, 120),
+            'descripcion' => substr(trim((string) ($movement['descripcion'] ?? '')), 0, 255),
+            'fecha_raw' => substr(trim((string) ($movement['fecha'] ?? '')), 0, 120),
+            'fecha_movimiento' => admin_parse_bank_movement_datetime((string) ($movement['fecha'] ?? '')),
+            'tipo' => substr(trim((string) ($movement['tipo'] ?? '')), 0, 80),
+            'monto' => admin_normalize_bank_amount($movement['monto'] ?? 0),
+            'moneda' => 'VES',
+            'payload_json' => json_encode($movement, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ];
+    }
+
+    return $normalized;
+}
+
+function admin_sync_bank_movements(PDO $pdo, array $movements): array {
+    if (empty($movements)) {
+        return [
+            'inserted' => 0,
+            'updated' => 0,
+            'processed' => 0,
+        ];
+    }
+
+    $references = [];
+    foreach ($movements as $movement) {
+        $reference = trim((string) ($movement['referencia'] ?? ''));
+        if ($reference !== '') {
+            $references[$reference] = true;
+        }
+    }
+
+    $existingReferences = [];
+    $referenceList = array_keys($references);
+    foreach (array_chunk($referenceList, 200) as $referenceChunk) {
+        if (empty($referenceChunk)) {
+            continue;
+        }
+
+        $placeholders = implode(', ', array_fill(0, count($referenceChunk), '?'));
+        $existingStmt = $pdo->prepare('SELECT referencia FROM movimientos WHERE referencia IN (' . $placeholders . ')');
+        $existingStmt->execute($referenceChunk);
+        foreach ($existingStmt->fetchAll(PDO::FETCH_COLUMN) as $existingReference) {
+            $existingReferences[(string) $existingReference] = true;
+        }
+    }
+
+    $syncStmt = $pdo->prepare(
+        'INSERT INTO movimientos (referencia, descripcion, fecha_raw, fecha_movimiento, tipo, monto, moneda, payload_json) '
+        . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?) '
+        . 'ON DUPLICATE KEY UPDATE descripcion = VALUES(descripcion), fecha_raw = VALUES(fecha_raw), fecha_movimiento = COALESCE(VALUES(fecha_movimiento), fecha_movimiento), tipo = VALUES(tipo), monto = VALUES(monto), moneda = VALUES(moneda), payload_json = VALUES(payload_json)'
+    );
+
+    $inserted = 0;
+    $updated = 0;
+    foreach ($movements as $movement) {
+        $reference = (string) ($movement['referencia'] ?? '');
+        if ($reference === '') {
+            continue;
+        }
+
+        $wasExisting = isset($existingReferences[$reference]);
+        $syncStmt->execute([
+            $reference,
+            (string) ($movement['descripcion'] ?? ''),
+            (string) ($movement['fecha_raw'] ?? ''),
+            $movement['fecha_movimiento'] !== null ? (string) $movement['fecha_movimiento'] : null,
+            (string) ($movement['tipo'] ?? ''),
+            (float) ($movement['monto'] ?? 0),
+            (string) ($movement['moneda'] ?? 'VES'),
+            (string) ($movement['payload_json'] ?? ''),
+        ]);
+
+        if ($wasExisting) {
+            $updated++;
+        } else {
+            $inserted++;
+        }
+    }
+
+    return [
+        'inserted' => $inserted,
+        'updated' => $updated,
+        'processed' => $inserted + $updated,
+    ];
 }
 
 require_once __DIR__ . '/includes/influencer_coupons.php';
@@ -608,6 +892,126 @@ switch ($seccion) {
 
         define('ADMIN_CONFIG_ACTIVE_TAB', $activeTab);
         define('ADMIN_CONFIG_POST_HANDLED', true);
+
+    case 'movimientos':
+        require_once __DIR__ . '/includes/db.php';
+        require_once __DIR__ . '/includes/store_config.php';
+        if ($seccion === 'movimientos') {
+            if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['actualizar_movimientos_api'])) {
+                $redirectQuery = admin_movement_query_from_input($_POST);
+
+                try {
+                    $bankConfig = [
+                        'ff_bank_posicion' => store_config_get('ff_bank_posicion', '0'),
+                        'ff_bank_token' => store_config_get('ff_bank_token', ''),
+                        'ff_bank_clave' => store_config_get('ff_bank_clave', ''),
+                    ];
+                    $movements = admin_fetch_bank_movements_from_api($bankConfig);
+                    $syncSummary = admin_sync_bank_movements($pdo, $movements);
+                    $hasNewMovements = (int) ($syncSummary['inserted'] ?? 0) > 0;
+
+                    if (admin_is_ajax_request()) {
+                        header('Content-Type: application/json; charset=utf-8');
+                        echo json_encode([
+                            'ok' => true,
+                            'has_new_movements' => $hasNewMovements,
+                            'inserted' => (int) ($syncSummary['inserted'] ?? 0),
+                            'updated' => (int) ($syncSummary['updated'] ?? 0),
+                            'processed' => (int) ($syncSummary['processed'] ?? 0),
+                            'message' => $hasNewMovements
+                                ? 'Se encontraron ' . (int) ($syncSummary['inserted'] ?? 0) . ' movimientos nuevos y ya fueron registrados.'
+                                : 'No hay movimientos nuevos para actualizar.',
+                        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                        exit();
+                    }
+
+                    if ($hasNewMovements) {
+                        admin_set_flash('success', 'Se registraron ' . (int) ($syncSummary['inserted'] ?? 0) . ' movimientos nuevos desde la API.');
+                    } else {
+                        admin_set_flash('info', 'No hay movimientos nuevos para actualizar.');
+                    }
+                } catch (Throwable $e) {
+                    if (admin_is_ajax_request()) {
+                        http_response_code(500);
+                        header('Content-Type: application/json; charset=utf-8');
+                        echo json_encode([
+                            'ok' => false,
+                            'message' => $e->getMessage(),
+                        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                        exit();
+                    }
+
+                    admin_set_flash('error', $e->getMessage());
+                }
+
+                admin_redirect('movimientos', $redirectQuery);
+            }
+            if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verificar_movimiento'])) {
+                $movementId = (int) ($_POST['movimiento_id'] ?? 0);
+                $redirectQuery = admin_movement_query_from_input($_POST);
+
+                if ($movementId > 0) {
+                    $stmt = $pdo->prepare('UPDATE movimientos SET checked = 1 WHERE id = ? AND (checked IS NULL OR checked = 0)');
+                    $stmt->execute([$movementId]);
+                    if ($stmt->rowCount() > 0) {
+                        if (admin_is_ajax_request()) {
+                            header('Content-Type: application/json; charset=utf-8');
+                            echo json_encode([
+                                'ok' => true,
+                                'movement_id' => $movementId,
+                                'checked' => 1,
+                                'message' => 'Movimiento verificado correctamente.',
+                            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                            exit();
+                        }
+                        admin_set_flash('success', 'Movimiento verificado correctamente.');
+                    } else {
+                        $checkStmt = $pdo->prepare('SELECT checked FROM movimientos WHERE id = ? LIMIT 1');
+                        $checkStmt->execute([$movementId]);
+                        $existingMovement = $checkStmt->fetch(PDO::FETCH_ASSOC);
+
+                        if ($existingMovement) {
+                            if (admin_is_ajax_request()) {
+                                header('Content-Type: application/json; charset=utf-8');
+                                echo json_encode([
+                                    'ok' => true,
+                                    'movement_id' => $movementId,
+                                    'checked' => (int) ($existingMovement['checked'] ?? 0) === 1 ? 1 : 0,
+                                    'message' => 'El movimiento ya estaba verificado.',
+                                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                                exit();
+                            }
+                            admin_set_flash('info', 'El movimiento ya estaba verificado.');
+                        } else {
+                            if (admin_is_ajax_request()) {
+                                http_response_code(404);
+                                header('Content-Type: application/json; charset=utf-8');
+                                echo json_encode([
+                                    'ok' => false,
+                                    'message' => 'El movimiento no existe.',
+                                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                                exit();
+                            }
+                            admin_set_flash('error', 'El movimiento no existe.');
+                        }
+                    }
+                } else {
+                    if (admin_is_ajax_request()) {
+                        http_response_code(422);
+                        header('Content-Type: application/json; charset=utf-8');
+                        echo json_encode([
+                            'ok' => false,
+                            'message' => 'Movimiento inválido para verificar.',
+                        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                        exit();
+                    }
+                    admin_set_flash('error', 'Movimiento inválido para verificar.');
+                }
+
+                admin_redirect('movimientos', $redirectQuery);
+            }
+            break;
+        }
         break;
 }
 
@@ -621,18 +1025,21 @@ require_once __DIR__ . '/includes/header.php';
 
 <div class="container-lg min-vh-100 d-flex flex-column align-items-center justify-content-center px-2">
     <div class="w-100 mt-5">
-        <?php if ($seccion === 'dashboard' && $adminUserRole === 'admin'): ?>
+        <?php if ($seccion === 'dashboard' && in_array($adminUserRole, admin_allowed_roles(), true)): ?>
         <div class="mb-5 text-center">
             <h1 class="display-4 fw-bold text-info mb-4">Panel de Administración</h1>
             <h2 class="h3 fw-semibold mb-3">Bienvenido al panel de administración</h2>
             <p class="mb-4">Selecciona una sección para comenzar.</p>
             <div class="d-flex flex-wrap justify-content-center gap-3">
+                <a href="/admin/pedidos" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>📋</span>Pedidos</a>
+                <a href="/admin/movimientos" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>💳</span>Movimientos</a>
+                <?php if ($adminUserRole === 'admin'): ?>
                 <a href="/admin/usuarios" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>👤</span>Usuarios</a>
                 <a href="/admin/juegos" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>🎮</span>Juegos</a>
                 <a href="/admin/monedas" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>💵</span>Monedas</a>
                 <a href="/admin/cupones" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>✏️</span>Cupones</a>
-                <a href="/admin/pedidos" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>📋</span>Pedidos</a>
                 <a href="/admin/configuracion" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>⚙️</span>Configuración</a>
+                <?php endif; ?>
             </div>
         </div>
         <?php endif; ?>
@@ -1202,6 +1609,436 @@ require_once __DIR__ . '/includes/header.php';
                 <?php endif; ?>
                 <?php
                 break;
+            case 'movimientos':
+                require_once __DIR__ . '/includes/db.php';
+                $movementReference = trim((string) ($_GET['referencia'] ?? ''));
+                $movementDateFrom = admin_normalize_date_filter($_GET['fecha_desde'] ?? null);
+                $movementDateTo = admin_normalize_date_filter($_GET['fecha_hasta'] ?? null);
+                $movementCurrency = strtoupper(trim((string) ($_GET['moneda'] ?? '')));
+                $movementCheckedFilter = admin_normalize_movement_checked_filter($_GET['estado_verificacion'] ?? 'no_verificados');
+                $movementOrderLinkFilter = admin_normalize_movement_order_link_filter($_GET['pedido_relacionado'] ?? 'todos');
+                $movementSort = admin_normalize_movement_sort_column($_GET['orden'] ?? 'fecha_movimiento');
+                $movementDirection = admin_normalize_sort_direction($_GET['direccion'] ?? 'desc');
+                $movementPage = admin_normalize_positive_page($_GET['pagina'] ?? 1);
+                $movementPerPage = admin_normalize_per_page($_GET['por_pagina'] ?? 15);
+                if ($movementCurrency !== '' && preg_match('/^[A-Z0-9_-]{1,20}$/', $movementCurrency) !== 1) {
+                    $movementCurrency = '';
+                }
+
+                $currencies = $pdo->query("SELECT DISTINCT moneda FROM movimientos WHERE moneda IS NOT NULL AND moneda <> '' ORDER BY moneda ASC")->fetchAll(PDO::FETCH_COLUMN);
+
+                $movementBaseSql = ' FROM movimientos m LEFT JOIN pedidos p ON p.id = m.pedido_id WHERE 1=1';
+                $movementParams = [];
+                if ($movementReference !== '') {
+                    $movementBaseSql .= ' AND m.referencia LIKE ?';
+                    $movementParams[] = '%' . $movementReference . '%';
+                }
+                if ($movementDateFrom !== null) {
+                    $movementBaseSql .= ' AND DATE(m.fecha_movimiento) >= ?';
+                    $movementParams[] = $movementDateFrom;
+                }
+                if ($movementDateTo !== null) {
+                    $movementBaseSql .= ' AND DATE(m.fecha_movimiento) <= ?';
+                    $movementParams[] = $movementDateTo;
+                }
+                if ($movementCurrency !== '') {
+                    $movementBaseSql .= ' AND m.moneda = ?';
+                    $movementParams[] = $movementCurrency;
+                }
+                if ($movementOrderLinkFilter === 'con_pedido') {
+                    $movementBaseSql .= ' AND m.pedido_id IS NOT NULL AND m.pedido_id > 0';
+                } elseif ($movementOrderLinkFilter === 'sin_pedido') {
+                    $movementBaseSql .= ' AND (m.pedido_id IS NULL OR m.pedido_id = 0)';
+                }
+
+                $movementStatsSql = 'SELECT COUNT(*) AS total, '
+                    . 'SUM(CASE WHEN COALESCE(m.checked, 0) = 1 THEN 1 ELSE 0 END) AS checked_count, '
+                    . 'SUM(CASE WHEN COALESCE(m.checked, 0) = 0 THEN 1 ELSE 0 END) AS unchecked_count'
+                    . $movementBaseSql;
+                $movementStatsStmt = $pdo->prepare($movementStatsSql);
+                $movementStatsStmt->execute($movementParams);
+                $movementStats = $movementStatsStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+                $movementCheckedCount = (int) ($movementStats['checked_count'] ?? 0);
+                $movementUncheckedCount = (int) ($movementStats['unchecked_count'] ?? 0);
+                $movementAllCount = (int) ($movementStats['total'] ?? 0);
+
+                if ($movementCheckedFilter === 'verificados') {
+                    $movementBaseSql .= ' AND COALESCE(m.checked, 0) = 1';
+                } elseif ($movementCheckedFilter === 'no_verificados') {
+                    $movementBaseSql .= ' AND COALESCE(m.checked, 0) = 0';
+                }
+
+                $movementCountStmt = $pdo->prepare('SELECT COUNT(*)' . $movementBaseSql);
+                $movementCountStmt->execute($movementParams);
+                $movementTotal = (int) $movementCountStmt->fetchColumn();
+                $movementTotalPages = max(1, (int) ceil($movementTotal / $movementPerPage));
+                if ($movementPage > $movementTotalPages) {
+                    $movementPage = $movementTotalPages;
+                }
+                $movementOffset = ($movementPage - 1) * $movementPerPage;
+
+                $movementSortColumns = [
+                    'referencia' => 'm.referencia',
+                    'descripcion' => 'm.descripcion',
+                    'fecha_movimiento' => 'm.fecha_movimiento',
+                    'monto' => 'm.monto',
+                    'moneda' => 'm.moneda',
+                ];
+                $movementOrderBy = $movementSortColumns[$movementSort] ?? 'm.fecha_movimiento';
+                $movementsSql = 'SELECT m.id, m.referencia, m.descripcion, m.fecha_movimiento, m.monto, m.moneda, m.pedido_id, m.checked, p.estado AS pedido_estado'
+                    . $movementBaseSql
+                    . ' ORDER BY ' . $movementOrderBy . ' ' . strtoupper($movementDirection) . ', m.fecha_movimiento DESC, m.referencia DESC'
+                    . ' LIMIT ' . (int) $movementPerPage . ' OFFSET ' . (int) $movementOffset;
+                $movementsStmt = $pdo->prepare($movementsSql);
+                $movementsStmt->execute($movementParams);
+                $movimientos = $movementsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+                $movementBaseQuery = [
+                    'referencia' => $movementReference,
+                    'fecha_desde' => $movementDateFrom,
+                    'fecha_hasta' => $movementDateTo,
+                    'moneda' => $movementCurrency,
+                    'estado_verificacion' => $movementCheckedFilter,
+                    'pedido_relacionado' => $movementOrderLinkFilter,
+                    'orden' => $movementSort,
+                    'direccion' => $movementDirection,
+                    'por_pagina' => $movementPerPage,
+                ];
+                $movementSortLabels = [
+                    'referencia' => 'Referencia',
+                    'descripcion' => 'Descripción',
+                    'fecha_movimiento' => 'Fecha movimiento',
+                    'monto' => 'Monto',
+                    'moneda' => 'Moneda',
+                ];
+                $movementCheckedLabels = [
+                    'no_verificados' => 'No verificados',
+                    'verificados' => 'Verificados',
+                    'todos' => 'Todos',
+                ];
+                $movementOrderLinkLabels = [
+                    'todos' => 'Todos',
+                    'con_pedido' => 'Con pedido',
+                    'sin_pedido' => 'Sin pedido',
+                ];
+                $movementRangeStart = $movementTotal > 0 ? $movementOffset + 1 : 0;
+                $movementRangeEnd = $movementTotal > 0 ? min($movementOffset + count($movimientos), $movementTotal) : 0;
+                $adminMovementsPath = app_path('/admin/movimientos');
+                $adminOrdersPath = app_path('/admin/pedidos');
+
+                echo '<h2 class="display-6 fw-bold text-info mb-3">Movimientos Bancarios</h2>';
+                echo '<p class="text-secondary mb-4">Listado de movimientos registrados en la tabla movimientos.</p>';
+
+                echo '<form method="GET" action="' . htmlspecialchars($adminMovementsPath) . '" class="row g-3 mb-4 align-items-end" style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:1.5rem;">';
+                echo '<div class="col-12 col-lg-4">';
+                echo '<label class="form-label" style="color:#00fff7;">Buscar por referencia</label>';
+                echo '<input type="search" name="referencia" value="' . htmlspecialchars($movementReference) . '" class="form-control" placeholder="Ej. 5398344305" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">';
+                echo '</div>';
+                echo '<div class="col-6 col-lg-2">';
+                echo '<label class="form-label" style="color:#00fff7;">Desde</label>';
+                echo '<input type="date" name="fecha_desde" value="' . htmlspecialchars((string) ($movementDateFrom ?? '')) . '" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">';
+                echo '</div>';
+                echo '<div class="col-6 col-lg-2">';
+                echo '<label class="form-label" style="color:#00fff7;">Hasta</label>';
+                echo '<input type="date" name="fecha_hasta" value="' . htmlspecialchars((string) ($movementDateTo ?? '')) . '" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">';
+                echo '</div>';
+                echo '<div class="col-12 col-lg-2">';
+                echo '<label class="form-label" style="color:#00fff7;">Moneda</label>';
+                echo '<select name="moneda" class="form-select" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">';
+                echo '<option value="">Todas</option>';
+                foreach ($currencies as $currencyOption) {
+                    $currencyOption = trim((string) $currencyOption);
+                    if ($currencyOption === '') {
+                        continue;
+                    }
+                    $selected = $movementCurrency === strtoupper($currencyOption) ? ' selected' : '';
+                    echo '<option value="' . htmlspecialchars($currencyOption) . '"' . $selected . '>' . htmlspecialchars($currencyOption) . '</option>';
+                }
+                echo '</select>';
+                echo '</div>';
+                echo '<div class="col-6 col-lg-2">';
+                echo '<label class="form-label" style="color:#00fff7;">Ver movimientos</label>';
+                echo '<select name="estado_verificacion" class="form-select" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">';
+                foreach ($movementCheckedLabels as $checkedKey => $checkedLabel) {
+                    $selected = $movementCheckedFilter === $checkedKey ? ' selected' : '';
+                    echo '<option value="' . htmlspecialchars($checkedKey) . '"' . $selected . '>' . htmlspecialchars($checkedLabel) . '</option>';
+                }
+                echo '</select>';
+                echo '</div>';
+                echo '<div class="col-6 col-lg-2">';
+                echo '<label class="form-label" style="color:#00fff7;">Pedidos</label>';
+                echo '<select name="pedido_relacionado" class="form-select" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">';
+                foreach ($movementOrderLinkLabels as $orderFilterKey => $orderFilterLabel) {
+                    $selected = $movementOrderLinkFilter === $orderFilterKey ? ' selected' : '';
+                    echo '<option value="' . htmlspecialchars($orderFilterKey) . '"' . $selected . '>' . htmlspecialchars($orderFilterLabel) . '</option>';
+                }
+                echo '</select>';
+                echo '</div>';
+                echo '<div class="col-6 col-lg-2">';
+                echo '<label class="form-label" style="color:#00fff7;">Ordenar por</label>';
+                echo '<select name="orden" class="form-select" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">';
+                foreach ($movementSortLabels as $sortKey => $sortLabel) {
+                    $selected = $movementSort === $sortKey ? ' selected' : '';
+                    echo '<option value="' . htmlspecialchars($sortKey) . '"' . $selected . '>' . htmlspecialchars($sortLabel) . '</option>';
+                }
+                echo '</select>';
+                echo '</div>';
+                echo '<div class="col-6 col-lg-2">';
+                echo '<label class="form-label" style="color:#00fff7;">Dirección</label>';
+                echo '<select name="direccion" class="form-select" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">';
+                echo '<option value="desc"' . ($movementDirection === 'desc' ? ' selected' : '') . '>Descendente</option>';
+                echo '<option value="asc"' . ($movementDirection === 'asc' ? ' selected' : '') . '>Ascendente</option>';
+                echo '</select>';
+                echo '</div>';
+                echo '<div class="col-6 col-lg-2">';
+                echo '<label class="form-label" style="color:#00fff7;">Por página</label>';
+                echo '<select name="por_pagina" class="form-select" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">';
+                foreach ([15, 30, 50] as $perPageOption) {
+                    $selected = $movementPerPage === $perPageOption ? ' selected' : '';
+                    echo '<option value="' . $perPageOption . '"' . $selected . '>' . $perPageOption . '</option>';
+                }
+                echo '</select>';
+                echo '</div>';
+                echo '<div class="col-12 col-lg-2 d-flex gap-2">';
+                echo '<button type="submit" class="btn btn-info flex-fill fw-bold" style="background:#00fff7; color:#181f2a; border:none; box-shadow:0 0 8px #00fff7;">Filtrar</button>';
+                echo '<a href="' . htmlspecialchars($adminMovementsPath) . '" class="btn btn-outline-info flex-fill fw-bold" style="border:1px solid #00fff7; color:#00fff7; background:#181f2a;">Limpiar</a>';
+                echo '</div>';
+                echo '</form>';
+
+                echo '<div class="mb-4" style="background:#111827; border-radius:16px; border:1px solid rgba(0,255,247,0.24); box-shadow:0 0 18px rgba(0,255,247,0.08); padding:1rem 1.1rem;">';
+                echo '<div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">';
+                echo '<div>';
+                echo '<div class="text-uppercase small fw-semibold" style="color:#7dd3fc; letter-spacing:0.08em;">Sincronización manual</div>';
+                echo '<div class="text-secondary small">Consulta la API bancaria e inserta solo los movimientos nuevos en la tabla.</div>';
+                echo '</div>';
+                echo '<form method="POST" action="' . htmlspecialchars($adminMovementsPath) . '" class="m-0" data-sync-movements-form="1">';
+                echo '<input type="hidden" name="actualizar_movimientos_api" value="1">';
+                foreach ($movementBaseQuery as $queryKey => $queryValue) {
+                    echo '<input type="hidden" name="' . htmlspecialchars((string) $queryKey) . '" value="' . htmlspecialchars((string) $queryValue) . '">';
+                }
+                echo '<input type="hidden" name="pagina" value="' . $movementPage . '">';
+                echo '<button type="submit" class="btn btn-info fw-bold" data-sync-movements-button="1" style="min-width:240px; background:linear-gradient(135deg, #00fff7, #2dd4bf); color:#0f172a; border:none; box-shadow:0 0 16px rgba(0,255,247,0.28);">Actualizar Movimientos API</button>';
+                echo '</form>';
+                echo '</div>';
+                echo '<div class="mt-3 d-none" data-sync-movements-status style="border-radius:14px; padding:0.9rem 1rem; border:1px solid rgba(0,255,247,0.22); background:rgba(15,23,42,0.88);">';
+                echo '<div class="d-flex align-items-center gap-3">';
+                echo '<span class="d-inline-flex align-items-center justify-content-center d-none" data-sync-movements-spinner="1" style="width:18px; height:18px; border-radius:999px; border:2px solid rgba(0,255,247,0.24); border-top-color:#00fff7; animation:movement-sync-spin 0.9s linear infinite;"></span>';
+                echo '<div>';
+                echo '<div class="fw-semibold" data-sync-movements-title style="color:#00fff7;">Listo para actualizar</div>';
+                echo '<div class="small text-secondary" data-sync-movements-message>Presiona el botón para consultar la API bancaria.</div>';
+                echo '</div>';
+                echo '</div>';
+                echo '</div>';
+                echo '</div>';
+
+                echo '<div class="d-flex flex-wrap gap-2 align-items-center mb-3">';
+                echo '<span class="small text-uppercase fw-semibold" style="color:#7dd3fc; letter-spacing:0.08em;">Verificación rápida</span>';
+                foreach ($movementCheckedLabels as $checkedKey => $checkedLabel) {
+                    $chipQuery = $movementBaseQuery;
+                    $chipQuery['estado_verificacion'] = $checkedKey;
+                    $chipQuery['pagina'] = 1;
+                    $chipCount = $checkedKey === 'verificados' ? $movementCheckedCount : ($checkedKey === 'no_verificados' ? $movementUncheckedCount : $movementAllCount);
+                    $isActiveChip = $movementCheckedFilter === $checkedKey;
+                    $chipStyle = $isActiveChip
+                        ? 'background:#00fff7; color:#181f2a; border:1px solid #00fff7; box-shadow:0 0 10px #00fff7;'
+                        : 'background:#181f2a; color:#00fff7; border:1px solid rgba(0,255,247,0.45);';
+                    echo '<a href="' . htmlspecialchars(admin_build_url($adminMovementsPath, $chipQuery)) . '" class="btn btn-sm rounded-pill fw-semibold" style="' . $chipStyle . '">';
+                    echo htmlspecialchars($checkedLabel) . ': <span data-movement-count-label="' . htmlspecialchars($checkedKey) . '">' . $chipCount . '</span>';
+                    echo '</a>';
+                }
+                echo '</div>';
+
+                echo '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">';
+                echo '<div class="text-info fw-semibold">Resultados: <span data-movement-results-total>' . $movementTotal . '</span></div>';
+                echo '<div class="text-secondary small">Orden actual: ' . htmlspecialchars($movementSortLabels[$movementSort] ?? 'Fecha movimiento') . ' (' . strtoupper($movementDirection) . ')</div>';
+                echo '<div class="text-secondary small">Estado: ' . htmlspecialchars($movementCheckedLabels[$movementCheckedFilter] ?? 'No verificados') . '</div>';
+                echo '<div class="text-secondary small">Pedidos: ' . htmlspecialchars($movementOrderLinkLabels[$movementOrderLinkFilter] ?? 'Todos') . '</div>';
+                if ($movementReference !== '' || $movementDateFrom !== null || $movementDateTo !== null || $movementCurrency !== '' || $movementCheckedFilter !== 'no_verificados' || $movementOrderLinkFilter !== 'todos') {
+                    echo '<div class="text-secondary small">Filtros activos aplicados a la tabla de movimientos.</div>';
+                }
+                echo '</div>';
+
+                if ($movementTotal === 0) {
+                    echo '<div class="text-secondary">No hay movimientos registrados.</div>';
+                    break;
+                }
+
+                echo '<div class="mb-3" style="background:linear-gradient(135deg, rgba(0,255,247,0.14), rgba(0,255,179,0.08)); border:1px solid rgba(0,255,247,0.35); border-radius:16px; padding:1rem 1.1rem; box-shadow:0 0 18px rgba(0,255,247,0.12);">';
+                echo '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2">';
+                echo '<div>';
+                echo '<div class="text-uppercase small fw-semibold" style="color:#7dd3fc; letter-spacing:0.08em;">Rango visible</div>';
+                echo '<div class="fw-bold" data-movement-range-label style="color:#00fff7; font-size:1.05rem;">Mostrando ' . $movementRangeStart . ' - ' . $movementRangeEnd . ' de ' . $movementTotal . '</div>';
+                echo '</div>';
+                echo '<div class="text-end">';
+                echo '<div class="text-uppercase small fw-semibold" style="color:#7dd3fc; letter-spacing:0.08em;">Paginación</div>';
+                echo '<div class="fw-semibold" style="color:#b2f6ff;">Página ' . $movementPage . ' de ' . $movementTotalPages . '</div>';
+                echo '</div>';
+                echo '</div>';
+                echo '</div>';
+
+                echo '<div class="table-responsive mb-4 d-none d-md-block" style="background:#10141a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:1rem;">';
+                echo '<table class="table align-middle mb-0" style="background:#181f2a; color:#00fff7; border-radius:12px;">';
+                echo '<thead style="background:#181f2a; color:#00fff7; border-bottom:2px solid #00fff7;">';
+                echo '<tr>';
+                foreach (['referencia', 'descripcion', 'fecha_movimiento', 'monto', 'moneda'] as $movementColumnKey) {
+                    $columnDirection = $movementSort === $movementColumnKey && $movementDirection === 'asc' ? 'desc' : 'asc';
+                    $columnArrow = $movementSort === $movementColumnKey ? ($movementDirection === 'asc' ? ' ↑' : ' ↓') : '';
+                    $columnQuery = $movementBaseQuery;
+                    $columnQuery['orden'] = $movementColumnKey;
+                    $columnQuery['direccion'] = $columnDirection;
+                    $columnQuery['pagina'] = 1;
+                    $minWidth = $movementColumnKey === 'descripcion' ? '260px' : ($movementColumnKey === 'fecha_movimiento' ? '180px' : ($movementColumnKey === 'monto' ? '130px' : ($movementColumnKey === 'moneda' ? '90px' : '160px')));
+                    echo '<th style="color:#00fff7; background:#181f2a; min-width:' . $minWidth . ';">';
+                    echo '<a href="' . htmlspecialchars(admin_build_url($adminMovementsPath, $columnQuery)) . '" style="color:#00fff7; text-decoration:none; display:inline-flex; align-items:center; gap:0.35rem;">' . htmlspecialchars($movementSortLabels[$movementColumnKey]) . '<span style="opacity:0.9;">' . htmlspecialchars($columnArrow) . '</span></a>';
+                    echo '</th>';
+                }
+                echo '<th style="color:#00fff7; background:#181f2a; min-width:140px;">Verificar</th>';
+                echo '<th style="color:#00fff7; background:#181f2a; min-width:170px;">Pedido relacionado</th>';
+                echo '</tr>';
+                echo '</thead>';
+                echo '<tbody>';
+
+                $rowAlt = false;
+                foreach ($movimientos as $movimiento) {
+                    $isChecked = (int) ($movimiento['checked'] ?? 0) === 1;
+                    $cellBackground = $isChecked ? '#183f2b' : ($rowAlt ? '#151a24' : '#181f2a');
+                    $rowStyle = $isChecked ? 'box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.08);' : '';
+                    $relatedOrderId = (int) ($movimiento['pedido_id'] ?? 0);
+                    $relatedOrderStatus = trim((string) ($movimiento['pedido_estado'] ?? ''));
+                    $relatedTab = in_array($relatedOrderStatus, ['pendiente', 'pagado', 'enviado', 'cancelado'], true) ? $relatedOrderStatus : 'pendiente';
+                    $relatedOrderHref = $adminOrdersPath . '?pedido=' . $relatedOrderId . '&order_search=' . urlencode((string) $relatedOrderId) . '&tab=' . urlencode($relatedTab) . '#pedido-' . $relatedOrderId;
+                    echo '<tr data-movement-row="' . (int) ($movimiento['id'] ?? 0) . '" data-movement-checked="' . ($isChecked ? '1' : '0') . '" style="' . $rowStyle . ' color:#fff;">';
+                    echo '<td data-movement-cell="reference" style="background:' . $cellBackground . '; color:' . ($isChecked ? '#d9ffe8' : '#00fff7') . '; font-weight:600;">' . htmlspecialchars(admin_display_value($movimiento['referencia'] ?? null)) . '</td>';
+                    echo '<td data-movement-cell="description" style="background:' . $cellBackground . '; color:' . ($isChecked ? '#ecfff2' : '#fff') . ';">' . htmlspecialchars(admin_display_value($movimiento['descripcion'] ?? null)) . '</td>';
+                    echo '<td data-movement-cell="date" style="background:' . $cellBackground . '; color:' . ($isChecked ? '#d7ffe6' : '#b2f6ff') . ';">' . htmlspecialchars(admin_display_value($movimiento['fecha_movimiento'] ?? null)) . '</td>';
+                    echo '<td data-movement-cell="amount" style="background:' . $cellBackground . '; color:#9effbd; font-weight:bold;">' . htmlspecialchars(admin_format_money($movimiento['monto'] ?? 0)) . '</td>';
+                    echo '<td data-movement-cell="currency" style="background:' . $cellBackground . '; color:' . ($isChecked ? '#d7ffe6' : '#b2f6ff') . '; font-weight:600;">' . htmlspecialchars(admin_display_value($movimiento['moneda'] ?? null)) . '</td>';
+                    echo '<td data-movement-cell="verify" data-movement-verify-cell="' . (int) ($movimiento['id'] ?? 0) . '" style="background:' . $cellBackground . '; color:#b2f6ff;">';
+                    if ($isChecked) {
+                        echo '<span class="fw-bold" data-movement-verified-text="' . (int) ($movimiento['id'] ?? 0) . '" style="color:#a8ffbf;">Verificado</span>';
+                    } else {
+                        echo '<form method="POST" action="' . htmlspecialchars($adminMovementsPath) . '" class="m-0 d-inline-flex align-items-center" data-verify-movement-form="' . (int) ($movimiento['id'] ?? 0) . '">';
+                        echo '<input type="hidden" name="verificar_movimiento" value="1">';
+                        echo '<input type="hidden" name="movimiento_id" value="' . (int) ($movimiento['id'] ?? 0) . '">';
+                        foreach ($movementBaseQuery as $queryKey => $queryValue) {
+                            echo '<input type="hidden" name="' . htmlspecialchars((string) $queryKey) . '" value="' . htmlspecialchars((string) $queryValue) . '">';
+                        }
+                        echo '<input type="hidden" name="pagina" value="' . $movementPage . '">';
+                        echo '<button type="submit" class="btn btn-sm fw-bold" data-verify-movement-button="' . (int) ($movimiento['id'] ?? 0) . '" title="Verificar movimiento" style="min-width:52px; min-height:44px; border:1px solid #34d399; color:#ffffff; background:#15803d; box-shadow:0 0 12px rgba(52,211,153,0.35); font-size:1.35rem; line-height:1;">&#10003;</button>';
+                        echo '</form>';
+                    }
+                    echo '</td>';
+                    echo '<td data-movement-cell="order" style="background:' . $cellBackground . '; color:#b2f6ff;">';
+                    if ($relatedOrderId > 0) {
+                        echo '<a href="' . htmlspecialchars($relatedOrderHref) . '" class="btn btn-outline-info btn-sm fw-semibold" style="border-color:#00fff7; color:#00fff7; background:#181f2a;">Ver pedido #' . htmlspecialchars((string) $relatedOrderId) . '</a>';
+                    } else {
+                        echo '<span class="text-secondary">Sin pedido</span>';
+                    }
+                    echo '</td>';
+                    echo '</tr>';
+                    $rowAlt = !$rowAlt;
+                }
+
+                echo '</tbody></table>';
+                echo '</div>';
+
+                echo '<div class="d-block d-md-none">';
+                foreach ($movimientos as $movimiento) {
+                    $isChecked = (int) ($movimiento['checked'] ?? 0) === 1;
+                    $relatedOrderId = (int) ($movimiento['pedido_id'] ?? 0);
+                    $relatedOrderStatus = trim((string) ($movimiento['pedido_estado'] ?? ''));
+                    $relatedTab = in_array($relatedOrderStatus, ['pendiente', 'pagado', 'enviado', 'cancelado'], true) ? $relatedOrderStatus : 'pendiente';
+                    $relatedOrderHref = $adminOrdersPath . '?pedido=' . $relatedOrderId . '&order_search=' . urlencode((string) $relatedOrderId) . '&tab=' . urlencode($relatedTab) . '#pedido-' . $relatedOrderId;
+                    $cardBackground = $isChecked ? 'linear-gradient(135deg, #183f2b, #1f5a35)' : '#181f2a';
+                    $cardBorder = $isChecked ? '#7ee787' : '#00fff7';
+                    echo '<div data-movement-card="' . (int) ($movimiento['id'] ?? 0) . '" data-movement-checked="' . ($isChecked ? '1' : '0') . '" style="background:' . $cardBackground . '; border-radius:16px; border:2px solid ' . $cardBorder . '; box-shadow:0 0 24px ' . ($isChecked ? 'rgba(126,231,135,0.24)' : '#00fff733') . '; padding:1rem; color:#00fff7; margin-bottom:1rem;">';
+                    echo '<div style="display:grid; grid-template-columns:1fr; gap:0.75rem;">';
+                    echo '<div style="padding-bottom:0.6rem; border-bottom:1px solid rgba(0,255,247,0.18);">';
+                    echo '<div style="font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em; color:#7dd3fc;">Referencia</div>';
+                    echo '<div style="font-weight:700; color:#00fff7; word-break:break-word;">' . htmlspecialchars(admin_display_value($movimiento['referencia'] ?? null)) . '</div>';
+                    echo '</div>';
+                    echo '<div style="padding-bottom:0.6rem; border-bottom:1px solid rgba(0,255,247,0.18);">';
+                    echo '<div style="font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em; color:#7dd3fc;">Descripción</div>';
+                    echo '<div style="color:#ffffff;">' . htmlspecialchars(admin_display_value($movimiento['descripcion'] ?? null)) . '</div>';
+                    echo '</div>';
+                    echo '<div style="padding-bottom:0.6rem; border-bottom:1px solid rgba(0,255,247,0.18);">';
+                    echo '<div style="font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em; color:#7dd3fc;">Fecha movimiento</div>';
+                    echo '<div style="color:#b2f6ff;">' . htmlspecialchars(admin_display_value($movimiento['fecha_movimiento'] ?? null)) . '</div>';
+                    echo '</div>';
+                    echo '<div style="padding-bottom:0.6rem; border-bottom:1px solid rgba(0,255,247,0.18);">';
+                    echo '<div style="font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em; color:#7dd3fc;">Monto</div>';
+                    echo '<div style="color:#00ffb3; font-weight:700;">' . htmlspecialchars(admin_format_money($movimiento['monto'] ?? 0)) . '</div>';
+                    echo '</div>';
+                    echo '<div>';
+                    echo '<div style="font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em; color:#7dd3fc;">Moneda</div>';
+                    echo '<div style="color:#b2f6ff; font-weight:600;">' . htmlspecialchars(admin_display_value($movimiento['moneda'] ?? null)) . '</div>';
+                    echo '</div>';
+                    echo '<div style="padding-top:0.4rem;">';
+                    echo '<div style="font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em; color:#7dd3fc; margin-bottom:0.4rem;">Verificar</div>';
+                    if ($isChecked) {
+                        echo '<div class="fw-bold" data-movement-card-verified-text="' . (int) ($movimiento['id'] ?? 0) . '" style="color:#a8ffbf;">Verificado</div>';
+                    } else {
+                        echo '<form method="POST" action="' . htmlspecialchars($adminMovementsPath) . '" class="m-0" data-verify-movement-form="' . (int) ($movimiento['id'] ?? 0) . '">';
+                        echo '<input type="hidden" name="verificar_movimiento" value="1">';
+                        echo '<input type="hidden" name="movimiento_id" value="' . (int) ($movimiento['id'] ?? 0) . '">';
+                        foreach ($movementBaseQuery as $queryKey => $queryValue) {
+                            echo '<input type="hidden" name="' . htmlspecialchars((string) $queryKey) . '" value="' . htmlspecialchars((string) $queryValue) . '">';
+                        }
+                        echo '<input type="hidden" name="pagina" value="' . $movementPage . '">';
+                        echo '<button type="submit" class="btn fw-bold" data-verify-movement-button="' . (int) ($movimiento['id'] ?? 0) . '" style="min-width:64px; min-height:48px; border:1px solid #34d399; color:#ffffff; background:#15803d; box-shadow:0 0 12px rgba(52,211,153,0.35); font-size:1.5rem; line-height:1;">&#10003;</button>';
+                        echo '</form>';
+                    }
+                    echo '</div>';
+                    echo '<div style="padding-top:0.4rem;">';
+                    echo '<div style="font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em; color:#7dd3fc; margin-bottom:0.4rem;">Pedido relacionado</div>';
+                    if ($relatedOrderId > 0) {
+                        echo '<a href="' . htmlspecialchars($relatedOrderHref) . '" class="btn btn-outline-info btn-sm fw-semibold" style="border-color:#00fff7; color:#00fff7; background:#181f2a;">Ver pedido #' . htmlspecialchars((string) $relatedOrderId) . '</a>';
+                    } else {
+                        echo '<div class="text-secondary">Sin pedido</div>';
+                    }
+                    echo '</div>';
+                    echo '</div>';
+                    echo '</div>';
+                }
+                echo '</div>';
+
+                if ($movementTotalPages > 1) {
+                    echo '<div class="mt-4" style="background:#181f2a; border-radius:16px; border:1px solid rgba(0,255,247,0.3); box-shadow:0 0 18px rgba(0,255,247,0.08); padding:1rem;">';
+                    echo '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">';
+                    echo '<div class="text-secondary small">Página actual: ' . $movementPage . ' / ' . $movementTotalPages . '</div>';
+                    echo '<div class="text-secondary small">Movimientos por página: ' . $movementPerPage . '</div>';
+                    echo '</div>';
+                    echo '<div class="d-grid d-sm-flex flex-wrap justify-content-center gap-2">';
+
+                    $previousQuery = $movementBaseQuery;
+                    $previousQuery['pagina'] = max(1, $movementPage - 1);
+                    $nextQuery = $movementBaseQuery;
+                    $nextQuery['pagina'] = min($movementTotalPages, $movementPage + 1);
+
+                    if ($movementPage > 1) {
+                        echo '<a href="' . htmlspecialchars(admin_build_url($adminMovementsPath, $previousQuery)) . '" class="btn btn-outline-info btn-sm fw-semibold" style="min-width:110px; border-color:#00fff7; color:#00fff7; background:#181f2a;">Anterior</a>';
+                    }
+
+                    $pageStart = max(1, $movementPage - 2);
+                    $pageEnd = min($movementTotalPages, $movementPage + 2);
+                    for ($pageNumber = $pageStart; $pageNumber <= $pageEnd; $pageNumber++) {
+                        $pageQuery = $movementBaseQuery;
+                        $pageQuery['pagina'] = $pageNumber;
+                        $isActivePage = $pageNumber === $movementPage;
+                        $pageStyle = $isActivePage
+                            ? 'background:#00fff7; color:#181f2a; border:1px solid #00fff7; box-shadow:0 0 8px #00fff7;'
+                            : 'border-color:#00fff7; color:#00fff7; background:#181f2a;';
+                        echo '<a href="' . htmlspecialchars(admin_build_url($adminMovementsPath, $pageQuery)) . '" class="btn btn-sm fw-semibold ' . ($isActivePage ? 'btn-info' : 'btn-outline-info') . '" style="min-width:44px; ' . $pageStyle . '">' . $pageNumber . '</a>';
+                    }
+
+                    if ($movementPage < $movementTotalPages) {
+                        echo '<a href="' . htmlspecialchars(admin_build_url($adminMovementsPath, $nextQuery)) . '" class="btn btn-outline-info btn-sm fw-semibold" style="min-width:110px; border-color:#00fff7; color:#00fff7; background:#181f2a;">Siguiente</a>';
+                    }
+
+                    echo '</div>';
+                    echo '</div>';
+                }
+                break;
             case 'pedidos':
                 echo '<h2 class="text-2xl font-semibold mb-4 text-cyan-300">Gestión de Pedidos</h2>';
                 echo '<p class="text-gray-400">Aquí se listarán y gestionarán los pedidos.</p>';
@@ -1213,4 +2050,318 @@ require_once __DIR__ . '/includes/header.php';
         ?>
     </div>
 </div>
+<?php if ($seccion === 'movimientos'): ?>
+<style>
+    .movement-toast {
+        position: fixed;
+        right: 24px;
+        bottom: 24px;
+        z-index: 1400;
+        min-width: 240px;
+        max-width: min(90vw, 360px);
+        padding: 0.95rem 1rem;
+        border-radius: 14px;
+        border: 1px solid rgba(126, 231, 135, 0.65);
+        background: linear-gradient(135deg, rgba(24, 63, 43, 0.98), rgba(31, 90, 53, 0.98));
+        color: #eafff0;
+        box-shadow: 0 0 24px rgba(126, 231, 135, 0.28);
+        font-weight: 700;
+        opacity: 0;
+        transform: translateY(14px);
+        pointer-events: none;
+        transition: opacity 180ms ease, transform 220ms ease;
+    }
+    .movement-toast.is-visible {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    @keyframes movement-sync-spin {
+        from {
+            transform: rotate(0deg);
+        }
+        to {
+            transform: rotate(360deg);
+        }
+    }
+    [data-movement-row],
+    [data-movement-card] {
+        transition: opacity 220ms ease, transform 260ms ease, box-shadow 220ms ease, filter 220ms ease;
+    }
+    .movement-removing {
+        opacity: 0;
+        transform: translateY(-8px) scale(0.985);
+        filter: saturate(0.88);
+    }
+</style>
+<script>
+(() => {
+    const movementForms = document.querySelectorAll('[data-verify-movement-form]');
+    const syncForm = document.querySelector('[data-sync-movements-form]');
+    if (!movementForms.length && !syncForm) {
+        return;
+    }
+
+    const currentCheckedFilter = <?php echo json_encode($movementCheckedFilter ?? 'no_verificados', JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+    const syncStatus = document.querySelector('[data-sync-movements-status]');
+    const syncStatusTitle = document.querySelector('[data-sync-movements-title]');
+    const syncStatusMessage = document.querySelector('[data-sync-movements-message]');
+    const syncSpinner = document.querySelector('[data-sync-movements-spinner]');
+    const syncButton = document.querySelector('[data-sync-movements-button]');
+
+    function wait(ms) {
+        return new Promise((resolve) => window.setTimeout(resolve, ms));
+    }
+
+    function setSyncStatus(type, title, message, isLoading) {
+        if (!syncStatus || !syncStatusTitle || !syncStatusMessage) {
+            return;
+        }
+
+        syncStatus.classList.remove('d-none');
+        syncStatus.style.borderColor = type === 'success'
+            ? 'rgba(126,231,135,0.35)'
+            : (type === 'error' ? 'rgba(248,113,113,0.35)' : 'rgba(0,255,247,0.24)');
+        syncStatus.style.background = type === 'success'
+            ? 'rgba(24,63,43,0.92)'
+            : (type === 'error' ? 'rgba(69,22,22,0.92)' : 'rgba(15,23,42,0.88)');
+        syncStatusTitle.style.color = type === 'success'
+            ? '#a8ffbf'
+            : (type === 'error' ? '#fca5a5' : '#00fff7');
+        syncStatusTitle.textContent = title;
+        syncStatusMessage.textContent = message;
+
+        if (syncSpinner) {
+            syncSpinner.classList.toggle('d-none', !isLoading);
+        }
+    }
+
+    function showMovementToast(message) {
+        let toast = document.querySelector('[data-movement-toast]');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.className = 'movement-toast';
+            toast.setAttribute('data-movement-toast', '1');
+            document.body.appendChild(toast);
+        }
+
+        toast.textContent = message;
+        toast.classList.add('is-visible');
+
+        window.clearTimeout(showMovementToast._timerId);
+        showMovementToast._timerId = window.setTimeout(() => {
+            toast.classList.remove('is-visible');
+        }, 2000);
+    }
+
+    function applyVerifiedDesktopState(movementId) {
+        const row = document.querySelector(`[data-movement-row="${movementId}"]`);
+        if (!row) {
+            return;
+        }
+
+        row.dataset.movementChecked = '1';
+        row.style.boxShadow = 'inset 0 0 0 1px rgba(125, 211, 252, 0.08)';
+
+        const desktopColors = {
+            reference: '#d9ffe8',
+            description: '#ecfff2',
+            date: '#d7ffe6',
+            amount: '#9effbd',
+            currency: '#d7ffe6',
+            verify: '#b2f6ff',
+            order: '#b2f6ff'
+        };
+
+        row.querySelectorAll('[data-movement-cell]').forEach((cell) => {
+            const cellKey = cell.getAttribute('data-movement-cell') || '';
+            cell.style.background = '#183f2b';
+            if (desktopColors[cellKey]) {
+                cell.style.color = desktopColors[cellKey];
+            }
+        });
+
+        const verifyCell = row.querySelector(`[data-movement-verify-cell="${movementId}"]`);
+        if (verifyCell) {
+            verifyCell.innerHTML = '<span class="fw-bold" style="color:#a8ffbf;">Verificado</span>';
+        }
+    }
+
+    function applyVerifiedMobileState(movementId) {
+        const card = document.querySelector(`[data-movement-card="${movementId}"]`);
+        if (!card) {
+            return;
+        }
+
+        card.dataset.movementChecked = '1';
+        card.style.background = 'linear-gradient(135deg, #183f2b, #1f5a35)';
+        card.style.borderColor = '#7ee787';
+        card.style.boxShadow = '0 0 24px rgba(126,231,135,0.24)';
+
+        const form = card.querySelector('[data-verify-movement-form]');
+        if (form) {
+            form.outerHTML = '<div class="fw-bold" style="color:#a8ffbf;">Verificado</div>';
+        }
+    }
+
+    function updateMovementCountersAfterVerify() {
+        const uncheckedLabel = document.querySelector('[data-movement-count-label="no_verificados"]');
+        const checkedLabel = document.querySelector('[data-movement-count-label="verificados"]');
+
+        if (uncheckedLabel) {
+            const nextValue = Math.max(0, Number(uncheckedLabel.textContent || '0') - 1);
+            uncheckedLabel.textContent = String(nextValue);
+        }
+        if (checkedLabel) {
+            checkedLabel.textContent = String(Number(checkedLabel.textContent || '0') + 1);
+        }
+    }
+
+    function updateVisibleResultsAfterRemoval() {
+        const resultsTotal = document.querySelector('[data-movement-results-total]');
+        const rangeLabel = document.querySelector('[data-movement-range-label]');
+        if (resultsTotal) {
+            const nextValue = Math.max(0, Number(resultsTotal.textContent || '0') - 1);
+            resultsTotal.textContent = String(nextValue);
+            if (rangeLabel) {
+                const currentText = rangeLabel.textContent || '';
+                rangeLabel.textContent = currentText.replace(/de\s+\d+$/, 'de ' + nextValue);
+            }
+        }
+    }
+
+    function removeMovementFromView(movementId) {
+        const row = document.querySelector(`[data-movement-row="${movementId}"]`);
+        if (row) {
+            row.classList.add('movement-removing');
+        }
+
+        const card = document.querySelector(`[data-movement-card="${movementId}"]`);
+        if (card) {
+            card.classList.add('movement-removing');
+        }
+
+        window.setTimeout(() => {
+            if (row) {
+                row.remove();
+            }
+
+            if (card) {
+                card.remove();
+            }
+
+            updateVisibleResultsAfterRemoval();
+        }, 320);
+    }
+
+    async function animateVerifiedMovement(movementId, shouldRemoveAfterAnimation) {
+        applyVerifiedDesktopState(movementId);
+        applyVerifiedMobileState(movementId);
+        showMovementToast('Movimiento verificado');
+
+        if (shouldRemoveAfterAnimation) {
+            await wait(900);
+            removeMovementFromView(movementId);
+        }
+    }
+
+    async function verifyMovement(form) {
+        const button = form.querySelector('[data-verify-movement-button]');
+        const formData = new FormData(form);
+        const movementId = formData.get('movimiento_id');
+
+        if (button) {
+            button.disabled = true;
+            button.style.opacity = '0.7';
+        }
+
+        try {
+            const response = await fetch(form.action, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+            if (!response.ok || !data.ok) {
+                throw new Error(data.message || 'No se pudo verificar el movimiento.');
+            }
+
+            updateMovementCountersAfterVerify();
+            if (currentCheckedFilter === 'no_verificados') {
+                await animateVerifiedMovement(String(movementId), true);
+            } else {
+                await animateVerifiedMovement(String(movementId), false);
+            }
+        } catch (error) {
+            if (button) {
+                button.disabled = false;
+                button.style.opacity = '1';
+            }
+            alert(error.message || 'No se pudo verificar el movimiento.');
+        }
+    }
+
+    movementForms.forEach((form) => {
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            verifyMovement(form);
+        });
+    });
+
+    if (syncForm) {
+        syncForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const formData = new FormData(syncForm);
+            if (syncButton) {
+                syncButton.disabled = true;
+                syncButton.style.opacity = '0.75';
+            }
+
+            setSyncStatus('loading', 'Consultando API bancaria', 'Buscando nuevos movimientos y registrando cambios en la tabla movimientos...', true);
+
+            try {
+                const response = await fetch(syncForm.action, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+                if (!response.ok || !data.ok) {
+                    throw new Error(data.message || 'No se pudo actualizar los movimientos desde la API.');
+                }
+
+                if (data.has_new_movements) {
+                    setSyncStatus('success', 'Nuevos movimientos disponibles', data.message || 'Se registraron nuevos movimientos en la tabla.', false);
+                    showMovementToast('Movimientos actualizados desde la API');
+                    await wait(1500);
+                    window.location.reload();
+                    return;
+                }
+
+                setSyncStatus('info', 'Sin movimientos nuevos', data.message || 'No hay movimientos nuevos para actualizar.', false);
+                await wait(3000);
+                if (syncStatus) {
+                    syncStatus.classList.add('d-none');
+                }
+            } catch (error) {
+                setSyncStatus('error', 'No se pudo actualizar', error.message || 'Ocurrió un error al consultar la API bancaria.', false);
+            } finally {
+                if (syncButton) {
+                    syncButton.disabled = false;
+                    syncButton.style.opacity = '1';
+                }
+            }
+        });
+    }
+})();
+</script>
+<?php endif; ?>
 <?php include __DIR__ . '/includes/footer.php'; ?>

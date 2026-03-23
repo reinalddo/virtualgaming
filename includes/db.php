@@ -19,3 +19,13 @@ try {
 } catch (PDOException $e) {
     die('Error de conexión a la base de datos: ' . $e->getMessage());
 }
+
+try {
+    $roleColumnStmt = $pdo->query("SHOW COLUMNS FROM usuarios LIKE 'rol'");
+    $roleColumn = $roleColumnStmt ? $roleColumnStmt->fetch() : false;
+    $roleType = strtolower((string) ($roleColumn['Type'] ?? ''));
+    if ($roleType !== '' && strpos($roleType, "'empleado'") === false) {
+        $pdo->exec("ALTER TABLE usuarios MODIFY rol ENUM('admin','empleado','usuario') NOT NULL DEFAULT 'usuario'");
+    }
+} catch (Throwable $exception) {
+}
