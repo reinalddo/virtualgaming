@@ -2411,6 +2411,8 @@ require_once __DIR__ . '/includes/header.php';
         const formData = new FormData(form);
         const movementId = formData.get('movimiento_id');
 
+        window.clearTimeout(filterAutoSubmitTimer);
+
         if (button) {
             button.disabled = true;
             button.style.opacity = '0.7';
@@ -2438,6 +2440,16 @@ require_once __DIR__ . '/includes/header.php';
                 await animateVerifiedMovement(String(movementId), false);
             }
         } catch (error) {
+            const errorMessage = error && error.message ? String(error.message) : '';
+            if (/failed to fetch/i.test(errorMessage)) {
+                if (button) {
+                    button.disabled = false;
+                    button.style.opacity = '1';
+                }
+                HTMLFormElement.prototype.submit.call(form);
+                return;
+            }
+
             if (button) {
                 button.disabled = false;
                 button.style.opacity = '1';
@@ -2451,14 +2463,14 @@ require_once __DIR__ . '/includes/header.php';
         filterControls.forEach((control) => {
             const controlType = (control.getAttribute('type') || '').toLowerCase();
             const isTypingControl = control.tagName === 'INPUT' && (controlType === 'search' || controlType === 'text' || controlType === 'number');
-            const autoSubmitDelay = isTypingControl ? 320 : 120;
+            const autoSubmitDelay = isTypingControl ? 2000 : 180;
 
             control.addEventListener('input', () => {
                 scheduleFilterAutoSubmit(autoSubmitDelay);
             });
 
             control.addEventListener('change', () => {
-                scheduleFilterAutoSubmit(80);
+                scheduleFilterAutoSubmit(180);
             });
         });
 
@@ -2522,6 +2534,7 @@ require_once __DIR__ . '/includes/header.php';
 
         if (target.matches('[data-sync-movements-form]')) {
             event.preventDefault();
+            window.clearTimeout(filterAutoSubmitTimer);
 
             const formData = new FormData(target);
             const submitButton = target.querySelector('[data-sync-movements-button]');
