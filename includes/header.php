@@ -21,10 +21,22 @@ if (!isset($brandName)) {
   $brandName = store_config_get('nombre_tienda', 'TVirtualGaming');
 }
 
+$defaultMetaTitle = store_config_get('nombre_tienda', 'TVirtualGaming') . ' | ' . store_config_get('nombre_tienda_subtitulo', 'Tienda de monedas digitales');
+$pageMetaTitle = trim((string) store_config_get('meta_titulo', $defaultMetaTitle));
+if ($pageMetaTitle === '') {
+  $pageMetaTitle = $defaultMetaTitle;
+}
+$pageDescription = trim((string) store_config_get('meta_descripcion', 'Compra monedas y recargas digitales en TVirtualGaming. Recibe ofertas, promociones y novedades directamente en tu WhatsApp.'));
+if ($pageDescription === '') {
+  $pageDescription = 'Compra monedas y recargas digitales en TVirtualGaming. Recibe ofertas, promociones y novedades directamente en tu WhatsApp.';
+}
+
 $authUser = $_SESSION['auth_user'] ?? null;
 $authUserName = trim((string) (($authUser['full_name'] ?? $authUser['nombre'] ?? $authUser['email'] ?? 'Usuario')));
 $authUserEmail = trim((string) ($authUser['email'] ?? ''));
 $authUserRole = trim((string) ($authUser['rol'] ?? ''));
+$authUserCanAccessAdmin = in_array($authUserRole, ['admin', 'empleado'], true);
+$authUserAdminHome = $authUserRole === 'empleado' ? app_path('/admin/pedidos') : app_path('/admin/dashboard');
 $authUserInitials = 'US';
 if ($authUserName !== '') {
   $nameParts = preg_split('/\s+/', $authUserName);
@@ -80,6 +92,22 @@ $mainStylesVersion = asset_version($mainStylesPath);
 $themeVariablesCss = store_theme_css_variables();
 $googleAuthEnabled = google_oauth_is_configured();
 $googleAuthLoginUrl = $googleAuthEnabled ? google_oauth_login_url() : '';
+$pageCanonicalUrl = app_url('/');
+$pageOgImage = '';
+if ($brandLogo !== '') {
+  if (preg_match('#^https?://#i', $brandLogo) === 1) {
+    $pageOgImage = $brandLogo;
+  } else {
+    $pageOgImage = app_url('/' . ltrim($brandLogo, '/'));
+  }
+}
+$authModalState = $_SESSION['auth_modal_state'] ?? null;
+if ($authModalState) {
+  unset($_SESSION['auth_modal_state']);
+}
+$authModalInitialMode = trim((string) ($authModalState['mode'] ?? ''));
+$authModalInlineMessage = trim((string) ($authModalState['message'] ?? ''));
+$authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
 ?>
 <!doctype html>
 <html lang="es">
@@ -89,7 +117,21 @@ $googleAuthLoginUrl = $googleAuthEnabled ? google_oauth_login_url() : '';
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title><?php echo htmlspecialchars($pageTitle, ENT_QUOTES, "UTF-8"); ?></title>
+  <title><?php echo htmlspecialchars($pageMetaTitle, ENT_QUOTES, "UTF-8"); ?></title>
+  <meta name="description" content="<?php echo htmlspecialchars($pageDescription, ENT_QUOTES, 'UTF-8'); ?>" />
+  <meta property="og:title" content="<?php echo htmlspecialchars($pageMetaTitle, ENT_QUOTES, 'UTF-8'); ?>" />
+  <meta property="og:description" content="<?php echo htmlspecialchars($pageDescription, ENT_QUOTES, 'UTF-8'); ?>" />
+  <meta property="og:url" content="<?php echo htmlspecialchars($pageCanonicalUrl, ENT_QUOTES, 'UTF-8'); ?>" />
+  <meta property="og:type" content="website" />
+  <?php if ($pageOgImage !== ''): ?>
+  <meta property="og:image" content="<?php echo htmlspecialchars($pageOgImage, ENT_QUOTES, 'UTF-8'); ?>" />
+  <?php endif; ?>
+  <meta name="twitter:card" content="<?php echo $pageOgImage !== '' ? 'summary_large_image' : 'summary'; ?>" />
+  <meta name="twitter:title" content="<?php echo htmlspecialchars($pageMetaTitle, ENT_QUOTES, 'UTF-8'); ?>" />
+  <meta name="twitter:description" content="<?php echo htmlspecialchars($pageDescription, ENT_QUOTES, 'UTF-8'); ?>" />
+  <?php if ($pageOgImage !== ''): ?>
+  <meta name="twitter:image" content="<?php echo htmlspecialchars($pageOgImage, ENT_QUOTES, 'UTF-8'); ?>" />
+  <?php endif; ?>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -271,23 +313,25 @@ $googleAuthLoginUrl = $googleAuthEnabled ? google_oauth_login_url() : '';
           <a href="<?php echo htmlspecialchars($popularUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-dark border rounded-3 px-4 py-3 fw-semibold">Juegos populares</a>
           <a href="<?php echo htmlspecialchars($gamesUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-dark border rounded-3 px-4 py-3 fw-semibold">Juegos</a>
           <?php if ($authUser): ?>
-            <?php if ($authUserRole === 'admin'): ?>
+            <?php if ($authUserCanAccessAdmin): ?>
               <hr class="my-2 border-slate-700">
-              <a href="<?php echo htmlspecialchars($adminDashboardUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Dashboard</a>
-              <a href="<?php echo htmlspecialchars($adminGamesUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Juegos</a>
-              <a href="<?php echo htmlspecialchars($adminCurrenciesUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Monedas</a>
               <a href="<?php echo htmlspecialchars($adminOrdersUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Pedidos</a>
-              <a href="<?php echo htmlspecialchars($adminUsersUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Usuarios</a>
-              <a href="<?php echo htmlspecialchars($adminCouponsUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Cupones</a>
-              <a href="<?php echo htmlspecialchars($adminConfigUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Configuración</a>
-              <a href="<?php echo htmlspecialchars($adminDashboardUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Ir al Admin</a>
+              <?php if ($authUserRole === 'admin'): ?>
+                <a href="<?php echo htmlspecialchars($adminDashboardUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Dashboard</a>
+                <a href="<?php echo htmlspecialchars($adminGamesUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Juegos</a>
+                <a href="<?php echo htmlspecialchars($adminCurrenciesUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Monedas</a>
+                <a href="<?php echo htmlspecialchars($adminUsersUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Usuarios</a>
+                <a href="<?php echo htmlspecialchars($adminCouponsUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Cupones</a>
+                <a href="<?php echo htmlspecialchars($adminConfigUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Configuración</a>
+              <?php endif; ?>
+              <a href="<?php echo htmlspecialchars($authUserAdminHome, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Ir al Admin</a>
             <?php endif; ?>
             <a href="<?php echo htmlspecialchars($logoutUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-danger border rounded-3 px-4 py-3 fw-semibold">Cerrar sesión</a>
           <?php endif; ?>
         </div>
       </nav>
 
-      <div id="auth-modal" class="position-fixed top-0 start-0 w-100 h-100 d-none d-flex align-items-center justify-content-center px-4" style="z-index:13000;">
+      <div id="auth-modal" class="position-fixed top-0 start-0 w-100 h-100 d-none d-flex align-items-center justify-content-center px-4" style="z-index:13000;" data-auth-initial-mode="<?php echo htmlspecialchars($authModalInitialMode, ENT_QUOTES, 'UTF-8'); ?>">
         <div class="position-absolute top-0 start-0 w-100 h-100" style="background:var(--theme-overlay-soft);backdrop-filter:blur(6px);box-shadow:var(--theme-shadow-primary), var(--theme-shadow-secondary);z-index:11000;" data-auth-close></div>
         <div class="position-relative w-100 neon-modal" style="max-width:420px;border-radius:1.5rem;border:2px solid var(--theme-primary);background:var(--theme-panel-gradient);padding:2rem 1.5rem;box-shadow:var(--theme-shadow-primary), var(--theme-shadow-secondary);animation:fadeUp 320ms ease-out both;z-index:12000;">
           <button type="button" data-auth-close class="position-absolute" style="top:18px;right:18px;width:48px;height:48px;border-radius:50%;background:var(--theme-primary-soft);border:2px solid var(--theme-primary);display:flex;align-items:center;justify-content:center;z-index:13001;box-shadow:0 0 12px var(--theme-primary);" aria-label="Cerrar">
@@ -302,9 +346,14 @@ $googleAuthLoginUrl = $googleAuthEnabled ? google_oauth_login_url() : '';
               <h2 class="mt-2 text-neon fw-bold" style="font-family:'Oxanium',sans-serif;font-size:2rem;text-shadow:0 0 8px var(--theme-primary);">Iniciar sesión</h2>
             </div>
             <form action="<?php echo htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8'); ?>" method="post" class="d-grid gap-4" novalidate>
+              <?php if ($authModalInlineMessage !== ''): ?>
+                <div class="rounded-3 border px-3 py-2 small" style="border-color:rgba(248,113,113,0.45); background:rgba(127,29,29,0.22); color:#fecaca; box-shadow:0 0 14px rgba(248,113,113,0.08);">
+                  <?php echo htmlspecialchars($authModalInlineMessage, ENT_QUOTES, 'UTF-8'); ?>
+                </div>
+              <?php endif; ?>
               <div class="d-grid gap-3">
                 <label class="form-label small text-neon">Correo electrónico</label>
-                <input type="email" name="email" autocomplete="email" class="form-control rounded-3 bg-dark text-neon border border-info" placeholder="nombre@correo.com" />
+                <input type="email" name="email" autocomplete="email" value="<?php echo htmlspecialchars($authModalLoginEmail, ENT_QUOTES, 'UTF-8'); ?>" class="form-control rounded-3 bg-dark text-neon border border-info" placeholder="nombre@correo.com" />
                 <label class="form-label small text-neon">Contraseña</label>
                 <div class="position-relative">
                   <input type="password" name="password" autocomplete="current-password" class="form-control rounded-3 bg-dark text-neon border border-info pe-5" placeholder="Ingresa tu contraseña" id="login-password" />

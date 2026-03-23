@@ -90,6 +90,8 @@ try {
         $userId = (int) $pdo->lastInsertId();
     }
 
+    session_regenerate_id(true);
+    unset($_SESSION['auth_modal_state']);
     $_SESSION['auth_user'] = [
         'id' => $userId,
         'email' => $email,
@@ -101,6 +103,11 @@ try {
 
     if ($role === 'admin') {
         header('Location: ' . google_oauth_admin_dashboard_url());
+        exit;
+    }
+
+    if ($role === 'empleado') {
+        header('Location: ' . app_path('/admin/pedidos'));
         exit;
     }
 

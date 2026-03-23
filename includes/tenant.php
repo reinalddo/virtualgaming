@@ -1,5 +1,26 @@
 <?php
 
+if (!function_exists('app_timezone_name')) {
+    function app_timezone_name(): string {
+        return 'America/Caracas';
+    }
+}
+
+if (!function_exists('app_configure_timezone')) {
+    function app_configure_timezone(): void {
+        static $configured = false;
+
+        if ($configured) {
+            return;
+        }
+
+        date_default_timezone_set(app_timezone_name());
+        $configured = true;
+    }
+}
+
+app_configure_timezone();
+
 if (!function_exists('tenant_normalize_host')) {
     function tenant_normalize_host(?string $host = null): string {
         $resolvedHost = $host ?? (string) ($_SERVER['HTTP_HOST'] ?? '');
@@ -423,20 +444,60 @@ if (!function_exists('tenant_session_name')) {
     }
 }
 
+if (!function_exists('tenant_session_cookie_lifetime')) {
+    function tenant_session_cookie_lifetime(): int {
+        return 60 * 60 * 24 * 30;
+    }
+}
+
+if (!function_exists('tenant_session_is_secure')) {
+    function tenant_session_is_secure(): bool {
+        $https = strtolower((string) ($_SERVER['HTTPS'] ?? ''));
+        $forwardedProto = strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+
+        return $https === 'on' || $https === '1' || $forwardedProto === 'https';
+    }
+}
+
 if (!function_exists('tenant_start_session')) {
     function tenant_start_session(): void {
         if (session_status() === PHP_SESSION_ACTIVE) {
             return;
         }
 
+        $lifetime = tenant_session_cookie_lifetime();
+        ini_set('session.gc_maxlifetime', (string) $lifetime);
+        ini_set('session.cookie_lifetime', (string) $lifetime);
+        ini_set('session.use_strict_mode', '1');
+        ini_set('session.use_only_cookies', '1');
+        ini_set('session.cookie_httponly', '1');
+
         session_name(tenant_session_name());
         session_set_cookie_params([
-            'lifetime' => 0,
+            'lifetime' => $lifetime,
             'path' => '/',
-            'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+            'secure' => tenant_session_is_secure(),
             'httponly' => true,
             'samesite' => 'Lax',
         ]);
         session_start();
+    }
+}
+
+if (!function_exists('tenant_forget_session_cookie')) {
+    function tenant_forget_session_cookie(): void {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            return;
+        }
+
+        $params = session_get_cookie_params();
+        setcookie(session_name(), '', [
+            'expires' => time() - 42000,
+            'path' => $params['path'] ?? '/',
+            'domain' => $params['domain'] ?? '',
+            'secure' => (bool) ($params['secure'] ?? false),
+            'httponly' => (bool) ($params['httponly'] ?? true),
+            'samesite' => $params['samesite'] ?? 'Lax',
+        ]);
     }
 }

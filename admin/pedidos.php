@@ -1,7 +1,9 @@
 <?php
 require_once __DIR__ . '/../includes/tenant.php';
 tenant_start_session();
-if (!isset($_SESSION['auth_user']) || ($_SESSION['auth_user']['rol'] ?? '') !== 'admin') {
+
+$adminRole = trim((string) ($_SESSION['auth_user']['rol'] ?? ''));
+if (!isset($_SESSION['auth_user']) || !in_array($adminRole, ['admin', 'empleado'], true)) {
   header('Location: ' . app_path('/login.php'));
     exit();
 }

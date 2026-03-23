@@ -6,9 +6,7 @@ function auth_normalize_email($email) {
 }
 
 function auth_set_flash($type, $message) {
-  if (session_status() !== PHP_SESSION_ACTIVE) {
-    tenant_start_session();
-  }
+  tenant_start_session();
   $_SESSION["auth_flash"] = ["type" => $type, "message" => $message];
 }
 

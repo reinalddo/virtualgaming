@@ -2,9 +2,29 @@
 require_once __DIR__ . '/includes/tenant.php';
 tenant_start_session();
 
-// Verificar si el usuario es admin
-if (!isset($_SESSION['auth_user']) || ($_SESSION['auth_user']['rol'] ?? '') !== 'admin') {
-    header('Location: login.php');
+function admin_allowed_roles(): array {
+    return ['admin', 'empleado'];
+}
+
+function admin_default_section_for_role(string $role): string {
+    return $role === 'empleado' ? 'pedidos' : 'dashboard';
+}
+
+function admin_user_can_access_section(string $role, string $section): bool {
+    if ($role === 'admin') {
+        return true;
+    }
+
+    if ($role === 'empleado') {
+        return in_array($section, ['pedidos'], true);
+    }
+
+    return false;
+}
+
+$adminUserRole = trim((string) ($_SESSION['auth_user']['rol'] ?? ''));
+if (!isset($_SESSION['auth_user']) || !in_array($adminUserRole, admin_allowed_roles(), true)) {
+    header('Location: ' . app_path('/login.php'));
     exit();
 }
 
@@ -14,6 +34,11 @@ if (isset($_SERVER['REQUEST_URI'])) {
     if (preg_match('#/admin/([a-zA-Z0-9_-]+)#', $_SERVER['REQUEST_URI'], $m)) {
         $seccion = $m[1];
     }
+}
+
+if (!admin_user_can_access_section($adminUserRole, $seccion)) {
+    admin_set_flash('error', 'No tienes permisos para acceder a esa sección.');
+    admin_redirect(admin_default_section_for_role($adminUserRole));
 }
 
 function normalize_coupon_code(string $value): string {
@@ -79,7 +104,7 @@ switch ($seccion) {
             $id = intval($_POST['id']);
             $nombre = trim($_POST['nombre'] ?? '');
             $rol = $_POST['rol'] ?? 'usuario';
-            if ($id && $nombre && in_array($rol, ['usuario', 'admin'], true)) {
+            if ($id && $nombre && in_array($rol, ['usuario', 'admin', 'empleado'], true)) {
                 $pdo->prepare('UPDATE usuarios SET nombre = ?, rol = ? WHERE id = ?')->execute([$nombre, $rol, $id]);
                 admin_set_flash('success', 'Usuario actualizado.');
             } else {
@@ -310,12 +335,14 @@ switch ($seccion) {
                 $nombrePrefijo = trim((string) ($_POST['nombre_prefijo'] ?? ''));
                 $nombreTienda = trim((string) ($_POST['nombre_tienda'] ?? ''));
                 $nombreTiendaSubtitulo = trim((string) ($_POST['nombre_tienda_subtitulo'] ?? ''));
+                $metaTitulo = trim((string) ($_POST['meta_titulo'] ?? ''));
+                $metaDescripcion = trim((string) ($_POST['meta_descripcion'] ?? ''));
                 $currentLogo = store_config_get('logo_tienda', '');
                 $nextLogo = $currentLogo;
                 $hasUpload = isset($_FILES['logo_tienda']) && (($_FILES['logo_tienda']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
 
-                if ($nombrePrefijo === '' || $nombreTienda === '' || $nombreTiendaSubtitulo === '') {
-                    admin_set_flash('error', 'Completa el nombre prefijo, el nombre de la tienda y el subtítulo del navegador.');
+                if ($nombrePrefijo === '' || $nombreTienda === '' || $nombreTiendaSubtitulo === '' || $metaTitulo === '' || $metaDescripcion === '') {
+                    admin_set_flash('error', 'Completa el nombre prefijo, el nombre de la tienda, el subtítulo del navegador y los datos SEO.');
                     define('ADMIN_CONFIG_POST_HANDLED', true);
                     admin_redirect('configuracion', ['tab' => 'cabecera']);
                 }
@@ -337,6 +364,8 @@ switch ($seccion) {
                 store_config_upsert('nombre_prefijo', $nombrePrefijo);
                 store_config_upsert('nombre_tienda', $nombreTienda);
                 store_config_upsert('nombre_tienda_subtitulo', $nombreTiendaSubtitulo);
+                store_config_upsert('meta_titulo', $metaTitulo);
+                store_config_upsert('meta_descripcion', $metaDescripcion);
                 if ($nextLogo === '') {
                     store_config_delete('logo_tienda');
                 } else {
@@ -592,7 +621,7 @@ require_once __DIR__ . '/includes/header.php';
 
 <div class="container-lg min-vh-100 d-flex flex-column align-items-center justify-content-center px-2">
     <div class="w-100 mt-5">
-        <?php if ($seccion === 'dashboard'): ?>
+        <?php if ($seccion === 'dashboard' && $adminUserRole === 'admin'): ?>
         <div class="mb-5 text-center">
             <h1 class="display-4 fw-bold text-info mb-4">Panel de Administración</h1>
             <h2 class="h3 fw-semibold mb-3">Bienvenido al panel de administración</h2>
@@ -626,7 +655,7 @@ require_once __DIR__ . '/includes/header.php';
                     $id = intval($_POST['id']);
                     $nombre = trim($_POST['nombre'] ?? '');
                     $rol = $_POST['rol'] ?? 'usuario';
-                    if ($id && $nombre && in_array($rol, ['usuario','admin'])) {
+                    if ($id && $nombre && in_array($rol, ['usuario', 'empleado', 'admin'], true)) {
                         $pdo->prepare('UPDATE usuarios SET nombre = ?, rol = ? WHERE id = ?')->execute([$nombre, $rol, $id]);
                         echo '<div class="text-green-400 mb-2">Usuario actualizado.</div>';
                     }
@@ -664,7 +693,7 @@ require_once __DIR__ . '/includes/header.php';
                         echo '<td style="color:#fff; background:#181f2a;">' . htmlspecialchars($usuario['email']) . '</td>';
                         echo '<td style="background:#181f2a;">';
                         echo '<select name="rol" class="form-select form-select-sm" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">';
-                        foreach (["usuario"=>"Usuario","admin"=>"Admin"] as $rolVal=>$rolTxt) {
+                        foreach (["usuario"=>"Usuario","empleado"=>"Empleado","admin"=>"Admin"] as $rolVal=>$rolTxt) {
                             $sel = $usuario['rol']===$rolVal ? 'selected' : '';
                             echo "<option value='$rolVal' $sel>$rolTxt</option>";
                         }
@@ -709,7 +738,7 @@ require_once __DIR__ . '/includes/header.php';
                         echo '<div class="mb-2">';
                         echo '<label class="form-label text-info">Rol</label>';
                         echo '<select name="rol" class="form-select">';
-                        foreach (["usuario"=>"Usuario","admin"=>"Admin"] as $rolVal=>$rolTxt) {
+                        foreach (["usuario"=>"Usuario","empleado"=>"Empleado","admin"=>"Admin"] as $rolVal=>$rolTxt) {
                             $sel = $usuario['rol']===$rolVal ? 'selected' : '';
                             echo "<option value='$rolVal' $sel>$rolTxt</option>";
                         }
