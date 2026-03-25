@@ -587,25 +587,47 @@ function recargas_api_post_json_with_fallback(string $url, array $payload, array
 }
 
 function recargas_api_purchase_is_completed(array $response): bool {
+    if (!recargas_api_purchase_is_accepted($response)) {
+        return false;
+    }
+
     $status = strtolower(trim((string) ($response['estado'] ?? '')));
-    if (in_array($status, ['completado', 'completed', 'success'], true)) {
+    if (in_array($status, ['completado', 'completed', 'success', 'enviado'], true)) {
         return true;
     }
 
-    if (!empty($response['exito']) || !empty($response['success'])) {
-        return true;
+    foreach (['codigo_entregado', 'codigo', 'pin', 'serial', 'voucher'] as $key) {
+        $value = trim((string) ($response[$key] ?? ''));
+        if ($value !== '') {
+            return true;
+        }
     }
 
     return false;
 }
 
 function recargas_api_purchase_is_accepted(array $response): bool {
-    $status = strtolower(trim((string) ($response['estado'] ?? '')));
-    if (in_array($status, ['procesando', 'processing', 'pending', 'aceptado', 'accepted'], true)) {
+    if (!empty($response['ok'])) {
         return true;
     }
 
-    return false;
+    $status = strtolower(trim((string) ($response['estado'] ?? '')));
+    if (in_array($status, ['procesando', 'processing', 'pending', 'accepted', 'en_proceso', 'in_process'], true)) {
+        return true;
+    }
+
+    $reference = trim((string) ($response['referencia'] ?? $response['pedido_id'] ?? ''));
+    $message = mb_strtolower(trim((string) ($response['mensaje'] ?? $response['message'] ?? $response['error'] ?? '')), 'UTF-8');
+
+    if ($reference !== '') {
+        return true;
+    }
+
+    return str_contains($message, 'pedido enviado')
+        || str_contains($message, 'compra aceptada')
+        || str_contains($message, 'en proceso')
+        || str_contains($message, 'se confirmara automaticamente')
+        || str_contains($message, 'se confirmará automáticamente');
 }
 
 function recargas_api_product_label(array $product): string {
