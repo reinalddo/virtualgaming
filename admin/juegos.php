@@ -2,6 +2,7 @@
 // admin/juegos.php - Gestión de juegos y características
 require_once '../includes/db_connect.php';
 require_once '../includes/tenant.php';
+require_once '../includes/recargas_api.php';
 
 function admin_game_store_upload(array $file, string $prefix): ?string {
     if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
@@ -49,8 +50,28 @@ function ensure_juegos_activo_column(mysqli $mysqli): void {
     }
 }
 
+function ensure_juegos_categoria_api_column(mysqli $mysqli): void {
+    $result = $mysqli->query("SHOW COLUMNS FROM juegos LIKE 'categoria_api'");
+    if (!($result instanceof mysqli_result) || $result->num_rows === 0) {
+        $mysqli->query("ALTER TABLE juegos ADD COLUMN categoria_api VARCHAR(100) NULL AFTER api_free_fire");
+    }
+}
+
 ensure_juegos_api_free_fire_column($mysqli);
 ensure_juegos_activo_column($mysqli);
+ensure_juegos_categoria_api_column($mysqli);
+
+$adminGamesUrl = app_path('/admin/juegos');
+$adminPackagesBaseUrl = app_path('/admin/paquetes');
+$apiCategories = [];
+$apiCategoriesError = null;
+if (recargas_api_is_configured()) {
+    try {
+        $apiCategories = recargas_api_fetch_categories();
+    } catch (Throwable $e) {
+        $apiCategoriesError = $e->getMessage();
+    }
+}
 
 if (isset($_GET['toggle_activo'])) {
     $toggleId = intval($_GET['toggle_activo']);
@@ -60,7 +81,7 @@ if (isset($_GET['toggle_activo'])) {
         $stmtToggle->execute();
         $stmtToggle->close();
     }
-    header('Location: /admin/juegos');
+    header('Location: ' . $adminGamesUrl);
     exit;
 }
 
@@ -100,7 +121,7 @@ if (isset($_GET['eliminar'])) {
     $stmt = $mysqli->prepare("DELETE FROM juegos WHERE id=?");
     $stmt->bind_param('i', $del_id);
     $stmt->execute();
-    header('Location: /admin/juegos');
+    header('Location: ' . $adminGamesUrl);
     exit;
 }
 // Procesar edición de cabecera de juego (antes de cualquier salida)
@@ -109,26 +130,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_juego_submit'], 
     $edit_nombre = trim($_POST['edit_nombre']);
     $edit_descripcion = trim($_POST['edit_descripcion']);
     $edit_popular = isset($_POST['edit_popular']) ? 1 : 0;
-    $edit_api_free_fire = isset($_POST['edit_api_free_fire']) ? 1 : 0;
+    $edit_categoria_api = trim((string) ($_POST['edit_categoria_api'] ?? ''));
+    $edit_api_free_fire = $edit_categoria_api !== '' ? 1 : 0;
     $edit_activo = isset($_POST['edit_activo']) ? 1 : 0;
     $edit_moneda_fija_id = isset($_POST['edit_moneda_fija_id']) && $_POST['edit_moneda_fija_id'] !== '' ? intval($_POST['edit_moneda_fija_id']) : null;
     $edit_imagen = admin_game_store_upload($_FILES['edit_imagen'] ?? [], 'juego_');
     $edit_imagen_paquete = admin_game_store_upload($_FILES['edit_imagen_paquete'] ?? [], 'juegopaq_');
     if ($edit_imagen && $edit_imagen_paquete) {
-        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, imagen=?, imagen_paquete=?, popular=?, api_free_fire=?, activo=?, moneda_fija_id=? WHERE id=?");
-        $stmt->bind_param('ssssiiiii', $edit_nombre, $edit_descripcion, $edit_imagen, $edit_imagen_paquete, $edit_popular, $edit_api_free_fire, $edit_activo, $edit_moneda_fija_id, $edit_id);
+        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, imagen=?, imagen_paquete=?, popular=?, api_free_fire=?, categoria_api=?, activo=?, moneda_fija_id=? WHERE id=?");
+        $stmt->bind_param('ssssiisiii', $edit_nombre, $edit_descripcion, $edit_imagen, $edit_imagen_paquete, $edit_popular, $edit_api_free_fire, $edit_categoria_api, $edit_activo, $edit_moneda_fija_id, $edit_id);
     } elseif ($edit_imagen) {
-        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, imagen=?, popular=?, api_free_fire=?, activo=?, moneda_fija_id=? WHERE id=?");
-        $stmt->bind_param('sssiiiii', $edit_nombre, $edit_descripcion, $edit_imagen, $edit_popular, $edit_api_free_fire, $edit_activo, $edit_moneda_fija_id, $edit_id);
+        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, imagen=?, popular=?, api_free_fire=?, categoria_api=?, activo=?, moneda_fija_id=? WHERE id=?");
+        $stmt->bind_param('sssiisiii', $edit_nombre, $edit_descripcion, $edit_imagen, $edit_popular, $edit_api_free_fire, $edit_categoria_api, $edit_activo, $edit_moneda_fija_id, $edit_id);
     } elseif ($edit_imagen_paquete) {
-        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, imagen_paquete=?, popular=?, api_free_fire=?, activo=?, moneda_fija_id=? WHERE id=?");
-        $stmt->bind_param('sssiiiii', $edit_nombre, $edit_descripcion, $edit_imagen_paquete, $edit_popular, $edit_api_free_fire, $edit_activo, $edit_moneda_fija_id, $edit_id);
+        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, imagen_paquete=?, popular=?, api_free_fire=?, categoria_api=?, activo=?, moneda_fija_id=? WHERE id=?");
+        $stmt->bind_param('sssiisiii', $edit_nombre, $edit_descripcion, $edit_imagen_paquete, $edit_popular, $edit_api_free_fire, $edit_categoria_api, $edit_activo, $edit_moneda_fija_id, $edit_id);
     } else {
-        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, popular=?, api_free_fire=?, activo=?, moneda_fija_id=? WHERE id=?");
-        $stmt->bind_param('ssiiiii', $edit_nombre, $edit_descripcion, $edit_popular, $edit_api_free_fire, $edit_activo, $edit_moneda_fija_id, $edit_id);
+        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, popular=?, api_free_fire=?, categoria_api=?, activo=?, moneda_fija_id=? WHERE id=?");
+        $stmt->bind_param('ssiisiii', $edit_nombre, $edit_descripcion, $edit_popular, $edit_api_free_fire, $edit_categoria_api, $edit_activo, $edit_moneda_fija_id, $edit_id);
     }
     $stmt->execute();
-    header('Location: /admin/juegos');
+    header('Location: ' . $adminGamesUrl);
     exit;
 }
 
@@ -138,12 +160,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['des
     $descripcion = trim($_POST['descripcion']);
     $moneda_fija_id = !empty($_POST['moneda_fija_id']) ? intval($_POST['moneda_fija_id']) : null;
     $popular = isset($_POST['popular']) ? 1 : 0;
-    $api_free_fire = isset($_POST['api_free_fire']) ? 1 : 0;
+    $categoria_api = trim((string) ($_POST['categoria_api'] ?? ''));
+    $api_free_fire = $categoria_api !== '' ? 1 : 0;
     $activo = isset($_POST['activo']) ? 1 : 0;
     $imagen = admin_game_store_upload($_FILES['imagen'] ?? [], 'juego_');
     $imagen_paquete = admin_game_store_upload($_FILES['imagen_paquete'] ?? [], 'juegopaq_');
-    $stmt = $mysqli->prepare("INSERT INTO juegos (nombre, imagen, imagen_paquete, descripcion, moneda_fija_id, popular, api_free_fire, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param('ssssiiii', $nombre, $imagen, $imagen_paquete, $descripcion, $moneda_fija_id, $popular, $api_free_fire, $activo);
+    $stmt = $mysqli->prepare("INSERT INTO juegos (nombre, imagen, imagen_paquete, descripcion, moneda_fija_id, popular, api_free_fire, categoria_api, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param('ssssiiisi', $nombre, $imagen, $imagen_paquete, $descripcion, $moneda_fija_id, $popular, $api_free_fire, $categoria_api, $activo);
     $stmt->execute();
     $juego_id = $mysqli->insert_id;
     // Características seleccionadas del select múltiple
@@ -168,7 +191,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['des
             }
         }
     }
-    header('Location: /admin/juegos');
+    header('Location: ' . $adminGamesUrl);
     exit;
 }
 
@@ -230,8 +253,14 @@ if ($resPaquetes instanceof mysqli_result) {
                 <label class="form-check-label text-neon" for="editPopularCheck">Marcar como popular</label>
             </div>
             <div class="form-check mb-3">
-                <input type="checkbox" name="edit_api_free_fire" class="form-check-input" id="editApiFreeFireCheck" <?= !empty($juego_edit['api_free_fire']) ? 'checked' : '' ?>>
-                <label class="form-check-label text-neon" for="editApiFreeFireCheck">Este Juego usa API Free Fire</label>
+                <label class="form-label text-neon" for="editCategoriaApiInput">Categoría API</label>
+                <select name="edit_categoria_api" id="editCategoriaApiInput" class="form-select" style="background:#222c3a;color:#00fff7;border:1px solid #00fff7;">
+                    <option value="">Proceso manual / sin API</option>
+                    <?php foreach ($apiCategories as $apiCategory): ?>
+                    <option value="<?= htmlspecialchars($apiCategory, ENT_QUOTES, 'UTF-8') ?>" <?= (string) ($juego_edit['categoria_api'] ?? '') === (string) $apiCategory ? 'selected' : '' ?>><?= htmlspecialchars($apiCategory, ENT_QUOTES, 'UTF-8') ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <div class="form-text mt-2" style="color:#8be9fd;">Selecciona la categoría exacta del catálogo remoto. Si queda vacía, el juego seguirá siendo manual.</div>
             </div>
             <div class="form-check mb-3">
                 <input type="checkbox" name="edit_activo" class="form-check-input" id="editActivoCheck" <?= !isset($juego_edit['activo']) || !empty($juego_edit['activo']) ? 'checked' : '' ?>>
@@ -252,7 +281,7 @@ if ($resPaquetes instanceof mysqli_result) {
                 <input type="file" name="edit_imagen_paquete" accept="image/*" class="form-control mt-2" style="background:#222c3a;color:#00fff7;border:1px solid #00fff7;">
             </div>
             <button type="submit" name="edit_juego_submit" class="btn neon-btn-info w-100 mt-3">Guardar cambios</button>
-            <a href="/admin/juegos" class="position-absolute top-0 end-0 m-3 text-neon fs-3" style="text-decoration:none;">&times;</a>
+            <a href="<?= htmlspecialchars($adminGamesUrl, ENT_QUOTES, 'UTF-8') ?>" class="position-absolute top-0 end-0 m-3 text-neon fs-3" style="text-decoration:none;">&times;</a>
         </form>
     </div>
     <?php endif; }
@@ -270,8 +299,14 @@ if ($resPaquetes instanceof mysqli_result) {
                 <label class="form-check-label" for="popularCheck" style="color:#00fff7;">Popular</label>
             </div>
             <div class="form-check mt-3">
-                <input type="checkbox" name="api_free_fire" class="form-check-input" id="apiFreeFireCheck">
-                <label class="form-check-label" for="apiFreeFireCheck" style="color:#00fff7;">Este Juego usa API Free Fire</label>
+                <label class="form-label" for="categoriaApiInput" style="color:#00fff7;">Categoría API</label>
+                <select name="categoria_api" id="categoriaApiInput" class="form-select" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
+                    <option value="">Proceso manual / sin API</option>
+                    <?php foreach ($apiCategories as $apiCategory): ?>
+                    <option value="<?= htmlspecialchars($apiCategory, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($apiCategory, ENT_QUOTES, 'UTF-8') ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <div class="form-text mt-2" style="color:#8be9fd;">Selecciona la categoría exacta del catálogo remoto. Si queda vacía, el juego quedará en proceso manual.</div>
             </div>
             <div class="form-check mt-3">
                 <input type="checkbox" name="activo" class="form-check-input" id="activoCheck" checked>
@@ -354,8 +389,8 @@ if ($resPaquetes instanceof mysqli_result) {
                     <td style="background:#181f2a; color:#00fff7;">
                         <div class="fw-semibold"><?= htmlspecialchars($j['nombre']) ?></div>
                         <div class="small" style="color:#b2f6ff;"><?= $totalPaquetes ?> paquete<?= $totalPaquetes === 1 ? '' : 's' ?> registrado<?= $totalPaquetes === 1 ? '' : 's' ?></div>
-                        <?php if (!empty($j['api_free_fire'])): ?>
-                            <div class="small mt-1"><span style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.2rem 0.55rem;border-radius:999px;border:1px solid rgba(52,211,153,0.7);background:rgba(16,185,129,0.12);color:#6ee7b7;font-weight:700;letter-spacing:0.04em;">API Free Fire</span></div>
+                        <?php if (!empty($j['categoria_api'])): ?>
+                            <div class="small mt-1"><span style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.2rem 0.55rem;border-radius:999px;border:1px solid rgba(52,211,153,0.7);background:rgba(16,185,129,0.12);color:#6ee7b7;font-weight:700;letter-spacing:0.04em;">API: <?= htmlspecialchars((string) $j['categoria_api'], ENT_QUOTES, 'UTF-8') ?></span></div>
                         <?php endif; ?>
                     </td>
                     <td class="text-center" style="background:#181f2a;">
@@ -366,7 +401,7 @@ if ($resPaquetes instanceof mysqli_result) {
                             <?php endif; ?>
                         </td>
                         <td class="text-center" style="background:#181f2a;">
-                            <form method="get" action="/admin/juegos" class="m-0 d-inline-block">
+                            <form method="get" action="<?= htmlspecialchars($adminGamesUrl, ENT_QUOTES, 'UTF-8') ?>" class="m-0 d-inline-block">
                                 <input type="hidden" name="toggle_activo" value="<?= (int) $j['id'] ?>">
                                 <div class="form-check form-switch d-inline-flex justify-content-center mb-0">
                                     <input class="form-check-input" type="checkbox" <?= !isset($j['activo']) || !empty($j['activo']) ? 'checked' : '' ?> onchange="this.form.submit()" aria-label="Activar o desactivar juego <?= htmlspecialchars($j['nombre'], ENT_QUOTES, 'UTF-8') ?>">
@@ -401,9 +436,9 @@ if ($resPaquetes instanceof mysqli_result) {
                             ?>
                         </td>
                         <td style="background:#181f2a;">
-                            <a href="/admin/juegos?editar=<?= $j['id'] ?>" style="color:#00fff7; text-decoration:underline; margin-right:1em;">Editar</a>
-                            <a href="/admin/paquetes/<?= $j['id'] ?>" style="color:#00fff7; text-decoration:underline; margin-right:1em;">Paquetes</a>
-                            <a href="/admin/juegos?eliminar=<?= $j['id'] ?>" style="color:#ff0059; text-decoration:underline;" onclick="return confirm('¿Eliminar este juego y todos sus paquetes/características?')">Eliminar</a>
+                            <a href="<?= htmlspecialchars($adminGamesUrl, ENT_QUOTES, 'UTF-8') ?>?editar=<?= $j['id'] ?>" style="color:#00fff7; text-decoration:underline; margin-right:1em;">Editar</a>
+                            <a href="<?= htmlspecialchars($adminPackagesBaseUrl, ENT_QUOTES, 'UTF-8') ?>/<?= $j['id'] ?>" style="color:#00fff7; text-decoration:underline; margin-right:1em;">Paquetes</a>
+                            <a href="<?= htmlspecialchars($adminGamesUrl, ENT_QUOTES, 'UTF-8') ?>?eliminar=<?= $j['id'] ?>" style="color:#ff0059; text-decoration:underline;" onclick="return confirm('¿Eliminar este juego y todos sus paquetes/características?')">Eliminar</a>
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -431,12 +466,12 @@ if ($resPaquetes instanceof mysqli_result) {
                                 <?php endif; ?>
                             </div>
                             <div style="font-size:0.9rem; color:#b2f6ff;"><?= $totalPaquetes ?> paquete<?= $totalPaquetes === 1 ? '' : 's' ?> registrado<?= $totalPaquetes === 1 ? '' : 's' ?></div>
-                            <?php if (!empty($j['api_free_fire'])): ?>
-                                <div class="mt-1"><span style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.2rem 0.55rem;border-radius:999px;border:1px solid rgba(52,211,153,0.7);background:rgba(16,185,129,0.12);color:#6ee7b7;font-weight:700;font-size:0.78rem;letter-spacing:0.04em;">API Free Fire</span></div>
+                            <?php if (!empty($j['categoria_api'])): ?>
+                                <div class="mt-1"><span style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.2rem 0.55rem;border-radius:999px;border:1px solid rgba(52,211,153,0.7);background:rgba(16,185,129,0.12);color:#6ee7b7;font-weight:700;font-size:0.78rem;letter-spacing:0.04em;">API: <?= htmlspecialchars((string) $j['categoria_api'], ENT_QUOTES, 'UTF-8') ?></span></div>
                             <?php endif; ?>
                             <div class="text-muted" style="font-size:0.85rem; color:#b2f6ff;">ID: <?= $j['id'] ?></div>
                             <div class="mt-2">
-                                <form method="get" action="/admin/juegos" class="m-0 d-inline-flex align-items-center gap-2">
+                                <form method="get" action="<?= htmlspecialchars($adminGamesUrl, ENT_QUOTES, 'UTF-8') ?>" class="m-0 d-inline-flex align-items-center gap-2">
                                     <input type="hidden" name="toggle_activo" value="<?= (int) $j['id'] ?>">
                                     <div class="form-check form-switch mb-0">
                                         <input class="form-check-input" type="checkbox" <?= !isset($j['activo']) || !empty($j['activo']) ? 'checked' : '' ?> onchange="this.form.submit()" aria-label="Activar o desactivar juego <?= htmlspecialchars($j['nombre'], ENT_QUOTES, 'UTF-8') ?>">

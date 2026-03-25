@@ -1,7 +1,6 @@
 <?php
 require_once __DIR__ . '/../includes/tenant.php';
 tenant_start_session();
-
 $adminRole = trim((string) ($_SESSION['auth_user']['rol'] ?? ''));
 if (!isset($_SESSION['auth_user']) || !in_array($adminRole, ['admin', 'empleado'], true)) {
   header('Location: ' . app_path('/login.php'));
@@ -9,7 +8,10 @@ if (!isset($_SESSION['auth_user']) || !in_array($adminRole, ['admin', 'empleado'
 }
 
 require_once __DIR__ . '/../includes/db_connect.php';
+require_once __DIR__ . '/../includes/recargas_api.php';
 require_once __DIR__ . '/../includes/header.php';
+
+$ordersApiUrl = app_path('/api/pedidos.php');
 
 $statuses = ['pendiente','pagado','enviado','cancelado'];
 $ordersByStatus = array_fill_keys($statuses, []);
@@ -34,7 +36,115 @@ function order_meta_value($value): string {
   return $text !== '' ? $text : '—';
 }
 
+function order_player_fields_from_json_admin(?string $json): array {
+  if (!is_string($json) || trim($json) === '') {
+    return [];
+  }
+
+  $decoded = json_decode($json, true);
+  return is_array($decoded) ? $decoded : [];
+}
+
+function order_player_fields_lines(array $order): array {
+  $primaryValue = trim((string) ($order['user_identifier'] ?? ''));
+  $lines = [];
+
+  foreach (order_player_fields_from_json_admin($order['player_fields_json'] ?? null) as $fieldName => $fieldValue) {
+    $value = trim((string) $fieldValue);
+    if ($value === '' || ($primaryValue !== '' && $value === $primaryValue)) {
+      continue;
+    }
+
+    $lines[] = recargas_api_field_label((string) $fieldName) . ': ' . $value;
+  }
+
+  return $lines;
+}
+
+function order_provider_status_label(array $order): string {
+  $providerOrderId = trim((string) ($order['recargas_api_pedido_id'] ?? ''));
+  if ($providerOrderId === '') {
+    return '';
+  }
+
+  $providerStatus = trim((string) ($order['recargas_api_estado'] ?? ''));
+  return 'Proveedor: ' . ($providerStatus !== '' ? $providerStatus : 'sin estado') . ' | ID externo: ' . $providerOrderId;
+}
+
+function order_provider_detail_lines(array $order): array {
+  $lines = [];
+
+  $providerMessage = trim((string) ($order['ff_api_mensaje'] ?? ''));
+  if ($providerMessage !== '') {
+    $lines[] = 'Respuesta API: ' . $providerMessage;
+  }
+
+  $providerCode = trim((string) ($order['recargas_api_codigo_entregado'] ?? ''));
+  if ($providerCode !== '') {
+    $lines[] = 'Código entregado: ' . $providerCode;
+  }
+
+  $refundAmount = isset($order['recargas_api_reembolso']) ? (float) $order['recargas_api_reembolso'] : 0.0;
+  if ($refundAmount > 0) {
+    $lines[] = 'Reembolso API: ' . format_money($refundAmount);
+  }
+
+  return $lines;
+}
+
+function order_provider_history_lines(array $order, int $limit = 3): array {
+  $json = $order['recargas_api_historial_json'] ?? null;
+  if (!is_string($json) || trim($json) === '') {
+    return [];
+  }
+
+  $decoded = json_decode($json, true);
+  if (!is_array($decoded)) {
+    return [];
+  }
+
+  $entries = array_slice(array_values(array_filter($decoded, 'is_array')), -$limit);
+  $lines = [];
+
+  foreach ($entries as $entry) {
+    $parts = [];
+    $recordedAt = trim((string) ($entry['recorded_at'] ?? ''));
+    $source = trim((string) ($entry['source'] ?? ''));
+    $providerStatus = trim((string) ($entry['provider_status'] ?? ''));
+    $localStatus = trim((string) ($entry['local_status'] ?? ''));
+    $providerMessage = trim((string) ($entry['provider_message'] ?? ''));
+
+    if ($recordedAt !== '') {
+      $parts[] = $recordedAt;
+    }
+    if ($source !== '') {
+      $parts[] = $source;
+    }
+    if ($providerStatus !== '') {
+      $parts[] = 'API: ' . $providerStatus;
+    }
+    if ($localStatus !== '') {
+      $parts[] = 'Local: ' . $localStatus;
+    }
+    if ($providerMessage !== '') {
+      $parts[] = $providerMessage;
+    }
+
+    if ($parts) {
+      $lines[] = 'Historial: ' . implode(' | ', $parts);
+    }
+  }
+
+  return $lines;
+}
+
+function order_normalize_date_query($value): string {
+  $date = trim((string) $value);
+  return preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) === 1 ? $date : '';
+}
+
 function order_search_index(array $order): string {
+  $playerFieldLines = order_player_fields_lines($order);
   $parts = [
     '#' . ($order['id'] ?? ''),
     $order['creado_en'] ?? '',
@@ -49,6 +159,9 @@ function order_search_index(array $order): string {
     $order['precio'] ?? '',
     $order['cupon'] ?? '',
     $order['estado'] ?? '',
+    implode(' ', $playerFieldLines),
+    implode(' ', order_provider_detail_lines($order)),
+    implode(' ', order_provider_history_lines($order)),
   ];
 
   return strtolower(trim(implode(' ', array_map(static fn ($value) => trim((string) $value), $parts))));
@@ -83,6 +196,31 @@ function order_status_button_style(string $status, bool $isActive = false): stri
   $shadow = $isActive ? '0 0 12px ' . $color . '66' : 'none';
 
   return 'border:1px solid ' . $color . '; background:' . $background . '; color:' . $textColor . '; box-shadow:' . $shadow . ';';
+}
+
+$requestedOrderId = max(0, (int) ($_GET['pedido'] ?? 0));
+$initialOrderSearch = trim((string) ($_GET['order_search'] ?? ''));
+if ($requestedOrderId > 0 && $initialOrderSearch === '') {
+  $initialOrderSearch = (string) $requestedOrderId;
+}
+$initialDateFrom = order_normalize_date_query($_GET['date_from'] ?? '');
+$initialDateTo = order_normalize_date_query($_GET['date_to'] ?? '');
+$initialTab = trim((string) ($_GET['tab'] ?? ''));
+if (!in_array($initialTab, $statuses, true)) {
+  $initialTab = '';
+}
+if ($requestedOrderId > 0 && $initialTab === '') {
+  foreach ($ordersByStatus as $statusKey => $statusOrders) {
+    foreach ($statusOrders as $statusOrder) {
+      if ((int) ($statusOrder['id'] ?? 0) === $requestedOrderId) {
+        $initialTab = $statusKey;
+        break 2;
+      }
+    }
+  }
+}
+if ($initialTab === '') {
+  $initialTab = 'pendiente';
 }
 ?>
 <main class="container-lg mt-5 mb-5 px-2">
@@ -153,6 +291,10 @@ function order_status_button_style(string $status, bool $isActive = false): stri
     }
     .order-status-btn:not(:disabled):active {
       transform: scale(0.98);
+    }
+    .order-target-highlight {
+      border-color: #00ffb3 !important;
+      box-shadow: 0 0 0 2px rgba(0, 255, 179, 0.2), 0 0 24px rgba(0, 255, 179, 0.32) !important;
     }
   </style>
   <div class="row mb-4">
@@ -227,7 +369,11 @@ function order_status_button_style(string $status, bool $isActive = false): stri
               </thead>
               <tbody id="table-body-<?= $st ?>">
                 <?php foreach ($list as $order): ?>
-                  <tr data-order-row="<?= $order['id'] ?>" data-status="<?= $st ?>" data-created-date="<?= htmlspecialchars(substr((string) ($order['creado_en'] ?? ''), 0, 10)) ?>" data-search-text="<?= htmlspecialchars(order_search_index($order)) ?>" style="background:#181f2a; color:#fff;">
+                  <?php $playerFieldLines = order_player_fields_lines($order); ?>
+                  <?php $providerStatusLine = order_provider_status_label($order); ?>
+                  <?php $providerDetailLines = order_provider_detail_lines($order); ?>
+                  <?php $providerHistoryLines = order_provider_history_lines($order); ?>
+                  <tr id="pedido-<?= $order['id'] ?>" data-order-row="<?= $order['id'] ?>" data-status="<?= $st ?>" data-created-date="<?= htmlspecialchars(substr((string) ($order['creado_en'] ?? ''), 0, 10)) ?>" data-search-text="<?= htmlspecialchars(order_search_index($order)) ?>" style="background:#181f2a; color:#fff;">
                     <td style="background:#181f2a; color:#00fff7;">
                       <div style="font-weight:bold;">#<?= $order['id'] ?></div>
                       <div style="color:#b2f6ff; margin-top:0.2rem;"><?= htmlspecialchars($order['creado_en']) ?></div>
@@ -235,6 +381,18 @@ function order_status_button_style(string $status, bool $isActive = false): stri
                     <td style="background:#181f2a; color:#00fff7;">
                       <div style="font-weight:bold;"><?= htmlspecialchars($order['user_identifier']) ?></div>
                       <div style="color:#b2f6ff; margin-top:0.2rem;"><?= htmlspecialchars($order['email']) ?></div>
+                      <?php foreach ($playerFieldLines as $playerFieldLine): ?>
+                        <div style="color:#7dd3fc; margin-top:0.2rem; font-size:0.9em;"><?= htmlspecialchars($playerFieldLine) ?></div>
+                      <?php endforeach; ?>
+                      <?php if ($providerStatusLine !== ''): ?>
+                        <div style="color:#fbbf24; margin-top:0.2rem; font-size:0.85em;"><?= htmlspecialchars($providerStatusLine) ?></div>
+                      <?php endif; ?>
+                      <?php foreach ($providerDetailLines as $providerDetailLine): ?>
+                        <div style="color:#fca5a5; margin-top:0.2rem; font-size:0.85em;"><?= htmlspecialchars($providerDetailLine) ?></div>
+                      <?php endforeach; ?>
+                      <?php foreach ($providerHistoryLines as $providerHistoryLine): ?>
+                        <div style="color:#c4b5fd; margin-top:0.2rem; font-size:0.8em;"><?= htmlspecialchars($providerHistoryLine) ?></div>
+                      <?php endforeach; ?>
                     </td>
                     <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars(order_meta_value($order['numero_referencia'] ?? '')) ?></td>
                     <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars(order_meta_value($order['telefono_contacto'] ?? '')) ?></td>
@@ -261,6 +419,9 @@ function order_status_button_style(string $status, bool $isActive = false): stri
                           <option value="<?= $opt ?>"><?= htmlspecialchars(order_status_label($opt)) ?></option>
                         <?php endforeach; ?>
                       </select>
+                      <?php if (($order['estado'] ?? '') !== 'enviado' && !empty($order['recargas_api_pedido_id'])): ?>
+                        <button type="button" class="btn btn-outline-warning btn-sm mt-2 js-sync-provider" data-order-id="<?= (int) $order['id'] ?>">Sincronizar API</button>
+                      <?php endif; ?>
                     </td>
                   </tr>
                 <?php endforeach; ?>
@@ -271,13 +432,29 @@ function order_status_button_style(string $status, bool $isActive = false): stri
           <!-- Mobile Cards -->
           <div id="cards-<?= $st ?>" class="d-block d-md-none" style="margin-top:1.5rem;">
             <?php foreach ($list as $order): ?>
-              <div data-order-card="<?= $order['id'] ?>" data-status="<?= $st ?>" data-created-date="<?= htmlspecialchars(substr((string) ($order['creado_en'] ?? ''), 0, 10)) ?>" data-search-text="<?= htmlspecialchars(order_search_index($order)) ?>" style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:1rem; color:#00fff7; margin-bottom:1.5rem;">
+              <?php $playerFieldLines = order_player_fields_lines($order); ?>
+              <?php $providerStatusLine = order_provider_status_label($order); ?>
+              <?php $providerDetailLines = order_provider_detail_lines($order); ?>
+              <?php $providerHistoryLines = order_provider_history_lines($order); ?>
+              <div id="pedido-card-<?= $order['id'] ?>" data-order-card="<?= $order['id'] ?>" data-status="<?= $st ?>" data-created-date="<?= htmlspecialchars(substr((string) ($order['creado_en'] ?? ''), 0, 10)) ?>" data-search-text="<?= htmlspecialchars(order_search_index($order)) ?>" style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:1rem; color:#00fff7; margin-bottom:1.5rem;">
                 <div style="display:flex; align-items:center; justify-content:space-between;">
                   <div style="font-weight:bold; font-size:1.1em; color:#00fff7;">#<?= $order['id'] ?></div>
                   <div style="font-size:0.95em; color:#b2f6ff;"><?= htmlspecialchars($order['creado_en']) ?></div>
                 </div>
                 <div style="margin-top:0.5em; color:#00fff7; font-size:1em;">Cliente: <span style="color:#b2f6ff; font-weight:bold;"><?= htmlspecialchars($order['user_identifier']) ?></span></div>
                 <div style="color:#b2f6ff; font-size:1em;">Email: <?= htmlspecialchars($order['email']) ?></div>
+                <?php foreach ($playerFieldLines as $playerFieldLine): ?>
+                  <div style="color:#7dd3fc; font-size:0.95em;"><?= htmlspecialchars($playerFieldLine) ?></div>
+                <?php endforeach; ?>
+                <?php if ($providerStatusLine !== ''): ?>
+                  <div style="color:#fbbf24; font-size:0.9em;"><?= htmlspecialchars($providerStatusLine) ?></div>
+                <?php endif; ?>
+                <?php foreach ($providerDetailLines as $providerDetailLine): ?>
+                  <div style="color:#fca5a5; font-size:0.9em;"><?= htmlspecialchars($providerDetailLine) ?></div>
+                <?php endforeach; ?>
+                <?php foreach ($providerHistoryLines as $providerHistoryLine): ?>
+                  <div style="color:#c4b5fd; font-size:0.85em;"><?= htmlspecialchars($providerHistoryLine) ?></div>
+                <?php endforeach; ?>
                 <div style="color:#b2f6ff; font-size:1em;">Referencia: <?= htmlspecialchars(order_meta_value($order['numero_referencia'] ?? '')) ?></div>
                 <div style="color:#b2f6ff; font-size:1em;">Teléfono: <?= htmlspecialchars(order_meta_value($order['telefono_contacto'] ?? '')) ?></div>
                 <div style="margin-top:0.5em; color:#00fff7; font-size:1em;">Juego: <span style="color:#b2f6ff; font-weight:bold;">
@@ -303,6 +480,9 @@ function order_status_button_style(string $status, bool $isActive = false): stri
                     ><?= htmlspecialchars(order_status_label($opt)) ?></button>
                   <?php endforeach; ?>
                 </div>
+                <?php if (($order['estado'] ?? '') !== 'enviado' && !empty($order['recargas_api_pedido_id'])): ?>
+                  <button type="button" class="btn btn-outline-warning btn-sm mt-3 js-sync-provider" data-order-id="<?= (int) $order['id'] ?>">Sincronizar API</button>
+                <?php endif; ?>
               </div>
             <?php endforeach; ?>
           </div>
@@ -324,7 +504,12 @@ function order_status_button_style(string $status, bool $isActive = false): stri
 // Forzar ocultamiento inicial y mostrar solo el tab activo
 (function(){
   // Detectar tab inicial
-  var initialTab = localStorage.getItem('tvg_tab') || 'pendiente';
+  var serverInitialTab = <?php echo json_encode($initialTab, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+  var initialTab = serverInitialTab || localStorage.getItem('tvg_tab') || 'pendiente';
+  var serverInitialSearch = <?php echo json_encode($initialOrderSearch, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+  var serverDateFrom = <?php echo json_encode($initialDateFrom, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+  var serverDateTo = <?php echo json_encode($initialDateTo, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+  var targetOrderId = <?php echo json_encode($requestedOrderId); ?>;
   window.initialTab = initialTab;
   // Filtro de rango de fecha
   const dateForm = document.getElementById('date-filter-form');
@@ -401,6 +586,20 @@ function order_status_button_style(string $status, bool $isActive = false): stri
     updateTabCounts();
   }
 
+  function highlightTargetOrder() {
+    if (!targetOrderId) {
+      return;
+    }
+    const desktopTarget = document.querySelector(`[data-order-row="${targetOrderId}"]`);
+    const mobileTarget = document.querySelector(`[data-order-card="${targetOrderId}"]`);
+    const target = window.innerWidth >= 768 ? desktopTarget : mobileTarget;
+    if (!target || target.style.display === 'none') {
+      return;
+    }
+    target.classList.add('order-target-highlight');
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
   dateForm.addEventListener('submit', function(e){
     e.preventDefault();
     applyFilters();
@@ -450,8 +649,20 @@ function order_status_button_style(string $status, bool $isActive = false): stri
     }
     localStorage.setItem('tvg_tab', tab);
   }
-  const initial = localStorage.getItem('tvg_tab') || 'pendiente';
+  if (dateFrom && serverDateFrom) {
+    dateFrom.value = serverDateFrom;
+  }
+  if (dateTo && serverDateTo) {
+    dateTo.value = serverDateTo;
+  }
+  if (orderSearch && serverInitialSearch) {
+    orderSearch.value = serverInitialSearch;
+  }
+
+  const initial = initialTab || localStorage.getItem('tvg_tab') || 'pendiente';
   showTab(initial);
+  applyFilters();
+  setTimeout(highlightTargetOrder, 120);
   tabs.forEach(btn => btn.addEventListener('click', () => showTab(btn.dataset.tab)));
 
   function moveOrder(id, newStatus){
@@ -549,7 +760,7 @@ function order_status_button_style(string $status, bool $isActive = false): stri
     fd.append('order_id', orderId);
     fd.append('estado', newStatus);
 
-    const res = await fetch(window.__TVG_API_PEDIDOS || '/api/pedidos.php', { method: 'POST', body: fd });
+    const res = await fetch(window.__TVG_API_PEDIDOS || <?php echo json_encode($ordersApiUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>, { method: 'POST', body: fd });
     const txt = await res.text();
     let data;
     try {
@@ -611,6 +822,42 @@ function order_status_button_style(string $status, bool $isActive = false): stri
           alert(err.message || 'No se pudo cambiar el estado');
         } finally {
           relatedButtons.forEach(item => { item.disabled = false; });
+          setAdminLoadingVisible(false);
+        }
+      });
+    });
+
+    document.querySelectorAll('.js-sync-provider').forEach(button => {
+      button.addEventListener('click', async () => {
+        const orderId = button.dataset.orderId;
+        if (!orderId) {
+          return;
+        }
+
+        button.disabled = true;
+        setAdminLoadingVisible(true);
+        try {
+          const fd = new FormData();
+          fd.append('action', 'sync_provider_status');
+          fd.append('order_id', orderId);
+          const res = await fetch(window.__TVG_API_PEDIDOS || <?php echo json_encode($ordersApiUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>, { method: 'POST', body: fd });
+          const data = await res.json();
+          if (!res.ok || !data.ok) {
+            throw new Error((data && data.message) ? data.message : 'No se pudo sincronizar el pedido con la API.');
+          }
+          const syncNotes = [data.message || 'Pedido sincronizado correctamente.'];
+          if (data.provider_status) {
+            syncNotes.push(`Estado proveedor: ${data.provider_status}`);
+          }
+          if (data.provider_message) {
+            syncNotes.push(`Detalle API: ${data.provider_message}`);
+          }
+          alert(syncNotes.join('\n'));
+          window.location.reload();
+        } catch (err) {
+          alert(err.message || 'No se pudo sincronizar el pedido con la API.');
+        } finally {
+          button.disabled = false;
           setAdminLoadingVisible(false);
         }
       });

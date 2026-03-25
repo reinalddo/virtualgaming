@@ -4,12 +4,11 @@ require_once __DIR__ . "/includes/db_connect.php";
 require_once __DIR__ . "/includes/store_config.php";
 require_once __DIR__ . "/includes/currency.php";
 require_once __DIR__ . "/includes/payment_methods.php";
+require_once __DIR__ . "/includes/recargas_api.php";
 currency_ensure_schema();
 $paymentSupportWhatsappBase = store_config_whatsapp_link(store_config_get('whatsapp', ''));
 $loggedUserEmail = '';
-if (session_status() !== PHP_SESSION_ACTIVE) {
-  tenant_start_session();
-}
+tenant_start_session();
 if (!empty($_SESSION['auth_user']['email'])) {
   $loggedUserEmail = (string) $_SESSION['auth_user']['email'];
 }
@@ -42,6 +41,7 @@ if (!$game) {
 if (!$game) {
   die('Juego no encontrado.');
 }
+$scriptDir = app_base_path();
 $pageTitle = store_config_get('nombre_tienda', 'TVirtualGaming') . " | " . ($game["nombre"] ?? "Juego");
 include __DIR__ . "/includes/header.php";
 ?>
@@ -108,18 +108,36 @@ include __DIR__ . "/includes/header.php";
       </select>
     </div>
   <?php endif; ?>
-  <div class="row row-cols-2 row-cols-sm-3 row-cols-lg-4 g-3 mb-4" id="pack-grid">
-    <?php 
-      $resPaq = $mysqli->query("SELECT * FROM juego_paquetes WHERE juego_id=" . intval($game['id']) . " ORDER BY precio ASC");
-      $paquetes = [];
-      while ($pack = $resPaq->fetch_assoc()) {
-        $paquetes[] = $pack;
+  <?php
+    $usesCatalogApi = trim((string) ($game['categoria_api'] ?? '')) !== '';
+    $apiProductsById = [];
+    if ($usesCatalogApi && recargas_api_is_configured()) {
+      try {
+        foreach (recargas_api_fetch_products_by_category((string) $game['categoria_api']) as $apiProduct) {
+          $apiProductsById[(int) ($apiProduct['id'] ?? 0)] = $apiProduct;
+        }
+      } catch (Throwable $e) {
+        $apiProductsById = [];
       }
-      foreach ($paquetes as $pack):
+    }
+
+    $resPaq = $mysqli->query("SELECT * FROM juego_paquetes WHERE juego_id=" . intval($game['id']) . " ORDER BY precio ASC");
+    $paquetes = [];
+    while ($pack = $resPaq->fetch_assoc()) {
+      $paquetes[] = $pack;
+    }
+  ?>
+  <div class="row row-cols-2 row-cols-sm-3 row-cols-lg-4 g-3 mb-4" id="pack-grid">
+    <?php foreach ($paquetes as $pack):
         $precio_base = floatval($pack['precio']);
         $precio_mostrar = $moneda_actual ? currency_convert_from_base($precio_base, $moneda_actual) : currency_apply_amount_rule($precio_base, null);
         $clave_moneda = $moneda_actual['clave'] ?? 'USD';
         $mostrarDecimales = $moneda_actual ? currency_should_show_decimals($moneda_actual) : true;
+        $packApiId = (int) ($pack['paquete_api'] ?? 0);
+        $apiRequiredFields = [];
+        if ($usesCatalogApi && $packApiId > 0 && isset($apiProductsById[$packApiId])) {
+          $apiRequiredFields = recargas_api_describe_required_fields($apiProductsById[$packApiId]);
+        }
     ?>
       <div class="col">
         <button type="button" class="pack-card card border-info bg-dark text-start w-100 h-100 shadow-sm"
@@ -129,6 +147,7 @@ include __DIR__ . "/includes/header.php";
           data-cantidad="<?= htmlspecialchars($pack['cantidad'], ENT_QUOTES, 'UTF-8') ?>"
           data-price-value="<?= htmlspecialchars((string) $precio_mostrar, ENT_QUOTES, 'UTF-8') ?>"
           data-show-decimals="<?= $mostrarDecimales ? '1' : '0' ?>"
+          data-required-fields="<?= htmlspecialchars(json_encode($apiRequiredFields, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8') ?>"
           data-moneda="<?= htmlspecialchars($clave_moneda) ?>">
           <div class="card-body p-0 d-flex flex-column">
             <?php 
@@ -241,15 +260,20 @@ include __DIR__ . "/includes/header.php";
     </div>
   </div>
   <form class="row g-3" id="order-form">
-    <div class="col-md-4">
-      <label class="form-label text-info">ID de usuario</label>
-      <input type="text" name="user_id" placeholder="Ej: 12345678" class="form-control bg-dark text-info border-info" required />
+    <div class="col-12">
+      <div class="row g-3" id="player-fields-row">
+        <div class="col-md-6 col-12" id="player-primary-field">
+          <label class="form-label text-info" id="player-primary-label">ID de usuario</label>
+          <input type="text" id="order-user-id" name="user_id" placeholder="Ej: 12345678" class="form-control bg-dark text-info border-info" required />
+        </div>
+        <div id="extra-player-fields" class="col-md-6 col-12"></div>
+      </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-6">
       <label class="form-label text-info">Correo</label>
       <input type="email" name="email" placeholder="tu@email.com" value="<?= htmlspecialchars($loggedUserEmail, ENT_QUOTES, 'UTF-8') ?>" autocomplete="email" class="form-control bg-dark text-info border-info" required />
     </div>
-    <div class="col-md-4">
+    <div class="col-md-6">
       <label class="form-label text-info">Cupón</label>
       <div class="input-group">
         <input type="text" name="coupon" id="coupon-input" placeholder="Código opcional" pattern="[A-Za-z0-9]+" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" title="Solo letras y números, sin espacios ni caracteres especiales." class="form-control bg-dark text-info border-info" />
@@ -285,6 +309,8 @@ include __DIR__ . "/includes/header.php";
       <div class="modal-content bg-dark border-info text-center p-4">
         <h4 id="payment-status-modal-title" class="fw-bold text-info mb-3">Estado de la operación</h4>
         <p id="payment-status-modal-message" class="text-light mb-4 small">Tu solicitud fue procesada.</p>
+        <div id="payment-status-modal-reasons" class="d-none payment-reasons-card mb-3 text-start"></div>
+        <div id="payment-status-modal-actions" class="d-none payment-support-actions mb-4"></div>
         <button type="button" id="payment-status-modal-accept" class="btn btn-info fw-bold px-4">Aceptar</button>
       </div>
     </div>
@@ -699,14 +725,20 @@ include __DIR__ . "/includes/header.php";
 </style>
 <script>
   // Todas las variables y lógica JS en un solo bloque
+  const appBasePath = <?= json_encode($scriptDir, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const defaultOrderEmail = <?= json_encode($loggedUserEmail, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const paymentMethodsByCurrency = <?= json_encode($paymentMethodsByCurrency, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const paymentSupportWhatsappBase = <?= json_encode($paymentSupportWhatsappBase, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+  const gameUsesCatalogApi = <?= $usesCatalogApi ? 'true' : 'false' ?>;
   const packCards2 = Array.from(document.querySelectorAll('.pack-card'));
   const selectedPack = document.getElementById("selected-pack");
   const selectedPrice = document.getElementById("selected-price");
   const orderForm = document.getElementById("order-form");
   const buyButton = document.getElementById("buy-button");
+  const playerPrimaryField = document.getElementById('player-primary-field');
+  const playerPrimaryLabel = document.getElementById('player-primary-label');
+  let playerPrimaryInput = document.getElementById('order-user-id');
+  const extraPlayerFields = document.getElementById('extra-player-fields');
   const couponInput = document.getElementById('coupon-input');
   const couponModal = document.getElementById('coupon-modal');
   const loadingModal = document.getElementById('loading-modal');
@@ -715,6 +747,8 @@ include __DIR__ . "/includes/header.php";
   const paymentStatusModal = document.getElementById('payment-status-modal');
   const paymentStatusModalTitle = document.getElementById('payment-status-modal-title');
   const paymentStatusModalMessage = document.getElementById('payment-status-modal-message');
+  const paymentStatusModalReasons = document.getElementById('payment-status-modal-reasons');
+  const paymentStatusModalActions = document.getElementById('payment-status-modal-actions');
   const paymentStatusModalAccept = document.getElementById('payment-status-modal-accept');
   const modalCouponName = document.getElementById('modal-coupon-name');
   const modalYes = document.getElementById('modal-yes');
@@ -726,6 +760,12 @@ include __DIR__ . "/includes/header.php";
   const paymentModalAlert = document.getElementById('payment-modal-alert');
   const paymentModalReasons = document.getElementById('payment-modal-reasons');
   const paymentModalActions = document.getElementById('payment-modal-actions');
+
+  function buildAppUrl(path) {
+    const normalizedPath = String(path || '').startsWith('/') ? String(path || '') : `/${String(path || '')}`;
+    return `${appBasePath}${normalizedPath}`;
+  }
+  let paymentStatusPollTimer = null;
   const paymentTimerValue = document.getElementById('payment-timer-value');
   const paymentSummaryUser = document.getElementById('payment-summary-user');
   const paymentSummaryProduct = document.getElementById('payment-summary-product');
@@ -750,6 +790,185 @@ include __DIR__ . "/includes/header.php";
   let couponValue = '';
   let activePaymentOrder = null;
   let paymentTimerInterval = null;
+  const defaultPrimaryField = {
+    name: 'id_juego',
+    label: 'ID de usuario',
+    placeholder: 'Ej: 12345678',
+    inputMode: 'text',
+    maxLength: 150
+  };
+
+  function parseRequiredFields(rawValue) {
+    try {
+      const parsed = JSON.parse(String(rawValue || '[]'));
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function buildPackStateFromCard(card) {
+    return {
+      id: card.dataset.packageId,
+      name: card.dataset.name,
+      priceValue: Number(card.dataset.priceValue || 0),
+      moneda: card.dataset.moneda,
+      cantidad: card.dataset.cantidad,
+      showDecimals: card.dataset.showDecimals === '1',
+      requiredFields: parseRequiredFields(card.dataset.requiredFields)
+    };
+  }
+
+  function clearFieldValidation(field) {
+    if (!field || !field.name) {
+      return;
+    }
+
+    const errorElem = document.getElementById(field.name + '-error');
+    if (errorElem) {
+      errorElem.remove();
+    }
+  }
+
+  function normalizeFieldOptions(fieldConfig) {
+    const options = fieldConfig && Array.isArray(fieldConfig.options) ? fieldConfig.options : [];
+    return options
+      .map((option) => {
+        if (option && typeof option === 'object') {
+          return {
+            value: String(option.value || '').trim(),
+            label: String(option.label || option.value || '').trim()
+          };
+        }
+
+        const normalized = String(option || '').trim();
+        return { value: normalized, label: normalized };
+      })
+      .filter((option) => option.value !== '');
+  }
+
+  function createDynamicFieldControl(fieldConfig, fieldNamePrefix) {
+    const options = normalizeFieldOptions(fieldConfig);
+    const controlName = `${fieldNamePrefix}${fieldConfig.name || 'extra'}`;
+    const hasOptions = options.length > 0;
+    const control = document.createElement(hasOptions ? 'select' : 'input');
+
+    if (hasOptions) {
+      control.innerHTML = `<option value="">Selecciona una opcion</option>`;
+      options.forEach((option) => {
+        const optionElement = document.createElement('option');
+        optionElement.value = option.value;
+        optionElement.textContent = option.label || option.value;
+        control.appendChild(optionElement);
+      });
+    } else {
+      control.type = 'text';
+      control.placeholder = fieldConfig.placeholder || 'Ingresa el dato';
+      control.inputMode = fieldConfig.inputMode || 'text';
+      control.maxLength = Number(fieldConfig.maxLength || 180);
+    }
+
+    control.name = controlName;
+    control.dataset.apiField = fieldConfig.name || '';
+    control.className = hasOptions ? 'form-select bg-dark text-info border-info' : 'form-control bg-dark text-info border-info';
+    control.required = true;
+
+    return control;
+  }
+
+  function syncPrimaryControl(fieldConfig) {
+    if (!playerPrimaryField || !playerPrimaryInput) {
+      return;
+    }
+
+    const normalizedConfig = fieldConfig || defaultPrimaryField;
+    const options = normalizeFieldOptions(normalizedConfig);
+    const needsSelect = options.length > 0;
+    const currentIsSelect = playerPrimaryInput.tagName === 'SELECT';
+
+    if (needsSelect !== currentIsSelect) {
+      const replacement = createDynamicFieldControl(normalizedConfig, 'user_');
+      replacement.id = 'order-user-id';
+      replacement.value = '';
+      playerPrimaryInput.replaceWith(replacement);
+      playerPrimaryInput = replacement;
+    }
+
+    playerPrimaryInput.name = 'user_id';
+    playerPrimaryInput.dataset.apiField = normalizedConfig.name || defaultPrimaryField.name;
+    playerPrimaryInput.required = true;
+    if (playerPrimaryInput.tagName === 'SELECT') {
+      playerPrimaryInput.className = 'form-select bg-dark text-info border-info';
+    } else {
+      playerPrimaryInput.className = 'form-control bg-dark text-info border-info';
+      playerPrimaryInput.placeholder = normalizedConfig.placeholder || defaultPrimaryField.placeholder;
+      playerPrimaryInput.inputMode = normalizedConfig.inputMode || 'text';
+      playerPrimaryInput.maxLength = Number(normalizedConfig.maxLength || defaultPrimaryField.maxLength);
+    }
+  }
+
+  function renderPlayerFields(pack) {
+    const requiredFields = pack && Array.isArray(pack.requiredFields) ? pack.requiredFields : [];
+    const shouldShowPrimaryField = !gameUsesCatalogApi || !pack || requiredFields.length > 0;
+    const primaryConfig = requiredFields[0] || defaultPrimaryField;
+
+    if (playerPrimaryField && playerPrimaryInput && playerPrimaryLabel) {
+      syncPrimaryControl(primaryConfig);
+      playerPrimaryField.classList.toggle('d-none', !shouldShowPrimaryField);
+      playerPrimaryLabel.textContent = primaryConfig.label || defaultPrimaryField.label;
+      playerPrimaryInput.dataset.apiField = primaryConfig.name || defaultPrimaryField.name;
+      playerPrimaryInput.required = shouldShowPrimaryField;
+
+      if (!shouldShowPrimaryField) {
+        playerPrimaryInput.value = '';
+        clearFieldValidation(playerPrimaryInput);
+      }
+    }
+
+    if (!extraPlayerFields) {
+      return;
+    }
+
+    extraPlayerFields.innerHTML = '';
+    requiredFields.slice(1).forEach((fieldConfig) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'col-12';
+
+      const label = document.createElement('label');
+      label.className = 'form-label text-info';
+      label.textContent = fieldConfig.label || 'Dato adicional';
+
+      const input = createDynamicFieldControl(fieldConfig, 'player_field_');
+
+      wrapper.appendChild(label);
+      wrapper.appendChild(input);
+      extraPlayerFields.appendChild(wrapper);
+    });
+  }
+
+  function collectPlayerFields() {
+    const fields = {};
+
+    if (playerPrimaryField && !playerPrimaryField.classList.contains('d-none') && playerPrimaryInput) {
+      const fieldName = String(playerPrimaryInput.dataset.apiField || defaultPrimaryField.name);
+      const fieldValue = playerPrimaryInput.value.trim();
+      if (fieldValue !== '') {
+        fields[fieldName] = fieldValue;
+      }
+    }
+
+    if (extraPlayerFields) {
+      extraPlayerFields.querySelectorAll('[data-api-field]').forEach((input) => {
+        const fieldName = String(input.dataset.apiField || '');
+        const fieldValue = input.value.trim();
+        if (fieldName !== '' && fieldValue !== '') {
+          fields[fieldName] = fieldValue;
+        }
+      });
+    }
+
+    return fields;
+  }
 
   function scrollToOrderForm() {
     if (!orderForm) {
@@ -833,6 +1052,101 @@ include __DIR__ . "/includes/header.php";
     setOverlayVisible(paymentStatusModal, true);
   }
 
+  function clearPaymentStatusPolling() {
+    if (paymentStatusPollTimer) {
+      clearTimeout(paymentStatusPollTimer);
+      paymentStatusPollTimer = null;
+    }
+    if (paymentStatusModalAccept) {
+      paymentStatusModalAccept.disabled = false;
+      paymentStatusModalAccept.textContent = 'Aceptar';
+    }
+  }
+
+  function setPaymentStatusWaiting(isWaiting) {
+    if (!paymentStatusModalAccept) {
+      return;
+    }
+    paymentStatusModalAccept.disabled = !!isWaiting;
+    paymentStatusModalAccept.textContent = isWaiting ? 'Esperando confirmación...' : 'Aceptar';
+  }
+
+  async function pollOrderResolution(reference, totalText, attempt = 1) {
+    if (!activePaymentOrder || !activePaymentOrder.orderId) {
+      clearPaymentStatusPolling();
+      return;
+    }
+
+    const maxAttempts = 15;
+    const pollDelayMs = 4000;
+    const payload = new URLSearchParams();
+    payload.set('action', 'order_status');
+    payload.set('order_id', String(activePaymentOrder.orderId));
+    payload.set('attempt_sync', '1');
+    if (activePaymentOrder.email) {
+      payload.set('email', String(activePaymentOrder.email));
+    }
+
+    try {
+      const response = await fetch(buildAppUrl('/api/pedidos.php'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: payload.toString(),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error((data && data.message) ? data.message : 'No se pudo consultar el estado del pedido.');
+      }
+
+      const nextState = String((data && data.estado) || '').toLowerCase();
+      if (nextState === 'enviado') {
+        clearPaymentStatusPolling();
+        clearPaymentSupportUi();
+        setPaymentAlert('Pago verificado y recarga procesada correctamente.', 'success');
+        setPaymentFormDisabled(true);
+        clearPaymentTimer();
+        setCancelOrderButtonMode('close');
+        showPaymentStatusModal('Operación exitosa', 'Pago verificado y recarga procesada correctamente.', 'success');
+        return;
+      }
+
+      if (nextState === 'cancelado') {
+        clearPaymentStatusPolling();
+        const cancelMessage = (data && data.provider_message) ? data.provider_message : 'El proveedor canceló la compra.';
+        setPaymentAlert(cancelMessage, 'danger');
+        renderProviderPaymentDetails(data, reference, totalText);
+        setPaymentFormDisabled(true);
+        clearPaymentTimer();
+        setCancelOrderButtonMode('close');
+        showPaymentStatusModal('No se pudo completar la operación', cancelMessage, 'danger');
+        return;
+      }
+
+      if (attempt >= maxAttempts) {
+        clearPaymentStatusPolling();
+        setPaymentAlert('La compra sigue en proceso. Puedes dejar esta ventana y el sistema continuará el seguimiento.', 'info');
+        renderProviderPaymentDetails(data, reference, totalText);
+        showPaymentStatusModal('Compra en proceso', 'La compra sigue en proceso. El sistema continuará el seguimiento automático.', 'info');
+        return;
+      }
+
+      renderProviderPaymentDetails(data, reference, totalText);
+      setPaymentStatusWaiting(true);
+      paymentStatusPollTimer = setTimeout(() => {
+        pollOrderResolution(reference, totalText, attempt + 1);
+      }, pollDelayMs);
+    } catch (error) {
+      if (attempt >= maxAttempts) {
+        clearPaymentStatusPolling();
+        return;
+      }
+
+      paymentStatusPollTimer = setTimeout(() => {
+        pollOrderResolution(reference, totalText, attempt + 1);
+      }, 5000);
+    }
+  }
+
   function showToast(msg, type) {
     const toast = document.createElement('div');
     toast.textContent = msg;
@@ -901,6 +1215,7 @@ include __DIR__ . "/includes/header.php";
   }
 
   function clearPaymentSupportUi() {
+    clearPaymentStatusPolling();
     if (paymentModalReasons) {
       paymentModalReasons.className = 'd-none payment-reasons-card mb-3';
       paymentModalReasons.innerHTML = '';
@@ -909,10 +1224,19 @@ include __DIR__ . "/includes/header.php";
       paymentModalActions.className = 'd-none payment-support-actions mb-4';
       paymentModalActions.innerHTML = '';
     }
+    if (paymentStatusModalReasons) {
+      paymentStatusModalReasons.className = 'd-none payment-reasons-card mb-3 text-start';
+      paymentStatusModalReasons.innerHTML = '';
+    }
+    if (paymentStatusModalActions) {
+      paymentStatusModalActions.className = 'd-none payment-support-actions mb-4';
+      paymentStatusModalActions.innerHTML = '';
+    }
   }
 
   if (paymentStatusModalAccept) {
     paymentStatusModalAccept.addEventListener('click', function() {
+      clearPaymentStatusPolling();
       setOverlayVisible(paymentStatusModal, false);
       scrollPaymentModalToTop();
     });
@@ -939,10 +1263,73 @@ include __DIR__ . "/includes/header.php";
     return `${paymentSupportWhatsappBase}?text=${encodeURIComponent(message)}`;
   }
 
+  function extractPaymentReasons(data) {
+    const reasons = Array.isArray(data && data.reasons)
+      ? data.reasons.map((reason) => String(reason || '').trim()).filter(Boolean)
+      : [];
+    const providerMessage = String((data && data.provider_message) || '').trim();
+
+    if (providerMessage !== '' && !reasons.includes(providerMessage)) {
+      reasons.unshift(providerMessage);
+    }
+
+    return reasons;
+  }
+
+  function normalizeProviderReasonsForDisplay(providerFlow, reasons) {
+    const flow = String(providerFlow || '').toLowerCase();
+    const list = Array.isArray(reasons) ? reasons.slice() : [];
+
+    if (flow !== 'tracking') {
+      return list;
+    }
+
+    const filtered = list.filter((reason) => !/json|timed out|timeout|0 bytes|respuesta vac[ií]a|incompleta|empty body|empty reply/i.test(String(reason || '')));
+    if (filtered.length) {
+      return filtered;
+    }
+
+    return ['La confirmación automática del proveedor quedó pendiente y será resuelta por webhook o por sincronización posterior.'];
+  }
+
+  function renderSupportCard(container, title, summary, steps, reasons) {
+    if (!container) {
+      return;
+    }
+
+    container.className = `payment-reasons-card mb-3${container.id === 'payment-status-modal-reasons' ? ' text-start' : ''}`;
+    container.innerHTML = `
+      <div class="payment-reasons-title">${escapePaymentHtml(title)}</div>
+      <div class="payment-reasons-summary">${escapePaymentHtml(summary)}</div>
+      <ol class="payment-reasons-steps">${steps.map((step) => `<li>${escapePaymentHtml(step)}</li>`).join('')}</ol>
+      ${reasons.length ? `
+        <div class="payment-reasons-caption">Detalle detectado por el sistema:</div>
+        <ul>${reasons.map((reason) => `<li>${escapePaymentHtml(reason)}</li>`).join('')}</ul>
+      ` : ''}
+    `;
+  }
+
+  function renderSupportActionLinks(reference, totalText) {
+    const whatsappUrl = buildPaymentSupportWhatsappUrl(activePaymentOrder ? activePaymentOrder.orderId : '', reference, totalText);
+    if (!whatsappUrl) {
+      return;
+    }
+
+    const actionHtml = `<a href="${escapePaymentHtml(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="payment-support-link">Contactar al administrador por WhatsApp</a>`;
+    if (paymentModalActions) {
+      paymentModalActions.className = 'payment-support-actions mb-4';
+      paymentModalActions.innerHTML = actionHtml;
+    }
+    if (paymentStatusModalActions) {
+      paymentStatusModalActions.className = 'payment-support-actions mb-4';
+      paymentStatusModalActions.innerHTML = actionHtml;
+    }
+  }
+
   function renderPaymentFailureDetails(data, reference, totalText) {
     clearPaymentSupportUi();
     const failureType = String((data && data.failure_type) || 'server_or_data_mismatch');
-    const reasons = Array.isArray(data && data.reasons) ? data.reasons.filter(Boolean) : [];
+    const reasons = extractPaymentReasons(data);
     let title = 'No pudimos validar el pago automáticamente';
     let summary = 'La validación no se pudo completar con la respuesta actual del servidor bancario.';
     let steps = [
@@ -976,28 +1363,51 @@ include __DIR__ . "/includes/header.php";
     }
 
     if (paymentModalReasons && reasons.length) {
-      paymentModalReasons.className = 'payment-reasons-card mb-3';
-      paymentModalReasons.innerHTML = `
-        <div class="payment-reasons-title">${escapePaymentHtml(title)}</div>
-        <div class="payment-reasons-summary">${escapePaymentHtml(summary)}</div>
-        <ol class="payment-reasons-steps">${steps.map((step) => `<li>${escapePaymentHtml(step)}</li>`).join('')}</ol>
-        <div class="payment-reasons-caption">Detalle detectado por el sistema:</div>
-        <ul>${reasons.map((reason) => `<li>${escapePaymentHtml(reason)}</li>`).join('')}</ul>
-      `;
-    } else if (paymentModalReasons) {
-      paymentModalReasons.className = 'payment-reasons-card mb-3';
-      paymentModalReasons.innerHTML = `
-        <div class="payment-reasons-title">${escapePaymentHtml(title)}</div>
-        <div class="payment-reasons-summary">${escapePaymentHtml(summary)}</div>
-        <ol class="payment-reasons-steps">${steps.map((step) => `<li>${escapePaymentHtml(step)}</li>`).join('')}</ol>
-      `;
+      renderSupportCard(paymentModalReasons, title, summary, steps, reasons);
+      renderSupportCard(paymentStatusModalReasons, title, summary, steps, reasons);
+    } else {
+      renderSupportCard(paymentModalReasons, title, summary, steps, []);
+      renderSupportCard(paymentStatusModalReasons, title, summary, steps, []);
+    }
+    renderSupportActionLinks(reference, totalText);
+    scrollPaymentModalToTop();
+  }
+
+  function renderProviderPaymentDetails(data, reference, totalText) {
+    clearPaymentSupportUi();
+
+    const providerFlow = String((data && data.provider_flow) || '').toLowerCase();
+    const reasons = normalizeProviderReasonsForDisplay(providerFlow, extractPaymentReasons(data));
+    let title = 'La recarga requiere revisión manual';
+    let summary = 'El pago bancario fue verificado, pero el proveedor no confirmó una entrega automática.';
+    let steps = [
+      'Conserva el comprobante de pago y el número de referencia de esta orden.',
+      'Nuestro equipo revisará el pedido; si deseas acelerar la revisión, contáctanos por WhatsApp con tu comprobante.'
+    ];
+
+    if (providerFlow === 'accepted') {
+      title = 'La compra quedó en proceso';
+      summary = 'El proveedor aceptó la orden, pero todavía no reporta entrega final.';
+      steps = [
+        'Tu pago ya quedó verificado correctamente.',
+        'Nuestro equipo dará seguimiento al pedido hasta que el proveedor confirme el resultado final.'
+      ];
     }
 
-    const whatsappUrl = buildPaymentSupportWhatsappUrl(activePaymentOrder ? activePaymentOrder.orderId : '', reference, totalText);
-    if (paymentModalActions && whatsappUrl) {
-      paymentModalActions.className = 'payment-support-actions mb-4';
-      paymentModalActions.innerHTML = `<a href="${escapePaymentHtml(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="payment-support-link">Contactar al administrador por WhatsApp</a>`;
+    if (providerFlow === 'tracking') {
+      title = 'La compra quedó en seguimiento automático';
+      summary = 'El pago ya fue verificado. La API del proveedor no respondió a tiempo, pero el sistema seguirá consultando hasta confirmar el resultado.';
+      steps = [
+        'Tu pago quedó verificado correctamente y la orden sigue activa.',
+        'Primero intentaremos resolverla por webhook; si no llega confirmación, el sistema hará sincronización automática posterior.',
+        'Si el proveedor no confirma pronto, el equipo también podrá revisarla desde la sincronización manual del panel.'
+      ];
     }
+
+    renderSupportCard(paymentModalReasons, title, summary, steps, reasons);
+    renderSupportCard(paymentStatusModalReasons, title, summary, steps, reasons);
+    renderSupportActionLinks(reference, totalText);
+
     scrollPaymentModalToTop();
   }
 
@@ -1088,6 +1498,7 @@ include __DIR__ . "/includes/header.php";
     couponValue = '';
     activePack = null;
     packCards2.forEach((item) => item.classList.remove('neon-selected'));
+    renderPlayerFields(null);
     updateResumenCompra(null);
     updateButtonState();
   }
@@ -1114,7 +1525,7 @@ include __DIR__ . "/includes/header.php";
     setPaymentFormDisabled(true);
     setPaymentAlert('La orden expiró. Estamos cancelando el pedido y notificando por correo.', 'danger');
     try {
-      const response = await fetch(window.__TVG_API_PEDIDOS || '/api/pedidos.php', {
+      const response = await fetch(buildAppUrl('/api/pedidos.php'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: `action=expire_order&order_id=${encodeURIComponent(activePaymentOrder.orderId)}`
@@ -1144,7 +1555,7 @@ include __DIR__ . "/includes/header.php";
     paymentTimerValue.textContent = `${minutes}:${seconds}`;
   }
 
-  function openPaymentModal(orderId, expiresAt, remainingSeconds, pack, userId, totalText) {
+  function openPaymentModal(orderId, expiresAt, remainingSeconds, pack, userId, totalText, orderEmail) {
     const currentMethod = renderPaymentMethodsByCurrency(pack.moneda || '');
     if (!currentMethod) {
       showToast(`No hay métodos de pago activos para la moneda ${pack.moneda || ''}.`, 'error');
@@ -1158,6 +1569,7 @@ include __DIR__ . "/includes/header.php";
       expiresAtMs: Date.now() + (safeRemainingSeconds * 1000),
       expiresAt,
       currency: pack.moneda || '',
+      email: orderEmail || '',
       expiring: false,
     };
 
@@ -1226,15 +1638,9 @@ include __DIR__ . "/includes/header.php";
         item.classList.remove("neon-selected");
       });
       card.classList.add("neon-selected");
-      activePack = {
-        id: card.dataset.packageId,
-        name: card.dataset.name,
-        priceValue: Number(card.dataset.priceValue || 0),
-        moneda: card.dataset.moneda,
-        cantidad: card.dataset.cantidad,
-        showDecimals: card.dataset.showDecimals === '1'
-      };
+      activePack = buildPackStateFromCard(card);
       updateResumenCompra(activePack);
+      renderPlayerFields(activePack);
       updateButtonState();
       scrollToOrderForm();
     });
@@ -1242,6 +1648,7 @@ include __DIR__ . "/includes/header.php";
   if (packCards2.length) {
     // Ya no se selecciona automáticamente ningún paquete al cargar
   }
+  renderPlayerFields(null);
               if (couponInput) {
               function normalizeCouponCode(value) {
                 return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -1300,7 +1707,7 @@ include __DIR__ . "/includes/header.php";
                     return;
                   }
                   paymentCancelConfirmButton.disabled = true;
-                  fetch(window.__TVG_API_PEDIDOS || '/api/pedidos.php', {
+                  fetch(buildAppUrl('/api/pedidos.php'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: `action=cancel_order&order_id=${encodeURIComponent(activePaymentOrder.orderId)}`
@@ -1360,7 +1767,7 @@ include __DIR__ . "/includes/header.php";
                   setPaymentAlert('', 'info');
                   setLoadingModalContent('Enviando orden...', 'Estamos registrando tu comprobante y procesando la orden según la moneda del pedido. No cierres esta ventana.');
                   setOverlayVisible(loadingModal, true);
-                  fetch(window.__TVG_API_PEDIDOS || '/api/pedidos.php', {
+                  fetch(buildAppUrl('/api/pedidos.php'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: [
@@ -1403,12 +1810,29 @@ include __DIR__ . "/includes/header.php";
 
                     if (nextState === 'pagado') {
                       const paidMessage = data.message || 'El pago fue confirmado correctamente.';
-                      setPaymentAlert(paidMessage, 'success');
-                      clearPaymentSupportUi();
+                      const providerFlow = String((data && data.provider_flow) || '').toLowerCase();
+                      const hasProviderDetails = extractPaymentReasons(data).length > 0;
+                      const isAcceptedFlow = providerFlow === 'accepted' || providerFlow === 'tracking';
+                      const requiresManualReview = providerFlow === 'manual_review' || (!isAcceptedFlow && hasProviderDetails);
+
+                      setPaymentAlert(paidMessage, requiresManualReview ? 'warning' : (isAcceptedFlow ? 'info' : 'success'));
+                      if (hasProviderDetails || providerFlow === 'accepted') {
+                        renderProviderPaymentDetails(data, reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
+                      } else {
+                        clearPaymentSupportUi();
+                      }
                       setPaymentFormDisabled(true);
                       clearPaymentTimer();
                       setCancelOrderButtonMode('close');
-                      showPaymentStatusModal('Operación exitosa', paidMessage, 'success');
+                      showPaymentStatusModal(
+                        requiresManualReview ? 'Revisión requerida' : (isAcceptedFlow ? 'Compra en proceso' : 'Operación exitosa'),
+                        paidMessage,
+                        requiresManualReview ? 'danger' : (isAcceptedFlow ? 'info' : 'success')
+                      );
+                      if (providerFlow === 'accepted' || providerFlow === 'tracking') {
+                        setPaymentStatusWaiting(true);
+                        pollOrderResolution(reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '', 1);
+                      }
                       return;
                     }
 
@@ -1426,7 +1850,10 @@ include __DIR__ . "/includes/header.php";
                   })
                   .catch((error) => {
                     setOverlayVisible(loadingModal, false);
-                    const errorMessage = error.message || 'No se pudo validar el pago por respuesta del servidor.';
+                    const rawErrorMessage = String((error && error.message) || '').trim();
+                    const errorMessage = rawErrorMessage.toLowerCase() === 'failed to fetch'
+                      ? 'No se pudo conectar con el servidor para validar el pago. Vuelve a intentarlo en unos segundos.'
+                      : (rawErrorMessage || 'No se pudo validar el pago por respuesta del servidor.');
                     setPaymentAlert(errorMessage, 'danger');
                     renderPaymentServerFailure(errorMessage, reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
                     setPaymentFormDisabled(false);
@@ -1450,17 +1877,12 @@ include __DIR__ . "/includes/header.php";
                   if (activePack) {
                     const selectedCard = packCards2.find((card) => card.classList.contains('neon-selected'));
                     if (selectedCard) {
-                      activePack = {
-                        id: selectedCard.dataset.packageId,
-                        name: selectedCard.dataset.name,
-                        priceValue: Number(selectedCard.dataset.priceValue || 0),
-                        moneda: selectedCard.dataset.moneda,
-                        cantidad: selectedCard.dataset.cantidad,
-                        showDecimals: selectedCard.dataset.showDecimals === '1'
-                      };
+                      activePack = buildPackStateFromCard(selectedCard);
                       updateResumenCompra(activePack);
+                      renderPlayerFields(activePack);
                     }
                   } else {
+                    renderPlayerFields(null);
                     updateResumenCompra(null);
                   }
 
@@ -1494,7 +1916,7 @@ include __DIR__ . "/includes/header.php";
                   showToast('Ingresa un cupón.', 'error');
                   return;
                 }
-                fetch('../api/validar_cupon.php', {
+                fetch(buildAppUrl('/api/validar_cupon.php'), {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                   body: `code=${encodeURIComponent(cupon)}&pack_price=${encodeURIComponent(precioNumerico)}&currency=${encodeURIComponent(pack.moneda || '')}`
@@ -1532,7 +1954,8 @@ include __DIR__ . "/includes/header.php";
                 const btn = document.getElementById('buy-button');
                 const couponVal = normalizeCouponCode(couponInput.value);
                 couponInput.value = couponVal;
-                const userId = orderForm.user_id.value.trim();
+                const userId = playerPrimaryInput ? playerPrimaryInput.value.trim() : '';
+                const playerFields = collectPlayerFields();
                 const email = orderForm.email.value.trim();
                 const pack = activePack;
                 if (!pack) {
@@ -1619,6 +2042,7 @@ include __DIR__ . "/includes/header.php";
                   price: precioFinal,
                   pack_base: String(normalizeCurrencyAmount(pack.priceValue, pack.showDecimals)),
                   user_identifier: userId,
+                  player_fields_json: JSON.stringify(playerFields),
                   email: email,
                   coupon: couponApplied ? couponVal : '',
                 };
@@ -1626,7 +2050,7 @@ include __DIR__ . "/includes/header.php";
                 btn.disabled = true;
                 setLoadingModalContent('Procesando pedido...', 'Estamos registrando tu pedido para abrir el formulario de pago.');
                 setOverlayVisible(loadingModal, true);
-                fetch(window.__TVG_API_PEDIDOS || '/api/pedidos.php', {
+                fetch(buildAppUrl('/api/pedidos.php'), {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                   body: Object.keys(pedidoData).map(k => `${encodeURIComponent(k)}=${encodeURIComponent(pedidoData[k])}`).join('&')
@@ -1639,12 +2063,7 @@ include __DIR__ . "/includes/header.php";
                     // Si no es JSON válido pero la respuesta es 200, asumimos éxito
                     if (res.ok) {
                       showToast('Pedido registrado correctamente', 'success');
-                      orderForm.reset();
-                      couponInput.disabled = false;
-                      applyCouponButton.disabled = false;
-                      couponApplied = false;
-                      selectedPack.textContent = 'Ninguno';
-                      selectedPrice.textContent = `${monedaActualClave} ${formatCurrencyAmount(0, monedaActualMostrarDecimales)}`;
+                      resetCheckoutState();
                       return;
                     } else {
                       showToast('Error de red al registrar pedido', 'error');
@@ -1652,7 +2071,7 @@ include __DIR__ . "/includes/header.php";
                     }
                   }
                   if (data && data.ok) {
-                    const opened = openPaymentModal(data.order_id, data.expires_at, data.remaining_seconds, pack, userId, selectedPrice.textContent);
+                    const opened = openPaymentModal(data.order_id, data.expires_at, data.remaining_seconds, pack, userId, selectedPrice.textContent, email);
                     if (opened) {
                       showToast('Pedido registrado. Completa ahora los datos del pago.', 'success');
                     }
