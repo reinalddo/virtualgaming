@@ -33,6 +33,7 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('inicio_popup_nombre_canal', 'DanisA Gamer Store', 'Nombre visible del canal en la ventana inicial'),
 ('inicio_popup_video_url', '', 'Enlace de YouTube usado en la ventana inicial con video'),
 ('ff_bank_api_base_url', 'https://pagonorte.net', 'Enlace base de la API del banco para consultar movimientos'),
+('ff_bank_dias_disponibles', '', 'Dias disponibles reportados por la API del banco al consultar movimientos'),
 ('ff_bank_posicion', '0', 'Posicion para la conexion al banco de Free Fire'),
 ('ff_bank_token', '', 'Token para la conexion al banco de Free Fire'),
 ('ff_bank_clave', '', 'Clave para la conexion al banco de Free Fire'),
