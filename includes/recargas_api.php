@@ -588,6 +588,20 @@ function recargas_api_post_json_with_fallback(string $url, array $payload, array
     }
 }
 
+function recargas_api_response_has_delivered_codes($value): bool {
+    if (is_array($value)) {
+        foreach ($value as $item) {
+            if (recargas_api_response_has_delivered_codes($item)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    return trim((string) $value) !== '';
+}
+
 function recargas_api_purchase_is_completed(array $response): bool {
     if (!recargas_api_purchase_is_accepted($response)) {
         return false;
@@ -601,6 +615,12 @@ function recargas_api_purchase_is_completed(array $response): bool {
     foreach (['codigo_entregado', 'codigo', 'pin', 'serial', 'voucher'] as $key) {
         $value = trim((string) ($response[$key] ?? ''));
         if ($value !== '') {
+            return true;
+        }
+    }
+
+    foreach (['codigos', 'codigos_entregados'] as $key) {
+        if (array_key_exists($key, $response) && recargas_api_response_has_delivered_codes($response[$key])) {
             return true;
         }
     }
