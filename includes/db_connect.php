@@ -48,7 +48,16 @@ if ($roleColumnResult instanceof mysqli_result) {
     $roleColumn = $roleColumnResult->fetch_assoc();
     $roleColumnResult->free();
     $roleType = strtolower((string) ($roleColumn['Type'] ?? ''));
-    if ($roleType !== '' && strpos($roleType, "'empleado'") === false) {
-        $mysqli->query("ALTER TABLE usuarios MODIFY rol ENUM('admin','empleado','usuario') NOT NULL DEFAULT 'usuario'");
+    if ($roleType !== '' && (strpos($roleType, "'empleado'") === false || strpos($roleType, "'influencer'") === false)) {
+        $mysqli->query("ALTER TABLE usuarios MODIFY rol ENUM('admin','empleado','influencer','usuario') NOT NULL DEFAULT 'usuario'");
+    }
+}
+
+$phoneColumnResult = $mysqli->query("SHOW COLUMNS FROM usuarios LIKE 'telefono'");
+if ($phoneColumnResult instanceof mysqli_result) {
+    $phoneColumnExists = $phoneColumnResult->fetch_assoc();
+    $phoneColumnResult->free();
+    if (!$phoneColumnExists) {
+        $mysqli->query("ALTER TABLE usuarios ADD COLUMN telefono VARCHAR(50) NULL AFTER email");
     }
 }

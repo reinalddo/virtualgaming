@@ -39,6 +39,7 @@ if ($pageDescription === '') {
 $authUser = auth_sync_session_user();
 $authUserName = trim((string) (($authUser['full_name'] ?? $authUser['nombre'] ?? $authUser['email'] ?? 'Usuario')));
 $authUserEmail = trim((string) ($authUser['email'] ?? ''));
+$authUserPhone = trim((string) ($authUser['telefono'] ?? ''));
 $authUserRole = strtolower(trim((string) ($authUser['rol'] ?? '')));
 $authUserCanAccessAdmin = in_array($authUserRole, ['admin', 'empleado'], true);
 $authUserAdminHome = app_path('/admin/dashboard');
@@ -519,6 +520,10 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
                 <div>
                   <label class="form-label small text-info">Correo</label>
                   <input type="email" name="email" class="form-control bg-dark text-info border-info" value="<?php echo htmlspecialchars($authUserEmail, ENT_QUOTES, 'UTF-8'); ?>" required />
+                </div>
+                <div>
+                  <label class="form-label small text-info">Teléfono</label>
+                  <input type="tel" name="phone" class="form-control bg-dark text-info border-info" value="<?php echo htmlspecialchars($authUserPhone, ENT_QUOTES, 'UTF-8'); ?>" autocomplete="tel" placeholder="Ej. +58 412 0000000" />
                 </div>
                 <div>
                   <label class="form-label small text-info">Nueva contraseña</label>

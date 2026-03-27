@@ -24,8 +24,14 @@ try {
     $roleColumnStmt = $pdo->query("SHOW COLUMNS FROM usuarios LIKE 'rol'");
     $roleColumn = $roleColumnStmt ? $roleColumnStmt->fetch() : false;
     $roleType = strtolower((string) ($roleColumn['Type'] ?? ''));
-    if ($roleType !== '' && strpos($roleType, "'empleado'") === false) {
-        $pdo->exec("ALTER TABLE usuarios MODIFY rol ENUM('admin','empleado','usuario') NOT NULL DEFAULT 'usuario'");
+    if ($roleType !== '' && (strpos($roleType, "'empleado'") === false || strpos($roleType, "'influencer'") === false)) {
+        $pdo->exec("ALTER TABLE usuarios MODIFY rol ENUM('admin','empleado','influencer','usuario') NOT NULL DEFAULT 'usuario'");
+    }
+
+    $phoneColumnStmt = $pdo->query("SHOW COLUMNS FROM usuarios LIKE 'telefono'");
+    $phoneColumn = $phoneColumnStmt ? $phoneColumnStmt->fetch() : false;
+    if (!$phoneColumn) {
+        $pdo->exec("ALTER TABLE usuarios ADD COLUMN telefono VARCHAR(50) NULL AFTER email");
     }
 } catch (Throwable $exception) {
 }
