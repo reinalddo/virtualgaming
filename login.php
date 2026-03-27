@@ -58,5 +58,9 @@ if (($user["rol"] ?? "") === "empleado") {
   header("Location: " . app_path('/admin/dashboard'));
   exit;
 }
+if (($user["rol"] ?? "") === "influencer") {
+  header("Location: " . app_path('/admin/cupones') . '?tab=influencers');
+  exit;
+}
 header("Location: " . app_path('/'));
 exit;
