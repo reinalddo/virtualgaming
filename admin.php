@@ -744,7 +744,7 @@ switch ($seccion) {
 
             if ($activeTab === 'api-banco') {
                 $ffBankApiBaseUrl = store_config_normalize_bank_api_base_url((string) ($_POST['ff_bank_api_base_url'] ?? 'https://pagonorte.net'));
-                $ffBankPosicion = (string) intval($_POST['ff_bank_posicion'] ?? 0);
+                $ffBankPosicion = trim((string) ($_POST['ff_bank_posicion'] ?? ''));
                 $ffBankToken = trim((string) ($_POST['ff_bank_token'] ?? ''));
                 $ffBankClave = trim((string) ($_POST['ff_bank_clave'] ?? ''));
 
@@ -754,8 +754,17 @@ switch ($seccion) {
                     admin_redirect('configuracion', ['tab' => 'api-banco']);
                 }
 
-                if (!in_array($ffBankPosicion, ['0', '1', '2', '3', '4', '5'], true)) {
+                if ($ffBankPosicion !== '' && !in_array($ffBankPosicion, ['0', '1', '2', '3', '4', '5'], true)) {
                     admin_set_flash('error', 'La Posicion debe estar entre 0 y 5.');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'api-banco']);
+                }
+
+                $hasAnyBankCredential = $ffBankPosicion !== '' || $ffBankToken !== '' || $ffBankClave !== '';
+                $hasCompleteBankCredential = $ffBankPosicion !== '' && $ffBankToken !== '' && $ffBankClave !== '';
+
+                if ($hasAnyBankCredential && !$hasCompleteBankCredential) {
+                    admin_set_flash('error', 'Para activar la conexión bancaria automática debes completar Posicion, Token y Clave, o dejar los tres campos vacíos.');
                     define('ADMIN_CONFIG_POST_HANDLED', true);
                     admin_redirect('configuracion', ['tab' => 'api-banco']);
                 }
@@ -943,7 +952,7 @@ switch ($seccion) {
                 try {
                     $bankConfig = [
                         'ff_bank_api_base_url' => store_config_get('ff_bank_api_base_url', 'https://pagonorte.net'),
-                        'ff_bank_posicion' => store_config_get('ff_bank_posicion', '0'),
+                        'ff_bank_posicion' => store_config_get('ff_bank_posicion', ''),
                         'ff_bank_token' => store_config_get('ff_bank_token', ''),
                         'ff_bank_clave' => store_config_get('ff_bank_clave', ''),
                     ];

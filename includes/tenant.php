@@ -221,17 +221,12 @@ if (!function_exists('resolve_tenant_slug')) {
             }
         }
 
-        if (tenant_directory_exists('virtualgaming')) {
-            $resolvedSlug = 'virtualgaming';
+        if (($host === '' || $host === 'localhost' || $host === '127.0.0.1') && tenant_directory_exists('localhost')) {
+            $resolvedSlug = 'localhost';
             return $resolvedSlug;
         }
 
-        if (tenant_directory_exists('default')) {
-            $resolvedSlug = 'default';
-            return $resolvedSlug;
-        }
-
-        $resolvedSlug = 'localhost';
+        $resolvedSlug = $host !== '' ? tenant_slugify($host) : 'localhost';
         return $resolvedSlug;
     }
 }

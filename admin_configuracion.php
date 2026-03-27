@@ -537,8 +537,9 @@ $googleCallbackUrl = google_oauth_callback_url();
                   <div class="col-md-4">
                     <label class="form-label">Posicion</label>
                     <select name="ff_bank_posicion" class="form-select">
+                      <option value="" <?= (string) ($cfg['ff_bank_posicion'] ?? '') === '' ? 'selected' : '' ?>>Selecciona una posicion</option>
                       <?php for ($position = 0; $position <= 5; $position++): ?>
-                        <option value="<?= $position ?>" <?= (string) ($cfg['ff_bank_posicion'] ?? '0') === (string) $position ? 'selected' : '' ?>><?= $position ?></option>
+                        <option value="<?= $position ?>" <?= (string) ($cfg['ff_bank_posicion'] ?? '') === (string) $position ? 'selected' : '' ?>><?= $position ?></option>
                       <?php endfor; ?>
                     </select>
                   </div>

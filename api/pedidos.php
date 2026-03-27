@@ -3414,7 +3414,7 @@ if ($action === 'submit_payment') {
 
     $bankConfig = [
         'ff_bank_api_base_url' => store_config_get('ff_bank_api_base_url', 'https://pagonorte.net'),
-        'ff_bank_posicion' => store_config_get('ff_bank_posicion', '0'),
+        'ff_bank_posicion' => store_config_get('ff_bank_posicion', ''),
         'ff_bank_token' => store_config_get('ff_bank_token', ''),
         'ff_bank_clave' => store_config_get('ff_bank_clave', ''),
     ];
