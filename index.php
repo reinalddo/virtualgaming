@@ -307,24 +307,18 @@ $accentMap = [
         .startup-popup-card-video {
           width: 100%;
           max-width: 356px;
-          max-height: min(92vh, 720px);
-          padding: 0.82rem 0.82rem 0.92rem;
+          height: min(calc(100vh - 2rem), 860px);
+          height: min(calc(100dvh - 2rem), 860px);
+          padding: 0.78rem 0.78rem 0.8rem;
           border-radius: 22px;
           border: 1px solid rgba(var(--theme-startup-video-popup-border-rgb), 0.95);
           background:
             radial-gradient(circle at top, rgba(var(--theme-startup-video-popup-accent-rgb), 0.12), transparent 28%),
             linear-gradient(180deg, rgba(var(--theme-startup-video-popup-surface-rgb), 0.99), rgba(10, 14, 20, 0.99));
           box-shadow: 0 18px 62px rgba(0, 0, 0, 0.58), 0 0 36px rgba(var(--theme-startup-video-popup-border-rgb), 0.18), inset 0 0 0 1px rgba(255, 255, 255, 0.03);
-          overflow-y: auto;
-          scrollbar-width: thin;
-          scrollbar-color: rgba(var(--theme-startup-video-popup-border-rgb), 0.75) transparent;
-        }
-        .startup-popup-card-video::-webkit-scrollbar {
-          width: 8px;
-        }
-        .startup-popup-card-video::-webkit-scrollbar-thumb {
-          border-radius: 999px;
-          background: rgba(var(--theme-startup-video-popup-border-rgb), 0.72);
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
         }
         .startup-popup-card-video .startup-popup-close {
           border-color: rgba(var(--theme-startup-video-popup-accent-rgb), 0.3);
@@ -336,24 +330,27 @@ $accentMap = [
           padding-right: 2rem;
           color: #f8fafc;
           font-family: 'Oxanium', 'Space Grotesk', sans-serif;
-          font-size: 1.34rem;
+          font-size: 1.28rem;
           line-height: 1.12;
           text-align: center;
           font-weight: 700;
+          flex: 0 0 auto;
         }
         .startup-popup-video-subtitle {
-          margin: 0.6rem auto 0;
-          max-width: 220px;
+          margin: 0.45rem auto 0;
+          max-width: 250px;
           color: rgba(226, 232, 240, 0.76);
           text-align: center;
-          font-size: 0.76rem;
-          line-height: 1.4;
+          font-size: 0.72rem;
+          line-height: 1.32;
+          flex: 0 0 auto;
         }
         .startup-popup-video-frame {
           position: relative;
           width: 100%;
-          margin-top: 0.85rem;
-          aspect-ratio: 9 / 16;
+          margin-top: 0.72rem;
+          flex: 1 1 auto;
+          min-height: 0;
           overflow: hidden;
           border-radius: 16px;
           border: 1px solid rgba(var(--theme-startup-video-popup-border-rgb), 0.86);
@@ -367,10 +364,11 @@ $accentMap = [
           display: block;
         }
         .startup-popup-video-link {
-          margin-top: 0.92rem;
+          margin-top: 0.72rem;
           background: linear-gradient(180deg, rgba(var(--theme-startup-video-popup-button-bg-rgb), 1), rgba(var(--theme-startup-video-popup-button-bg-rgb), 0.9));
           color: var(--theme-startup-video-popup-button-text);
           box-shadow: 0 12px 24px rgba(var(--theme-startup-video-popup-button-bg-rgb), 0.24), 0 0 14px rgba(var(--theme-startup-video-popup-button-bg-rgb), 0.18);
+          flex: 0 0 auto;
         }
         .startup-popup-video-link svg {
           width: 21px;
@@ -381,10 +379,11 @@ $accentMap = [
           color: var(--theme-startup-video-popup-button-text);
         }
         .startup-popup-video-dismiss {
-          margin-top: 0.62rem;
+          margin-top: 0.52rem;
           background: linear-gradient(180deg, rgba(239, 68, 68, 0.98), rgba(185, 28, 28, 0.94));
           color: #fff5f5;
           box-shadow: 0 12px 24px rgba(185, 28, 28, 0.28), 0 0 14px rgba(239, 68, 68, 0.18);
+          flex: 0 0 auto;
         }
         .startup-popup-video-dismiss:hover {
           color: #fff5f5;
@@ -402,11 +401,28 @@ $accentMap = [
           }
           .startup-popup-card-video {
             max-width: none;
-            padding: 0.78rem 0.78rem 0.92rem;
+            height: calc(100vh - 0.64rem);
+            height: calc(100dvh - 0.64rem);
+            padding: 0.68rem 0.68rem 0.72rem;
             border-radius: 20px;
           }
           .startup-popup-video-title {
-            font-size: 1.22rem;
+            font-size: 1.14rem;
+          }
+          .startup-popup-video-subtitle {
+            margin-top: 0.38rem;
+            font-size: 0.68rem;
+            line-height: 1.26;
+          }
+          .startup-popup-video-frame {
+            margin-top: 0.58rem;
+            border-radius: 14px;
+          }
+          .startup-popup-video-link,
+          .startup-popup-video-dismiss {
+            margin-top: 0.5rem;
+            padding: 0.68rem 0.74rem;
+            font-size: 0.76rem;
           }
         }
         .promo-section-mobile,
