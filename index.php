@@ -305,7 +305,8 @@ $accentMap = [
           font-size: 0.76rem;
         }
         .startup-popup-card-video {
-          width: min(100%, 292px);
+          width: 100%;
+          max-width: 356px;
           max-height: min(92vh, 720px);
           padding: 0.82rem 0.82rem 0.92rem;
           border-radius: 22px;
@@ -371,6 +372,11 @@ $accentMap = [
           color: var(--theme-startup-video-popup-button-text);
           box-shadow: 0 12px 24px rgba(var(--theme-startup-video-popup-button-bg-rgb), 0.24), 0 0 14px rgba(var(--theme-startup-video-popup-button-bg-rgb), 0.18);
         }
+        .startup-popup-video-link svg {
+          width: 21px;
+          height: 21px;
+          flex: 0 0 21px;
+        }
         .startup-popup-video-link:hover {
           color: var(--theme-startup-video-popup-button-text);
         }
@@ -385,7 +391,7 @@ $accentMap = [
         }
         @media (max-width: 420px) {
           .startup-popup-shell {
-            padding: 0.62rem;
+            padding: 0.32rem;
           }
           .startup-popup-card {
             border-radius: 20px;
@@ -395,6 +401,7 @@ $accentMap = [
             font-size: 1.42rem;
           }
           .startup-popup-card-video {
+            max-width: none;
             padding: 0.78rem 0.78rem 0.92rem;
             border-radius: 20px;
           }
@@ -548,7 +555,7 @@ $accentMap = [
               </div>
               <a href="<?= htmlspecialchars($startupPopupChannelUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" class="startup-popup-link startup-popup-video-link" id="startup-popup-link">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M20.52 3.48A11.8 11.8 0 0 0 12.08 0C5.54 0 .22 5.32.22 11.86c0 2.09.55 4.13 1.58 5.93L0 24l6.39-1.67a11.8 11.8 0 0 0 5.69 1.45h.01c6.54 0 11.86-5.32 11.86-11.86 0-3.17-1.23-6.16-3.43-8.44ZM12.09 21.76h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.79.99 1.01-3.69-.23-.38A9.87 9.87 0 0 1 2.2 11.86C2.2 6.4 6.63 1.98 12.08 1.98c2.64 0 5.12 1.03 6.98 2.91a9.8 9.8 0 0 1 2.88 6.98c0 5.45-4.43 9.89-9.85 9.89Zm5.42-7.41c-.3-.15-1.76-.87-2.03-.97-.27-.1-.46-.15-.66.15-.2.3-.76.97-.93 1.17-.17.2-.34.22-.64.07-.3-.15-1.27-.47-2.41-1.49-.89-.8-1.49-1.79-1.67-2.09-.17-.3-.02-.47.13-.62.13-.13.3-.34.44-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.66-1.59-.9-2.17-.24-.58-.48-.5-.66-.5h-.56c-.2 0-.52.08-.79.37-.27.3-1.05 1.03-1.05 2.52 0 1.49 1.08 2.92 1.23 3.12.15.2 2.11 3.23 5.12 4.52.72.31 1.29.49 1.73.63.73.23 1.39.2 1.91.12.58-.09 1.76-.72 2.01-1.42.25-.69.25-1.29.17-1.42-.07-.12-.27-.2-.57-.35Z"/></svg>
-                <span>📢 Únete al canal de WhatsApp</span>
+                <span>📢 Canal de WhatsApp</span>
               </a>
               <button type="button" class="startup-popup-link startup-popup-video-dismiss" id="startup-popup-dismiss">Cerrar y recargar</button>
             </div>
