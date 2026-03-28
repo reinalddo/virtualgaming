@@ -9,9 +9,14 @@ require_once __DIR__ . '/includes/home_gallery.php';
 require_once __DIR__ . '/includes/payment_methods.php';
 require_once __DIR__ . '/includes/google_oauth.php';
 
+$cfg = store_config_all();
 $activeTab = defined('ADMIN_CONFIG_ACTIVE_TAB') ? ADMIN_CONFIG_ACTIVE_TAB : ($_GET['tab'] ?? 'correo');
 $startupPopupTabEnabled = store_config_get('inicio_popup_tab_habilitado', '1') === '1';
-$allowedTabs = ['correo', 'cabecera', 'notificaciones-recargas', 'sociales', 'api-banco', 'api-free-fire', 'personalizar-colores', 'galeria', 'metodos-pago'];
+$rechargeNotificationsTabEnabled = ($cfg['notificaciones_recargas'] ?? '0') === '1';
+$allowedTabs = ['correo', 'cabecera', 'sociales', 'api-banco', 'api-free-fire', 'personalizar-colores', 'galeria', 'metodos-pago'];
+if ($rechargeNotificationsTabEnabled) {
+  $allowedTabs[] = 'notificaciones-recargas';
+}
 if ($startupPopupTabEnabled) {
   $allowedTabs[] = 'ventana-inicial';
 }
@@ -21,7 +26,6 @@ if (!in_array($activeTab, $allowedTabs, true)) {
 
 home_gallery_ensure_table();
 payment_methods_ensure_table();
-$cfg = store_config_all();
 $logoTienda = trim((string) ($cfg['logo_tienda'] ?? ''));
 $rechargeNotificationsLogo = trim((string) ($cfg['recarga_notificaciones_logo'] ?? ''));
 $rechargeNotificationsEffectiveLogo = $rechargeNotificationsLogo !== '' ? $rechargeNotificationsLogo : $logoTienda;
@@ -354,9 +358,11 @@ $googleCallbackUrl = google_oauth_callback_url();
           <div class="neon-tabs-item">
             <a href="/admin/configuracion?tab=cabecera" class="neon-tab-link <?= $activeTab === 'cabecera' ? 'active' : '' ?>">Datos de cabecera</a>
           </div>
-          <div class="neon-tabs-item">
-            <a href="/admin/configuracion?tab=notificaciones-recargas" class="neon-tab-link <?= $activeTab === 'notificaciones-recargas' ? 'active' : '' ?>">Notificaciones Recargas</a>
-          </div>
+          <?php if ($rechargeNotificationsTabEnabled): ?>
+            <div class="neon-tabs-item">
+              <a href="/admin/configuracion?tab=notificaciones-recargas" class="neon-tab-link <?= $activeTab === 'notificaciones-recargas' ? 'active' : '' ?>">Notificaciones Recargas</a>
+            </div>
+          <?php endif; ?>
           <div class="neon-tabs-item">
             <a href="/admin/configuracion?tab=sociales" class="neon-tab-link <?= $activeTab === 'sociales' ? 'active' : '' ?>">Redes Sociales</a>
           </div>
