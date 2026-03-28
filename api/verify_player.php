@@ -1,0 +1,49 @@
+<?php
+require_once __DIR__ . '/../includes/tenant.php';
+tenant_start_session();
+header('Content-Type: application/json; charset=UTF-8');
+
+require_once __DIR__ . '/../includes/db_connect.php';
+require_once __DIR__ . '/../includes/player_verification.php';
+
+function verify_player_json(array $payload, int $status = 200): void {
+    http_response_code($status);
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+$gameId = (int) ($_POST['game_id'] ?? $_GET['game_id'] ?? 0);
+if ($gameId <= 0) {
+    verify_player_json(['ok' => false, 'message' => 'Juego inválido.'], 422);
+}
+
+$stmt = $mysqli->prepare('SELECT * FROM juegos WHERE id = ? LIMIT 1');
+if (!$stmt) {
+    verify_player_json(['ok' => false, 'message' => 'No se pudo preparar la verificación.'], 500);
+}
+
+$stmt->bind_param('i', $gameId);
+$stmt->execute();
+$result = $stmt->get_result();
+$game = $result ? $result->fetch_assoc() : null;
+$stmt->close();
+
+if (!$game) {
+    verify_player_json(['ok' => false, 'message' => 'Juego no encontrado.'], 404);
+}
+
+$userIdentifier = trim((string) ($_POST['user_identifier'] ?? $_GET['user_identifier'] ?? ''));
+$playerFieldsRaw = (string) ($_POST['player_fields_json'] ?? $_GET['player_fields_json'] ?? '');
+$playerFields = [];
+if ($playerFieldsRaw !== '') {
+    $decoded = json_decode($playerFieldsRaw, true);
+    if (is_array($decoded)) {
+        $playerFields = $decoded;
+    }
+}
+
+$verification = player_verification_verify($game, $userIdentifier, $playerFields);
+$httpStatus = (int) ($verification['http_status'] ?? 200);
+unset($verification['http_status']);
+
+verify_player_json($verification, $httpStatus);

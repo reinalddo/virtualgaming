@@ -6,6 +6,7 @@ require_once __DIR__ . "/includes/currency.php";
 require_once __DIR__ . "/includes/payment_methods.php";
 require_once __DIR__ . "/includes/recargas_api.php";
 require_once __DIR__ . "/includes/slugify.php";
+require_once __DIR__ . "/includes/player_verification.php";
 currency_ensure_schema();
 $paymentSupportWhatsappBase = store_config_whatsapp_link(store_config_get('whatsapp', ''));
 $loggedUserEmail = '';
@@ -58,6 +59,8 @@ if ($requestedGame) {
     exit;
   }
 }
+
+$playerVerificationConfig = player_verification_frontend_config($game);
 
 $scriptDir = app_base_path();
 $pageTitle = store_config_get('nombre_tienda', 'TVirtualGaming') . " | " . ($game["nombre"] ?? "Juego");
@@ -281,7 +284,11 @@ include __DIR__ . "/includes/header.php";
       <div class="row g-3" id="player-fields-row">
         <div class="col-md-6 col-12" id="player-primary-field">
           <label class="form-label text-info" id="player-primary-label">ID de usuario</label>
-          <input type="text" id="order-user-id" name="user_id" placeholder="Ej: 12345678" class="form-control bg-dark text-info border-info" required />
+          <div class="d-flex flex-column flex-sm-row gap-2 align-items-stretch">
+            <input type="text" id="order-user-id" name="user_id" placeholder="Ej: 12345678" class="form-control bg-dark text-info border-info" required />
+            <button type="button" id="verify-player-button" class="btn btn-outline-info fw-bold text-nowrap<?= $playerVerificationConfig ? '' : ' d-none' ?>"><?= htmlspecialchars((string) ($playerVerificationConfig['buttonLabel'] ?? 'Verificar nombre del jugador'), ENT_QUOTES, 'UTF-8') ?></button>
+          </div>
+          <div id="player-verification-feedback" class="d-none mt-2"></div>
         </div>
         <div id="extra-player-fields" class="col-md-6 col-12"></div>
       </div>
@@ -788,6 +795,9 @@ include __DIR__ . "/includes/header.php";
   const playerPrimaryLabel = document.getElementById('player-primary-label');
   let playerPrimaryInput = document.getElementById('order-user-id');
   const extraPlayerFields = document.getElementById('extra-player-fields');
+  const verifyPlayerButton = document.getElementById('verify-player-button');
+  const playerVerificationFeedback = document.getElementById('player-verification-feedback');
+  const playerVerificationConfig = <?= json_encode($playerVerificationConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const couponInput = document.getElementById('coupon-input');
   const couponModal = document.getElementById('coupon-modal');
   const loadingModal = document.getElementById('loading-modal');
@@ -846,6 +856,12 @@ include __DIR__ . "/includes/header.php";
     inputMode: 'text',
     maxLength: 150
   };
+  let playerVerificationState = {
+    verified: false,
+    playerName: '',
+    signature: '',
+    pending: false,
+  };
 
   function parseRequiredFields(rawValue) {
     try {
@@ -903,6 +919,14 @@ include __DIR__ . "/includes/header.php";
       .trim();
 
     return normalized || fallback;
+  }
+
+  function getPlayerVerificationDefaultFields() {
+    if (!playerVerificationConfig || !Array.isArray(playerVerificationConfig.defaultFields)) {
+      return [];
+    }
+
+    return playerVerificationConfig.defaultFields;
   }
 
   function createDynamicFieldControl(fieldConfig, fieldNamePrefix) {
@@ -966,7 +990,9 @@ include __DIR__ . "/includes/header.php";
   }
 
   function renderPlayerFields(pack) {
-    const requiredFields = pack && Array.isArray(pack.requiredFields) ? pack.requiredFields : [];
+    const existingValues = collectPlayerFields();
+    const packRequiredFields = pack && Array.isArray(pack.requiredFields) ? pack.requiredFields : [];
+    const requiredFields = packRequiredFields.length ? packRequiredFields : getPlayerVerificationDefaultFields();
     const shouldShowPrimaryField = !gameUsesCatalogApi || !pack || requiredFields.length > 0;
     const primaryConfig = requiredFields[0] || defaultPrimaryField;
 
@@ -976,6 +1002,11 @@ include __DIR__ . "/includes/header.php";
       playerPrimaryLabel.textContent = primaryConfig.label || defaultPrimaryField.label;
       playerPrimaryInput.dataset.apiField = primaryConfig.name || defaultPrimaryField.name;
       playerPrimaryInput.required = shouldShowPrimaryField;
+
+      const primaryFieldName = String(primaryConfig.name || defaultPrimaryField.name);
+      if (shouldShowPrimaryField && existingValues[primaryFieldName] && playerPrimaryInput.value.trim() === '') {
+        playerPrimaryInput.value = existingValues[primaryFieldName];
+      }
 
       if (!shouldShowPrimaryField) {
         playerPrimaryInput.value = '';
@@ -997,11 +1028,14 @@ include __DIR__ . "/includes/header.php";
       label.textContent = fieldConfig.label || 'Dato adicional';
 
       const input = createDynamicFieldControl(fieldConfig, 'player_field_');
+      input.value = existingValues[fieldConfig.name || ''] || '';
 
       wrapper.appendChild(label);
       wrapper.appendChild(input);
       extraPlayerFields.appendChild(wrapper);
     });
+
+    syncPlayerVerificationUi();
   }
 
   function collectPlayerFields() {
@@ -1026,6 +1060,189 @@ include __DIR__ . "/includes/header.php";
     }
 
     return fields;
+  }
+
+  function buildPlayerVerificationPayload() {
+    const userIdentifier = playerPrimaryInput ? playerPrimaryInput.value.trim() : '';
+    const playerFields = collectPlayerFields();
+
+    return {
+      userIdentifier,
+      playerFields,
+      signature: JSON.stringify({
+        gameKey: playerVerificationConfig ? playerVerificationConfig.gameKey : '',
+        userIdentifier,
+        playerFields,
+      }),
+    };
+  }
+
+  function getPlayerVerificationZoneValue(playerFields) {
+    const fields = playerFields && typeof playerFields === 'object' ? playerFields : {};
+    const candidates = ['input2', 'zone_id', 'zoneid', 'zone', 'server_id', 'serverid', 'server'];
+
+    for (const candidate of candidates) {
+      if (typeof fields[candidate] === 'string' && fields[candidate].trim() !== '') {
+        return fields[candidate].trim();
+      }
+    }
+
+    const extraValue = Object.entries(fields)
+      .filter(([fieldName, fieldValue]) => String(fieldName || '') !== String(playerPrimaryInput ? playerPrimaryInput.dataset.apiField || '' : '') && String(fieldValue || '').trim() !== '')
+      .map(([, fieldValue]) => String(fieldValue || '').trim())[0];
+
+    return extraValue || '';
+  }
+
+  function hasPlayerVerificationInputs(payload) {
+    if (!playerVerificationConfig) {
+      return false;
+    }
+
+    const currentPayload = payload || buildPlayerVerificationPayload();
+    if (currentPayload.userIdentifier === '') {
+      return false;
+    }
+
+    if (playerVerificationConfig.requiresZone) {
+      return getPlayerVerificationZoneValue(currentPayload.playerFields) !== '';
+    }
+
+    return true;
+  }
+
+  function clearPlayerVerificationFeedback() {
+    if (!playerVerificationFeedback) {
+      return;
+    }
+
+    playerVerificationFeedback.className = 'd-none mt-2';
+    playerVerificationFeedback.textContent = '';
+  }
+
+  function setPlayerVerificationFeedback(type, message) {
+    if (!playerVerificationFeedback) {
+      return;
+    }
+
+    if (!message) {
+      clearPlayerVerificationFeedback();
+      return;
+    }
+
+    const alertType = type === 'success' ? 'success' : (type === 'info' ? 'info' : 'danger');
+    playerVerificationFeedback.className = `alert alert-${alertType} py-2 px-3 mt-2 mb-0 small fw-semibold`;
+    playerVerificationFeedback.textContent = message;
+  }
+
+  function resetPlayerVerificationState(clearFeedback = true) {
+    playerVerificationState = {
+      verified: false,
+      playerName: '',
+      signature: '',
+      pending: false,
+    };
+
+    if (clearFeedback) {
+      clearPlayerVerificationFeedback();
+    }
+  }
+
+  function syncPlayerVerificationUi() {
+    if (!verifyPlayerButton) {
+      return;
+    }
+
+    if (!playerVerificationConfig) {
+      verifyPlayerButton.classList.add('d-none');
+      return;
+    }
+
+    verifyPlayerButton.classList.remove('d-none');
+    verifyPlayerButton.disabled = playerVerificationState.pending || !hasPlayerVerificationInputs();
+    verifyPlayerButton.textContent = playerVerificationState.pending
+      ? 'Verificando...'
+      : (playerVerificationConfig.buttonLabel || 'Verificar nombre del jugador');
+  }
+
+  function handlePlayerVerificationFieldChange() {
+    if (!playerVerificationConfig) {
+      return;
+    }
+
+    const payload = buildPlayerVerificationPayload();
+    const hasInputs = hasPlayerVerificationInputs(payload);
+
+    if (!hasInputs) {
+      resetPlayerVerificationState();
+      syncPlayerVerificationUi();
+      return;
+    }
+
+    if (playerVerificationState.signature !== '' && playerVerificationState.signature !== payload.signature) {
+      resetPlayerVerificationState();
+    }
+
+    syncPlayerVerificationUi();
+  }
+
+  async function verifyCurrentPlayer() {
+    if (!playerVerificationConfig) {
+      return;
+    }
+
+    const payload = buildPlayerVerificationPayload();
+    if (!hasPlayerVerificationInputs(payload)) {
+      setPlayerVerificationFeedback('danger', playerVerificationConfig.requiresZone
+        ? 'Debes ingresar el ID del jugador y la Zona ID para verificar.'
+        : 'Debes ingresar el ID del jugador para verificar.');
+      updateButtonState();
+      return;
+    }
+
+    playerVerificationState.pending = true;
+    syncPlayerVerificationUi();
+    setPlayerVerificationFeedback('info', 'Verificando nombre del jugador...');
+
+    try {
+      const requestBody = new URLSearchParams();
+      requestBody.set('game_id', "<?= (string) ($game['id'] ?? '') ?>");
+      requestBody.set('user_identifier', payload.userIdentifier);
+      requestBody.set('player_fields_json', JSON.stringify(payload.playerFields));
+
+      const response = await fetch(buildAppUrl('/api/verify_player.php'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: requestBody.toString(),
+      });
+
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (error) {
+        data = null;
+      }
+
+      if (response.ok && data && data.ok) {
+        playerVerificationState = {
+          verified: true,
+          playerName: String(data.player_name || ''),
+          signature: payload.signature,
+          pending: false,
+        };
+        setPlayerVerificationFeedback('success', String(data.message || 'Jugador encontrado.'));
+      } else {
+        resetPlayerVerificationState(false);
+        setPlayerVerificationFeedback('danger', String((data && data.message) || 'No se pudo verificar el jugador.'));
+      }
+    } catch (error) {
+      resetPlayerVerificationState(false);
+      setPlayerVerificationFeedback('danger', 'No se pudo verificar el jugador en este momento.');
+    } finally {
+      playerVerificationState.pending = false;
+      syncPlayerVerificationUi();
+      updateButtonState();
+    }
   }
 
   function scrollToOrderForm() {
@@ -1664,6 +1881,7 @@ include __DIR__ . "/includes/header.php";
     couponApplied = false;
     couponValue = '';
     activePack = null;
+    resetPlayerVerificationState();
     packCards2.forEach((item) => item.classList.remove('neon-selected'));
     renderPlayerFields(null);
     updateResumenCompra(null);
@@ -1786,7 +2004,8 @@ include __DIR__ . "/includes/header.php";
       selectedPack.style.color = "";
       selectedPack.textContent = activePack.name;
     }
-    buyButton.disabled = !activePack || !requiredFilled;
+    buyButton.disabled = !activePack || !requiredFilled || (Boolean(playerVerificationConfig) && !playerVerificationState.verified);
+    syncPlayerVerificationUi();
   }
   function updateResumenCompra(pack) {
     if (pack) {
@@ -1808,6 +2027,7 @@ include __DIR__ . "/includes/header.php";
       activePack = buildPackStateFromCard(card);
       updateResumenCompra(activePack);
       renderPlayerFields(activePack);
+      handlePlayerVerificationFieldChange();
       updateButtonState();
       scrollToOrderForm();
     });
@@ -1816,6 +2036,9 @@ include __DIR__ . "/includes/header.php";
     // Ya no se selecciona automáticamente ningún paquete al cargar
   }
   renderPlayerFields(null);
+  if (verifyPlayerButton) {
+    verifyPlayerButton.addEventListener('click', verifyCurrentPlayer);
+  }
               if (couponInput) {
               function normalizeCouponCode(value) {
                 return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -2115,7 +2338,14 @@ include __DIR__ . "/includes/header.php";
               modalCancel.addEventListener('click', function() {
                 setOverlayVisible(couponModal, false);
               });
-              orderForm.addEventListener('input', updateButtonState);
+              orderForm.addEventListener('input', function() {
+                handlePlayerVerificationFieldChange();
+                updateButtonState();
+              });
+              orderForm.addEventListener('change', function() {
+                handlePlayerVerificationFieldChange();
+                updateButtonState();
+              });
               orderForm.addEventListener('submit', function(event) {
                 event.preventDefault();
                 const btn = document.getElementById('buy-button');
@@ -2155,6 +2385,10 @@ include __DIR__ . "/includes/header.php";
                   }
                 });
                 if (!requiredFilled) {
+                  return;
+                }
+                if (playerVerificationConfig && !playerVerificationState.verified) {
+                  setPlayerVerificationFeedback('danger', 'Debes verificar el nombre del jugador antes de comprar.');
                   return;
                 }
                 // Si el cupón no está aplicado y hay valor, mostrar modal
