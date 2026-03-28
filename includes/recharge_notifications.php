@@ -10,7 +10,8 @@ if (!function_exists('recharge_notifications_current_tenant_slug')) {
 
 if (!function_exists('recharge_notifications_is_enabled')) {
     function recharge_notifications_is_enabled(): bool {
-        return store_config_get('recarga_notificaciones_activas', '1') !== '0';
+        return store_config_get('notificaciones_recargas', '0') === '1'
+            && store_config_get('recarga_notificaciones_activas', '1') !== '0';
     }
 }
 

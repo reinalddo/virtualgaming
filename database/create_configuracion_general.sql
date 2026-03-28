@@ -19,6 +19,8 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('nombre_tienda', 'TVirtualGaming', 'Nombre principal visible de la tienda'),
 ('nombre_tienda_subtitulo', 'Tienda de monedas digitales', 'Texto complementario usado en el título del inicio y en la instalación de la app'),
 ('logo_tienda', '', 'Ruta del logo visible en el encabezado'),
+('notificaciones_recargas', '0', 'Activa o desactiva por tenant las notificaciones de recargas en la tienda'),
+('verificacion_nombre_api', '0', 'Activa o desactiva por tenant la verificación de nombres de jugador mediante API'),
 ('recarga_notificaciones_activas', '1', 'Activa o desactiva las notificaciones flotantes de recargas en el sitio público'),
 ('recarga_notificaciones_logo', '', 'Ruta del logo usado en la notificación flotante de recargas'),
 ('facebook', '', 'URL de Facebook de la tienda'),
