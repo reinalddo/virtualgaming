@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/includes/tenant.php';
 require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/slugify.php';
 tenant_start_session();
 
 function admin_allowed_roles(): array {
@@ -680,8 +681,8 @@ switch ($seccion) {
                 $descripcion = $_POST['descripcion'] ?? '';
                 $precio = $_POST['precio'] ?? 0;
                 $imagen = $_POST['imagen'] ?? '';
-                $stmt = $pdo->prepare('INSERT INTO juegos (nombre, descripcion, precio, imagen) VALUES (?, ?, ?, ?)');
-                $stmt->execute([$nombre, $descripcion, $precio, $imagen]);
+                $stmt = $pdo->prepare('INSERT INTO juegos (nombre, descripcion, slug, precio, imagen) VALUES (?, ?, ?, ?, ?)');
+                $stmt->execute([$nombre, $descripcion, slugify($nombre), $precio, $imagen]);
                 admin_set_flash('success', 'Juego agregado correctamente.');
                 admin_redirect('juegos');
             }
@@ -1566,8 +1567,8 @@ require_once __DIR__ . '/includes/header.php';
                     $descripcion = $_POST['descripcion'] ?? '';
                     $precio = $_POST['precio'] ?? 0;
                     $imagen = $_POST['imagen'] ?? '';
-                    $stmt = $pdo->prepare("INSERT INTO juegos (nombre, descripcion, precio, imagen) VALUES (?, ?, ?, ?)");
-                    $stmt->execute([$nombre, $descripcion, $precio, $imagen]);
+                    $stmt = $pdo->prepare("INSERT INTO juegos (nombre, descripcion, slug, precio, imagen) VALUES (?, ?, ?, ?, ?)");
+                    $stmt->execute([$nombre, $descripcion, slugify($nombre), $precio, $imagen]);
                     echo '<div class="text-green-400 mb-2">Juego agregado correctamente.</div>';
                 }
                 // Borrado de juego
