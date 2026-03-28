@@ -896,6 +896,15 @@ include __DIR__ . "/includes/header.php";
       .filter((option) => option.value !== '');
   }
 
+  function sanitizeFieldPlaceholder(placeholder, fallback = 'Ingresa el dato') {
+    const normalized = String(placeholder || '')
+      .replace(/\bAPI\b/gi, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+
+    return normalized || fallback;
+  }
+
   function createDynamicFieldControl(fieldConfig, fieldNamePrefix) {
     const options = normalizeFieldOptions(fieldConfig);
     const controlName = `${fieldNamePrefix}${fieldConfig.name || 'extra'}`;
@@ -912,7 +921,7 @@ include __DIR__ . "/includes/header.php";
       });
     } else {
       control.type = 'text';
-      control.placeholder = fieldConfig.placeholder || 'Ingresa el dato';
+      control.placeholder = sanitizeFieldPlaceholder(fieldConfig.placeholder, 'Ingresa el dato');
       control.inputMode = fieldConfig.inputMode || 'text';
       control.maxLength = Number(fieldConfig.maxLength || 180);
     }
@@ -950,7 +959,7 @@ include __DIR__ . "/includes/header.php";
       playerPrimaryInput.className = 'form-select bg-dark text-info border-info';
     } else {
       playerPrimaryInput.className = 'form-control bg-dark text-info border-info';
-      playerPrimaryInput.placeholder = normalizedConfig.placeholder || defaultPrimaryField.placeholder;
+      playerPrimaryInput.placeholder = sanitizeFieldPlaceholder(normalizedConfig.placeholder, defaultPrimaryField.placeholder);
       playerPrimaryInput.inputMode = normalizedConfig.inputMode || 'text';
       playerPrimaryInput.maxLength = Number(normalizedConfig.maxLength || defaultPrimaryField.maxLength);
     }
