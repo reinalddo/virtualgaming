@@ -933,6 +933,8 @@ switch ($seccion) {
                 $nombreTiendaSubtitulo = trim((string) ($_POST['nombre_tienda_subtitulo'] ?? ''));
                 $metaTitulo = trim((string) ($_POST['meta_titulo'] ?? ''));
                 $metaDescripcion = trim((string) ($_POST['meta_descripcion'] ?? ''));
+                $googleAnalyticsActivo = isset($_POST['google_analytics_activo']) ? '1' : '0';
+                $googleAnalyticsScript = trim((string) ($_POST['google_analytics_script'] ?? ''));
                 $currentLogo = store_config_get('logo_tienda', '');
                 $nextLogo = $currentLogo;
                 $hasUpload = isset($_FILES['logo_tienda']) && (($_FILES['logo_tienda']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
@@ -962,6 +964,8 @@ switch ($seccion) {
                 store_config_upsert('nombre_tienda_subtitulo', $nombreTiendaSubtitulo);
                 store_config_upsert('meta_titulo', $metaTitulo);
                 store_config_upsert('meta_descripcion', $metaDescripcion);
+                store_config_upsert('google_analytics_activo', $googleAnalyticsActivo);
+                store_config_upsert('google_analytics_script', $googleAnalyticsScript);
                 if ($nextLogo === '') {
                     store_config_delete('logo_tienda');
                 } else {

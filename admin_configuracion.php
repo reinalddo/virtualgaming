@@ -437,6 +437,10 @@ $googleCallbackUrl = google_oauth_callback_url();
               <div class="config-section-note mb-4">Controla el prefijo, nombre y logo de la tienda. El mismo logo también se usa como favicon.</div>
               <div class="row g-4 align-items-start">
                 <div class="col-md-8">
+                  <div class="form-check form-switch mb-4">
+                    <input class="form-check-input" type="checkbox" role="switch" id="googleAnalyticsActivo" name="google_analytics_activo" value="1" <?= ($cfg['google_analytics_activo'] ?? '0') === '1' ? 'checked' : '' ?>>
+                    <label class="form-check-label" for="googleAnalyticsActivo">Insertar script de Google Analytics en el footer público</label>
+                  </div>
                   <div class="mb-3">
                     <label class="form-label">Nombre Prefijo</label>
                     <input type="text" name="nombre_prefijo" value="<?= htmlspecialchars($cfg['nombre_prefijo'] ?? 'TIENDA') ?>" required class="form-control" placeholder="TIENDA">
@@ -459,6 +463,11 @@ $googleCallbackUrl = google_oauth_callback_url();
                     <label class="form-label">Meta descripción SEO</label>
                     <textarea name="meta_descripcion" rows="4" required maxlength="320" class="form-control" placeholder="Describe la tienda en una o dos frases para Google y redes sociales."><?= htmlspecialchars($cfg['meta_descripcion'] ?? 'Compra monedas y recargas digitales en TVirtualGaming. Recibe ofertas, promociones y novedades directamente en tu WhatsApp.') ?></textarea>
                     <div class="form-text mt-2">Google suele usar este texto como descripción del resultado de búsqueda. Intenta mantenerlo entre 140 y 160 caracteres para un snippet más estable.</div>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">Script de Google Analytics / Google Tag</label>
+                    <textarea name="google_analytics_script" rows="7" class="form-control" placeholder="Pega aquí el código completo que te entrega Google, incluyendo las etiquetas <script>."><?= htmlspecialchars($cfg['google_analytics_script'] ?? '') ?></textarea>
+                    <div class="form-text mt-2">Si el interruptor está activo y este campo tiene contenido, el script se insertará al final del sitio, antes de cerrar el body.</div>
                   </div>
                   <div class="mb-3">
                     <label class="form-label">Logo tienda</label>

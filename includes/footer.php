@@ -16,6 +16,8 @@ $whatsappValue = store_config_get('whatsapp', '');
 $whatsappMessage = store_config_get('mensaje_whatsapp', '');
 $whatsappUrl = store_config_whatsapp_link_with_message($whatsappValue, $whatsappMessage);
 $whatsappChannelUrl = store_config_normalize_social_url(store_config_get('whatsapp_channel', ''));
+$googleAnalyticsEnabled = store_config_get('google_analytics_activo', '0') === '1';
+$googleAnalyticsScript = trim(store_config_get('google_analytics_script', ''));
 
 $hasFacebook = store_config_is_valid_social_url($facebookUrl);
 $hasInstagram = store_config_is_valid_social_url($instagramUrl);
@@ -744,6 +746,9 @@ $rechargeNotificationsScript = str_replace('__LIVE_RECHARGE_ENABLED__', $recharg
     foreach ($pageScripts as $script) {
       echo $script;
     }
+  }
+  if ($googleAnalyticsEnabled && $googleAnalyticsScript !== '') {
+    echo $googleAnalyticsScript;
   }
   ?>
 </body>
