@@ -306,7 +306,7 @@ include __DIR__ . "/includes/header.php";
     </div>
     <div class="col-12">
       <button type="submit" id="buy-button" class="btn btn-success w-100 fw-bold text-uppercase" disabled>
-        Compra ahora
+        Comprar Ahora
       </button>
     </div>
   </form>
@@ -791,6 +791,8 @@ include __DIR__ . "/includes/header.php";
   const selectedPrice = document.getElementById("selected-price");
   const orderForm = document.getElementById("order-form");
   const buyButton = document.getElementById("buy-button");
+  const defaultBuyButtonLabel = 'Comprar Ahora';
+  const verifyUserBuyButtonLabel = 'Debe Verificar El usuario para poder comprar';
   const playerPrimaryField = document.getElementById('player-primary-field');
   const playerPrimaryLabel = document.getElementById('player-primary-label');
   let playerPrimaryInput = document.getElementById('order-user-id');
@@ -2004,7 +2006,10 @@ include __DIR__ . "/includes/header.php";
       selectedPack.style.color = "";
       selectedPack.textContent = activePack.name;
     }
-    buyButton.disabled = !activePack || !requiredFilled || (Boolean(playerVerificationConfig) && !playerVerificationState.verified);
+    const requiresPlayerVerification = Boolean(playerVerificationConfig);
+    const needsPlayerVerification = requiresPlayerVerification && !playerVerificationState.verified;
+    buyButton.disabled = !activePack || !requiredFilled || needsPlayerVerification;
+    buyButton.textContent = needsPlayerVerification ? verifyUserBuyButtonLabel : defaultBuyButtonLabel;
     syncPlayerVerificationUi();
   }
   function updateResumenCompra(pack) {
