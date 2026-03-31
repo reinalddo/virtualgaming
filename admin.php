@@ -2,6 +2,7 @@
 require_once __DIR__ . '/includes/tenant.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/slugify.php';
+require_once __DIR__ . '/includes/store_config.php';
 tenant_start_session();
 
 function admin_allowed_roles(): array {
@@ -847,6 +848,16 @@ switch ($seccion) {
         }
         break;
 
+    case 'instrucciones-influencer':
+        require_once __DIR__ . '/includes/influencer_instructions.php';
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['influencer_instructions_save'])) {
+            $result = influencer_instructions_save_from_request($_POST, $_FILES);
+            admin_set_flash($result['success'] ? 'success' : 'error', (string) ($result['message'] ?? 'No se pudo actualizar el modulo.'));
+            admin_redirect('instrucciones-influencer');
+        }
+        break;
+
     case 'configuracion':
         require_once __DIR__ . '/includes/store_config.php';
         require_once __DIR__ . '/includes/home_gallery.php';
@@ -933,6 +944,7 @@ switch ($seccion) {
                 $nombreTiendaSubtitulo = trim((string) ($_POST['nombre_tienda_subtitulo'] ?? ''));
                 $metaTitulo = trim((string) ($_POST['meta_titulo'] ?? ''));
                 $metaDescripcion = trim((string) ($_POST['meta_descripcion'] ?? ''));
+                $instruccionesInfluencer = isset($_POST['instrucciones_influencer']) ? '1' : '0';
                 $googleAnalyticsActivo = isset($_POST['google_analytics_activo']) ? '1' : '0';
                 $googleAnalyticsScript = trim((string) ($_POST['google_analytics_script'] ?? ''));
                 $currentLogo = store_config_get('logo_tienda', '');
@@ -964,6 +976,7 @@ switch ($seccion) {
                 store_config_upsert('nombre_tienda_subtitulo', $nombreTiendaSubtitulo);
                 store_config_upsert('meta_titulo', $metaTitulo);
                 store_config_upsert('meta_descripcion', $metaDescripcion);
+                store_config_upsert('instrucciones_influencer', $instruccionesInfluencer);
                 store_config_upsert('google_analytics_activo', $googleAnalyticsActivo);
                 store_config_upsert('google_analytics_script', $googleAnalyticsScript);
                 if ($nextLogo === '') {
@@ -1400,6 +1413,9 @@ if ($seccion === 'usuarios' && admin_is_ajax_request() && isset($_GET['usuarios_
 
 define('ADMIN_LAYOUT_EMBEDDED', true);
 
+$influencerInstructionsEnabled = store_config_get('instrucciones_influencer', '0') === '1';
+$adminInfluencerInstructionsPath = app_path('/admin/instrucciones-influencer');
+
 // Header y menú igual al inicio
 require_once __DIR__ . '/includes/header.php';
 ?>
@@ -1421,6 +1437,9 @@ require_once __DIR__ . '/includes/header.php';
                 <a href="/admin/juegos" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>🎮</span>Juegos</a>
                 <a href="/admin/monedas" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>💵</span>Monedas</a>
                 <a href="/admin/cupones" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>✏️</span>Cupones</a>
+                <?php if ($influencerInstructionsEnabled): ?>
+                <a href="<?= htmlspecialchars($adminInfluencerInstructionsPath, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>🤝</span>Instrucciones Influencer</a>
+                <?php endif; ?>
                 <a href="/admin/configuracion" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>⚙️</span>Configuración</a>
                 <?php endif; ?>
             </div>
@@ -2582,6 +2601,9 @@ require_once __DIR__ . '/includes/header.php';
             case 'pedidos':
                 echo '<h2 class="text-2xl font-semibold mb-4 text-cyan-300">Gestión de Pedidos</h2>';
                 echo '<p class="text-gray-400">Aquí se listarán y gestionarán los pedidos.</p>';
+                break;
+            case 'instrucciones-influencer':
+                require_once __DIR__ . '/admin_influencer_instructions.php';
                 break;
             case 'configuracion':
                 require_once __DIR__ . '/admin_configuracion.php';

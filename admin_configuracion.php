@@ -441,6 +441,10 @@ $googleCallbackUrl = google_oauth_callback_url();
                     <input class="form-check-input" type="checkbox" role="switch" id="googleAnalyticsActivo" name="google_analytics_activo" value="1" <?= ($cfg['google_analytics_activo'] ?? '0') === '1' ? 'checked' : '' ?>>
                     <label class="form-check-label" for="googleAnalyticsActivo">Insertar script de Google Analytics en el footer público</label>
                   </div>
+                  <div class="form-check form-switch mb-4">
+                    <input class="form-check-input" type="checkbox" role="switch" id="instruccionesInfluencerActivas" name="instrucciones_influencer" value="1" <?= ($cfg['instrucciones_influencer'] ?? '0') === '1' ? 'checked' : '' ?>>
+                    <label class="form-check-label" for="instruccionesInfluencerActivas">Activar modulo Instrucciones Influencer en menu publico y admin</label>
+                  </div>
                   <div class="mb-3">
                     <label class="form-label">Nombre Prefijo</label>
                     <input type="text" name="nombre_prefijo" value="<?= htmlspecialchars($cfg['nombre_prefijo'] ?? 'TIENDA') ?>" required class="form-control" placeholder="TIENDA">

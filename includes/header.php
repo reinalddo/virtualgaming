@@ -13,6 +13,7 @@ if ($authScriptBaseDir === '/' || $authScriptBaseDir === '.') {
   $authScriptBaseDir = '';
 }
 require_once __DIR__ . '/store_config.php';
+require_once __DIR__ . '/influencer_instructions.php';
 require_once __DIR__ . '/google_oauth.php';
 require_once __DIR__ . '/auth.php';
 
@@ -96,6 +97,14 @@ $adminMovementsUrl = app_path('/admin/movimientos');
 $adminUsersUrl = app_path('/admin/usuarios');
 $adminCouponsUrl = app_path('/admin/cupones');
 $adminConfigUrl = app_path('/admin/configuracion');
+$adminInfluencerInstructionsUrl = app_path('/admin/instrucciones-influencer');
+$influencerJoinUrl = app_path('/quiero-unirme');
+$influencerInstructionsEnabled = store_config_get('instrucciones_influencer', '0') === '1';
+$influencerInstructionsMenuLabel = 'Quiero Unirme';
+if ($influencerInstructionsEnabled) {
+  $influencerInstructionsData = influencer_instructions_get();
+  $influencerInstructionsMenuLabel = trim((string) ($influencerInstructionsData['menu_label'] ?? 'Quiero Unirme')) ?: 'Quiero Unirme';
+}
 $mainStylesPath = __DIR__ . '/../assets/css/estilos.css';
 $mainStylesVersion = asset_version($mainStylesPath);
 $themeVariablesCss = store_theme_css_variables();
@@ -321,6 +330,9 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
           <a href="<?php echo htmlspecialchars($homeUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-dark border rounded-3 px-4 py-3 fw-semibold">Inicio</a>
           <a href="<?php echo htmlspecialchars($popularUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-dark border rounded-3 px-4 py-3 fw-semibold">Juegos populares</a>
           <a href="<?php echo htmlspecialchars($gamesUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-dark border rounded-3 px-4 py-3 fw-semibold">Juegos</a>
+          <?php if ($influencerInstructionsEnabled): ?>
+            <a href="<?php echo htmlspecialchars($influencerJoinUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn rounded-3 px-4 py-3 fw-semibold" style="background:linear-gradient(90deg,#f59e0b 0%,#facc15 100%); color:#111827; border:1px solid rgba(250,204,21,0.45); box-shadow:0 0 18px rgba(245,158,11,0.28);"><?php echo $influencerInstructionsMenuLabel; ?></a>
+          <?php endif; ?>
           <?php if ($authUser): ?>
             <?php if ($authUserCanAccessAdmin): ?>
               <hr class="my-2 border-slate-700">
@@ -335,6 +347,9 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
                   <a href="<?php echo htmlspecialchars($adminCurrenciesUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Monedas</a>
                   <a href="<?php echo htmlspecialchars($adminUsersUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Usuarios</a>
                   <a href="<?php echo htmlspecialchars($adminCouponsUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Cupones</a>
+                  <?php if ($influencerInstructionsEnabled): ?>
+                    <a href="<?php echo htmlspecialchars($adminInfluencerInstructionsUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Instrucciones Influencer</a>
+                  <?php endif; ?>
                   <a href="<?php echo htmlspecialchars($adminConfigUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Configuración</a>
                 <?php endif; ?>
                 <a href="<?php echo htmlspecialchars($authUserAdminHome, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Ir al Admin</a>
