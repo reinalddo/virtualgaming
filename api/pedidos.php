@@ -15,6 +15,7 @@ require_once __DIR__ . '/../includes/payment_methods.php';
 require_once __DIR__ . '/../includes/store_config.php';
 require_once __DIR__ . '/../includes/recargas_api.php';
 require_once __DIR__ . '/../includes/recharge_notifications.php';
+require_once __DIR__ . '/../includes/win_points.php';
 
 if (!function_exists('create_app_mysqli_connection')) {
     function create_app_mysqli_connection(): mysqli {
@@ -2441,6 +2442,8 @@ function cancel_expired_order(mysqli $mysqli, array $order): array {
             send_app_mail($adminEmail, "Orden vencida #{$orderId}", $adminHtml, null, $brandingImages);
     }
 
+    win_points_handle_order_status_change($mysqli, $orderId, 'cancelado');
+
     return ['changed' => true, 'message' => 'La orden expiró y fue cancelada automáticamente.'];
 }
 
@@ -2502,6 +2505,8 @@ function cancel_pending_order_by_customer(mysqli $mysqli, array $order): array {
     if ($adminEmail !== null) {
         send_app_mail($adminEmail, "Orden cancelada por cliente #{$orderId}", $adminHtml, null, $brandingImages);
     }
+
+    win_points_handle_order_status_change($mysqli, $orderId, 'cancelado');
 
     return ['changed' => true, 'message' => 'La orden fue cancelada correctamente.'];
 }
@@ -2912,6 +2917,9 @@ function sync_local_order_with_provider_detail(mysqli $mysqli, array $order, arr
 
     $updatedOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
     $previousStatus = (string) ($order['estado'] ?? '');
+    if ($localStatus !== $previousStatus) {
+        win_points_handle_order_status_change($mysqli, $orderId, $localStatus);
+    }
     if (in_array($localStatus, ['pagado', 'enviado'], true)) {
         recharge_notifications_emit_for_order($mysqli, $updatedOrder);
     }
@@ -3133,6 +3141,7 @@ ensure_juego_paquetes_monto_ff_column($mysqli);
 ensure_juego_paquetes_paquete_api_column($mysqli);
 influencer_coupon_ensure_sales_table_mysqli($mysqli);
 sync_coupon_usage_counts_safe($mysqli);
+win_points_ensure_schema();
 
 if ($action === 'create') {
     $game_id = isset($_POST['game_id']) ? intval($_POST['game_id']) : null;
@@ -3197,6 +3206,12 @@ if ($action === 'create') {
 
     if (!$selectedPackage) {
         json_error('El paquete seleccionado no existe para este juego.');
+    }
+
+    $winPointsAward = 0;
+    $winPointsEligible = win_points_enabled() && $cliente_usuario_id !== null && $cliente_usuario_id > 0;
+    if ($winPointsEligible) {
+        $winPointsAward = win_points_package_reward($selectedPackage);
     }
 
     $selectedCurrency = currency_find_by_code((string) $currency);
@@ -3272,11 +3287,11 @@ if ($action === 'create') {
         $cupon = null;
     }
 
-    $stmt = $mysqli->prepare("INSERT INTO pedidos (tenant_slug, juego_id, paquete_id, juego_nombre, paquete_nombre, paquete_cantidad, monto_ff, paquete_api, moneda, precio, user_identifier, player_fields_json, email, cliente_usuario_id, cupon, cantidad, estado) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, ?, 'pendiente')");
+    $stmt = $mysqli->prepare("INSERT INTO pedidos (tenant_slug, juego_id, paquete_id, juego_nombre, paquete_nombre, paquete_cantidad, monto_ff, paquete_api, moneda, precio, user_identifier, player_fields_json, email, cliente_usuario_id, cupon, cantidad, win_points_awarded, win_points_payment_mode, estado) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'money', 'pendiente')");
     if (!$stmt) {
         json_error('No se pudo preparar el pedido');
     }
-    $stmt->bind_param('siissssisdsssisi', $tenant_slug, $game_id, $package_id, $game_name, $pack_name, $pack_amount_text, $monto_ff, $paquete_api, $currency, $price, $user_identifier, $player_fields_json, $email, $cliente_usuario_id, $cupon, $pack_amount_num);
+    $stmt->bind_param('siissssisdsssisii', $tenant_slug, $game_id, $package_id, $game_name, $pack_name, $pack_amount_text, $monto_ff, $paquete_api, $currency, $price, $user_identifier, $player_fields_json, $email, $cliente_usuario_id, $cupon, $pack_amount_num, $winPointsAward);
     if (!$stmt->execute()) {
         json_error('No se pudo guardar el pedido');
     }
@@ -3333,7 +3348,14 @@ if ($action === 'create') {
         'estado' => 'pendiente',
         'created_at' => date(DATE_ATOM, isset($storedOrder['creado_en_ts']) ? (int) $storedOrder['creado_en_ts'] : time()),
         'expires_at' => order_expiration_iso($storedOrder),
-        'remaining_seconds' => max(0, order_expiration_timestamp($storedOrder) - time())
+        'remaining_seconds' => max(0, order_expiration_timestamp($storedOrder) - time()),
+        'win_points' => [
+            'enabled' => win_points_enabled(),
+            'eligible' => $winPointsEligible,
+            'award' => $winPointsAward,
+            'name' => win_points_program_name(),
+            'balance' => $winPointsEligible && $cliente_usuario_id !== null ? win_points_wallet_balance($mysqli, (int) $cliente_usuario_id) : 0,
+        ]
     ]);
 }
 
@@ -3341,24 +3363,14 @@ if ($action === 'submit_payment') {
     $mysqli = ensure_mysqli_connection($mysqli);
 
     $orderId = intval($_POST['order_id'] ?? 0);
+    $paymentMode = trim((string) ($_POST['payment_mode'] ?? 'money'));
+    $paymentMode = in_array($paymentMode, ['money', 'points'], true) ? $paymentMode : 'money';
     $paymentMethodId = intval($_POST['payment_method_id'] ?? 0);
     $referenceNumberRaw = trim((string) ($_POST['reference_number'] ?? ''));
     $phoneRaw = trim((string) ($_POST['phone'] ?? ''));
 
     if ($orderId <= 0) {
         json_error('Pedido inválido.');
-    }
-    if ($paymentMethodId <= 0) {
-        json_error('Debes seleccionar un método de pago.');
-    }
-    if ($referenceNumberRaw === '') {
-        json_error('Debes ingresar el número de referencia.');
-    }
-    if ($phoneRaw === '') {
-        json_error('Debes ingresar un número de teléfono.');
-    }
-    if (preg_match('/^\d+$/', $referenceNumberRaw) !== 1) {
-        json_error('El número de referencia solo puede contener dígitos.');
     }
 
     $order = fetch_order_by_id($mysqli, $orderId);
@@ -3371,6 +3383,301 @@ if ($action === 'submit_payment') {
     if (order_is_expired($order)) {
         $expiration = cancel_expired_order($mysqli, $order);
         json_error($expiration['message'] ?: 'La orden ya expiró.', 409);
+    }
+
+    if ($paymentMode === 'points') {
+        if (!win_points_enabled()) {
+            json_error('El sistema de premios no está activo.', 409);
+        }
+
+        $sessionUserId = isset($_SESSION['auth_user']['id']) ? intval($_SESSION['auth_user']['id']) : 0;
+        if ($sessionUserId <= 0) {
+            json_error('Debes iniciar sesión para canjear tus premios.', 403);
+        }
+        if ($sessionUserId !== (int) ($order['cliente_usuario_id'] ?? 0)) {
+            json_error('Solo el dueño de la orden puede canjear premios en este pedido.', 403);
+        }
+
+        try {
+            $redemption = win_points_assign_pending_order_redemption($mysqli, $orderId, $sessionUserId);
+        } catch (Throwable $e) {
+            json_error($e->getMessage(), 409);
+        }
+
+        $updatedOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
+        $usesCatalogApi = game_uses_catalog_api($mysqli, (int) ($updatedOrder['juego_id'] ?? 0));
+        $requiredPoints = max(0, (int) ($redemption['required_points'] ?? 0));
+
+        if (!$usesCatalogApi) {
+            $paidStatus = 'pagado';
+            $paidStmt = $mysqli->prepare("UPDATE pedidos SET estado = ? WHERE id = ? AND estado = 'pendiente'");
+            if (!$paidStmt) {
+                json_error('No se pudo registrar el canje del pedido.', 500);
+            }
+            $paidStmt->bind_param('si', $paidStatus, $orderId);
+            if (!$paidStmt->execute()) {
+                $paidStmt->close();
+                json_error('No se pudo actualizar el pedido tras canjear premios.', 500);
+            }
+            $paidStmt->close();
+
+            $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+            recharge_notifications_emit_for_order($mysqli, $paidOrder);
+            json_response([
+                'ok' => true,
+                'message' => 'Canje realizado. Tu pedido quedó pagado y pendiente de entrega manual.',
+                'order_id' => $orderId,
+                'estado' => 'pagado',
+                'verified' => true,
+                'payment_mode' => 'points',
+                'win_points' => [
+                    'name' => win_points_program_name(),
+                    'spent' => $requiredPoints,
+                    'balance' => win_points_wallet_balance($mysqli, $sessionUserId),
+                ],
+            ]);
+        }
+
+        $packageApiId = (int) ($updatedOrder['paquete_api'] ?? 0);
+        $orderPlayerFields = order_player_fields_from_json((string) ($updatedOrder['player_fields_json'] ?? ''));
+
+        try {
+            $providerResult = execute_catalog_api_purchase($packageApiId, (string) ($updatedOrder['user_identifier'] ?? ''), $orderPlayerFields);
+        } catch (Throwable $e) {
+            $providerResult = [
+                'success' => false,
+                'accepted' => false,
+                'message' => $e->getMessage(),
+                'reference' => '',
+                'payload' => ['exception' => $e->getMessage()],
+            ];
+        }
+
+        $providerPayloadData = (array) ($providerResult['payload'] ?? []);
+        $providerReference = (string) ($providerResult['reference'] ?? '');
+        $providerMessage = provider_order_status_message($providerPayloadData, (string) ($providerResult['message'] ?? 'No se recibió mensaje del proveedor.'));
+        $providerPayload = json_encode($providerPayloadData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $providerOrderId = recargas_api_extract_provider_order_id($providerPayloadData);
+        $providerState = strtolower(trim((string) (($providerPayloadData['estado'] ?? ''))));
+        $providerCode = provider_delivered_code_text($providerPayloadData);
+
+        if (!empty($providerResult['success'])) {
+            $verifiedStatus = 'enviado';
+            $providerHistoryJson = append_provider_history(
+                $updatedOrder['recargas_api_historial_json'] ?? null,
+                build_provider_history_entry(
+                    'points_purchase',
+                    $providerState,
+                    $verifiedStatus,
+                    $providerMessage,
+                    $providerReference,
+                    $providerOrderId,
+                    $providerCode
+                )
+            );
+            $verifyStmt = $mysqli->prepare("UPDATE pedidos SET ff_api_referencia = ?, ff_api_mensaje = ?, ff_api_payload = ?, recargas_api_pedido_id = ?, recargas_api_estado = ?, recargas_api_codigo_entregado = ?, recargas_api_ultimo_check = NOW(), recargas_api_historial_json = ?, estado = ? WHERE id = ? AND estado = 'pendiente'");
+            if (!$verifyStmt) {
+                json_error('No se pudo confirmar la recarga por premios.', 500);
+            }
+            $verifyStmt->bind_param('ssssssssi', $providerReference, $providerMessage, $providerPayload, $providerOrderId, $providerState, $providerCode, $providerHistoryJson, $verifiedStatus, $orderId);
+            if (!$verifyStmt->execute()) {
+                $verifyStmt->close();
+                json_error('No se pudo actualizar el pedido tras procesar el canje.', 500);
+            }
+            $verifyStmt->close();
+
+            $verifiedOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+            win_points_handle_order_status_change($mysqli, $orderId, 'enviado');
+            recharge_notifications_emit_for_order($mysqli, $verifiedOrder);
+            json_response([
+                'ok' => true,
+                'message' => 'Canje realizado y recarga procesada correctamente.',
+                'order_id' => $orderId,
+                'estado' => 'enviado',
+                'verified' => true,
+                'payment_mode' => 'points',
+                'provider_flow' => 'completed',
+                'provider_reference' => $providerReference,
+                'provider_message' => $providerMessage,
+                'provider_code' => $providerCode,
+                'win_points' => [
+                    'name' => win_points_program_name(),
+                    'spent' => $requiredPoints,
+                    'balance' => win_points_wallet_balance($mysqli, $sessionUserId),
+                ],
+            ]);
+        }
+
+        $manualProcessing = !empty($providerResult['manual_processing']);
+        $acceptedLike = !empty($providerResult['accepted'])
+            || ($manualProcessing && provider_message_indicates_pending_lookup($providerMessage));
+        $trackingFollowUp = provider_message_indicates_transport_timeout($providerMessage);
+
+        if ($trackingFollowUp || $acceptedLike) {
+            $paidStatus = 'pagado';
+            $providerHistoryJson = append_provider_history(
+                $updatedOrder['recargas_api_historial_json'] ?? null,
+                build_provider_history_entry(
+                    $trackingFollowUp ? 'points_purchase_timeout' : 'points_purchase_accepted',
+                    $providerState !== '' ? $providerState : 'pending_confirmation',
+                    $paidStatus,
+                    $providerMessage,
+                    $providerReference,
+                    $providerOrderId,
+                    $providerCode
+                )
+            );
+            $paidStmt = $mysqli->prepare("UPDATE pedidos SET ff_api_referencia = ?, ff_api_mensaje = ?, ff_api_payload = ?, recargas_api_pedido_id = ?, recargas_api_estado = ?, recargas_api_codigo_entregado = ?, recargas_api_ultimo_check = NOW(), recargas_api_historial_json = ?, estado = ? WHERE id = ? AND estado = 'pendiente'");
+            if (!$paidStmt) {
+                json_error('No se pudo dejar el canje en seguimiento.', 500);
+            }
+            $trackedState = $providerState !== '' ? $providerState : 'pending_confirmation';
+            $paidStmt->bind_param('ssssssssi', $providerReference, $providerMessage, $providerPayload, $providerOrderId, $trackedState, $providerCode, $providerHistoryJson, $paidStatus, $orderId);
+            if (!$paidStmt->execute()) {
+                $paidStmt->close();
+                json_error('No se pudo actualizar el pedido tras aceptar el canje.', 500);
+            }
+            $paidStmt->close();
+
+            $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+            recharge_notifications_emit_for_order($mysqli, $paidOrder);
+
+            if ($acceptedLike) {
+                $autoSyncAttempts = $manualProcessing ? 5 : 3;
+                $autoSyncDelaySeconds = $manualProcessing ? 4 : 2;
+                $autoSyncResult = try_auto_sync_provider_order($mysqli, $paidOrder, $autoSyncAttempts, $autoSyncDelaySeconds);
+                if (is_array($autoSyncResult)) {
+                    $providerMessage = trim((string) ($autoSyncResult['provider_message'] ?? $providerMessage));
+                    $providerReference = trim((string) ($autoSyncResult['provider_reference'] ?? $providerReference));
+                    $providerCode = trim((string) ($autoSyncResult['provider_code'] ?? $providerCode));
+                    $resolvedStatus = trim((string) ($autoSyncResult['local_status'] ?? ''));
+
+                    if ($resolvedStatus === 'enviado') {
+                        json_response([
+                            'ok' => true,
+                            'message' => 'Canje realizado y recarga procesada correctamente.',
+                            'order_id' => $orderId,
+                            'estado' => 'enviado',
+                            'verified' => true,
+                            'payment_mode' => 'points',
+                            'provider_flow' => 'completed',
+                            'provider_reference' => $providerReference,
+                            'provider_message' => $providerMessage,
+                            'provider_code' => $providerCode,
+                            'win_points' => [
+                                'name' => win_points_program_name(),
+                                'spent' => $requiredPoints,
+                                'balance' => win_points_wallet_balance($mysqli, $sessionUserId),
+                            ],
+                        ]);
+                    }
+
+                    if ($resolvedStatus === 'cancelado') {
+                        $cancelStmt = $mysqli->prepare("UPDATE pedidos SET estado = 'cancelado' WHERE id = ? AND estado = 'pagado'");
+                        if ($cancelStmt) {
+                            $cancelStmt->bind_param('i', $orderId);
+                            $cancelStmt->execute();
+                            $cancelStmt->close();
+                        }
+                        win_points_handle_order_status_change($mysqli, $orderId, 'cancelado');
+                        json_response([
+                            'ok' => true,
+                            'message' => 'El proveedor rechazó el canje. Tus premios fueron reembolsados.',
+                            'order_id' => $orderId,
+                            'estado' => 'cancelado',
+                            'verified' => true,
+                            'payment_mode' => 'points',
+                            'provider_flow' => 'cancelled',
+                            'reasons' => [$providerMessage],
+                            'provider_reference' => $providerReference,
+                            'provider_message' => $providerMessage,
+                            'win_points' => [
+                                'name' => win_points_program_name(),
+                                'spent' => 0,
+                                'balance' => win_points_wallet_balance($mysqli, $sessionUserId),
+                            ],
+                        ]);
+                    }
+                }
+            }
+
+            json_response([
+                'ok' => true,
+                'message' => $trackingFollowUp
+                    ? 'Canje aceptado. La compra quedó en seguimiento automático mientras el proveedor confirma la entrega.'
+                    : 'Canje aceptado. La recarga quedó en proceso para seguimiento.',
+                'order_id' => $orderId,
+                'estado' => 'pagado',
+                'verified' => true,
+                'payment_mode' => 'points',
+                'provider_flow' => $trackingFollowUp ? 'tracking' : 'accepted',
+                'reasons' => [$providerMessage],
+                'provider_reference' => $providerReference,
+                'provider_message' => $providerMessage,
+                'provider_code' => $providerCode,
+                'win_points' => [
+                    'name' => win_points_program_name(),
+                    'spent' => $requiredPoints,
+                    'balance' => win_points_wallet_balance($mysqli, $sessionUserId),
+                ],
+            ]);
+        }
+
+        $cancelStatus = 'cancelado';
+        $failedHistoryJson = append_provider_history(
+            $updatedOrder['recargas_api_historial_json'] ?? null,
+            build_provider_history_entry(
+                'points_purchase_failed',
+                $providerState,
+                $cancelStatus,
+                $providerMessage,
+                $providerReference,
+                $providerOrderId,
+                $providerCode
+            )
+        );
+        $cancelStmt = $mysqli->prepare("UPDATE pedidos SET ff_api_referencia = ?, ff_api_mensaje = ?, ff_api_payload = ?, recargas_api_pedido_id = ?, recargas_api_estado = ?, recargas_api_codigo_entregado = ?, recargas_api_ultimo_check = NOW(), recargas_api_historial_json = ?, estado = ? WHERE id = ? AND estado = 'pendiente'");
+        if (!$cancelStmt) {
+            json_error('No se pudo cerrar el canje fallido.', 500);
+        }
+        $cancelStmt->bind_param('ssssssssi', $providerReference, $providerMessage, $providerPayload, $providerOrderId, $providerState, $providerCode, $failedHistoryJson, $cancelStatus, $orderId);
+        if (!$cancelStmt->execute()) {
+            $cancelStmt->close();
+            json_error('No se pudo cancelar el pedido tras fallar el canje.', 500);
+        }
+        $cancelStmt->close();
+
+        win_points_handle_order_status_change($mysqli, $orderId, 'cancelado');
+        json_response([
+            'ok' => true,
+            'message' => 'No se pudo procesar el canje con el proveedor. Tus premios fueron reembolsados.',
+            'order_id' => $orderId,
+            'estado' => 'cancelado',
+            'verified' => true,
+            'payment_mode' => 'points',
+            'provider_flow' => 'cancelled',
+            'reasons' => [$providerMessage],
+            'provider_reference' => $providerReference,
+            'provider_message' => $providerMessage,
+            'win_points' => [
+                'name' => win_points_program_name(),
+                'spent' => 0,
+                'balance' => win_points_wallet_balance($mysqli, $sessionUserId),
+            ],
+        ]);
+    }
+
+    if ($paymentMethodId <= 0) {
+        json_error('Debes seleccionar un método de pago.');
+    }
+    if ($referenceNumberRaw === '') {
+        json_error('Debes ingresar el número de referencia.');
+    }
+    if ($phoneRaw === '') {
+        json_error('Debes ingresar un número de teléfono.');
+    }
+    if (preg_match('/^\d+$/', $referenceNumberRaw) !== 1) {
+        json_error('El número de referencia solo puede contener dígitos.');
     }
 
     $method = fetch_active_payment_method($mysqli, $paymentMethodId);
@@ -3556,6 +3863,7 @@ if ($action === 'submit_payment') {
                 $verifyStmt->close();
 
                 $verifiedOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+                win_points_handle_order_status_change($mysqli, $orderId, 'enviado');
                 recharge_notifications_emit_for_order($mysqli, $verifiedOrder);
                 json_response([
                     'ok' => true,
@@ -4391,6 +4699,7 @@ if ($action === 'update_status') {
     $stmt = $mysqli->prepare('UPDATE pedidos SET estado=? WHERE id=?');
     $stmt->bind_param('si', $new_status, $order_id);
     $stmt->execute();
+    win_points_handle_order_status_change($mysqli, $order_id, $new_status);
 
     if (in_array($new_status, ['pagado', 'enviado'], true) && !in_array((string) ($order['estado'] ?? ''), ['pagado', 'enviado'], true)) {
         register_influencer_coupon_sale($mysqli, [

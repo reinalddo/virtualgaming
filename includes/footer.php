@@ -41,6 +41,7 @@ $menuScript = <<<'SCRIPT'
   const authInitialMode = authModal ? (authModal.dataset.authInitialMode || "").trim() : "";
   const passwordToggles = document.querySelectorAll("[data-password-toggle]");
   const userOrdersModal = document.getElementById("user-orders-modal");
+  const userRewardsModal = document.getElementById("user-rewards-modal");
   const userProfileModal = document.getElementById("user-profile-modal");
   const userOrdersList = document.getElementById("user-orders-list");
   const userOrdersTableBody = document.getElementById("user-orders-table-body");
@@ -48,12 +49,26 @@ $menuScript = <<<'SCRIPT'
   const userOrdersLoading = document.getElementById("user-orders-loading");
   const userOrdersEmpty = document.getElementById("user-orders-empty");
   const userOrdersFeedback = document.getElementById("user-orders-feedback");
+  const userRewardsFeedback = document.getElementById("user-rewards-feedback");
+  const userRewardsLoading = document.getElementById("user-rewards-loading");
+  const userRewardsContent = document.getElementById("user-rewards-content");
+  const userRewardsEmpty = document.getElementById("user-rewards-empty");
+  const userRewardsTransactionsList = document.getElementById("user-rewards-transactions-list");
+  const userRewardsTableBody = document.getElementById("user-rewards-table-body");
+  const userRewardsCards = document.getElementById("user-rewards-cards");
+  const userRewardsModalTitle = document.getElementById("user-rewards-modal-title");
+  const userRewardsBalanceValue = document.getElementById("user-rewards-balance-value");
+  const userRewardsEarnedValue = document.getElementById("user-rewards-earned-value");
+  const userRewardsSpentValue = document.getElementById("user-rewards-spent-value");
+  const userRewardsTransactionsValue = document.getElementById("user-rewards-transactions-value");
   const userProfileForm = document.getElementById("user-profile-form");
   const userProfileFeedback = document.getElementById("user-profile-feedback");
   const userTriggerName = document.getElementById("user-trigger-name");
   const userTriggerInitials = document.getElementById("user-trigger-initials");
   const userMenuName = document.getElementById("user-menu-name");
   const userMenuEmail = document.getElementById("user-menu-email");
+  const userMenuRewardsName = document.getElementById("user-menu-rewards-name");
+  const userMenuRewardsBalance = document.getElementById("user-menu-rewards-balance");
 
   const showElement = (element, displayClass) => {
     if (!element) {
@@ -121,6 +136,7 @@ $menuScript = <<<'SCRIPT'
 
   const closeAllUserModals = () => {
     closeUserModal(userOrdersModal);
+    closeUserModal(userRewardsModal);
     closeUserModal(userProfileModal);
   };
 
@@ -158,6 +174,24 @@ $menuScript = <<<'SCRIPT'
       cancelado: "Cancelado",
     };
     return labels[status] || status || "Pendiente";
+  };
+
+  const rewardsTypeLabel = (type) => {
+    const labels = {
+      earn: "Ganado",
+      redeem: "Canjeado",
+      award_reversal: "Reverso de premio",
+      redeem_refund: "Reembolso de canje",
+      admin_adjustment: "Ajuste manual",
+    };
+    return labels[type] || type || "Movimiento";
+  };
+
+  const formatPointsNumber = (value) => {
+    const numericValue = Number(value || 0);
+    return Number.isFinite(numericValue)
+      ? new Intl.NumberFormat("es-VE").format(numericValue)
+      : "0";
   };
 
   const getInitials = (name, email) => {
@@ -199,6 +233,77 @@ $menuScript = <<<'SCRIPT'
         <td class="bg-transparent border-bottom border-info-subtle"><span class="badge rounded-pill text-bg-dark border border-info-subtle text-info">${escapeHtml(statusLabel(order.estado))}</span></td>
         <td class="bg-transparent border-bottom border-info-subtle text-info fw-bold text-end">${escapeHtml(order.moneda)} ${escapeHtml(order.precio)}</td>
       </tr>`;
+  };
+
+  const renderRewardTransactionCard = (transaction) => {
+    const delta = Number(transaction.points_delta || 0);
+    const deltaClass = delta >= 0 ? "text-success" : "text-warning";
+    const orderText = transaction.order_id ? `Pedido #${escapeHtml(transaction.order_id)}` : "Sin pedido asociado";
+    return `
+      <article class="rounded-4 border border-info p-3" style="background:rgba(8,15,24,0.78);box-shadow:0 0 16px rgba(34,211,238,0.08);">
+        <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
+          <div>
+            <div class="small text-uppercase text-info" style="letter-spacing:0.14em;">${escapeHtml(rewardsTypeLabel(transaction.transaction_type))}</div>
+            <div class="small text-secondary">${escapeHtml(transaction.created_at || "")}</div>
+          </div>
+          <div class="fw-bold ${deltaClass}">${delta >= 0 ? "+" : ""}${escapeHtml(formatPointsNumber(delta))}</div>
+        </div>
+        <div class="text-light fw-semibold mb-1">${escapeHtml(transaction.description || orderText)}</div>
+        <div class="small text-secondary mb-1">${escapeHtml(orderText)}</div>
+        <div class="small text-info">Saldo luego del movimiento: ${escapeHtml(formatPointsNumber(transaction.balance_after || 0))}</div>
+      </article>`;
+  };
+
+  const renderRewardTransactionRow = (transaction) => {
+    const delta = Number(transaction.points_delta || 0);
+    const deltaClass = delta >= 0 ? "text-success" : "text-warning";
+    const detailParts = [transaction.description || ""];
+    if (transaction.juego_nombre || transaction.paquete_nombre) {
+      detailParts.push(`${transaction.juego_nombre || ""} ${transaction.paquete_nombre || ""}`.trim());
+    }
+    if (transaction.order_id) {
+      detailParts.push(`Pedido #${transaction.order_id}`);
+    }
+    return `
+      <tr>
+        <td class="bg-transparent border-bottom border-info-subtle text-secondary">${escapeHtml(transaction.created_at || "")}</td>
+        <td class="bg-transparent border-bottom border-info-subtle text-light fw-semibold">${escapeHtml(rewardsTypeLabel(transaction.transaction_type))}</td>
+        <td class="bg-transparent border-bottom border-info-subtle text-light">${escapeHtml(detailParts.filter(Boolean).join(" | "))}</td>
+        <td class="bg-transparent border-bottom border-info-subtle text-end fw-bold ${deltaClass}">${delta >= 0 ? "+" : ""}${escapeHtml(formatPointsNumber(delta))}</td>
+        <td class="bg-transparent border-bottom border-info-subtle text-end text-info fw-bold">${escapeHtml(formatPointsNumber(transaction.balance_after || 0))}</td>
+      </tr>`;
+  };
+
+  const updateRewardsPresentation = (payload) => {
+    if (!payload) {
+      return;
+    }
+
+    const config = payload.config || {};
+    const summary = payload.summary || {};
+    const programName = config.name || "Win Points";
+
+    if (userMenuRewardsName) {
+      userMenuRewardsName.textContent = programName;
+    }
+    if (userMenuRewardsBalance) {
+      userMenuRewardsBalance.textContent = formatPointsNumber(summary.balance || 0);
+    }
+    if (userRewardsModalTitle) {
+      userRewardsModalTitle.textContent = `Mis ${programName}`;
+    }
+    if (userRewardsBalanceValue) {
+      userRewardsBalanceValue.textContent = formatPointsNumber(summary.balance || 0);
+    }
+    if (userRewardsEarnedValue) {
+      userRewardsEarnedValue.textContent = formatPointsNumber(summary.earned || 0);
+    }
+    if (userRewardsSpentValue) {
+      userRewardsSpentValue.textContent = formatPointsNumber(summary.spent || 0);
+    }
+    if (userRewardsTransactionsValue) {
+      userRewardsTransactionsValue.textContent = formatPointsNumber(summary.transactions || 0);
+    }
   };
 
   const loadUserOrders = async () => {
@@ -253,6 +358,46 @@ $menuScript = <<<'SCRIPT'
     } catch (error) {
       hideElement(userOrdersLoading);
       showFeedback(userOrdersFeedback, error.message || "No se pudo cargar el historial.", "danger");
+    }
+  };
+
+  const loadUserRewards = async () => {
+    if (!userRewardsModal || !userRewardsLoading || !userRewardsContent || !userRewardsEmpty || !userRewardsTransactionsList || !userRewardsTableBody || !userRewardsCards) {
+      return;
+    }
+
+    hideFeedback(userRewardsFeedback);
+    hideElement(userRewardsContent);
+    hideElement(userRewardsEmpty);
+    hideElement(userRewardsTransactionsList);
+    showElement(userRewardsLoading);
+    userRewardsLoading.textContent = "Cargando saldo y movimientos...";
+
+    try {
+      const response = await fetch((window.__TVG_API_ACCOUNT || __ACCOUNT_API_URL__) + "?action=rewards", {
+        credentials: "same-origin",
+        headers: { "Accept": "application/json" },
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || "No se pudo cargar el panel de premios.");
+      }
+
+      hideElement(userRewardsLoading);
+      updateRewardsPresentation(data);
+      showElement(userRewardsContent);
+
+      if (!data.enabled || !Array.isArray(data.transactions) || data.transactions.length === 0) {
+        showElement(userRewardsEmpty);
+        return;
+      }
+
+      userRewardsTableBody.innerHTML = data.transactions.map(renderRewardTransactionRow).join("");
+      userRewardsCards.innerHTML = data.transactions.map(renderRewardTransactionCard).join("");
+      showElement(userRewardsTransactionsList);
+    } catch (error) {
+      hideElement(userRewardsLoading);
+      showFeedback(userRewardsFeedback, error.message || "No se pudo cargar el panel de premios.", "danger");
     }
   };
 
@@ -390,6 +535,11 @@ $menuScript = <<<'SCRIPT'
       if (target === "orders") {
         openUserModal(userOrdersModal);
         await loadUserOrders();
+        return;
+      }
+      if (target === "rewards") {
+        openUserModal(userRewardsModal);
+        await loadUserRewards();
         return;
       }
       if (target === "profile") {

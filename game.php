@@ -7,10 +7,15 @@ require_once __DIR__ . "/includes/payment_methods.php";
 require_once __DIR__ . "/includes/recargas_api.php";
 require_once __DIR__ . "/includes/slugify.php";
 require_once __DIR__ . "/includes/player_verification.php";
+require_once __DIR__ . "/includes/win_points.php";
 currency_ensure_schema();
 $paymentSupportWhatsappBase = store_config_whatsapp_link(store_config_get('whatsapp', ''));
+$loggedUserId = 0;
 $loggedUserEmail = '';
 tenant_start_session();
+if (!empty($_SESSION['auth_user']['id'])) {
+  $loggedUserId = (int) $_SESSION['auth_user']['id'];
+}
 if (!empty($_SESSION['auth_user']['email'])) {
   $loggedUserEmail = (string) $_SESSION['auth_user']['email'];
 }
@@ -61,6 +66,20 @@ if ($requestedGame) {
 }
 
 $playerVerificationConfig = player_verification_frontend_config($game);
+$winPointsConfig = win_points_config();
+$winPointsEnabled = !empty($winPointsConfig['enabled']);
+$winPointsProgramName = (string) ($winPointsConfig['name'] ?? 'Win Points');
+$winPointsIconUrl = (string) ($winPointsConfig['icon_url'] ?? '');
+$winPointsGuestMessage = (string) ($winPointsConfig['guest_message'] ?? '');
+$winPointsUserSummary = $winPointsEnabled && $loggedUserId > 0
+  ? win_points_fetch_user_summary($mysqli, $loggedUserId)
+  : ['balance' => 0, 'earned' => 0, 'spent' => 0, 'transactions' => 0];
+$winPointsPackageRewards = $winPointsEnabled
+  ? win_points_fetch_game_package_rewards($mysqli, (int) ($game['id'] ?? 0))
+  : [];
+$winPointsRedemptionRules = $winPointsEnabled
+  ? win_points_fetch_game_redemption_rules($mysqli, (int) ($game['id'] ?? 0))
+  : [];
 
 $scriptDir = app_base_path();
 $pageTitle = store_config_get('nombre_tienda', 'TVirtualGaming') . " | " . ($game["nombre"] ?? "Juego");
@@ -155,6 +174,11 @@ include __DIR__ . "/includes/header.php";
         $clave_moneda = $moneda_actual['clave'] ?? 'USD';
         $mostrarDecimales = $moneda_actual ? currency_should_show_decimals($moneda_actual) : true;
         $packApiId = (int) ($pack['paquete_api'] ?? 0);
+        $packId = (int) ($pack['id'] ?? 0);
+        $packWinPointsReward = (int) ($winPointsPackageRewards[$packId] ?? 0);
+        $packWinPointsRule = $winPointsRedemptionRules[$packId] ?? null;
+        $packWinPointsRequired = max(0, (int) (($packWinPointsRule['required_points'] ?? 0)));
+        $packWinPointsRuleActive = is_array($packWinPointsRule) && !empty($packWinPointsRule['activo']) && $packWinPointsRequired > 0;
         $apiRequiredFields = [];
         if ($usesCatalogApi && $packApiId > 0 && isset($apiProductsById[$packApiId])) {
           $apiRequiredFields = recargas_api_describe_required_fields($apiProductsById[$packApiId]);
@@ -162,13 +186,16 @@ include __DIR__ . "/includes/header.php";
     ?>
       <div class="col">
         <button type="button" class="pack-card card border-info bg-dark text-start w-100 h-100 shadow-sm"
-          data-package-id="<?= (int) ($pack['id'] ?? 0) ?>"
+          data-package-id="<?= $packId ?>"
           data-base="<?= htmlspecialchars($precio_base) ?>"
           data-name="<?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?>"
           data-cantidad="<?= htmlspecialchars($pack['cantidad'], ENT_QUOTES, 'UTF-8') ?>"
           data-price-value="<?= htmlspecialchars((string) $precio_mostrar, ENT_QUOTES, 'UTF-8') ?>"
           data-show-decimals="<?= $mostrarDecimales ? '1' : '0' ?>"
           data-required-fields="<?= htmlspecialchars(json_encode($apiRequiredFields, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8') ?>"
+          data-win-points-reward="<?= $packWinPointsReward ?>"
+          data-win-points-required="<?= $packWinPointsRequired ?>"
+          data-win-points-active="<?= $packWinPointsRuleActive ? '1' : '0' ?>"
           data-moneda="<?= htmlspecialchars($clave_moneda) ?>">
           <div class="card-body p-0 d-flex flex-column">
             <?php 
@@ -189,6 +216,14 @@ include __DIR__ . "/includes/header.php";
                   <?= currency_format_amount($precio_mostrar, $moneda_actual) ?>
                 </span>
               </div>
+              <?php if ($winPointsEnabled && $packWinPointsReward > 0): ?>
+                <div class="pack-win-points-badge">
+                  <?php if ($winPointsIconUrl !== ''): ?>
+                    <img src="<?= htmlspecialchars($winPointsIconUrl, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($winPointsProgramName, ENT_QUOTES, 'UTF-8') ?>" class="pack-win-points-icon" />
+                  <?php endif; ?>
+                  <span>+<?= $packWinPointsReward ?> <?= htmlspecialchars($winPointsProgramName, ENT_QUOTES, 'UTF-8') ?></span>
+                </div>
+              <?php endif; ?>
             </div>
           </div>
         </button>
@@ -308,6 +343,11 @@ include __DIR__ . "/includes/header.php";
       <button type="submit" id="buy-button" class="btn btn-success w-100 fw-bold text-uppercase" disabled>
         Comprar Ahora
       </button>
+      <?php if ($winPointsEnabled && $loggedUserId <= 0): ?>
+        <div id="win-points-guest-hint" class="win-points-guest-hint">
+          <?= htmlspecialchars($winPointsGuestMessage, ENT_QUOTES, 'UTF-8') ?>
+        </div>
+      <?php endif; ?>
     </div>
   </form>
 
@@ -369,7 +409,21 @@ include __DIR__ . "/includes/header.php";
           <div class="payment-summary-row"><span>Producto:</span><strong id="payment-summary-product">-</strong></div>
           <div class="payment-summary-row payment-summary-total"><span>Total a pagar:</span><strong id="payment-summary-total">-</strong></div>
         </div>
-        <div class="payment-method-card mb-4">
+        <div id="payment-win-points-card" class="payment-win-points-card d-none">
+          <div class="payment-win-points-header">
+            <div>
+              <div class="payment-win-points-title">Premios disponibles</div>
+              <div id="payment-win-points-copy" class="payment-win-points-copy"></div>
+            </div>
+            <div id="payment-win-points-balance" class="payment-win-points-balance">0</div>
+          </div>
+          <div class="payment-win-points-actions">
+            <button type="button" id="payment-mode-money-btn" class="payment-mode-btn">Pagar normal</button>
+            <button type="button" id="payment-mode-points-btn" class="payment-mode-btn">Usar premios</button>
+          </div>
+          <div id="payment-win-points-message" class="payment-win-points-message"></div>
+        </div>
+        <div id="payment-method-card" class="payment-method-card mb-4">
           <div id="payment-method-select-wrap" class="mb-3 d-none">
             <label for="payment-method-select" class="form-label text-info">Método de pago</label>
             <select id="payment-method-select" class="form-select bg-dark text-info border-info"></select>
@@ -378,12 +432,12 @@ include __DIR__ . "/includes/header.php";
           <div id="payment-method-currency" class="small text-info mb-2"></div>
           <div id="payment-method-details" class="small text-light payment-method-details"></div>
         </div>
-        <div class="mb-3">
+        <div id="payment-reference-group" class="mb-3">
           <label for="payment-reference-input" class="form-label text-info">Número de Referencia</label>
           <input type="text" id="payment-reference-input" class="form-control bg-dark text-info border-info" inputmode="numeric" autocomplete="off" placeholder="Inserte su número de referencia para comprobar el pago">
           <div id="payment-reference-help" class="form-text text-secondary">Inserte su número de referencia para comprobar el pago.</div>
         </div>
-        <div class="mb-4">
+        <div id="payment-phone-group" class="mb-4">
           <label for="payment-phone-input" class="form-label text-info">Número de teléfono real para contactarte</label>
           <input type="tel" id="payment-phone-input" class="form-control bg-dark text-info border-info" autocomplete="tel" placeholder="Ej: 04121234567">
         </div>
@@ -586,6 +640,120 @@ include __DIR__ . "/includes/header.php";
     backdrop-filter: blur(2px);
   }
 
+  .win-points-guest-hint {
+    margin-top: 0.85rem;
+    padding: 0.9rem 1rem;
+    border-radius: 0.95rem;
+    border: 1px solid rgba(250, 204, 21, 0.42);
+    background: linear-gradient(135deg, rgba(120, 53, 15, 0.34), rgba(146, 64, 14, 0.18));
+    color: #fde68a;
+    font-weight: 700;
+    font-size: 0.94rem;
+    text-align: center;
+    box-shadow: 0 0 18px rgba(251, 191, 36, 0.12);
+  }
+
+  .payment-win-points-card {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(45, 212, 191, 0.25);
+    background: linear-gradient(180deg, rgba(9, 24, 34, 0.95), rgba(8, 18, 28, 0.92));
+    box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.06);
+  }
+
+  .payment-win-points-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.9rem;
+    margin-bottom: 0.9rem;
+  }
+
+  .payment-win-points-title {
+    color: #f8fafc;
+    font-weight: 700;
+    margin-bottom: 0.2rem;
+  }
+
+  .payment-win-points-copy {
+    color: #cbd5e1;
+    font-size: 0.9rem;
+    line-height: 1.45;
+  }
+
+  .payment-win-points-balance {
+    padding: 0.55rem 0.8rem;
+    border-radius: 999px;
+    border: 1px solid rgba(34, 197, 94, 0.42);
+    background: rgba(6, 78, 59, 0.32);
+    color: #86efac;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .payment-win-points-actions {
+    display: grid;
+    gap: 0.65rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .payment-mode-btn {
+    min-height: 3rem;
+    padding: 0.8rem 0.95rem;
+    border-radius: 0.95rem;
+    border: 1px solid rgba(56, 189, 248, 0.2);
+    background: rgba(15, 23, 42, 0.72);
+    color: #cbd5e1;
+    font-weight: 700;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease;
+  }
+
+  .payment-mode-btn.is-active {
+    border-color: rgba(34, 211, 238, 0.72);
+    background: linear-gradient(135deg, rgba(8, 47, 73, 0.94), rgba(8, 145, 178, 0.4));
+    color: #ecfeff;
+    box-shadow: 0 0 18px rgba(34, 211, 238, 0.16);
+  }
+
+  .payment-mode-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.58;
+    box-shadow: none;
+  }
+
+  .payment-win-points-message {
+    margin-top: 0.85rem;
+    color: #93c5fd;
+    font-size: 0.92rem;
+    line-height: 1.45;
+  }
+
+  .pack-win-points-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    width: fit-content;
+    max-width: 100%;
+    padding: 0.45rem 0.75rem;
+    border-radius: 999px;
+    border: 1px solid rgba(250, 204, 21, 0.25);
+    background: linear-gradient(135deg, rgba(41, 37, 19, 0.94), rgba(62, 45, 7, 0.78));
+    color: #fcd34d;
+    font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1.15;
+    box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.08);
+  }
+
+  .pack-win-points-icon {
+    width: 1rem;
+    height: 1rem;
+    border-radius: 999px;
+    object-fit: cover;
+    flex: 0 0 auto;
+  }
+
   @media (max-width: 575.98px) {
     .app-overlay-modal {
       align-items: flex-start;
@@ -616,6 +784,16 @@ include __DIR__ . "/includes/header.php";
 
     .payment-expiration-banner {
       font-size: 0.92rem;
+    }
+
+    .payment-win-points-header,
+    .payment-win-points-actions {
+      grid-template-columns: 1fr;
+      display: grid;
+    }
+
+    .payment-win-points-balance {
+      white-space: normal;
     }
   }
 
@@ -785,6 +963,14 @@ include __DIR__ . "/includes/header.php";
   const defaultOrderEmail = <?= json_encode($loggedUserEmail, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const paymentMethodsByCurrency = <?= json_encode($paymentMethodsByCurrency, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const paymentSupportWhatsappBase = <?= json_encode($paymentSupportWhatsappBase, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+  const winPointsState = <?= json_encode([
+    'enabled' => $winPointsEnabled,
+    'loggedIn' => $loggedUserId > 0,
+    'name' => $winPointsProgramName,
+    'iconUrl' => $winPointsIconUrl,
+    'guestMessage' => $winPointsGuestMessage,
+    'balance' => (int) ($winPointsUserSummary['balance'] ?? 0),
+  ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const gameUsesCatalogApi = <?= $usesCatalogApi ? 'true' : 'false' ?>;
   const packCards2 = Array.from(document.querySelectorAll('.pack-card'));
   const selectedPack = document.getElementById("selected-pack");
@@ -792,6 +978,7 @@ include __DIR__ . "/includes/header.php";
   const orderForm = document.getElementById("order-form");
   const buyButton = document.getElementById("buy-button");
   const defaultBuyButtonLabel = 'Comprar Ahora';
+  const defaultPaymentSubmitButtonLabel = 'Pagado / Recargar';
   const verifyUserBuyButtonLabel = 'Debe Verificar El usuario para poder comprar';
   const playerPrimaryField = document.getElementById('player-primary-field');
   const playerPrimaryLabel = document.getElementById('player-primary-label');
@@ -833,11 +1020,20 @@ include __DIR__ . "/includes/header.php";
   const paymentSummaryTotal = document.getElementById('payment-summary-total');
   const paymentMethodSelectWrap = document.getElementById('payment-method-select-wrap');
   const paymentMethodSelect = document.getElementById('payment-method-select');
+  const paymentMethodCard = document.getElementById('payment-method-card');
   const paymentMethodTitle = document.getElementById('payment-method-title');
   const paymentMethodCurrency = document.getElementById('payment-method-currency');
   const paymentMethodDetails = document.getElementById('payment-method-details');
+  const paymentWinPointsCard = document.getElementById('payment-win-points-card');
+  const paymentWinPointsBalance = document.getElementById('payment-win-points-balance');
+  const paymentWinPointsCopy = document.getElementById('payment-win-points-copy');
+  const paymentWinPointsMessage = document.getElementById('payment-win-points-message');
+  const paymentModeMoneyButton = document.getElementById('payment-mode-money-btn');
+  const paymentModePointsButton = document.getElementById('payment-mode-points-btn');
+  const paymentReferenceGroup = document.getElementById('payment-reference-group');
   const paymentReferenceInput = document.getElementById('payment-reference-input');
   const paymentReferenceHelp = document.getElementById('payment-reference-help');
+  const paymentPhoneGroup = document.getElementById('payment-phone-group');
   const paymentPhoneInput = document.getElementById('payment-phone-input');
   const paymentSubmitButton = document.getElementById('payment-submit-btn');
   const paymentCancelOrderButton = document.getElementById('payment-cancel-order-btn');
@@ -882,8 +1078,118 @@ include __DIR__ . "/includes/header.php";
       moneda: card.dataset.moneda,
       cantidad: card.dataset.cantidad,
       showDecimals: card.dataset.showDecimals === '1',
+      rewardPoints: Number(card.dataset.winPointsReward || 0),
+      redeemRequiredPoints: Number(card.dataset.winPointsRequired || 0),
+      redeemActive: card.dataset.winPointsActive === '1',
       requiredFields: parseRequiredFields(card.dataset.requiredFields)
     };
+  }
+
+  function formatWinPointsAmount(points) {
+    return `${Number(points || 0).toLocaleString('en-US')} ${winPointsState.name || 'Win Points'}`;
+  }
+
+  function canRedeemPackWithPoints(pack) {
+    return Boolean(
+      winPointsState.enabled
+      && winPointsState.loggedIn
+      && pack
+      && pack.redeemActive
+      && Number(pack.redeemRequiredPoints || 0) > 0
+      && Number(winPointsState.balance || 0) >= Number(pack.redeemRequiredPoints || 0)
+    );
+  }
+
+  function setActivePaymentMode(mode) {
+    if (!activePaymentOrder) {
+      return;
+    }
+
+    const canUseMoney = !!activePaymentOrder.canUseMoney;
+    const canUsePoints = !!activePaymentOrder.canUsePoints;
+    let nextMode = mode === 'points' ? 'points' : 'money';
+
+    if (nextMode === 'points' && !canUsePoints) {
+      nextMode = canUseMoney ? 'money' : 'points';
+    }
+    if (nextMode === 'money' && !canUseMoney) {
+      nextMode = canUsePoints ? 'points' : 'money';
+    }
+
+    activePaymentOrder.paymentMode = nextMode;
+    const usingPoints = nextMode === 'points';
+
+    if (paymentModeMoneyButton) {
+      paymentModeMoneyButton.classList.toggle('is-active', !usingPoints);
+      paymentModeMoneyButton.disabled = !canUseMoney;
+    }
+    if (paymentModePointsButton) {
+      paymentModePointsButton.classList.toggle('is-active', usingPoints);
+      paymentModePointsButton.disabled = !canUsePoints;
+    }
+    if (paymentMethodCard) {
+      paymentMethodCard.classList.toggle('d-none', usingPoints || !canUseMoney);
+    }
+    if (paymentReferenceGroup) {
+      paymentReferenceGroup.classList.toggle('d-none', usingPoints || !canUseMoney);
+    }
+    if (paymentPhoneGroup) {
+      paymentPhoneGroup.classList.toggle('d-none', usingPoints || !canUseMoney);
+    }
+    if (paymentSubmitButton) {
+      paymentSubmitButton.textContent = usingPoints
+        ? `Canjear ${formatWinPointsAmount(activePaymentOrder.pointsRequired || 0)}`
+        : defaultPaymentSubmitButtonLabel;
+    }
+  }
+
+  function renderWinPointsPaymentState(pack, currentMethod) {
+    if (!paymentWinPointsCard) {
+      return;
+    }
+
+    if (!winPointsState.enabled || !winPointsState.loggedIn || !pack || !activePaymentOrder) {
+      paymentWinPointsCard.classList.add('d-none');
+      if (activePaymentOrder) {
+        activePaymentOrder.canUsePoints = false;
+      }
+      return;
+    }
+
+    const rewardPoints = Number(pack.rewardPoints || 0);
+    const requiredPoints = Number(pack.redeemRequiredPoints || 0);
+    const hasRule = !!pack.redeemActive && requiredPoints > 0;
+    const currentBalance = Number(winPointsState.balance || 0);
+    const canUsePoints = hasRule && currentBalance >= requiredPoints;
+
+    activePaymentOrder.canUseMoney = Boolean(currentMethod);
+    activePaymentOrder.canUsePoints = canUsePoints;
+    activePaymentOrder.pointsRequired = requiredPoints;
+
+    paymentWinPointsCard.classList.remove('d-none');
+    paymentWinPointsBalance.textContent = formatWinPointsAmount(currentBalance);
+
+    if (rewardPoints > 0) {
+      paymentWinPointsCopy.textContent = `Este paquete te entrega +${rewardPoints} ${winPointsState.name} cuando la recarga quede enviada.`;
+    } else {
+      paymentWinPointsCopy.textContent = `Tu saldo disponible se puede usar en los paquetes que tengan canje activo.`;
+    }
+
+    if (paymentModePointsButton) {
+      paymentModePointsButton.textContent = hasRule
+        ? `Usar ${formatWinPointsAmount(requiredPoints)}`
+        : 'Sin canje disponible';
+    }
+
+    if (hasRule && canUsePoints) {
+      paymentWinPointsMessage.textContent = `Puedes canjear este paquete usando ${formatWinPointsAmount(requiredPoints)}.`;
+    } else if (hasRule) {
+      paymentWinPointsMessage.textContent = `Necesitas ${formatWinPointsAmount(requiredPoints)} para canjear este paquete. Tu saldo actual es ${formatWinPointsAmount(currentBalance)}.`;
+    } else {
+      paymentWinPointsMessage.textContent = 'Este paquete no tiene una regla activa de canje por premios. Puedes pagar normal y seguir acumulando puntos.';
+    }
+
+    setActivePaymentMode(activePaymentOrder.canUseMoney ? 'money' : 'points');
   }
 
   function clearFieldValidation(field) {
@@ -1822,7 +2128,7 @@ include __DIR__ . "/includes/header.php";
   }
 
   function setPaymentFormDisabled(disabled) {
-    [paymentMethodSelect, paymentReferenceInput, paymentPhoneInput, paymentSubmitButton].forEach((field) => {
+    [paymentMethodSelect, paymentReferenceInput, paymentPhoneInput, paymentSubmitButton, paymentModeMoneyButton, paymentModePointsButton].forEach((field) => {
       if (field) {
         field.disabled = disabled;
       }
@@ -1883,6 +2189,9 @@ include __DIR__ . "/includes/header.php";
     couponApplied = false;
     couponValue = '';
     activePack = null;
+    if (paymentWinPointsCard) {
+      paymentWinPointsCard.classList.add('d-none');
+    }
     resetPlayerVerificationState();
     packCards2.forEach((item) => item.classList.remove('neon-selected'));
     renderPlayerFields(null);
@@ -1900,6 +2209,12 @@ include __DIR__ . "/includes/header.php";
       paymentPhoneInput.value = '';
       clearPaymentSupportUi();
       setCancelOrderButtonMode('cancel');
+      if (paymentWinPointsCard) {
+        paymentWinPointsCard.classList.add('d-none');
+      }
+      if (paymentSubmitButton) {
+        paymentSubmitButton.textContent = defaultPaymentSubmitButtonLabel;
+      }
     }
   }
 
@@ -1944,7 +2259,8 @@ include __DIR__ . "/includes/header.php";
 
   function openPaymentModal(orderId, expiresAt, remainingSeconds, pack, userId, totalText, orderEmail) {
     const currentMethod = renderPaymentMethodsByCurrency(pack.moneda || '');
-    if (!currentMethod) {
+    const canUsePoints = canRedeemPackWithPoints(pack);
+    if (!currentMethod && !canUsePoints) {
       showToast(`No hay métodos de pago activos para la moneda ${pack.moneda || ''}.`, 'error');
       return false;
     }
@@ -1953,10 +2269,15 @@ include __DIR__ . "/includes/header.php";
 
     activePaymentOrder = {
       orderId,
+      pack,
       expiresAtMs: Date.now() + (safeRemainingSeconds * 1000),
       expiresAt,
       currency: pack.moneda || '',
       email: orderEmail || '',
+      canUseMoney: Boolean(currentMethod),
+      canUsePoints,
+      paymentMode: currentMethod ? 'money' : 'points',
+      pointsRequired: Number(pack.redeemRequiredPoints || 0),
       expiring: false,
     };
 
@@ -1968,6 +2289,7 @@ include __DIR__ . "/includes/header.php";
     setPaymentFormDisabled(false);
     setPaymentAlert('', 'info');
     clearPaymentSupportUi();
+    renderWinPointsPaymentState(pack, currentMethod);
     setCancelOrderButtonMode('cancel');
     setOverlayVisible(paymentModal, true);
     scrollPaymentModalToTop();
@@ -2044,7 +2366,6 @@ include __DIR__ . "/includes/header.php";
   if (verifyPlayerButton) {
     verifyPlayerButton.addEventListener('click', verifyCurrentPlayer);
   }
-              if (couponInput) {
               function normalizeCouponCode(value) {
                 return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
               }
@@ -2134,33 +2455,43 @@ include __DIR__ . "/includes/header.php";
                     return;
                   }
 
+                  const paymentMode = activePaymentOrder.paymentMode === 'points' ? 'points' : 'money';
                   const methods = getPaymentMethodsForCurrency(activePaymentOrder.currency);
                   const selectedMethod = methods.find((method) => String(method.id) === String(paymentMethodSelect.value)) || methods[0] || null;
-                  if (!selectedMethod) {
+                  if (paymentMode === 'money' && !selectedMethod) {
                     setPaymentAlert('No hay un método de pago disponible para esta orden.', 'danger');
                     return;
                   }
 
-                  const reference = paymentReferenceInput.value.trim();
-                  const phone = paymentPhoneInput.value.trim();
-                  const requiredDigits = Number(selectedMethod.referencia_digitos || 0);
+                  const reference = paymentMode === 'points' ? '' : paymentReferenceInput.value.trim();
+                  const phone = paymentMode === 'points' ? '' : paymentPhoneInput.value.trim();
+                  const requiredDigits = Number(selectedMethod ? (selectedMethod.referencia_digitos || 0) : 0);
 
-                  if (!reference) {
+                  if (paymentMode === 'points' && !activePaymentOrder.canUsePoints) {
+                    setPaymentAlert('Este paquete no tiene un canje disponible con tus premios en este momento.', 'danger');
+                    return;
+                  }
+                  if (paymentMode === 'money' && !reference) {
                     setPaymentAlert('Debes ingresar el número de referencia.', 'danger');
                     return;
                   }
-                  if (requiredDigits > 0 && reference.length !== requiredDigits) {
+                  if (paymentMode === 'money' && requiredDigits > 0 && reference.length !== requiredDigits) {
                     setPaymentAlert(`La referencia debe contener exactamente ${requiredDigits} dígitos.`, 'danger');
                     return;
                   }
-                  if (!phone) {
+                  if (paymentMode === 'money' && !phone) {
                     setPaymentAlert('Debes ingresar un número de teléfono para contactarte.', 'danger');
                     return;
                   }
 
                   setPaymentFormDisabled(true);
                   setPaymentAlert('', 'info');
-                  setLoadingModalContent('Enviando orden...', 'Estamos registrando tu comprobante y procesando la orden según la moneda del pedido. No cierres esta ventana.');
+                  setLoadingModalContent(
+                    paymentMode === 'points' ? 'Canjeando premios...' : 'Enviando orden...',
+                    paymentMode === 'points'
+                      ? 'Estamos validando tu saldo y procesando la recarga con tus premios. No cierres esta ventana.'
+                      : 'Estamos registrando tu comprobante y procesando la orden según la moneda del pedido. No cierres esta ventana.'
+                  );
                   setOverlayVisible(loadingModal, true);
                   fetch(buildAppUrl('/api/pedidos.php'), {
                     method: 'POST',
@@ -2168,7 +2499,8 @@ include __DIR__ . "/includes/header.php";
                     body: [
                       'action=submit_payment',
                       `order_id=${encodeURIComponent(activePaymentOrder.orderId)}`,
-                      `payment_method_id=${encodeURIComponent(selectedMethod.id)}`,
+                      `payment_mode=${encodeURIComponent(paymentMode)}`,
+                      `payment_method_id=${encodeURIComponent(selectedMethod ? selectedMethod.id : '')}`,
                       `reference_number=${encodeURIComponent(reference)}`,
                       `phone=${encodeURIComponent(phone)}`
                     ].join('&')
@@ -2178,11 +2510,19 @@ include __DIR__ . "/includes/header.php";
                     if (!response.ok || !data.ok) {
                       throw new Error((data && data.message) ? data.message : 'No se pudieron guardar los datos del pago.');
                     }
+
+                    if (data && data.win_points && Number.isFinite(Number(data.win_points.balance))) {
+                      winPointsState.balance = Number(data.win_points.balance);
+                      renderWinPointsPaymentState(activePaymentOrder.pack || activePack, selectedMethod);
+                    }
+
                     setOverlayVisible(loadingModal, false);
 
                     const nextState = String((data && data.estado) || '').toLowerCase();
                     if (nextState === 'enviado') {
-                      const successMessage = data.message || 'La recarga fue procesada correctamente.';
+                      const successMessage = data.message || (paymentMode === 'points'
+                        ? 'Canje realizado y recarga procesada correctamente.'
+                        : 'La recarga fue procesada correctamente.');
                       setPaymentAlert(successMessage, 'success');
                       renderDeliveredCodes(data);
                       setPaymentFormDisabled(true);
@@ -2195,7 +2535,11 @@ include __DIR__ . "/includes/header.php";
                     if (nextState === 'cancelado') {
                       const cancelMessage = data.message || 'La orden fue cancelada.';
                       setPaymentAlert(cancelMessage, 'danger');
-                      renderPaymentFailureDetails(data, reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
+                      if (String((data && data.provider_flow) || '').trim() !== '') {
+                        renderProviderPaymentDetails(data, reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
+                      } else {
+                        renderPaymentFailureDetails(data, reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
+                      }
                       setPaymentFormDisabled(true);
                       clearPaymentTimer();
                       setCancelOrderButtonMode('close');
@@ -2257,6 +2601,18 @@ include __DIR__ . "/includes/header.php";
                       expireActiveOrder();
                     }
                   });
+                });
+              }
+
+              if (paymentModeMoneyButton) {
+                paymentModeMoneyButton.addEventListener('click', function() {
+                  setActivePaymentMode('money');
+                });
+              }
+
+              if (paymentModePointsButton) {
+                paymentModePointsButton.addEventListener('click', function() {
+                  setActivePaymentMode('points');
                 });
               }
 
@@ -2353,7 +2709,7 @@ include __DIR__ . "/includes/header.php";
               });
               orderForm.addEventListener('submit', function(event) {
                 event.preventDefault();
-                const btn = document.getElementById('buy-button');
+                const btn = buyButton;
                 const couponVal = normalizeCouponCode(couponInput.value);
                 couponInput.value = couponVal;
                 const userId = playerPrimaryInput ? playerPrimaryInput.value.trim() : '';
@@ -2365,52 +2721,57 @@ include __DIR__ . "/includes/header.php";
                   return;
                 }
                 const paymentMethods = getPaymentMethodsForCurrency(pack.moneda || '');
-                if (!paymentMethods.length) {
+                const pointsCheckoutAvailable = canRedeemPackWithPoints(pack);
+                if (!paymentMethods.length && !pointsCheckoutAvailable) {
                   showToast(`No hay métodos de pago activos para la moneda ${pack.moneda || ''}.`, 'error');
                   return;
                 }
-                // Validar campos obligatorios solo al intentar comprar
+
                 const requiredFields = Array.from(orderForm.querySelectorAll('[required]'));
                 let requiredFilled = true;
                 requiredFields.forEach(field => {
-                  const errorId = field.name + "-error";
+                  const errorId = `${field.name}-error`;
                   let errorElem = document.getElementById(errorId);
-                  if (field.value.trim() === "") {
+                  if (field.value.trim() === '') {
                     requiredFilled = false;
                     if (!errorElem) {
-                      errorElem = document.createElement("div");
+                      errorElem = document.createElement('div');
                       errorElem.id = errorId;
-                      errorElem.style.color = "#f87171";
-                      errorElem.style.fontSize = "12px";
-                      errorElem.textContent = "Este campo es obligatorio.";
+                      errorElem.style.color = '#f87171';
+                      errorElem.style.fontSize = '12px';
+                      errorElem.textContent = 'Este campo es obligatorio.';
                       field.parentNode.appendChild(errorElem);
                     }
                   } else {
-                    if (errorElem) errorElem.remove();
+                    if (errorElem) {
+                      errorElem.remove();
+                    }
                   }
                 });
+
                 if (!requiredFilled) {
                   return;
                 }
+
                 if (playerVerificationConfig && !playerVerificationState.verified) {
                   setPlayerVerificationFeedback('danger', 'Debes verificar el nombre del jugador antes de comprar.');
                   return;
                 }
-                // Si el cupón no está aplicado y hay valor, mostrar modal
+
                 if (couponVal && !couponApplied) {
+                  if (modalCouponName) {
+                    modalCouponName.textContent = couponVal;
+                  }
                   setOverlayVisible(couponModal, true);
-                  modalCouponName.textContent = couponVal;
                   modalYes.onclick = function() {
                     setOverlayVisible(couponModal, false);
-                    document.getElementById('apply-coupon-btn').click();
-                    // Esperar a que se aplique el cupón y luego enviar el formulario
+                    applyCouponButton.click();
                     setTimeout(() => orderForm.dispatchEvent(new Event('submit', {cancelable: true})), 150);
                   };
                   modalNo.onclick = function() {
                     setOverlayVisible(couponModal, false);
                     couponApplied = false;
                     couponInput.value = '';
-                    // Enviar el formulario sin cupón (ya no se mostrará el modal)
                     setTimeout(() => orderForm.dispatchEvent(new Event('submit', {cancelable: true})), 100);
                   };
                   modalCancel.onclick = function() {
@@ -2418,30 +2779,28 @@ include __DIR__ . "/includes/header.php";
                   };
                   return;
                 }
-                // Envío AJAX del pedido
-                                // Mostrar spinner y deshabilitar botón justo antes de enviar la compra
-                                var spinner = document.getElementById('spinner-compra');
-                                if (!spinner) {
-                                  spinner = document.createElement('span');
-                                  spinner.id = 'spinner-compra';
-                                  spinner.innerHTML = `<svg width="22" height="22" viewBox="0 0 50 50" style="vertical-align:middle;"><circle cx="25" cy="25" r="20" fill="none" stroke="#34d399" stroke-width="5" stroke-linecap="round" stroke-dasharray="31.4 31.4" transform="rotate(-90 25 25)"><animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite"/></circle></svg>`;
-                                  spinner.style.marginLeft = '8px';
-                                  btn.appendChild(spinner);
-                                }
-                                btn.disabled = true;
-                // El precio mostrado SIEMPRE es el que se envía, así se evita doble descuento
+
+                let spinner = document.getElementById('spinner-compra');
+                if (!spinner) {
+                  spinner = document.createElement('span');
+                  spinner.id = 'spinner-compra';
+                  spinner.innerHTML = `<svg width="22" height="22" viewBox="0 0 50 50" style="vertical-align:middle;"><circle cx="25" cy="25" r="20" fill="none" stroke="#34d399" stroke-width="5" stroke-linecap="round" stroke-dasharray="31.4 31.4" transform="rotate(-90 25 25)"><animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite"/></circle></svg>`;
+                  spinner.style.marginLeft = '8px';
+                  btn.appendChild(spinner);
+                }
+
                 let precioFinal = selectedPrice.textContent.replace(/[^\d.]/g, '');
-                // Si no hay cupón aplicado, usar el precio base del paquete
                 if (!couponApplied || !couponVal) {
                   precioFinal = String(normalizeCurrencyAmount(pack.priceValue, pack.showDecimals));
                 } else {
                   precioFinal = String(normalizeCurrencyAmount(selectedTotalValue, pack.showDecimals));
                 }
+
                 const pedidoData = {
                   action: 'create',
                   game_id: "<?= $game['id'] ?>",
                   package_id: pack.id || '',
-                  game_name: "<?= $game['nombre'] ?>",//window.gameName,
+                  game_name: "<?= $game['nombre'] ?>",
                   pack_name: pack.name || '',
                   pack_amount: pack.cantidad || '',
                   currency: pack.moneda || '',
@@ -2452,10 +2811,12 @@ include __DIR__ . "/includes/header.php";
                   email: email,
                   coupon: couponApplied ? couponVal : '',
                 };
+
                 console.log('Datos enviados a pedidos.php:', pedidoData);
                 btn.disabled = true;
                 setLoadingModalContent('Procesando pedido...', 'Estamos registrando tu pedido para abrir el formulario de pago.');
                 setOverlayVisible(loadingModal, true);
+
                 fetch(buildAppUrl('/api/pedidos.php'), {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -2477,6 +2838,18 @@ include __DIR__ . "/includes/header.php";
                     }
                   }
                   if (data && data.ok) {
+                    if (data.win_points && Number.isFinite(Number(data.win_points.balance))) {
+                      const refreshedBalance = Number(data.win_points.balance);
+                      const userMenuRewardsBalance = document.getElementById('user-menu-rewards-balance');
+                      const userRewardsBalanceValue = document.getElementById('user-rewards-balance-value');
+                      winPointsState.balance = refreshedBalance;
+                      if (userMenuRewardsBalance) {
+                        userMenuRewardsBalance.textContent = refreshedBalance.toLocaleString('en-US');
+                      }
+                      if (userRewardsBalanceValue) {
+                        userRewardsBalanceValue.textContent = refreshedBalance.toLocaleString('en-US');
+                      }
+                    }
                     const opened = openPaymentModal(data.order_id, data.expires_at, data.remaining_seconds, pack, userId, selectedPrice.textContent, email);
                     if (opened) {
                       showToast('Pedido registrado. Completa ahora los datos del pago.', 'success');
@@ -2494,7 +2867,6 @@ include __DIR__ . "/includes/header.php";
                   setOverlayVisible(loadingModal, false);
                 });
               });
-              }
               </script>
             </section>
 <?php

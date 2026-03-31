@@ -5,6 +5,7 @@ header('Content-Type: application/json');
 
 require_once __DIR__ . '/../includes/db_connect.php';
 require_once __DIR__ . '/../includes/currency.php';
+require_once __DIR__ . '/../includes/win_points.php';
 
 currency_ensure_schema();
 
@@ -98,6 +99,30 @@ if ($action === 'orders') {
     $stmt->close();
 
     account_json_ok(['orders' => $orders]);
+}
+
+if ($action === 'rewards') {
+    $config = win_points_config();
+    if (!$config['enabled']) {
+        account_json_ok([
+            'enabled' => false,
+            'config' => $config,
+            'summary' => [
+                'balance' => 0,
+                'earned' => 0,
+                'spent' => 0,
+                'transactions' => 0,
+            ],
+            'transactions' => [],
+        ]);
+    }
+
+    account_json_ok([
+        'enabled' => true,
+        'config' => $config,
+        'summary' => win_points_fetch_user_summary($mysqli, $authUserId),
+        'transactions' => win_points_fetch_user_transactions($mysqli, $authUserId, 50),
+    ]);
 }
 
 if ($action === 'update_profile') {

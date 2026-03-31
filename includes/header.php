@@ -14,6 +14,7 @@ if ($authScriptBaseDir === '/' || $authScriptBaseDir === '.') {
 }
 require_once __DIR__ . '/store_config.php';
 require_once __DIR__ . '/influencer_instructions.php';
+require_once __DIR__ . '/win_points.php';
 require_once __DIR__ . '/google_oauth.php';
 require_once __DIR__ . '/auth.php';
 
@@ -42,6 +43,12 @@ $authUserName = trim((string) (($authUser['full_name'] ?? $authUser['nombre'] ??
 $authUserEmail = trim((string) ($authUser['email'] ?? ''));
 $authUserPhone = trim((string) ($authUser['telefono'] ?? ''));
 $authUserRole = strtolower(trim((string) ($authUser['rol'] ?? '')));
+$winPointsProgramEnabled = win_points_enabled();
+$winPointsProgramConfig = $winPointsProgramEnabled ? win_points_config() : ['name' => 'Win Points', 'icon_url' => ''];
+$winPointsUserSummary = ['balance' => 0, 'earned' => 0, 'spent' => 0, 'transactions' => 0];
+if ($winPointsProgramEnabled && $authUser && !empty($authUser['id'])) {
+  $winPointsUserSummary = win_points_fetch_user_summary(win_points_db(), (int) $authUser['id']);
+}
 $authUserCanAccessAdmin = in_array($authUserRole, ['admin', 'empleado', 'influencer'], true);
 $authUserAdminHome = $authUserRole === 'influencer'
   ? app_path('/admin/cupones') . '?tab=influencers'
@@ -290,6 +297,25 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
                 <div id="user-menu-name" class="fw-bold text-light"><?php echo htmlspecialchars($authUserName, ENT_QUOTES, 'UTF-8'); ?></div>
                 <div id="user-menu-email" class="small text-info text-break"><?php echo htmlspecialchars($authUserEmail, ENT_QUOTES, 'UTF-8'); ?></div>
               </div>
+              <?php if ($winPointsProgramEnabled): ?>
+              <div id="user-menu-rewards-card" class="rounded-4 border border-info-subtle px-3 py-2 mb-2" style="background:rgba(8,15,24,0.82);box-shadow:0 0 14px rgba(var(--theme-primary-rgb),0.12);">
+                <div class="d-flex align-items-center justify-content-between gap-3">
+                  <div class="d-flex align-items-center gap-2 min-w-0">
+                    <?php if (($winPointsProgramConfig['icon_url'] ?? '') !== ''): ?>
+                      <img src="<?php echo htmlspecialchars((string) $winPointsProgramConfig['icon_url'], ENT_QUOTES, 'UTF-8'); ?>" alt="<?php echo htmlspecialchars((string) ($winPointsProgramConfig['name'] ?? 'Win Points'), ENT_QUOTES, 'UTF-8'); ?>" style="width:30px;height:30px;border-radius:10px;object-fit:cover;border:1px solid rgba(var(--theme-primary-rgb),0.28);">
+                    <?php else: ?>
+                      <span class="d-inline-flex align-items-center justify-content-center rounded-3 fw-bold text-info" style="width:30px;height:30px;background:rgba(var(--theme-primary-rgb),0.12);border:1px solid rgba(var(--theme-primary-rgb),0.22);">WP</span>
+                    <?php endif; ?>
+                    <div class="min-w-0">
+                      <div id="user-menu-rewards-name" class="fw-semibold text-light text-truncate"><?php echo htmlspecialchars((string) ($winPointsProgramConfig['name'] ?? 'Win Points'), ENT_QUOTES, 'UTF-8'); ?></div>
+                      <div class="small text-secondary">Saldo disponible</div>
+                    </div>
+                  </div>
+                  <div id="user-menu-rewards-balance" class="fw-bold text-info"><?php echo number_format((int) ($winPointsUserSummary['balance'] ?? 0)); ?></div>
+                </div>
+              </div>
+              <button type="button" class="btn btn-outline-info w-100 rounded-3 border mb-2 fw-semibold" data-user-open="rewards">Mis <?php echo htmlspecialchars((string) ($winPointsProgramConfig['name'] ?? 'Win Points'), ENT_QUOTES, 'UTF-8'); ?></button>
+              <?php endif; ?>
               <button type="button" class="btn btn-admin w-100 rounded-3 border mb-2 fw-semibold" data-user-open="orders">Ver Pedidos</button>
               <button type="button" class="btn btn-outline-info w-100 rounded-3 border mb-2 fw-semibold" data-user-open="profile">Datos Usuario</button>
               <a href="<?php echo htmlspecialchars($logoutUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-danger w-100 rounded-3 border fw-semibold">Cerrar sesión</a>
@@ -476,6 +502,83 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
           </div>
         </div>
       </div>
+
+      <?php if ($authUser && $winPointsProgramEnabled): ?>
+      <div id="user-rewards-modal" class="position-fixed top-0 start-0 w-100 h-100 d-none d-flex align-items-start align-items-md-center justify-content-center px-3 py-3 overflow-auto" style="z-index:13100;">
+        <div class="position-absolute top-0 start-0 w-100 h-100" style="background:var(--theme-overlay-soft);backdrop-filter:blur(6px);" data-user-close></div>
+        <div class="position-relative w-100" style="max-width:920px;z-index:1;">
+          <div class="rounded-4 border border-info overflow-hidden" style="background:var(--theme-panel-gradient);box-shadow:0 0 32px var(--theme-primary-glow);">
+            <div class="d-flex align-items-center justify-content-between gap-3 px-4 py-3 border-bottom border-info-subtle">
+              <div>
+                <div class="small text-uppercase text-info" style="letter-spacing:0.3em;">Mi cuenta</div>
+                <h3 id="user-rewards-modal-title" class="h5 mb-0 text-white">Mis <?php echo htmlspecialchars((string) ($winPointsProgramConfig['name'] ?? 'Win Points'), ENT_QUOTES, 'UTF-8'); ?></h3>
+              </div>
+              <button type="button" class="btn btn-outline-info rounded-circle d-flex align-items-center justify-content-center" style="width:42px;height:42px;" data-user-close aria-label="Cerrar">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div class="px-4 py-4" style="max-height:calc(100vh - 170px);overflow-y:auto;">
+              <div id="user-rewards-feedback" class="d-none alert mb-3 py-2"></div>
+              <div id="user-rewards-loading" class="text-center py-5 text-info">Cargando saldo y movimientos...</div>
+              <div id="user-rewards-content" class="d-none">
+                <div class="row g-3 mb-4">
+                  <div class="col-sm-6 col-lg-3">
+                    <div class="rounded-4 border border-info-subtle p-3 h-100" style="background:rgba(8,15,24,0.82);">
+                      <div class="small text-uppercase text-secondary mb-1">Saldo</div>
+                      <div id="user-rewards-balance-value" class="h4 fw-bold text-info mb-0"><?php echo number_format((int) ($winPointsUserSummary['balance'] ?? 0)); ?></div>
+                    </div>
+                  </div>
+                  <div class="col-sm-6 col-lg-3">
+                    <div class="rounded-4 border border-info-subtle p-3 h-100" style="background:rgba(8,15,24,0.82);">
+                      <div class="small text-uppercase text-secondary mb-1">Ganados</div>
+                      <div id="user-rewards-earned-value" class="h4 fw-bold text-success mb-0"><?php echo number_format((int) ($winPointsUserSummary['earned'] ?? 0)); ?></div>
+                    </div>
+                  </div>
+                  <div class="col-sm-6 col-lg-3">
+                    <div class="rounded-4 border border-info-subtle p-3 h-100" style="background:rgba(8,15,24,0.82);">
+                      <div class="small text-uppercase text-secondary mb-1">Gastados</div>
+                      <div id="user-rewards-spent-value" class="h4 fw-bold text-warning mb-0"><?php echo number_format((int) ($winPointsUserSummary['spent'] ?? 0)); ?></div>
+                    </div>
+                  </div>
+                  <div class="col-sm-6 col-lg-3">
+                    <div class="rounded-4 border border-info-subtle p-3 h-100" style="background:rgba(8,15,24,0.82);">
+                      <div class="small text-uppercase text-secondary mb-1">Movimientos</div>
+                      <div id="user-rewards-transactions-value" class="h4 fw-bold text-light mb-0"><?php echo number_format((int) ($winPointsUserSummary['transactions'] ?? 0)); ?></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-3">
+                  <div>
+                    <h4 class="h6 text-info fw-bold mb-1">Historial de movimientos</h4>
+                    <p class="text-secondary small mb-0">Ganancias, canjes, reembolsos y ajustes relacionados con tus premios.</p>
+                  </div>
+                </div>
+
+                <div id="user-rewards-empty" class="d-none text-center py-5 text-secondary">Todavia no tienes movimientos en este programa.</div>
+                <div id="user-rewards-transactions-list" class="d-none">
+                  <div class="table-responsive d-none d-md-block rounded-4 border border-info-subtle overflow-hidden mb-3" style="background:var(--theme-bg-elevated);">
+                    <table class="table align-middle mb-0" style="--bs-table-bg:transparent;--bs-table-color:var(--theme-text);">
+                      <thead>
+                        <tr>
+                          <th class="text-info text-uppercase small fw-bold border-bottom border-info-subtle bg-transparent">Fecha</th>
+                          <th class="text-info text-uppercase small fw-bold border-bottom border-info-subtle bg-transparent">Tipo</th>
+                          <th class="text-info text-uppercase small fw-bold border-bottom border-info-subtle bg-transparent">Detalle</th>
+                          <th class="text-info text-uppercase small fw-bold border-bottom border-info-subtle bg-transparent text-end">Delta</th>
+                          <th class="text-info text-uppercase small fw-bold border-bottom border-info-subtle bg-transparent text-end">Saldo</th>
+                        </tr>
+                      </thead>
+                      <tbody id="user-rewards-table-body"></tbody>
+                    </table>
+                  </div>
+                  <div id="user-rewards-cards" class="d-grid d-md-none gap-3"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <?php endif; ?>
 
       <?php if ($authUser): ?>
       <div id="user-orders-modal" class="position-fixed top-0 start-0 w-100 h-100 d-none d-flex align-items-start align-items-md-center justify-content-center px-3 py-3 overflow-auto" style="z-index:13100;">

@@ -4,6 +4,7 @@
 require_once '../includes/db_connect.php';
 require_once '../includes/tenant.php';
 require_once '../includes/recargas_api.php';
+require_once '../includes/win_points.php';
 
 function admin_packages_is_ajax_request(): bool {
     if (isset($_REQUEST['ajax']) && (string) $_REQUEST['ajax'] === '1') {
@@ -118,6 +119,7 @@ ensure_juego_paquetes_monto_ff_column($mysqli);
 ensure_juego_paquetes_activo_column($mysqli);
 ensure_juego_paquetes_paquete_api_column($mysqli);
 ensure_juego_paquetes_orden_column($mysqli);
+win_points_ensure_schema();
 
 $adminGamesUrl = app_path('/admin/juegos');
 $adminPackageBaseUrl = app_path('/admin/paquetes');
@@ -142,6 +144,8 @@ $freeFireApiOptions = free_fire_api_amount_options();
 $juegoCategoriaApi = trim((string) ($juego['categoria_api'] ?? ''));
 $usesApiCatalog = $juegoCategoriaApi !== '';
 $usesLegacyFreeFire = !$usesApiCatalog && !empty($juego['api_free_fire']);
+$winPointsName = win_points_program_name();
+$defaultWinPointsReward = 0;
 $apiProducts = [];
 $apiProductsById = [];
 $apiProductsError = null;
@@ -235,14 +239,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_paquete_id'])) {
     $edit_paquete_api = $usesApiCatalog ? trim((string) ($_POST['edit_paquete_api'] ?? '')) : '';
     $edit_cantidad = intval($_POST['edit_cantidad'] ?? 0);
     $edit_precio = floatval($_POST['edit_precio'] ?? 0);
+    $edit_win_points_reward = max(0, (int) ($_POST['edit_win_points_reward'] ?? 0));
     $edit_activo = isset($_POST['edit_activo']) ? 1 : 0;
     $edit_imagen_icono = admin_package_store_upload($_FILES['edit_imagen_icono'] ?? []);
     if ($edit_imagen_icono) {
-        $stmt = $mysqli->prepare("UPDATE juego_paquetes SET nombre=?, clave=?, monto_ff=NULLIF(?, ''), paquete_api=NULLIF(?, ''), cantidad=?, precio=?, imagen_icono=?, activo=? WHERE id=?");
-        $stmt->bind_param('ssssidsii', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_paquete_api, $edit_cantidad, $edit_precio, $edit_imagen_icono, $edit_activo, $edit_id);
+        $stmt = $mysqli->prepare("UPDATE juego_paquetes SET nombre=?, clave=?, monto_ff=NULLIF(?, ''), paquete_api=NULLIF(?, ''), cantidad=?, precio=?, win_points_reward=?, imagen_icono=?, activo=? WHERE id=?");
+        $stmt->bind_param('ssssidisii', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_paquete_api, $edit_cantidad, $edit_precio, $edit_win_points_reward, $edit_imagen_icono, $edit_activo, $edit_id);
     } else {
-        $stmt = $mysqli->prepare("UPDATE juego_paquetes SET nombre=?, clave=?, monto_ff=NULLIF(?, ''), paquete_api=NULLIF(?, ''), cantidad=?, precio=?, activo=? WHERE id=?");
-        $stmt->bind_param('ssssidii', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_paquete_api, $edit_cantidad, $edit_precio, $edit_activo, $edit_id);
+        $stmt = $mysqli->prepare("UPDATE juego_paquetes SET nombre=?, clave=?, monto_ff=NULLIF(?, ''), paquete_api=NULLIF(?, ''), cantidad=?, precio=?, win_points_reward=?, activo=? WHERE id=?");
+        $stmt->bind_param('ssssidiii', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_paquete_api, $edit_cantidad, $edit_precio, $edit_win_points_reward, $edit_activo, $edit_id);
     }
     $stmt->execute();
     header('Location: ' . $adminPackageBaseUrl . '/' . $juego_id);
@@ -257,11 +262,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['cla
     $paquete_api = $usesApiCatalog ? trim((string) ($_POST['paquete_api'] ?? '')) : '';
     $cantidad = intval($_POST['cantidad']);
     $precio = floatval($_POST['precio']);
+    $win_points_reward = max(0, (int) ($_POST['win_points_reward'] ?? $defaultWinPointsReward));
     $activo = isset($_POST['activo']) ? 1 : 0;
     $orden = admin_package_next_order($mysqli, $juego_id);
     $imagen_icono = admin_package_store_upload($_FILES['imagen_icono'] ?? []);
-    $stmt = $mysqli->prepare("INSERT INTO juego_paquetes (juego_id, nombre, clave, monto_ff, paquete_api, cantidad, precio, imagen_icono, activo, orden) VALUES (?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?, ?)");
-    $stmt->bind_param('issssidsii', $juego_id, $nombre, $clave, $monto_ff, $paquete_api, $cantidad, $precio, $imagen_icono, $activo, $orden);
+    $stmt = $mysqli->prepare("INSERT INTO juego_paquetes (juego_id, nombre, clave, monto_ff, paquete_api, cantidad, precio, win_points_reward, imagen_icono, activo, orden) VALUES (?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param('issssidisii', $juego_id, $nombre, $clave, $monto_ff, $paquete_api, $cantidad, $precio, $win_points_reward, $imagen_icono, $activo, $orden);
     $stmt->execute();
     header('Location: ' . $adminPackageBaseUrl . '/' . $juego_id);
     exit;
@@ -320,6 +326,10 @@ include '../includes/header.php';
             <input type="number" step="0.01" min="0" name="precio" placeholder="Precio" required class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;">
         </div>
         <div class="col-md-4">
+            <label class="form-label text-neon"><?= htmlspecialchars($winPointsName, ENT_QUOTES, 'UTF-8') ?> a ganar</label>
+            <input type="number" min="0" name="win_points_reward" value="<?= $defaultWinPointsReward ?>" class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;">
+        </div>
+        <div class="col-md-4">
             <label class="form-label text-neon">Icono del paquete</label>
             <input type="file" name="imagen_icono" accept="image/*" class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;" onchange="previewNuevoPaqueteImg(event)">
         </div>
@@ -356,6 +366,7 @@ include '../includes/header.php';
                     <?php endif; ?>
                     <th style="color:#22d3ee; background:#181f2a;">Activo</th>
                     <th style="color:#22d3ee; background:#181f2a;">Precio</th>
+                    <th style="color:#22d3ee; background:#181f2a;"><?= htmlspecialchars($winPointsName, ENT_QUOTES, 'UTF-8') ?></th>
                     <th style="color:#22d3ee; background:#181f2a;">Acciones</th>
                 </tr>
             </thead>
@@ -399,6 +410,7 @@ include '../includes/header.php';
                         </form>
                     </td>
                     <td class="text-neon" style="background:#181f2a; color:#22d3ee;">$<?= number_format($p['precio'], 2) ?></td>
+                    <td style="background:#181f2a; color:#fff;"><?= (int) ($p['win_points_reward'] ?? 0) ?></td>
                     <td style="background:#181f2a;" class="text-nowrap">
                         <a href="<?= htmlspecialchars($adminPackageBaseUrl, ENT_QUOTES, 'UTF-8') ?>/<?= $juego_id ?>?editar=<?= $p['id'] ?>" class="btn neon-btn-info btn-sm me-2">Editar</a>
                         <a href="<?= htmlspecialchars($adminPackageBaseUrl, ENT_QUOTES, 'UTF-8') ?>/<?= $juego_id ?>?eliminar=<?= $p['id'] ?>" class="btn btn-danger btn-sm" onclick="return confirm('¿Eliminar este paquete?')">Eliminar</a>
@@ -448,6 +460,7 @@ include '../includes/header.php';
                         <div style="color:#fff;"><span class="fw-semibold">Monto FF:</span> <?= htmlspecialchars(!empty($p['monto_ff']) ? free_fire_api_amount_label((string) $p['monto_ff']) : '—') ?></div>
                     <?php endif; ?>
                     <div class="text-neon" style="color:#22d3ee;"><span class="fw-semibold">Precio:</span> $<?= number_format($p['precio'], 2) ?></div>
+                    <div style="color:#fff;"><span class="fw-semibold"><?= htmlspecialchars($winPointsName, ENT_QUOTES, 'UTF-8') ?>:</span> <?= (int) ($p['win_points_reward'] ?? 0) ?></div>
                     <form method="post" action="<?= htmlspecialchars($adminPackageBaseUrl, ENT_QUOTES, 'UTF-8') ?>/<?= $juego_id ?>" class="mt-3 d-flex align-items-center gap-2 flex-wrap js-ajax-order-form">
                         <input type="hidden" name="ajax" value="1">
                         <input type="hidden" name="update_orden_paquete" value="1">
@@ -519,6 +532,10 @@ if (isset($_GET['editar'])) {
         <div class="mb-3">
             <label class="form-label text-neon">Precio USD</label>
             <input type="number" step="0.01" name="edit_precio" value="<?= htmlspecialchars($paq_edit['precio']) ?>" required class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
+        </div>
+        <div class="mb-3">
+            <label class="form-label text-neon"><?= htmlspecialchars($winPointsName, ENT_QUOTES, 'UTF-8') ?> a ganar</label>
+            <input type="number" min="0" name="edit_win_points_reward" value="<?= (int) ($paq_edit['win_points_reward'] ?? 0) ?>" class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
         </div>
         <div class="form-check mb-3">
             <input type="checkbox" name="edit_activo" class="form-check-input" id="editPaqueteActivoCheck" <?= !isset($paq_edit['activo']) || !empty($paq_edit['activo']) ? 'checked' : '' ?>>
