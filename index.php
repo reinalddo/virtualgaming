@@ -129,9 +129,6 @@ $accentMap = [
 ?>
 
       <style>
-        body.startup-popup-open {
-          overflow: hidden;
-        }
         .startup-popup-shell {
           position: fixed;
           inset: 0;
@@ -142,6 +139,7 @@ $accentMap = [
           padding: 1rem;
           background: radial-gradient(circle at top, rgba(var(--theme-startup-popup-accent-rgb), 0.16), rgba(0, 0, 0, 0) 34%), rgba(2, 6, 12, 0.74);
           backdrop-filter: blur(12px);
+          pointer-events: none;
         }
         .startup-popup-shell.is-hidden {
           display: none;
@@ -157,6 +155,7 @@ $accentMap = [
             linear-gradient(180deg, rgba(var(--theme-startup-popup-surface-rgb), 0.98), rgba(12, 10, 10, 0.98));
           box-shadow: 0 18px 62px rgba(0, 0, 0, 0.58), 0 0 36px rgba(var(--theme-startup-popup-accent-rgb), 0.16), inset 0 0 0 1px rgba(255, 255, 255, 0.03);
           overflow: hidden;
+          pointer-events: auto;
         }
         .startup-popup-card::before {
           content: "";
@@ -758,6 +757,7 @@ $pageScripts = [
       return;
     }
 
+    const popupCard = popup.querySelector(".startup-popup-card");
     const closeButton = document.getElementById("startup-popup-close");
     const dismissButton = document.getElementById("startup-popup-dismiss");
     const videoFrame = popup.querySelector("iframe[data-embed-src]");
@@ -788,21 +788,35 @@ $pageScripts = [
       stopVideoPlayback();
       popup.classList.add("is-hidden");
       popup.setAttribute("aria-hidden", "true");
-      document.body.classList.remove("startup-popup-open");
     };
 
     const showPopup = () => {
+      if (!popupCard) {
+        hidePopup();
+        return;
+      }
+
       restoreVideoPlayback();
       popup.classList.remove("is-hidden");
       popup.setAttribute("aria-hidden", "false");
-      document.body.classList.add("startup-popup-open");
+
+      window.requestAnimationFrame(() => {
+        const rect = popupCard.getBoundingClientRect();
+        if (rect.width < 40 || rect.height < 40) {
+          hidePopup();
+        }
+      });
     };
 
     let mustShow = popupShouldOpen;
     if (popupFrequency === "per_entry") {
-      mustShow = window.sessionStorage.getItem(perEntryStorageKey) !== "1";
-      if (mustShow) {
-        window.sessionStorage.setItem(perEntryStorageKey, "1");
+      try {
+        mustShow = window.sessionStorage.getItem(perEntryStorageKey) !== "1";
+        if (mustShow) {
+          window.sessionStorage.setItem(perEntryStorageKey, "1");
+        }
+      } catch (error) {
+        mustShow = popupShouldOpen;
       }
     }
 
@@ -834,6 +848,14 @@ $pageScripts = [
         hidePopup();
       }
     });
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden && !popup.classList.contains("is-hidden")) {
+        hidePopup();
+      }
+    });
+
+    window.addEventListener("pagehide", hidePopup);
   })();
 </script>
 SCRIPT,
