@@ -173,6 +173,41 @@ include __DIR__ . '/includes/header.php';
     display: grid;
     gap: 1.5rem;
   }
+  .win-points-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    overflow: visible;
+    padding: 1rem 0;
+  }
+  .win-points-tab {
+    flex: 0 1 auto;
+    border: 1px solid rgba(34, 211, 238, 0.24);
+    background: rgba(8, 15, 28, 0.9);
+    color: #8cf6ff;
+    border-radius: 999px;
+    padding: 0.8rem 1.15rem;
+    font-weight: 700;
+    line-height: 1;
+    transition: all 0.2s ease;
+  }
+  .win-points-tab:hover {
+    border-color: rgba(34, 211, 238, 0.4);
+    color: #d8fbff;
+  }
+  .win-points-tab.is-active {
+    background: linear-gradient(135deg, rgba(34, 211, 238, 0.18), rgba(34, 197, 94, 0.12));
+    border-color: rgba(34, 211, 238, 0.48);
+    color: #ffffff;
+    box-shadow: 0 10px 24px rgba(34, 211, 238, 0.14);
+  }
+  .win-points-tab-panel {
+    display: none;
+    gap: 1.5rem;
+  }
+  .win-points-tab-panel.is-active {
+    display: grid;
+  }
   .win-points-panel {
     background: linear-gradient(180deg, rgba(9, 18, 33, 0.96), rgba(14, 25, 45, 0.94));
     border: 1px solid rgba(34, 211, 238, 0.22);
@@ -253,6 +288,7 @@ include __DIR__ . '/includes/header.php';
   .win-points-pill {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 0.45rem;
     padding: 0.35rem 0.75rem;
     border-radius: 999px;
@@ -261,6 +297,133 @@ include __DIR__ . '/includes/header.php';
     color: #8cf6ff;
     font-size: 0.85rem;
     font-weight: 700;
+  }
+  .win-points-section-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: end;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+  }
+  .win-points-filter-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    flex: 1 1 720px;
+  }
+  .win-points-filter-field {
+    display: grid;
+    gap: 0.35rem;
+    flex: 1 1 220px;
+  }
+  .win-points-filter-field--compact {
+    flex-basis: 150px;
+    max-width: 190px;
+  }
+  .win-points-filter-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .win-points-pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+  }
+  .win-points-pagination-nav {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .win-points-hidden {
+    display: none !important;
+  }
+  .win-points-table-responsive {
+    width: 100%;
+    overflow-x: auto;
+  }
+  .win-points-mobile-stack {
+    display: none;
+  }
+  @media (max-width: 991.98px) {
+    .win-points-tabs {
+      gap: 0.5rem;
+      padding: 0.85rem 0;
+    }
+    .win-points-tab {
+      padding: 0.75rem 0.95rem;
+      font-size: 0.92rem;
+    }
+    .win-points-panel {
+      padding: 1.1rem;
+      border-radius: 20px;
+    }
+    .win-points-icon-upload-stage {
+      margin-left: 0;
+    }
+    .win-points-table-responsive table {
+      min-width: 920px;
+    }
+  }
+  @media (max-width: 767.98px) {
+    .win-points-tabs {
+      gap: 0.5rem;
+      padding: 0.85rem 0 1rem;
+    }
+    .win-points-tab {
+      flex: 1 1 calc(50% - 0.5rem);
+      text-align: center;
+      justify-content: center;
+    }
+    .win-points-kpi {
+      padding: 1rem;
+    }
+    .win-points-section-tools,
+    .win-points-pagination {
+      align-items: stretch;
+    }
+    .win-points-filter-group,
+    .win-points-filter-field,
+    .win-points-filter-field--compact,
+    .win-points-filter-actions {
+      flex: 1 1 100%;
+      max-width: none;
+    }
+    .win-points-filter-actions {
+      justify-content: space-between;
+    }
+    .win-points-mobile-stack {
+      display: grid;
+      gap: 0.9rem;
+    }
+    .win-points-mobile-card {
+      border: 1px solid rgba(34, 211, 238, 0.14);
+      border-radius: 18px;
+      background: rgba(8, 15, 28, 0.72);
+      padding: 1rem;
+      display: grid;
+      gap: 0.75rem;
+    }
+    .win-points-mobile-field {
+      display: grid;
+      gap: 0.3rem;
+    }
+    .win-points-mobile-label {
+      color: #7dd3fc;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 700;
+    }
+    .win-points-table-responsive {
+      display: none;
+    }
   }
 </style>
 
@@ -274,7 +437,16 @@ include __DIR__ . '/includes/header.php';
       <a href="<?= htmlspecialchars($dashboardUrl, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-outline-info fw-bold px-4">Volver al panel</a>
     </div>
 
-    <div class="row g-3">
+    <div class="win-points-tabs" role="tablist" aria-label="Secciones Win Points">
+      <button type="button" class="win-points-tab is-active" data-win-points-tab="overview">Resumen</button>
+      <button type="button" class="win-points-tab" data-win-points-tab="setup">Configuraci&oacute;n</button>
+      <button type="button" class="win-points-tab" data-win-points-tab="rules">Reglas</button>
+      <button type="button" class="win-points-tab" data-win-points-tab="wallets">Wallets</button>
+      <button type="button" class="win-points-tab" data-win-points-tab="ledger">Movimientos</button>
+    </div>
+
+    <div class="win-points-tab-panel is-active" data-win-points-tab-panel="overview">
+      <div class="row g-3">
       <div class="col-md-4">
         <div class="win-points-kpi">
           <div class="text-secondary small text-uppercase mb-2">Estado global</div>
@@ -296,9 +468,11 @@ include __DIR__ . '/includes/header.php';
           <div class="text-secondary">Cada regla define cuantas unidades de <?= htmlspecialchars($winPointsConfig['name'], ENT_QUOTES, 'UTF-8') ?> cuesta un paquete.</div>
         </div>
       </div>
+      </div>
     </div>
 
-    <div class="row g-4">
+    <div class="win-points-tab-panel" data-win-points-tab-panel="setup">
+      <div class="row g-4">
       <div class="col-xl-5">
         <div class="win-points-panel h-100">
           <div class="d-flex align-items-start justify-content-between gap-3 mb-4">
@@ -397,21 +571,97 @@ include __DIR__ . '/includes/header.php';
           </form>
         </div>
       </div>
+      </div>
     </div>
 
-    <div class="win-points-panel">
+    <div class="win-points-tab-panel" data-win-points-tab-panel="rules">
+    <div class="win-points-panel" data-wp-section="rules">
       <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
         <div>
           <h2 class="h4 text-info fw-bold mb-1">Reglas actuales</h2>
           <p class="text-secondary mb-0">Puedes editar puntos requeridos, orden o estado directamente sobre cada regla creada.</p>
         </div>
-        <span class="win-points-pill"><?= count($adminRules) ?> reglas registradas</span>
       </div>
 
       <?php if (empty($adminRules)): ?>
         <div class="text-secondary">Aun no hay reglas de canje creadas.</div>
       <?php else: ?>
-        <div class="table-responsive">
+        <div class="win-points-section-tools">
+          <div class="win-points-filter-group">
+            <div class="win-points-filter-field">
+              <label class="form-label text-info small mb-0">Buscar</label>
+              <input type="search" class="form-control bg-dark text-info border-info" placeholder="Juego, paquete, premio o costo" data-wp-filter-search>
+            </div>
+            <div class="win-points-filter-field win-points-filter-field--compact">
+              <label class="form-label text-info small mb-0">Estado</label>
+              <select class="form-select bg-dark text-info border-info" data-wp-filter-extra>
+                <option value="all">Todas</option>
+                <option value="active">Activas</option>
+                <option value="inactive">Inactivas</option>
+              </select>
+            </div>
+            <div class="win-points-filter-field win-points-filter-field--compact">
+              <label class="form-label text-info small mb-0">Elementos por pagina</label>
+              <select class="form-select bg-dark text-info border-info" data-wp-filter-size>
+                <option value="5" selected>5</option>
+                <option value="10">10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+              </select>
+            </div>
+          </div>
+          <div class="win-points-filter-actions">
+            <span class="win-points-pill" data-wp-filter-count data-wp-count-singular="regla visible" data-wp-count-plural="reglas visibles"><?= count($adminRules) ?> reglas visibles</span>
+          </div>
+        </div>
+        <div class="win-points-mobile-stack">
+          <?php foreach ($adminRules as $ruleIndex => $rule): ?>
+            <?php $mobileEditFormId = 'winPointsRuleMobileForm' . (int) ($rule['id'] ?? 0); ?>
+            <div class="win-points-mobile-card" data-wp-item="rules" data-wp-key="rule-<?= (int) $ruleIndex ?>" data-wp-extra="<?= !empty($rule['activo']) ? 'active' : 'inactive' ?>" data-wp-filter="<?= htmlspecialchars(trim((string) (($rule['juego_nombre'] ?? '') . ' ' . ($rule['paquete_nombre'] ?? '') . ' ' . (int) ($rule['win_points_reward'] ?? 0) . ' ' . (int) ($rule['required_points'] ?? 0) . ' ' . (isset($rule['orden']) && $rule['orden'] !== null ? (int) $rule['orden'] : ''))), ENT_QUOTES, 'UTF-8') ?>">
+              <form id="<?= htmlspecialchars($mobileEditFormId, ENT_QUOTES, 'UTF-8') ?>" method="POST" class="win-points-rule-inline-form">
+                <input type="hidden" name="save_win_points_rule" value="1">
+                <input type="hidden" name="rule_package_id" value="<?= (int) ($rule['paquete_id'] ?? 0) ?>">
+              </form>
+              <div class="win-points-mobile-field">
+                <span class="win-points-mobile-label">Juego</span>
+                <div><?= htmlspecialchars((string) ($rule['juego_nombre'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+              </div>
+              <div class="win-points-mobile-field">
+                <span class="win-points-mobile-label">Paquete</span>
+                <div><?= htmlspecialchars((string) ($rule['paquete_nombre'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+              </div>
+              <div class="row g-3">
+                <div class="col-6">
+                  <label class="form-label text-info small mb-1">Premio por compra</label>
+                  <input type="number" min="0" name="rule_reward_points" value="<?= max(0, (int) ($rule['win_points_reward'] ?? 0)) ?>" form="<?= htmlspecialchars($mobileEditFormId, ENT_QUOTES, 'UTF-8') ?>" class="form-control form-control-sm bg-dark text-info border-info" required>
+                </div>
+                <div class="col-6">
+                  <label class="form-label text-info small mb-1">Costo de canje</label>
+                  <input type="number" min="1" name="rule_required_points" value="<?= max(1, (int) ($rule['required_points'] ?? 0)) ?>" form="<?= htmlspecialchars($mobileEditFormId, ENT_QUOTES, 'UTF-8') ?>" class="form-control form-control-sm bg-dark text-info border-info" required>
+                </div>
+                <div class="col-6">
+                  <label class="form-label text-info small mb-1">Orden</label>
+                  <input type="number" min="1" name="rule_order" value="<?= isset($rule['orden']) && $rule['orden'] !== null ? (int) $rule['orden'] : '' ?>" form="<?= htmlspecialchars($mobileEditFormId, ENT_QUOTES, 'UTF-8') ?>" class="form-control form-control-sm bg-dark text-info border-info" placeholder="Orden">
+                </div>
+                <div class="col-6 d-flex align-items-end">
+                  <div class="form-check form-switch m-0">
+                    <input class="form-check-input" type="checkbox" name="rule_active" form="<?= htmlspecialchars($mobileEditFormId, ENT_QUOTES, 'UTF-8') ?>" <?= !empty($rule['activo']) ? 'checked' : '' ?>>
+                    <label class="form-check-label small ms-2">Activa</label>
+                  </div>
+                </div>
+              </div>
+              <div class="win-points-rule-actions">
+                <button type="submit" form="<?= htmlspecialchars($mobileEditFormId, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-sm btn-outline-info fw-bold">Guardar</button>
+                <form method="POST" onsubmit="return confirm('¿Eliminar esta regla de canje?');" class="win-points-rule-inline-form">
+                  <input type="hidden" name="delete_win_points_rule" value="1">
+                  <input type="hidden" name="rule_id" value="<?= (int) ($rule['id'] ?? 0) ?>">
+                  <button type="submit" class="btn btn-sm btn-outline-danger fw-bold">Eliminar</button>
+                </form>
+              </div>
+            </div>
+          <?php endforeach; ?>
+        </div>
+        <div class="win-points-table-responsive">
           <table class="table table-dark table-hover align-middle win-points-table">
             <thead>
               <tr>
@@ -425,32 +675,32 @@ include __DIR__ . '/includes/header.php';
               </tr>
             </thead>
             <tbody>
-              <?php foreach ($adminRules as $rule): ?>
+              <?php foreach ($adminRules as $ruleIndex => $rule): ?>
                 <?php $editFormId = 'winPointsRuleForm' . (int) ($rule['id'] ?? 0); ?>
-                <tr>
-                  <td>
+                <tr data-wp-item="rules" data-wp-key="rule-<?= (int) $ruleIndex ?>" data-wp-extra="<?= !empty($rule['activo']) ? 'active' : 'inactive' ?>" data-wp-filter="<?= htmlspecialchars(trim((string) (($rule['juego_nombre'] ?? '') . ' ' . ($rule['paquete_nombre'] ?? '') . ' ' . (int) ($rule['win_points_reward'] ?? 0) . ' ' . (int) ($rule['required_points'] ?? 0) . ' ' . (isset($rule['orden']) && $rule['orden'] !== null ? (int) $rule['orden'] : ''))), ENT_QUOTES, 'UTF-8') ?>">
+                  <td data-label="Juego">
                     <form id="<?= htmlspecialchars($editFormId, ENT_QUOTES, 'UTF-8') ?>" method="POST" class="win-points-rule-inline-form">
                       <input type="hidden" name="save_win_points_rule" value="1">
                       <input type="hidden" name="rule_package_id" value="<?= (int) ($rule['paquete_id'] ?? 0) ?>">
                     </form>
                     <?= htmlspecialchars((string) ($rule['juego_nombre'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
                   </td>
-                  <td><?= htmlspecialchars((string) ($rule['paquete_nombre'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
-                  <td>
+                  <td data-label="Paquete"><?= htmlspecialchars((string) ($rule['paquete_nombre'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                  <td data-label="Premio por compra">
                     <input type="number" min="0" name="rule_reward_points" value="<?= max(0, (int) ($rule['win_points_reward'] ?? 0)) ?>" form="<?= htmlspecialchars($editFormId, ENT_QUOTES, 'UTF-8') ?>" class="form-control form-control-sm bg-dark text-info border-info win-points-rule-field text-center" required>
                   </td>
-                  <td>
+                  <td data-label="Costo de canje">
                     <input type="number" min="1" name="rule_required_points" value="<?= max(1, (int) ($rule['required_points'] ?? 0)) ?>" form="<?= htmlspecialchars($editFormId, ENT_QUOTES, 'UTF-8') ?>" class="form-control form-control-sm bg-dark text-info border-info win-points-rule-field text-center" required>
                   </td>
-                  <td>
+                  <td data-label="Orden">
                     <input type="number" min="1" name="rule_order" value="<?= isset($rule['orden']) && $rule['orden'] !== null ? (int) $rule['orden'] : '' ?>" form="<?= htmlspecialchars($editFormId, ENT_QUOTES, 'UTF-8') ?>" class="form-control form-control-sm bg-dark text-info border-info win-points-rule-field text-center" placeholder="Orden">
                   </td>
-                  <td class="text-center">
+                  <td class="text-center" data-label="Activo">
                     <div class="form-check form-switch win-points-rule-active m-0">
                       <input class="form-check-input" type="checkbox" name="rule_active" form="<?= htmlspecialchars($editFormId, ENT_QUOTES, 'UTF-8') ?>" <?= !empty($rule['activo']) ? 'checked' : '' ?>>
                     </div>
                   </td>
-                  <td class="text-end">
+                  <td class="text-end" data-label="Acciones">
                     <div class="win-points-rule-actions">
                       <button type="submit" form="<?= htmlspecialchars($editFormId, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-sm btn-outline-info fw-bold">Guardar</button>
                       <form method="POST" onsubmit="return confirm('¿Eliminar esta regla de canje?');" class="win-points-rule-inline-form">
@@ -465,12 +715,21 @@ include __DIR__ . '/includes/header.php';
             </tbody>
           </table>
         </div>
+        <div class="win-points-pagination" data-wp-pagination>
+          <div class="text-secondary small" data-wp-pagination-info></div>
+          <div class="win-points-pagination-nav">
+            <button type="button" class="btn btn-sm btn-outline-info" data-wp-page-prev>Anterior</button>
+            <button type="button" class="btn btn-sm btn-outline-info" data-wp-page-next>Siguiente</button>
+          </div>
+        </div>
       <?php endif; ?>
     </div>
+    </div>
 
+    <div class="win-points-tab-panel" data-win-points-tab-panel="wallets">
     <div class="row g-4">
       <div class="col-xl-7">
-        <div class="win-points-panel h-100">
+        <div class="win-points-panel h-100" data-wp-section="wallets">
           <div class="d-flex align-items-center justify-content-between gap-3 mb-4">
             <div>
               <h2 class="h4 text-info fw-bold mb-1">Wallets de usuarios</h2>
@@ -479,7 +738,86 @@ include __DIR__ . '/includes/header.php';
             <span class="win-points-pill"><?= number_format($totalWalletBalance) ?> puntos</span>
           </div>
 
-          <div class="table-responsive">
+          <?php if (!empty($adminWallets)): ?>
+            <div class="win-points-section-tools">
+              <div class="win-points-filter-group">
+                <div class="win-points-filter-field">
+                  <label class="form-label text-info small mb-0">Buscar</label>
+                  <input type="search" class="form-control bg-dark text-info border-info" placeholder="Usuario, correo o telefono" data-wp-filter-search>
+                </div>
+                <div class="win-points-filter-field win-points-filter-field--compact">
+                  <label class="form-label text-info small mb-0">Saldo</label>
+                  <select class="form-select bg-dark text-info border-info" data-wp-filter-extra>
+                    <option value="all">Todos</option>
+                    <option value="positive">Con saldo</option>
+                    <option value="zero">Sin saldo</option>
+                  </select>
+                </div>
+                <div class="win-points-filter-field win-points-filter-field--compact">
+                  <label class="form-label text-info small mb-0">Elementos por pagina</label>
+                  <select class="form-select bg-dark text-info border-info" data-wp-filter-size>
+                    <option value="5" selected>5</option>
+                    <option value="10">10</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                  </select>
+                </div>
+              </div>
+              <div class="win-points-filter-actions">
+                <span class="win-points-pill" data-wp-filter-count data-wp-count-singular="wallet visible" data-wp-count-plural="wallets visibles"><?= count($adminWallets) ?> wallets visibles</span>
+              </div>
+            </div>
+          <?php endif; ?>
+
+          <div class="win-points-mobile-stack">
+            <?php foreach ($adminWallets as $walletIndex => $wallet): ?>
+              <div class="win-points-mobile-card" data-wp-item="wallets" data-wp-key="wallet-<?= (int) $walletIndex ?>" data-wp-extra="<?= ((int) ($wallet['balance'] ?? 0)) > 0 ? 'positive' : 'zero' ?>" data-wp-filter="<?= htmlspecialchars(trim((string) (($wallet['nombre'] ?? '') . ' ' . ($wallet['email'] ?? '') . ' ' . ($wallet['telefono'] ?? '') . ' ' . (int) ($wallet['balance'] ?? 0) . ' ' . (int) ($wallet['earned_points'] ?? 0) . ' ' . (int) ($wallet['spent_points'] ?? 0))), ENT_QUOTES, 'UTF-8') ?>">
+                <div class="win-points-mobile-field">
+                  <span class="win-points-mobile-label">Usuario</span>
+                  <div><?= htmlspecialchars((string) ($wallet['nombre'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+                </div>
+                <div class="win-points-mobile-field">
+                  <span class="win-points-mobile-label">Correo</span>
+                  <div><?= htmlspecialchars((string) ($wallet['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+                </div>
+                <div class="win-points-mobile-field">
+                  <span class="win-points-mobile-label">Telefono</span>
+                  <div><?= htmlspecialchars(trim((string) ($wallet['telefono'] ?? '')) !== '' ? (string) $wallet['telefono'] : 'No disponible', ENT_QUOTES, 'UTF-8') ?></div>
+                </div>
+                <div class="row g-3">
+                  <div class="col-6">
+                    <div class="win-points-mobile-field">
+                      <span class="win-points-mobile-label">Ganados</span>
+                      <div class="text-success fw-bold"><?= number_format((int) ($wallet['earned_points'] ?? 0)) ?></div>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="win-points-mobile-field">
+                      <span class="win-points-mobile-label">Gastados</span>
+                      <div class="text-warning fw-bold"><?= number_format((int) ($wallet['spent_points'] ?? 0)) ?></div>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="win-points-mobile-field">
+                      <span class="win-points-mobile-label">Movimientos</span>
+                      <div><?= number_format((int) ($wallet['total_transactions'] ?? 0)) ?></div>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="win-points-mobile-field">
+                      <span class="win-points-mobile-label">Saldo</span>
+                      <div class="text-info fw-bold"><?= number_format((int) ($wallet['balance'] ?? 0)) ?></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="win-points-mobile-field">
+                  <span class="win-points-mobile-label">Ultimo movimiento</span>
+                  <div><?= htmlspecialchars((string) ($wallet['last_transaction_at'] ?? 'Sin movimientos'), ENT_QUOTES, 'UTF-8') ?></div>
+                </div>
+              </div>
+            <?php endforeach; ?>
+          </div>
+          <div class="win-points-table-responsive">
             <table class="table table-dark table-hover align-middle win-points-table">
               <thead>
                 <tr>
@@ -494,21 +832,30 @@ include __DIR__ . '/includes/header.php';
                 </tr>
               </thead>
               <tbody>
-                <?php foreach ($adminWallets as $wallet): ?>
-                  <tr>
-                    <td><?= htmlspecialchars((string) ($wallet['nombre'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
-                    <td><?= htmlspecialchars((string) ($wallet['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
-                    <td><?= htmlspecialchars(trim((string) ($wallet['telefono'] ?? '')) !== '' ? (string) $wallet['telefono'] : 'No disponible', ENT_QUOTES, 'UTF-8') ?></td>
-                    <td class="text-end text-success fw-bold"><?= number_format((int) ($wallet['earned_points'] ?? 0)) ?></td>
-                    <td class="text-end text-warning fw-bold"><?= number_format((int) ($wallet['spent_points'] ?? 0)) ?></td>
-                    <td class="text-end text-light"><?= number_format((int) ($wallet['total_transactions'] ?? 0)) ?></td>
-                    <td class="text-end fw-bold text-info"><?= number_format((int) ($wallet['balance'] ?? 0)) ?></td>
-                    <td><?= htmlspecialchars((string) ($wallet['last_transaction_at'] ?? 'Sin movimientos'), ENT_QUOTES, 'UTF-8') ?></td>
+                <?php foreach ($adminWallets as $walletIndex => $wallet): ?>
+                  <tr data-wp-item="wallets" data-wp-key="wallet-<?= (int) $walletIndex ?>" data-wp-extra="<?= ((int) ($wallet['balance'] ?? 0)) > 0 ? 'positive' : 'zero' ?>" data-wp-filter="<?= htmlspecialchars(trim((string) (($wallet['nombre'] ?? '') . ' ' . ($wallet['email'] ?? '') . ' ' . ($wallet['telefono'] ?? '') . ' ' . (int) ($wallet['balance'] ?? 0) . ' ' . (int) ($wallet['earned_points'] ?? 0) . ' ' . (int) ($wallet['spent_points'] ?? 0))), ENT_QUOTES, 'UTF-8') ?>">
+                    <td data-label="Usuario"><?= htmlspecialchars((string) ($wallet['nombre'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                    <td data-label="Correo"><?= htmlspecialchars((string) ($wallet['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                    <td data-label="Telefono"><?= htmlspecialchars(trim((string) ($wallet['telefono'] ?? '')) !== '' ? (string) $wallet['telefono'] : 'No disponible', ENT_QUOTES, 'UTF-8') ?></td>
+                    <td class="text-end text-success fw-bold" data-label="Ganados"><?= number_format((int) ($wallet['earned_points'] ?? 0)) ?></td>
+                    <td class="text-end text-warning fw-bold" data-label="Gastados"><?= number_format((int) ($wallet['spent_points'] ?? 0)) ?></td>
+                    <td class="text-end text-light" data-label="Movimientos"><?= number_format((int) ($wallet['total_transactions'] ?? 0)) ?></td>
+                    <td class="text-end fw-bold text-info" data-label="Saldo"><?= number_format((int) ($wallet['balance'] ?? 0)) ?></td>
+                    <td data-label="Ultimo movimiento"><?= htmlspecialchars((string) ($wallet['last_transaction_at'] ?? 'Sin movimientos'), ENT_QUOTES, 'UTF-8') ?></td>
                   </tr>
                 <?php endforeach; ?>
               </tbody>
             </table>
           </div>
+          <?php if (!empty($adminWallets)): ?>
+            <div class="win-points-pagination" data-wp-pagination>
+              <div class="text-secondary small" data-wp-pagination-info></div>
+              <div class="win-points-pagination-nav">
+                <button type="button" class="btn btn-sm btn-outline-info" data-wp-page-prev>Anterior</button>
+                <button type="button" class="btn btn-sm btn-outline-info" data-wp-page-next>Siguiente</button>
+              </div>
+            </div>
+          <?php endif; ?>
         </div>
       </div>
 
@@ -547,20 +894,99 @@ include __DIR__ . '/includes/header.php';
         </div>
       </div>
     </div>
+    </div>
 
-    <div class="win-points-panel">
+    <div class="win-points-tab-panel" data-win-points-tab-panel="ledger">
+    <div class="win-points-panel" data-wp-section="ledger">
       <div class="d-flex align-items-center justify-content-between gap-3 mb-4">
         <div>
           <h2 class="h4 text-info fw-bold mb-1">Movimientos recientes</h2>
           <p class="text-secondary mb-0">Ultimos movimientos del ledger de premios para auditoria de ganancias, canjes, reversos y ajustes.</p>
         </div>
-        <span class="win-points-pill">Ultimos <?= count($adminTransactions) ?> registros</span>
       </div>
 
       <?php if (empty($adminTransactions)): ?>
         <div class="text-secondary">Aun no hay movimientos registrados en Win Points.</div>
       <?php else: ?>
-        <div class="table-responsive">
+        <div class="win-points-section-tools">
+          <div class="win-points-filter-group">
+            <div class="win-points-filter-field">
+              <label class="form-label text-info small mb-0">Buscar</label>
+              <input type="search" class="form-control bg-dark text-info border-info" placeholder="Fecha, usuario, pedido o descripcion" data-wp-filter-search>
+            </div>
+            <div class="win-points-filter-field win-points-filter-field--compact">
+              <label class="form-label text-info small mb-0">Tipo</label>
+              <select class="form-select bg-dark text-info border-info" data-wp-filter-extra>
+                <option value="all">Todos</option>
+                <?php foreach ($transactionTypeLabels as $transactionTypeKey => $transactionTypeLabel): ?>
+                  <option value="<?= htmlspecialchars((string) $transactionTypeKey, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string) $transactionTypeLabel, ENT_QUOTES, 'UTF-8') ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div class="win-points-filter-field win-points-filter-field--compact">
+              <label class="form-label text-info small mb-0">Elementos por pagina</label>
+              <select class="form-select bg-dark text-info border-info" data-wp-filter-size>
+                <option value="5" selected>5</option>
+                <option value="10">10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+              </select>
+            </div>
+          </div>
+          <div class="win-points-filter-actions">
+            <span class="win-points-pill" data-wp-filter-count data-wp-count-singular="registro visible" data-wp-count-plural="registros visibles"><?= count($adminTransactions) ?> registros visibles</span>
+          </div>
+        </div>
+        <div class="win-points-mobile-stack">
+          <?php foreach ($adminTransactions as $transactionIndex => $transaction): ?>
+            <?php $mobileDelta = (int) ($transaction['points_delta'] ?? 0); ?>
+            <div class="win-points-mobile-card" data-wp-item="ledger" data-wp-key="ledger-<?= (int) $transactionIndex ?>" data-wp-extra="<?= htmlspecialchars((string) ($transaction['transaction_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-wp-filter="<?= htmlspecialchars(trim((string) (($transaction['created_at'] ?? '') . ' ' . ($transaction['usuario_nombre'] ?? '') . ' ' . ($transaction['usuario_email'] ?? '') . ' ' . ($transaction['transaction_type'] ?? '') . ' ' . ($transactionTypeLabels[(string) ($transaction['transaction_type'] ?? '')] ?? '') . ' ' . ($transaction['description'] ?? '') . ' ' . ($transaction['juego_nombre'] ?? '') . ' ' . ($transaction['paquete_nombre'] ?? '') . ' ' . (!empty($transaction['order_id']) ? '#' . (int) $transaction['order_id'] : ''))), ENT_QUOTES, 'UTF-8') ?>">
+              <div class="win-points-mobile-field">
+                <span class="win-points-mobile-label">Fecha</span>
+                <div><?= htmlspecialchars((string) ($transaction['created_at'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+              </div>
+              <div class="win-points-mobile-field">
+                <span class="win-points-mobile-label">Usuario</span>
+                <div class="fw-semibold"><?= htmlspecialchars((string) ($transaction['usuario_nombre'] ?? 'Usuario'), ENT_QUOTES, 'UTF-8') ?></div>
+                <div class="small text-secondary"><?= htmlspecialchars((string) ($transaction['usuario_email'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+              </div>
+              <div class="row g-3">
+                <div class="col-6">
+                  <div class="win-points-mobile-field">
+                    <span class="win-points-mobile-label">Tipo</span>
+                    <div><?= htmlspecialchars($transactionTypeLabels[(string) ($transaction['transaction_type'] ?? '')] ?? (string) ($transaction['transaction_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="win-points-mobile-field">
+                    <span class="win-points-mobile-label">Delta</span>
+                    <div class="fw-bold <?= $mobileDelta >= 0 ? 'text-success' : 'text-danger' ?>"><?= $mobileDelta >= 0 ? '+' : '' ?><?= number_format($mobileDelta) ?></div>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="win-points-mobile-field">
+                    <span class="win-points-mobile-label">Saldo</span>
+                    <div class="text-info fw-bold"><?= number_format((int) ($transaction['balance_after'] ?? 0)) ?></div>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="win-points-mobile-field">
+                    <span class="win-points-mobile-label">Pedido</span>
+                    <div><?= !empty($transaction['order_id']) ? '#' . (int) $transaction['order_id'] : '—' ?></div>
+                  </div>
+                </div>
+              </div>
+              <div class="win-points-mobile-field">
+                <span class="win-points-mobile-label">Descripcion</span>
+                <div><?= htmlspecialchars((string) ($transaction['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+                <?php if (!empty($transaction['juego_nombre']) || !empty($transaction['paquete_nombre'])): ?>
+                  <div class="small text-secondary"><?= htmlspecialchars(trim((string) (($transaction['juego_nombre'] ?? '') . ' ' . ($transaction['paquete_nombre'] ?? ''))), ENT_QUOTES, 'UTF-8') ?></div>
+                <?php endif; ?>
+              </div>
+            </div>
+          <?php endforeach; ?>
+        </div>
+        <div class="win-points-table-responsive">
           <table class="table table-dark table-hover align-middle win-points-table">
             <thead>
               <tr>
@@ -574,19 +1000,19 @@ include __DIR__ . '/includes/header.php';
               </tr>
             </thead>
             <tbody>
-              <?php foreach ($adminTransactions as $transaction): ?>
+              <?php foreach ($adminTransactions as $transactionIndex => $transaction): ?>
                 <?php $delta = (int) ($transaction['points_delta'] ?? 0); ?>
-                <tr>
-                  <td><?= htmlspecialchars((string) ($transaction['created_at'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
-                  <td>
+                <tr data-wp-item="ledger" data-wp-key="ledger-<?= (int) $transactionIndex ?>" data-wp-extra="<?= htmlspecialchars((string) ($transaction['transaction_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-wp-filter="<?= htmlspecialchars(trim((string) (($transaction['created_at'] ?? '') . ' ' . ($transaction['usuario_nombre'] ?? '') . ' ' . ($transaction['usuario_email'] ?? '') . ' ' . ($transaction['transaction_type'] ?? '') . ' ' . ($transactionTypeLabels[(string) ($transaction['transaction_type'] ?? '')] ?? '') . ' ' . ($transaction['description'] ?? '') . ' ' . ($transaction['juego_nombre'] ?? '') . ' ' . ($transaction['paquete_nombre'] ?? '') . ' ' . (!empty($transaction['order_id']) ? '#' . (int) $transaction['order_id'] : ''))), ENT_QUOTES, 'UTF-8') ?>">
+                  <td data-label="Fecha"><?= htmlspecialchars((string) ($transaction['created_at'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                  <td data-label="Usuario">
                     <div class="fw-semibold"><?= htmlspecialchars((string) ($transaction['usuario_nombre'] ?? 'Usuario'), ENT_QUOTES, 'UTF-8') ?></div>
                     <div class="small text-secondary"><?= htmlspecialchars((string) ($transaction['usuario_email'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
                   </td>
-                  <td><?= htmlspecialchars($transactionTypeLabels[(string) ($transaction['transaction_type'] ?? '')] ?? (string) ($transaction['transaction_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
-                  <td class="fw-bold <?= $delta >= 0 ? 'text-success' : 'text-danger' ?>"><?= $delta >= 0 ? '+' : '' ?><?= number_format($delta) ?></td>
-                  <td class="text-info fw-bold"><?= number_format((int) ($transaction['balance_after'] ?? 0)) ?></td>
-                  <td><?= !empty($transaction['order_id']) ? '#' . (int) $transaction['order_id'] : '—' ?></td>
-                  <td>
+                  <td data-label="Tipo"><?= htmlspecialchars($transactionTypeLabels[(string) ($transaction['transaction_type'] ?? '')] ?? (string) ($transaction['transaction_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                  <td class="fw-bold <?= $delta >= 0 ? 'text-success' : 'text-danger' ?>" data-label="Delta"><?= $delta >= 0 ? '+' : '' ?><?= number_format($delta) ?></td>
+                  <td class="text-info fw-bold" data-label="Saldo"><?= number_format((int) ($transaction['balance_after'] ?? 0)) ?></td>
+                  <td data-label="Pedido"><?= !empty($transaction['order_id']) ? '#' . (int) $transaction['order_id'] : '—' ?></td>
+                  <td data-label="Descripcion">
                     <div><?= htmlspecialchars((string) ($transaction['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
                     <?php if (!empty($transaction['juego_nombre']) || !empty($transaction['paquete_nombre'])): ?>
                       <div class="small text-secondary">
@@ -599,18 +1025,44 @@ include __DIR__ . '/includes/header.php';
             </tbody>
           </table>
         </div>
+        <div class="win-points-pagination" data-wp-pagination>
+          <div class="text-secondary small" data-wp-pagination-info></div>
+          <div class="win-points-pagination-nav">
+            <button type="button" class="btn btn-sm btn-outline-info" data-wp-page-prev>Anterior</button>
+            <button type="button" class="btn btn-sm btn-outline-info" data-wp-page-next>Siguiente</button>
+          </div>
+        </div>
       <?php endif; ?>
+    </div>
     </div>
   </div>
 </section>
 
 <script>
   (function () {
+    const tabs = Array.from(document.querySelectorAll('[data-win-points-tab]'));
+    const tabPanels = Array.from(document.querySelectorAll('[data-win-points-tab-panel]'));
     const iconInput = document.querySelector('[data-win-points-icon-input]');
     const iconStage = document.querySelector('[data-win-points-icon-stage]');
     const iconRemove = document.querySelector('[data-win-points-icon-remove]');
     const packageSelect = document.querySelector('[data-rule-package-select]');
     const rewardInput = document.querySelector('[data-rule-reward-input]');
+
+    function activateTab(targetTab) {
+      if (!targetTab) {
+        return;
+      }
+
+      tabs.forEach(function (tabButton) {
+        const isActive = tabButton.dataset.winPointsTab === targetTab;
+        tabButton.classList.toggle('is-active', isActive);
+      });
+
+      tabPanels.forEach(function (panel) {
+        const isActive = panel.dataset.winPointsTabPanel === targetTab;
+        panel.classList.toggle('is-active', isActive);
+      });
+    }
 
     function renderIconPreview(src) {
       if (!iconStage) {
@@ -655,6 +1107,152 @@ include __DIR__ . '/includes/header.php';
       rewardInput.value = selectedOption ? (selectedOption.dataset.currentReward || '0') : '0';
     }
 
+    function initFilterableSection(sectionName) {
+      const section = document.querySelector('[data-wp-section="' + sectionName + '"]');
+      if (!section) {
+        return;
+      }
+
+      const searchInput = section.querySelector('[data-wp-filter-search]');
+      const sizeSelect = section.querySelector('[data-wp-filter-size]');
+      const extraSelect = section.querySelector('[data-wp-filter-extra]');
+      const countBadge = section.querySelector('[data-wp-filter-count]');
+      const paginationWrap = section.querySelector('[data-wp-pagination]');
+      const paginationInfo = section.querySelector('[data-wp-pagination-info]');
+      const prevButton = section.querySelector('[data-wp-page-prev]');
+      const nextButton = section.querySelector('[data-wp-page-next]');
+      const itemNodes = Array.from(section.querySelectorAll('[data-wp-item="' + sectionName + '"]'));
+
+      if (!itemNodes.length) {
+        return;
+      }
+
+      const keyedItems = new Map();
+      itemNodes.forEach(function (node, index) {
+        const key = node.dataset.wpKey || (sectionName + '-' + index);
+        if (!keyedItems.has(key)) {
+          keyedItems.set(key, {
+            key: key,
+            elements: [],
+            filterText: (node.dataset.wpFilter || '').toLowerCase(),
+            extra: node.dataset.wpExtra || 'all'
+          });
+        }
+
+        const entry = keyedItems.get(key);
+        entry.elements.push(node);
+        if (!entry.filterText && node.dataset.wpFilter) {
+          entry.filterText = node.dataset.wpFilter.toLowerCase();
+        }
+        if ((!entry.extra || entry.extra === 'all') && node.dataset.wpExtra) {
+          entry.extra = node.dataset.wpExtra;
+        }
+      });
+
+      const entries = Array.from(keyedItems.values());
+      let currentPage = 1;
+
+      function renderCount(total) {
+        if (!countBadge) {
+          return;
+        }
+
+        const singular = countBadge.dataset.wpCountSingular || 'resultado visible';
+        const plural = countBadge.dataset.wpCountPlural || 'resultados visibles';
+        countBadge.textContent = total === 1 ? '1 ' + singular : total + ' ' + plural;
+      }
+
+      function applyFilters(resetPage) {
+        if (resetPage) {
+          currentPage = 1;
+        }
+
+        const searchTerm = (searchInput ? searchInput.value : '').trim().toLowerCase();
+        const extraValue = extraSelect ? extraSelect.value : 'all';
+        const pageSize = Math.max(1, parseInt(sizeSelect ? sizeSelect.value : '5', 10) || 5);
+
+        const filteredEntries = entries.filter(function (entry) {
+          const matchesSearch = searchTerm === '' || entry.filterText.indexOf(searchTerm) !== -1;
+          const matchesExtra = extraValue === 'all' || entry.extra === extraValue;
+          return matchesSearch && matchesExtra;
+        });
+
+        const total = filteredEntries.length;
+        const totalPages = Math.max(1, Math.ceil(total / pageSize));
+        if (currentPage > totalPages) {
+          currentPage = totalPages;
+        }
+
+        const startIndex = total === 0 ? 0 : (currentPage - 1) * pageSize;
+        const endIndex = total === 0 ? 0 : Math.min(startIndex + pageSize, total);
+        const visibleKeys = new Set(filteredEntries.slice(startIndex, endIndex).map(function (entry) {
+          return entry.key;
+        }));
+
+        entries.forEach(function (entry) {
+          const isVisible = visibleKeys.has(entry.key);
+          entry.elements.forEach(function (element) {
+            element.classList.toggle('win-points-hidden', !isVisible);
+          });
+        });
+
+        renderCount(total);
+
+        if (paginationInfo) {
+          paginationInfo.textContent = total === 0
+            ? 'Sin resultados para los filtros actuales.'
+            : 'Mostrando ' + (startIndex + 1) + '-' + endIndex + ' de ' + total + '.';
+        }
+
+        if (prevButton) {
+          prevButton.disabled = total === 0 || currentPage <= 1;
+        }
+        if (nextButton) {
+          nextButton.disabled = total === 0 || currentPage >= totalPages;
+        }
+        if (paginationWrap) {
+          paginationWrap.classList.toggle('win-points-hidden', total === 0);
+        }
+      }
+
+      if (searchInput) {
+        searchInput.addEventListener('input', function () {
+          applyFilters(true);
+        });
+      }
+
+      if (sizeSelect) {
+        sizeSelect.addEventListener('change', function () {
+          applyFilters(true);
+        });
+      }
+
+      if (extraSelect) {
+        extraSelect.addEventListener('change', function () {
+          applyFilters(true);
+        });
+      }
+
+      if (prevButton) {
+        prevButton.addEventListener('click', function () {
+          if (currentPage <= 1) {
+            return;
+          }
+          currentPage -= 1;
+          applyFilters(false);
+        });
+      }
+
+      if (nextButton) {
+        nextButton.addEventListener('click', function () {
+          currentPage += 1;
+          applyFilters(false);
+        });
+      }
+
+      applyFilters(true);
+    }
+
     if (iconInput && iconStage) {
       const defaultSrc = iconStage.dataset.defaultSrc || '';
 
@@ -694,6 +1292,18 @@ include __DIR__ . '/includes/header.php';
       syncSelectedPackageReward();
       packageSelect.addEventListener('change', syncSelectedPackageReward);
     }
+
+    if (tabs.length && tabPanels.length) {
+      tabs.forEach(function (tabButton) {
+        tabButton.addEventListener('click', function () {
+          activateTab(tabButton.dataset.winPointsTab || 'overview');
+        });
+      });
+    }
+
+    initFilterableSection('rules');
+    initFilterableSection('wallets');
+    initFilterableSection('ledger');
   })();
 </script>
 
