@@ -299,6 +299,7 @@ include __DIR__ . "/includes/header.php";
           <div class="card-body">
             <p class="small text-secondary mb-1">Total</p>
             <p id="selected-price" class="fw-bold text-info fs-5"><?= ($moneda_actual['clave'] ?? 'Bs.') . ' ' . currency_format_amount(0, $moneda_actual) ?></p>
+            <p id="selected-win-points-total" class="small fw-semibold text-warning mb-0 d-none"></p>
           </div>
         </div>
       </div>
@@ -975,6 +976,7 @@ include __DIR__ . "/includes/header.php";
   const packCards2 = Array.from(document.querySelectorAll('.pack-card'));
   const selectedPack = document.getElementById("selected-pack");
   const selectedPrice = document.getElementById("selected-price");
+  const selectedWinPointsTotal = document.getElementById('selected-win-points-total');
   const orderForm = document.getElementById("order-form");
   const buyButton = document.getElementById("buy-button");
   const defaultBuyButtonLabel = 'Comprar Ahora';
@@ -2339,10 +2341,22 @@ include __DIR__ . "/includes/header.php";
       selectedPack.textContent = pack.name;
       selectedTotalValue = normalizeCurrencyAmount(pack.priceValue, pack.showDecimals);
       selectedPrice.textContent = `${pack.moneda} ${formatCurrencyAmount(selectedTotalValue, pack.showDecimals)}`;
+      if (selectedWinPointsTotal) {
+        const requiredPoints = Number(pack.redeemRequiredPoints || 0);
+        const hasWinPointsRedemption = Boolean(pack.redeemActive) && requiredPoints > 0;
+        selectedWinPointsTotal.textContent = hasWinPointsRedemption
+          ? `Canje: ${formatWinPointsAmount(requiredPoints)}`
+          : '';
+        selectedWinPointsTotal.classList.toggle('d-none', !hasWinPointsRedemption);
+      }
     } else {
       selectedTotalValue = 0;
       selectedPack.textContent = 'Ninguno';
       selectedPrice.textContent = `${monedaActualClave} ${formatCurrencyAmount(0, monedaActualMostrarDecimales)}`;
+      if (selectedWinPointsTotal) {
+        selectedWinPointsTotal.textContent = '';
+        selectedWinPointsTotal.classList.add('d-none');
+      }
     }
   }
   packCards2.forEach((card) => {
