@@ -869,12 +869,17 @@ include __DIR__ . '/includes/header.php';
           <form method="POST" class="row g-3">
             <input type="hidden" name="adjust_win_points_balance" value="1">
             <div class="col-12">
+              <label class="form-label text-info">Buscar usuario</label>
+              <input type="search" class="form-control bg-dark text-info border-info" placeholder="Escribe nombre, correo o telefono" data-win-points-user-search>
+            </div>
+            <div class="col-12">
               <label class="form-label text-info">Usuario</label>
-              <select name="adjust_user_id" class="form-select bg-dark text-info border-info" required>
+              <select name="adjust_user_id" class="form-select bg-dark text-info border-info" data-win-points-user-select required>
                 <option value="">Selecciona un usuario</option>
                 <?php foreach ($adminUsers as $user): ?>
-                  <option value="<?= (int) ($user['id'] ?? 0) ?>">
-                    <?= htmlspecialchars((string) ($user['nombre'] ?? 'Usuario'), ENT_QUOTES, 'UTF-8') ?> | <?= htmlspecialchars((string) ($user['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                  <?php $userSearch = trim((string) (($user['nombre'] ?? '') . ' ' . ($user['email'] ?? '') . ' ' . ($user['telefono'] ?? ''))); ?>
+                  <option value="<?= (int) ($user['id'] ?? 0) ?>" data-search="<?= htmlspecialchars(strtolower($userSearch), ENT_QUOTES, 'UTF-8') ?>">
+                    <?= htmlspecialchars((string) ($user['nombre'] ?? 'Usuario'), ENT_QUOTES, 'UTF-8') ?> | <?= htmlspecialchars((string) ($user['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?><?= !empty($user['telefono']) ? ' | ' . htmlspecialchars((string) $user['telefono'], ENT_QUOTES, 'UTF-8') : '' ?>
                   </option>
                 <?php endforeach; ?>
               </select>
@@ -1047,6 +1052,8 @@ include __DIR__ . '/includes/header.php';
     const iconRemove = document.querySelector('[data-win-points-icon-remove]');
     const packageSelect = document.querySelector('[data-rule-package-select]');
     const rewardInput = document.querySelector('[data-rule-reward-input]');
+    const adjustmentUserSearch = document.querySelector('[data-win-points-user-search]');
+    const adjustmentUserSelect = document.querySelector('[data-win-points-user-select]');
 
     function activateTab(targetTab) {
       if (!targetTab) {
@@ -1105,6 +1112,53 @@ include __DIR__ . '/includes/header.php';
 
       const selectedOption = packageSelect.options[packageSelect.selectedIndex];
       rewardInput.value = selectedOption ? (selectedOption.dataset.currentReward || '0') : '0';
+    }
+
+    function initUserSelectFilter() {
+      if (!adjustmentUserSearch || !adjustmentUserSelect) {
+        return;
+      }
+
+      const baseOptions = Array.from(adjustmentUserSelect.options).map(function (option) {
+        return {
+          value: option.value,
+          text: option.textContent || '',
+          search: (option.dataset.search || option.textContent || '').toLowerCase(),
+        };
+      });
+
+      function renderUserOptions() {
+        const term = adjustmentUserSearch.value.trim().toLowerCase();
+        const currentValue = adjustmentUserSelect.value;
+        const placeholder = baseOptions[0] || { value: '', text: 'Selecciona un usuario', search: '' };
+        const matches = baseOptions.slice(1).filter(function (option) {
+          return term === '' || option.search.indexOf(term) !== -1;
+        });
+
+        adjustmentUserSelect.innerHTML = '';
+
+        const placeholderOption = document.createElement('option');
+        placeholderOption.value = placeholder.value;
+        placeholderOption.textContent = matches.length ? placeholder.text : 'No se encontraron usuarios';
+        adjustmentUserSelect.appendChild(placeholderOption);
+
+        matches.forEach(function (optionData) {
+          const option = document.createElement('option');
+          option.value = optionData.value;
+          option.textContent = optionData.text;
+          option.dataset.search = optionData.search;
+          adjustmentUserSelect.appendChild(option);
+        });
+
+        if (matches.some(function (option) { return option.value === currentValue; })) {
+          adjustmentUserSelect.value = currentValue;
+        } else {
+          adjustmentUserSelect.value = '';
+        }
+      }
+
+      adjustmentUserSearch.addEventListener('input', renderUserOptions);
+      renderUserOptions();
     }
 
     function initFilterableSection(sectionName) {
@@ -1301,6 +1355,7 @@ include __DIR__ . '/includes/header.php';
       });
     }
 
+    initUserSelectFilter();
     initFilterableSection('rules');
     initFilterableSection('wallets');
     initFilterableSection('ledger');
