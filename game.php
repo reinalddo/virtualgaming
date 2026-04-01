@@ -1061,6 +1061,7 @@ include __DIR__ . "/includes/header.php";
     playerName: '',
     signature: '',
     pending: false,
+    serverUnavailable: false,
   };
 
   function parseRequiredFields(rawValue) {
@@ -1451,11 +1452,32 @@ include __DIR__ . "/includes/header.php";
       playerName: '',
       signature: '',
       pending: false,
+      serverUnavailable: false,
     };
 
     if (clearFeedback) {
       clearPlayerVerificationFeedback();
     }
+  }
+
+  function setPlayerVerificationUnavailableState(signature, message) {
+    playerVerificationState = {
+      verified: false,
+      playerName: '',
+      signature: signature,
+      pending: false,
+      serverUnavailable: true,
+    };
+
+    const baseMessage = String(message || 'No se pudo verificar el jugador en este momento.').trim();
+    setPlayerVerificationFeedback('info', `${baseMessage} Puedes continuar con la recarga normal.`);
+  }
+
+  function requiresVerifiedPlayerForCheckout() {
+    return Boolean(
+      playerVerificationConfig
+      && (playerVerificationState.pending || (!playerVerificationState.verified && !playerVerificationState.serverUnavailable))
+    );
   }
 
   function syncPlayerVerificationUi() {
@@ -1511,8 +1533,10 @@ include __DIR__ . "/includes/header.php";
     }
 
     playerVerificationState.pending = true;
+    playerVerificationState.serverUnavailable = false;
     syncPlayerVerificationUi();
     setPlayerVerificationFeedback('info', 'Verificando nombre del jugador...');
+    updateButtonState();
 
     try {
       const requestBody = new URLSearchParams();
@@ -1539,15 +1563,21 @@ include __DIR__ . "/includes/header.php";
           playerName: String(data.player_name || ''),
           signature: payload.signature,
           pending: false,
+          serverUnavailable: false,
         };
         setPlayerVerificationFeedback('success', String(data.message || 'Jugador encontrado.'));
       } else {
-        resetPlayerVerificationState(false);
-        setPlayerVerificationFeedback('danger', String((data && data.message) || 'No se pudo verificar el jugador.'));
+        const verificationStatus = String((data && data.status) || '').toLowerCase();
+        const verificationMessage = String((data && data.message) || 'No se pudo verificar el jugador.');
+        if (verificationStatus === 'unavailable' || response.status >= 500) {
+          setPlayerVerificationUnavailableState(payload.signature, verificationMessage);
+        } else {
+          resetPlayerVerificationState(false);
+          setPlayerVerificationFeedback('danger', verificationMessage);
+        }
       }
     } catch (error) {
-      resetPlayerVerificationState(false);
-      setPlayerVerificationFeedback('danger', 'No se pudo verificar el jugador en este momento.');
+      setPlayerVerificationUnavailableState(payload.signature, 'No se pudo verificar el jugador en este momento.');
     } finally {
       playerVerificationState.pending = false;
       syncPlayerVerificationUi();
@@ -2330,8 +2360,7 @@ include __DIR__ . "/includes/header.php";
       selectedPack.style.color = "";
       selectedPack.textContent = activePack.name;
     }
-    const requiresPlayerVerification = Boolean(playerVerificationConfig);
-    const needsPlayerVerification = requiresPlayerVerification && !playerVerificationState.verified;
+    const needsPlayerVerification = requiresVerifiedPlayerForCheckout();
     buyButton.disabled = !activePack || !requiredFilled || needsPlayerVerification;
     buyButton.textContent = needsPlayerVerification ? verifyUserBuyButtonLabel : defaultBuyButtonLabel;
     syncPlayerVerificationUi();
@@ -2767,7 +2796,7 @@ include __DIR__ . "/includes/header.php";
                   return;
                 }
 
-                if (playerVerificationConfig && !playerVerificationState.verified) {
+                if (requiresVerifiedPlayerForCheckout()) {
                   setPlayerVerificationFeedback('danger', 'Debes verificar el nombre del jugador antes de comprar.');
                   return;
                 }
