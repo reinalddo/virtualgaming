@@ -748,8 +748,8 @@ include __DIR__ . "/includes/header.php";
   }
 
   .pack-win-points-icon {
-    width: 1rem;
-    height: 1rem;
+    width: 2rem;
+    height: 2rem;
     border-radius: 999px;
     object-fit: cover;
     flex: 0 0 auto;
