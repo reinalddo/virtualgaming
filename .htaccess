@@ -5,6 +5,10 @@ RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
+# SEO endpoints
+RewriteRule ^robots\.txt$ robots.php [L,QSA]
+RewriteRule ^sitemap\.xml$ sitemap.php [L,QSA]
+
 # Admin friendly URLs: /admin/seccion -> admin.php?seccion=seccion
 RewriteRule ^admin/([a-zA-Z0-9_-]+)?$ admin.php?seccion=$1 [QSA,L]
 # Redirect /admin to /admin/juegos by default
