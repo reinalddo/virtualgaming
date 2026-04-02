@@ -1473,6 +1473,33 @@ include __DIR__ . "/includes/header.php";
     setPlayerVerificationFeedback('info', `${baseMessage} Puedes continuar con la recarga normal.`);
   }
 
+  function shouldAllowCheckoutOnVerificationFailure(status, message, httpStatus) {
+    const normalizedStatus = String(status || '').trim().toLowerCase();
+    const normalizedMessage = String(message || '').trim().toLowerCase();
+    const numericHttpStatus = Number(httpStatus || 0);
+
+    if (normalizedStatus === 'unavailable' || numericHttpStatus >= 500) {
+      return true;
+    }
+
+    const temporaryFailureSnippets = [
+      'no player data found for uid',
+      'service unavailable',
+      'temporarily unavailable',
+      'internal server error',
+      'gateway timeout',
+      'bad gateway',
+      'request timeout',
+      'try again later',
+      'connection refused',
+      'connection reset',
+      'upstream',
+      'timeout',
+    ];
+
+    return temporaryFailureSnippets.some((snippet) => normalizedMessage.includes(snippet));
+  }
+
   function requiresVerifiedPlayerForCheckout() {
     return Boolean(
       playerVerificationConfig
@@ -1569,7 +1596,7 @@ include __DIR__ . "/includes/header.php";
       } else {
         const verificationStatus = String((data && data.status) || '').toLowerCase();
         const verificationMessage = String((data && data.message) || 'No se pudo verificar el jugador.');
-        if (verificationStatus === 'unavailable' || response.status >= 500) {
+        if (shouldAllowCheckoutOnVerificationFailure(verificationStatus, verificationMessage, response.status)) {
           setPlayerVerificationUnavailableState(payload.signature, verificationMessage);
         } else {
           resetPlayerVerificationState(false);
