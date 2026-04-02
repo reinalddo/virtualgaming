@@ -61,6 +61,52 @@ if (!function_exists('win_points_icon_url')) {
     }
 }
 
+if (!function_exists('win_points_normalize_hex_color')) {
+    function win_points_normalize_hex_color($value, string $default): string {
+        $fallback = strtoupper(trim($default));
+        $candidate = strtoupper(trim((string) $value));
+
+        if (preg_match('/^#([0-9A-F]{3}|[0-9A-F]{6})$/', $candidate) !== 1) {
+            return $fallback;
+        }
+
+        if (strlen($candidate) === 4) {
+            return sprintf(
+                '#%1$s%1$s%2$s%2$s%3$s%3$s',
+                $candidate[1],
+                $candidate[2],
+                $candidate[3]
+            );
+        }
+
+        return $candidate;
+    }
+}
+
+if (!function_exists('win_points_badge_background_color')) {
+    function win_points_badge_background_color(): string {
+        return win_points_normalize_hex_color(store_config_get('win_points_badge_background_color', '#3E2D07'), '#3E2D07');
+    }
+}
+
+if (!function_exists('win_points_badge_text_color')) {
+    function win_points_badge_text_color(): string {
+        return win_points_normalize_hex_color(store_config_get('win_points_badge_text_color', '#FCD34D'), '#FCD34D');
+    }
+}
+
+if (!function_exists('win_points_hex_to_rgba')) {
+    function win_points_hex_to_rgba(string $hexColor, float $alpha): string {
+        $normalized = win_points_normalize_hex_color($hexColor, '#000000');
+        $alpha = max(0, min(1, $alpha));
+        $red = hexdec(substr($normalized, 1, 2));
+        $green = hexdec(substr($normalized, 3, 2));
+        $blue = hexdec(substr($normalized, 5, 2));
+
+        return sprintf('rgba(%d, %d, %d, %.3F)', $red, $green, $blue, $alpha);
+    }
+}
+
 if (!function_exists('win_points_config')) {
     function win_points_config(): array {
         return [
@@ -68,6 +114,8 @@ if (!function_exists('win_points_config')) {
             'name' => win_points_program_name(),
             'icon_path' => win_points_icon_path(),
             'icon_url' => win_points_icon_url(),
+            'badge_background_color' => win_points_badge_background_color(),
+            'badge_text_color' => win_points_badge_text_color(),
             'default_award' => win_points_default_award(),
             'guest_message' => win_points_guest_message(),
         ];

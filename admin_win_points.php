@@ -64,6 +64,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         if (isset($_POST['save_win_points_program'])) {
             $programName = trim((string) ($_POST['win_points_name'] ?? ''));
+          $badgeBackgroundColor = win_points_normalize_hex_color($_POST['win_points_badge_background_color'] ?? '', '#3E2D07');
+          $badgeTextColor = win_points_normalize_hex_color($_POST['win_points_badge_text_color'] ?? '', '#FCD34D');
             $currentIcon = store_config_get('win_points_icon', '');
             $nextIcon = $currentIcon;
             $hasUpload = isset($_FILES['win_points_icon']) && (($_FILES['win_points_icon']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
@@ -85,6 +87,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             store_config_upsert('win_points_name', $programName);
+            store_config_upsert('win_points_badge_background_color', $badgeBackgroundColor);
+            store_config_upsert('win_points_badge_text_color', $badgeTextColor);
             store_config_delete('win_points_default_award');
 
             if ($nextIcon === '') {
@@ -137,6 +141,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $winPointsConfig = win_points_config();
+$winPointsBadgeBackgroundColor = (string) ($winPointsConfig['badge_background_color'] ?? '#3E2D07');
+$winPointsBadgeTextColor = (string) ($winPointsConfig['badge_text_color'] ?? '#FCD34D');
+$winPointsBadgeBorderColor = win_points_hex_to_rgba($winPointsBadgeTextColor, 0.28);
+$winPointsBadgeInsetColor = win_points_hex_to_rgba($winPointsBadgeTextColor, 0.08);
 $packageOptions = win_points_fetch_admin_package_options($mysqli);
 $adminUsers = win_points_fetch_admin_users($mysqli);
 $adminRules = win_points_fetch_admin_rules($mysqli);
@@ -263,6 +271,39 @@ include __DIR__ . '/includes/header.php';
     font-weight: 700;
     text-align: center;
     opacity: 0.8;
+  }
+  .win-points-badge-preview-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 100%;
+    padding: 1rem;
+    border-radius: 18px;
+    border: 1px solid rgba(34, 211, 238, 0.16);
+    background: rgba(8, 15, 28, 0.78);
+  }
+  .win-points-badge-preview {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    width: fit-content;
+    max-width: 100%;
+    padding: 0.45rem 0.75rem;
+    border-radius: 999px;
+    border: 1px solid var(--wp-badge-border, rgba(250, 204, 21, 0.25));
+    background: var(--wp-badge-bg, #3E2D07);
+    color: var(--wp-badge-text, #FCD34D);
+    font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1.15;
+    box-shadow: inset 0 0 0 1px var(--wp-badge-shadow, rgba(250, 204, 21, 0.08));
+  }
+  .win-points-badge-preview img {
+    width: 1.35rem;
+    height: 1.35rem;
+    border-radius: 999px;
+    object-fit: cover;
+    flex: 0 0 auto;
   }
   .win-points-table td,
   .win-points-table th {
@@ -478,7 +519,7 @@ include __DIR__ . '/includes/header.php';
           <div class="d-flex align-items-start justify-content-between gap-3 mb-4">
             <div>
               <h2 class="h4 text-info fw-bold mb-1">Configuracion global</h2>
-              <p class="text-secondary mb-0">Nombre e icono del programa global de premios por recarga.</p>
+              <p class="text-secondary mb-0">Nombre, icono y colores del distintivo global de premios por recarga.</p>
             </div>
             <div class="win-points-icon-preview">
               <?php if ($winPointsConfig['icon_url'] !== ''): ?>
@@ -500,6 +541,16 @@ include __DIR__ . '/includes/header.php';
               <input type="file" name="win_points_icon" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" class="form-control bg-dark text-info border-info" data-win-points-icon-input>
               <div class="form-text mt-2">La vista previa se muestra en formato cuadrado sin recortar la imagen.</div>
             </div>
+            <div class="col-md-6">
+              <label class="form-label text-info">Color de fondo del badge</label>
+              <input type="color" name="win_points_badge_background_color" value="<?= htmlspecialchars($winPointsBadgeBackgroundColor, ENT_QUOTES, 'UTF-8') ?>" class="form-control form-control-color bg-dark border-info w-100" style="height:3rem;" data-win-points-badge-bg-input>
+              <div class="form-text mt-2">Fondo del distintivo que aparece en los paquetes.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label text-info">Color del texto del badge</label>
+              <input type="color" name="win_points_badge_text_color" value="<?= htmlspecialchars($winPointsBadgeTextColor, ENT_QUOTES, 'UTF-8') ?>" class="form-control form-control-color bg-dark border-info w-100" style="height:3rem;" data-win-points-badge-text-input>
+              <div class="form-text mt-2">Color del texto y realce del distintivo.</div>
+            </div>
             <div class="col-md-5">
               <label class="form-label text-info">Vista previa</label>
               <div class="win-points-icon-upload-stage" data-win-points-icon-stage data-default-src="<?= htmlspecialchars($winPointsConfig['icon_url'], ENT_QUOTES, 'UTF-8') ?>">
@@ -508,6 +559,17 @@ include __DIR__ . '/includes/header.php';
                 <?php else: ?>
                   <span class="win-points-icon-upload-empty" data-win-points-icon-empty>Sin icono</span>
                 <?php endif; ?>
+              </div>
+            </div>
+            <div class="col-12">
+              <label class="form-label text-info">Vista previa del distintivo en paquetes</label>
+              <div class="win-points-badge-preview-wrap">
+                <div class="win-points-badge-preview" data-win-points-badge-preview style="--wp-badge-bg: <?= htmlspecialchars($winPointsBadgeBackgroundColor, ENT_QUOTES, 'UTF-8') ?>; --wp-badge-text: <?= htmlspecialchars($winPointsBadgeTextColor, ENT_QUOTES, 'UTF-8') ?>; --wp-badge-border: <?= htmlspecialchars($winPointsBadgeBorderColor, ENT_QUOTES, 'UTF-8') ?>; --wp-badge-shadow: <?= htmlspecialchars($winPointsBadgeInsetColor, ENT_QUOTES, 'UTF-8') ?>;">
+                  <?php if ($winPointsConfig['icon_url'] !== ''): ?>
+                    <img src="<?= htmlspecialchars($winPointsConfig['icon_url'], ENT_QUOTES, 'UTF-8') ?>" alt="Badge <?= htmlspecialchars($winPointsConfig['name'], ENT_QUOTES, 'UTF-8') ?>">
+                  <?php endif; ?>
+                  <span data-win-points-badge-label>+3 <?= htmlspecialchars($winPointsConfig['name'], ENT_QUOTES, 'UTF-8') ?></span>
+                </div>
               </div>
             </div>
             <div class="col-12">
@@ -1050,6 +1112,11 @@ include __DIR__ . '/includes/header.php';
     const iconInput = document.querySelector('[data-win-points-icon-input]');
     const iconStage = document.querySelector('[data-win-points-icon-stage]');
     const iconRemove = document.querySelector('[data-win-points-icon-remove]');
+    const badgeBackgroundInput = document.querySelector('[data-win-points-badge-bg-input]');
+    const badgeTextInput = document.querySelector('[data-win-points-badge-text-input]');
+    const badgePreview = document.querySelector('[data-win-points-badge-preview]');
+    const badgeLabel = document.querySelector('[data-win-points-badge-label]');
+    const programNameInput = document.querySelector('[name="win_points_name"]');
     const packageSelect = document.querySelector('[data-rule-package-select]');
     const rewardInput = document.querySelector('[data-rule-reward-input]');
     const adjustmentUserSearch = document.querySelector('[data-win-points-user-search]');
@@ -1102,6 +1169,37 @@ include __DIR__ . '/includes/header.php';
         emptyState.setAttribute('data-win-points-icon-empty', '1');
         emptyState.textContent = 'Sin icono';
         iconStage.appendChild(emptyState);
+      }
+    }
+
+    function hexToRgba(hexColor, alpha) {
+      const value = (hexColor || '').trim();
+      if (!/^#([0-9a-f]{6})$/i.test(value)) {
+        return 'rgba(0, 0, 0, ' + alpha + ')';
+      }
+
+      const red = parseInt(value.slice(1, 3), 16);
+      const green = parseInt(value.slice(3, 5), 16);
+      const blue = parseInt(value.slice(5, 7), 16);
+      return 'rgba(' + red + ', ' + green + ', ' + blue + ', ' + alpha + ')';
+    }
+
+    function syncBadgePreview() {
+      if (!badgePreview) {
+        return;
+      }
+
+      const backgroundColor = badgeBackgroundInput ? badgeBackgroundInput.value : '#3E2D07';
+      const textColor = badgeTextInput ? badgeTextInput.value : '#FCD34D';
+      const programName = programNameInput ? programNameInput.value.trim() : '';
+
+      badgePreview.style.setProperty('--wp-badge-bg', backgroundColor || '#3E2D07');
+      badgePreview.style.setProperty('--wp-badge-text', textColor || '#FCD34D');
+      badgePreview.style.setProperty('--wp-badge-border', hexToRgba(textColor || '#FCD34D', 0.28));
+      badgePreview.style.setProperty('--wp-badge-shadow', hexToRgba(textColor || '#FCD34D', 0.08));
+
+      if (badgeLabel) {
+        badgeLabel.textContent = '+3 ' + (programName || 'Win Points');
       }
     }
 
@@ -1347,6 +1445,20 @@ include __DIR__ . '/includes/header.php';
       packageSelect.addEventListener('change', syncSelectedPackageReward);
     }
 
+    if (badgeBackgroundInput) {
+      badgeBackgroundInput.addEventListener('input', syncBadgePreview);
+      badgeBackgroundInput.addEventListener('change', syncBadgePreview);
+    }
+
+    if (badgeTextInput) {
+      badgeTextInput.addEventListener('input', syncBadgePreview);
+      badgeTextInput.addEventListener('change', syncBadgePreview);
+    }
+
+    if (programNameInput) {
+      programNameInput.addEventListener('input', syncBadgePreview);
+    }
+
     if (tabs.length && tabPanels.length) {
       tabs.forEach(function (tabButton) {
         tabButton.addEventListener('click', function () {
@@ -1359,6 +1471,7 @@ include __DIR__ . '/includes/header.php';
     initFilterableSection('rules');
     initFilterableSection('wallets');
     initFilterableSection('ledger');
+    syncBadgePreview();
   })();
 </script>
 

@@ -70,6 +70,10 @@ $winPointsConfig = win_points_config();
 $winPointsEnabled = !empty($winPointsConfig['enabled']);
 $winPointsProgramName = (string) ($winPointsConfig['name'] ?? 'Win Points');
 $winPointsIconUrl = (string) ($winPointsConfig['icon_url'] ?? '');
+$winPointsBadgeBackgroundColor = (string) ($winPointsConfig['badge_background_color'] ?? '#3E2D07');
+$winPointsBadgeTextColor = (string) ($winPointsConfig['badge_text_color'] ?? '#FCD34D');
+$winPointsBadgeBorderColor = win_points_hex_to_rgba($winPointsBadgeTextColor, 0.25);
+$winPointsBadgeInsetColor = win_points_hex_to_rgba($winPointsBadgeTextColor, 0.08);
 $winPointsGuestMessage = (string) ($winPointsConfig['guest_message'] ?? '');
 $winPointsUserSummary = $winPointsEnabled && $loggedUserId > 0
   ? win_points_fetch_user_summary($mysqli, $loggedUserId)
@@ -738,13 +742,13 @@ include __DIR__ . "/includes/header.php";
     max-width: 100%;
     padding: 0.45rem 0.75rem;
     border-radius: 999px;
-    border: 1px solid rgba(250, 204, 21, 0.25);
-    background: linear-gradient(135deg, rgba(41, 37, 19, 0.94), rgba(62, 45, 7, 0.78));
-    color: #fcd34d;
+    border: 1px solid <?= htmlspecialchars($winPointsBadgeBorderColor, ENT_QUOTES, 'UTF-8') ?>;
+    background: <?= htmlspecialchars($winPointsBadgeBackgroundColor, ENT_QUOTES, 'UTF-8') ?>;
+    color: <?= htmlspecialchars($winPointsBadgeTextColor, ENT_QUOTES, 'UTF-8') ?>;
     font-size: 0.82rem;
     font-weight: 700;
     line-height: 1.15;
-    box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.08);
+    box-shadow: inset 0 0 0 1px <?= htmlspecialchars($winPointsBadgeInsetColor, ENT_QUOTES, 'UTF-8') ?>;
   }
 
   .pack-win-points-icon {
