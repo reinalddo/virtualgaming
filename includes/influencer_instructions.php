@@ -47,6 +47,12 @@ if (!function_exists('influencer_instructions_defaults')) {
                     ],
                 ],
             ],
+            'video_rewards' => [
+                'eyebrow' => 'RECOMPENSAS EXTRA',
+                'title' => 'Bono por Video en HydraUP',
+                'intro_html' => '<p>Ademas de la comision por tu codigo, ganas recompensas extra por cada video en TikTok que nos mencione.</p>',
+                'tabs' => influencer_instructions_default_reward_tabs(),
+            ],
             'steps' => [
                 'eyebrow' => 'Paso a paso',
                 'title' => 'Como funciona el ingreso',
@@ -130,6 +136,9 @@ if (!function_exists('influencer_instructions_defaults')) {
                 'benefits_card_bg' => '#1F2937',
                 'benefits_card_title' => '#F9FAFB',
                 'benefits_card_text' => '#D1D5DB',
+                'video_rewards_surface' => '#0B1320',
+                'video_rewards_title' => '#FFFFFF',
+                'video_rewards_text' => '#B7C6DB',
                 'notes_surface' => '#101826',
                 'notes_label' => '#F59E0B',
                 'notes_title' => '#FFFFFF',
@@ -141,6 +150,206 @@ if (!function_exists('influencer_instructions_defaults')) {
                 'notes_icon_color' => '#FBBF24',
             ],
         ];
+    }
+}
+
+if (!function_exists('influencer_instructions_default_reward_tabs')) {
+    function influencer_instructions_default_reward_tabs(): array {
+        return [
+            [
+                'label' => 'Free Fire',
+                'tab_emoji' => '',
+                'views_label' => 'VISTAS',
+                'views_emoji' => 'o',
+                'reward_label' => 'DIAMANTES',
+                'reward_emoji' => '💎',
+                'active_bg' => '#22C55E',
+                'active_text' => '#FFFFFF',
+                'table_border' => '#8A6A1F',
+                'header_bg' => '#3A311A',
+                'header_text' => '#FACC15',
+                'body_bg' => '#182132',
+                'body_text' => '#FFFFFF',
+                'highlight_bg' => '#342B1E',
+                'highlight_text' => '#FACC15',
+                'rows' => [
+                    ['views' => '1,000 - 3,999', 'reward' => '110 💎'],
+                    ['views' => '4,000 - 9,999', 'reward' => '341 💎'],
+                    ['views' => '10,000 - 29,999', 'reward' => '572 💎'],
+                    ['views' => '30,000 - 49,999', 'reward' => '1160 💎'],
+                    ['views' => '50,000 - 99,999', 'reward' => '2398 💎'],
+                    ['views' => '100,000 o mas', 'reward' => '6160 💎'],
+                ],
+            ],
+            [
+                'label' => 'Blood Strike',
+                'tab_emoji' => '',
+                'views_label' => 'VISTAS',
+                'views_emoji' => 'o',
+                'reward_label' => 'GOLD',
+                'reward_emoji' => '⚡',
+                'active_bg' => '#EF4444',
+                'active_text' => '#FFFFFF',
+                'table_border' => '#8A5A1F',
+                'header_bg' => '#4A2B1F',
+                'header_text' => '#FACC15',
+                'body_bg' => '#182132',
+                'body_text' => '#FFFFFF',
+                'highlight_bg' => '#39271F',
+                'highlight_text' => '#FACC15',
+                'rows' => [
+                    ['views' => '1,000 - 3,999', 'reward' => '100 GOLD'],
+                    ['views' => '4,000 - 9,999', 'reward' => '300 GOLD'],
+                    ['views' => '10,000 - 29,999', 'reward' => '500 GOLD'],
+                    ['views' => '30,000 - 49,999', 'reward' => '1000 GOLD'],
+                    ['views' => '50,000 - 99,999', 'reward' => '2000 GOLD'],
+                    ['views' => '100,000 o mas', 'reward' => '5000 GOLD'],
+                ],
+            ],
+            [
+                'label' => 'Dinero Real',
+                'tab_emoji' => '',
+                'views_label' => 'VISTAS',
+                'views_emoji' => 'o',
+                'reward_label' => 'RECOMPENSA',
+                'reward_emoji' => '$',
+                'active_bg' => '#22C55E',
+                'active_text' => '#FFFFFF',
+                'table_border' => '#1D6B52',
+                'header_bg' => '#17453F',
+                'header_text' => '#34D399',
+                'body_bg' => '#182132',
+                'body_text' => '#FFFFFF',
+                'highlight_bg' => '#123A34',
+                'highlight_text' => '#34D399',
+                'rows' => [
+                    ['views' => '1,000 - 3,999', 'reward' => '$0.86 USD'],
+                    ['views' => '4,000 - 9,999', 'reward' => '$2.84 USD'],
+                    ['views' => '10,000 - 29,999', 'reward' => '$4.02 USD'],
+                    ['views' => '30,000 - 49,999', 'reward' => '$7.46 USD'],
+                    ['views' => '50,000 - 99,999', 'reward' => '$14.65 USD'],
+                    ['views' => '100,000 o mas', 'reward' => '$36.90 USD'],
+                ],
+            ],
+        ];
+    }
+}
+
+if (!function_exists('influencer_instructions_reward_color_defaults')) {
+    function influencer_instructions_reward_color_defaults(): array {
+        return [
+            'active_bg' => '#22C55E',
+            'active_text' => '#FFFFFF',
+            'table_border' => '#8A6A1F',
+            'header_bg' => '#3A311A',
+            'header_text' => '#FACC15',
+            'body_bg' => '#182132',
+            'body_text' => '#FFFFFF',
+            'highlight_bg' => '#342B1E',
+            'highlight_text' => '#FACC15',
+        ];
+    }
+}
+
+if (!function_exists('influencer_instructions_reward_color_keys')) {
+    function influencer_instructions_reward_color_keys(): array {
+        return array_keys(influencer_instructions_reward_color_defaults());
+    }
+}
+
+if (!function_exists('influencer_instructions_reward_tab_template')) {
+    function influencer_instructions_reward_tab_template(): array {
+        return [
+            'label' => '',
+            'tab_emoji' => '',
+            'views_label' => 'VISTAS',
+            'views_emoji' => 'o',
+            'reward_label' => 'PREMIO',
+            'reward_emoji' => '💎',
+            'active_bg' => '#22C55E',
+            'active_text' => '#FFFFFF',
+            'table_border' => '#8A6A1F',
+            'header_bg' => '#3A311A',
+            'header_text' => '#FACC15',
+            'body_bg' => '#182132',
+            'body_text' => '#FFFFFF',
+            'highlight_bg' => '#342B1E',
+            'highlight_text' => '#FACC15',
+            'rows' => [],
+        ];
+    }
+}
+
+if (!function_exists('influencer_instructions_normalize_reward_tabs')) {
+    function influencer_instructions_normalize_reward_tabs(array $tabs, array $fallbackTabs = []): array {
+        $normalized = [];
+        $template = influencer_instructions_reward_tab_template();
+        $colorDefaults = influencer_instructions_reward_color_defaults();
+
+        foreach ($tabs as $tabIndex => $tab) {
+            if (!is_array($tab)) {
+                continue;
+            }
+
+            $fallbackTab = is_array($fallbackTabs[$tabIndex] ?? null) ? $fallbackTabs[$tabIndex] : [];
+
+            $label = trim((string) ($tab['label'] ?? ($fallbackTab['label'] ?? '')));
+            $viewsLabel = trim((string) ($tab['views_label'] ?? ($fallbackTab['views_label'] ?? $template['views_label'])));
+            $rewardLabel = trim((string) ($tab['reward_label'] ?? ($fallbackTab['reward_label'] ?? $template['reward_label'])));
+
+            $normalizedTab = [
+                'label' => $label !== '' ? $label : 'Tab ' . (count($normalized) + 1),
+                'tab_emoji' => trim((string) ($tab['tab_emoji'] ?? ($fallbackTab['tab_emoji'] ?? $template['tab_emoji']))),
+                'views_label' => $viewsLabel !== '' ? $viewsLabel : (string) $template['views_label'],
+                'views_emoji' => trim((string) ($tab['views_emoji'] ?? ($fallbackTab['views_emoji'] ?? $template['views_emoji']))),
+                'reward_label' => $rewardLabel !== '' ? $rewardLabel : (string) $template['reward_label'],
+                'reward_emoji' => trim((string) ($tab['reward_emoji'] ?? ($fallbackTab['reward_emoji'] ?? $template['reward_emoji']))),
+                'rows' => [],
+            ];
+
+            foreach ($colorDefaults as $colorKey => $defaultColor) {
+                $fallbackColor = (string) ($fallbackTab[$colorKey] ?? $defaultColor);
+                $normalizedTab[$colorKey] = influencer_instructions_normalize_hex((string) ($tab[$colorKey] ?? $fallbackColor), $fallbackColor);
+            }
+
+            $rows = is_array($tab['rows'] ?? null) ? $tab['rows'] : [];
+            foreach ($rows as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+
+                $views = trim((string) ($row['views'] ?? ''));
+                $reward = trim((string) ($row['reward'] ?? ''));
+                if ($views === '' && $reward === '') {
+                    continue;
+                }
+
+                $normalizedTab['rows'][] = [
+                    'views' => $views,
+                    'reward' => $reward,
+                ];
+            }
+
+            $normalized[] = $normalizedTab;
+        }
+
+        if ($normalized === []) {
+            $fallback = [];
+            foreach ($fallbackTabs as $candidate) {
+                if (is_array($candidate)) {
+                    $fallback[] = $candidate;
+                    break;
+                }
+            }
+
+            if ($fallback === []) {
+                $fallback = [influencer_instructions_reward_tab_template()];
+            }
+
+            return influencer_instructions_normalize_reward_tabs($fallback, []);
+        }
+
+        return array_values($normalized);
     }
 }
 
@@ -236,7 +445,13 @@ if (!function_exists('influencer_instructions_get')) {
             $decoded = [];
         }
 
-        return influencer_instructions_deep_merge(influencer_instructions_defaults(), $decoded);
+        $data = influencer_instructions_deep_merge(influencer_instructions_defaults(), $decoded);
+        $data['video_rewards']['tabs'] = influencer_instructions_normalize_reward_tabs(
+            is_array($data['video_rewards']['tabs'] ?? null) ? $data['video_rewards']['tabs'] : [],
+            influencer_instructions_default_reward_tabs()
+        );
+
+        return $data;
     }
 }
 
@@ -453,6 +668,9 @@ if (!function_exists('influencer_instructions_save_from_request')) {
         }
 
         $data['benefits']['intro_html'] = trim((string) ($input['benefits_intro_html'] ?? ''));
+        $data['video_rewards']['eyebrow'] = trim((string) ($input['video_rewards_eyebrow'] ?? ($data['video_rewards']['eyebrow'] ?? '')));
+        $data['video_rewards']['title'] = trim((string) ($input['video_rewards_title'] ?? ($data['video_rewards']['title'] ?? '')));
+        $data['video_rewards']['intro_html'] = trim((string) ($input['video_rewards_intro_html'] ?? ($data['video_rewards']['intro_html'] ?? '')));
         $data['steps']['intro_html'] = trim((string) ($input['steps_intro_html'] ?? ''));
         $data['notes']['intro_html'] = trim((string) ($input['notes_intro_html'] ?? ''));
         $data['closing']['content_html'] = trim((string) ($input['closing_content_html'] ?? ''));
@@ -472,6 +690,15 @@ if (!function_exists('influencer_instructions_save_from_request')) {
             $data['benefits']['items'][$index]['title'] = trim((string) ($row['title'] ?? $item['title']));
             $data['benefits']['items'][$index]['html'] = trim((string) ($row['html'] ?? $item['html']));
         }
+
+        $rewardTabs = is_array($input['video_rewards_tabs'] ?? null) ? $input['video_rewards_tabs'] : [];
+        $rewardFallbackTabs = $rewardTabs === []
+            ? []
+            : (is_array($current['video_rewards']['tabs'] ?? null) ? $current['video_rewards']['tabs'] : influencer_instructions_default_reward_tabs());
+        $data['video_rewards']['tabs'] = influencer_instructions_normalize_reward_tabs(
+            $rewardTabs,
+            $rewardFallbackTabs
+        );
 
         $stepItems = $input['steps_items'] ?? [];
         foreach ($data['steps']['items'] as $index => $item) {

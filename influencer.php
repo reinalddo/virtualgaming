@@ -11,6 +11,8 @@ $influencerData = influencer_instructions_get();
 $colors = $influencerData['colors'] ?? [];
 $hero = $influencerData['hero'] ?? [];
 $benefits = $influencerData['benefits'] ?? [];
+$videoRewards = $influencerData['video_rewards'] ?? [];
+$rewardTabs = $videoRewards['tabs'] ?? [];
 $steps = $influencerData['steps'] ?? [];
 $notes = $influencerData['notes'] ?? [];
 $closing = $influencerData['closing'] ?? [];
@@ -65,6 +67,9 @@ include __DIR__ . '/includes/header.php';
     --influencer-benefits-card-bg: <?= htmlspecialchars((string) ($colors['benefits_card_bg'] ?? '#1F2937'), ENT_QUOTES, 'UTF-8') ?>;
     --influencer-benefits-card-title: <?= htmlspecialchars((string) ($colors['benefits_card_title'] ?? '#F9FAFB'), ENT_QUOTES, 'UTF-8') ?>;
     --influencer-benefits-card-text: <?= htmlspecialchars((string) ($colors['benefits_card_text'] ?? '#D1D5DB'), ENT_QUOTES, 'UTF-8') ?>;
+    --influencer-video-rewards-surface: <?= htmlspecialchars((string) ($colors['video_rewards_surface'] ?? '#0B1320'), ENT_QUOTES, 'UTF-8') ?>;
+    --influencer-video-rewards-title: <?= htmlspecialchars((string) ($colors['video_rewards_title'] ?? '#FFFFFF'), ENT_QUOTES, 'UTF-8') ?>;
+    --influencer-video-rewards-text: <?= htmlspecialchars((string) ($colors['video_rewards_text'] ?? '#B7C6DB'), ENT_QUOTES, 'UTF-8') ?>;
     --influencer-notes-surface: <?= htmlspecialchars((string) ($colors['notes_surface'] ?? '#101826'), ENT_QUOTES, 'UTF-8') ?>;
     --influencer-notes-label: <?= htmlspecialchars((string) ($colors['notes_label'] ?? '#F59E0B'), ENT_QUOTES, 'UTF-8') ?>;
     --influencer-notes-title: <?= htmlspecialchars((string) ($colors['notes_title'] ?? '#FFFFFF'), ENT_QUOTES, 'UTF-8') ?>;
@@ -267,6 +272,100 @@ include __DIR__ . '/includes/header.php';
   .influencer-benefits .influencer-card--benefit .influencer-html {
     color: var(--influencer-benefits-card-text);
   }
+  .influencer-video-rewards {
+    background: linear-gradient(180deg, var(--influencer-video-rewards-surface), rgba(9, 15, 24, 0.96));
+  }
+  .influencer-video-rewards .influencer-section-label {
+    color: #facc15;
+  }
+  .influencer-video-rewards .influencer-section-title {
+    color: var(--influencer-video-rewards-title);
+  }
+  .influencer-video-rewards .influencer-section-copy {
+    color: var(--influencer-video-rewards-text);
+  }
+  .influencer-reward-tabs {
+    display: flex;
+    gap: 0.85rem;
+    flex-wrap: wrap;
+    margin: 0 0 1.5rem;
+  }
+  .influencer-reward-tab-button {
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    background: rgba(15, 23, 42, 0.72);
+    color: #dce7f6;
+    border-radius: 14px;
+    padding: 0.85rem 1.35rem;
+    font-weight: 700;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .influencer-reward-tab-button:hover {
+    transform: translateY(-1px);
+  }
+  .influencer-reward-tab-button.is-active {
+    color: var(--reward-tab-active-text, #ffffff);
+    background: var(--reward-tab-active-bg, #22c55e);
+    border-color: var(--reward-tab-active-bg, #22c55e);
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.28);
+  }
+  .influencer-reward-panel {
+    display: none;
+  }
+  .influencer-reward-panel.is-active {
+    display: block;
+  }
+  .influencer-reward-table-wrap {
+    border: 1px solid var(--reward-table-border, #475569);
+    border-radius: 22px;
+    overflow: hidden;
+    background: var(--reward-body-bg, #182132);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  }
+  .influencer-reward-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .influencer-reward-table th,
+  .influencer-reward-table td {
+    width: 50%;
+    padding: 1.25rem 1rem;
+    text-align: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .influencer-reward-table th {
+    background: var(--reward-header-bg, #3a311a);
+    color: var(--reward-header-text, #facc15);
+    font-size: clamp(1rem, 1.5vw, 1.15rem);
+    letter-spacing: 0.03em;
+  }
+  .influencer-reward-table th + th,
+  .influencer-reward-table td + td {
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .influencer-reward-table tbody tr {
+    background: var(--reward-body-bg, #182132);
+    color: var(--reward-body-text, #ffffff);
+  }
+  .influencer-reward-table tbody tr:last-child {
+    background: var(--reward-highlight-bg, #342b1e);
+    color: var(--reward-highlight-text, #facc15);
+  }
+  .influencer-reward-table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+  .influencer-reward-value {
+    font-size: clamp(1.2rem, 2vw, 1.8rem);
+    font-weight: 800;
+    line-height: 1.1;
+  }
+  .influencer-reward-caption {
+    font-size: clamp(1.15rem, 2vw, 1.65rem);
+    font-weight: 800;
+    line-height: 1.1;
+  }
+  .influencer-reward-emoji {
+    margin-right: 0.45rem;
+  }
   .influencer-notes {
     background: linear-gradient(180deg, var(--influencer-notes-surface), rgba(16,24,38,0.95));
   }
@@ -306,6 +405,10 @@ include __DIR__ . '/includes/header.php';
   @media (max-width: 991.98px) {
     .influencer-grid-3 {
       grid-template-columns: 1fr;
+    }
+    .influencer-reward-table th,
+    .influencer-reward-table td {
+      padding: 1rem 0.75rem;
     }
   }
 </style>
@@ -383,6 +486,67 @@ include __DIR__ . '/includes/header.php';
       </div>
     </div>
 
+    <?php if (!empty($rewardTabs)): ?>
+      <div class="influencer-panel influencer-video-rewards">
+        <div class="d-grid gap-3 mb-4 text-center">
+          <div class="influencer-section-label"><?= $videoRewards['eyebrow'] ?? '' ?></div>
+          <div class="influencer-section-title h2 mb-0"><?= $videoRewards['title'] ?? '' ?></div>
+          <?php if (trim((string) ($videoRewards['intro_html'] ?? '')) !== ''): ?>
+            <div class="influencer-html influencer-section-copy"><?= $videoRewards['intro_html'] ?></div>
+          <?php endif; ?>
+        </div>
+
+        <div class="d-flex justify-content-center">
+          <div class="influencer-reward-tabs" role="tablist" aria-label="Recompensas por juego">
+            <?php foreach ($rewardTabs as $tabIndex => $rewardTab): ?>
+              <button
+                type="button"
+                class="influencer-reward-tab-button<?= $tabIndex === 0 ? ' is-active' : '' ?>"
+                data-influencer-reward-tab="reward-tab-<?= $tabIndex ?>"
+                style="--reward-tab-active-bg: <?= htmlspecialchars((string) ($rewardTab['active_bg'] ?? '#22C55E'), ENT_QUOTES, 'UTF-8') ?>; --reward-tab-active-text: <?= htmlspecialchars((string) ($rewardTab['active_text'] ?? '#FFFFFF'), ENT_QUOTES, 'UTF-8') ?>;"
+              >
+                <?php if (trim((string) ($rewardTab['tab_emoji'] ?? '')) !== ''): ?><span class="me-2"><?= htmlspecialchars((string) ($rewardTab['tab_emoji'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
+                <span><?= htmlspecialchars((string) ($rewardTab['label'] ?? 'Tab'), ENT_QUOTES, 'UTF-8') ?></span>
+              </button>
+            <?php endforeach; ?>
+          </div>
+        </div>
+
+        <?php foreach ($rewardTabs as $tabIndex => $rewardTab): ?>
+          <div
+            class="influencer-reward-panel<?= $tabIndex === 0 ? ' is-active' : '' ?>"
+            data-influencer-reward-panel="reward-tab-<?= $tabIndex ?>"
+            style="--reward-table-border: <?= htmlspecialchars((string) ($rewardTab['table_border'] ?? '#475569'), ENT_QUOTES, 'UTF-8') ?>; --reward-header-bg: <?= htmlspecialchars((string) ($rewardTab['header_bg'] ?? '#3A311A'), ENT_QUOTES, 'UTF-8') ?>; --reward-header-text: <?= htmlspecialchars((string) ($rewardTab['header_text'] ?? '#FACC15'), ENT_QUOTES, 'UTF-8') ?>; --reward-body-bg: <?= htmlspecialchars((string) ($rewardTab['body_bg'] ?? '#182132'), ENT_QUOTES, 'UTF-8') ?>; --reward-body-text: <?= htmlspecialchars((string) ($rewardTab['body_text'] ?? '#FFFFFF'), ENT_QUOTES, 'UTF-8') ?>; --reward-highlight-bg: <?= htmlspecialchars((string) ($rewardTab['highlight_bg'] ?? '#342B1E'), ENT_QUOTES, 'UTF-8') ?>; --reward-highlight-text: <?= htmlspecialchars((string) ($rewardTab['highlight_text'] ?? '#FACC15'), ENT_QUOTES, 'UTF-8') ?>;"
+          >
+            <div class="influencer-reward-table-wrap">
+              <table class="influencer-reward-table">
+                <thead>
+                  <tr>
+                    <th>
+                      <?php if (trim((string) ($rewardTab['views_emoji'] ?? '')) !== ''): ?><span class="influencer-reward-emoji"><?= htmlspecialchars((string) ($rewardTab['views_emoji'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
+                      <?= htmlspecialchars((string) ($rewardTab['views_label'] ?? 'VISTAS'), ENT_QUOTES, 'UTF-8') ?>
+                    </th>
+                    <th>
+                      <?php if (trim((string) ($rewardTab['reward_emoji'] ?? '')) !== ''): ?><span class="influencer-reward-emoji"><?= htmlspecialchars((string) ($rewardTab['reward_emoji'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
+                      <?= htmlspecialchars((string) ($rewardTab['reward_label'] ?? 'RECOMPENSA'), ENT_QUOTES, 'UTF-8') ?>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <?php foreach (($rewardTab['rows'] ?? []) as $rewardRow): ?>
+                    <tr>
+                      <td><div class="influencer-reward-caption"><?= htmlspecialchars((string) ($rewardRow['views'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div></td>
+                      <td><div class="influencer-reward-value"><?= htmlspecialchars((string) ($rewardRow['reward'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div></td>
+                    </tr>
+                  <?php endforeach; ?>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    <?php endif; ?>
+
     <div class="influencer-panel influencer-notes">
       <div class="d-grid gap-3 mb-4">
         <div class="influencer-section-label"><?= $notes['eyebrow'] ?? '' ?></div>
@@ -420,5 +584,31 @@ include __DIR__ . '/includes/header.php';
     </div>
   </div>
 </section>
+
+<script>
+  (function () {
+    const rewardTabs = Array.from(document.querySelectorAll('[data-influencer-reward-tab]'));
+    const rewardPanels = Array.from(document.querySelectorAll('[data-influencer-reward-panel]'));
+    if (!rewardTabs.length || !rewardPanels.length) {
+      return;
+    }
+
+    const activateRewardTab = function (targetKey) {
+      rewardTabs.forEach(function (button) {
+        button.classList.toggle('is-active', button.getAttribute('data-influencer-reward-tab') === targetKey);
+      });
+
+      rewardPanels.forEach(function (panel) {
+        panel.classList.toggle('is-active', panel.getAttribute('data-influencer-reward-panel') === targetKey);
+      });
+    };
+
+    rewardTabs.forEach(function (button) {
+      button.addEventListener('click', function () {
+        activateRewardTab(button.getAttribute('data-influencer-reward-tab'));
+      });
+    });
+  }());
+</script>
 
 <?php include __DIR__ . '/includes/footer.php'; ?>
