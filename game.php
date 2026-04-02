@@ -418,7 +418,7 @@ include __DIR__ . "/includes/header.php";
           <div class="payment-win-points-header">
             <div>
               <div class="payment-win-points-title">Premios disponibles</div>
-              <div id="payment-win-points-copy" class="payment-win-points-copy"></div>
+              <div class="payment-win-points-copy">Elige si deseas completar esta orden con transferencia o con tus premios acumulados.</div>
             </div>
             <div id="payment-win-points-balance" class="payment-win-points-balance">0</div>
           </div>
@@ -426,25 +426,39 @@ include __DIR__ . "/includes/header.php";
             <button type="button" id="payment-mode-money-btn" class="payment-mode-btn">Pagar normal</button>
             <button type="button" id="payment-mode-points-btn" class="payment-mode-btn">Usar premios</button>
           </div>
-          <div id="payment-win-points-message" class="payment-win-points-message"></div>
         </div>
-        <div id="payment-method-card" class="payment-method-card mb-4">
-          <div id="payment-method-select-wrap" class="mb-3 d-none">
-            <label for="payment-method-select" class="form-label text-info">Método de pago</label>
-            <select id="payment-method-select" class="form-select bg-dark text-info border-info"></select>
+        <div class="payment-mode-panels mb-4">
+          <div id="payment-money-panel" class="payment-mode-panel is-active">
+            <div class="payment-mode-panel-inner">
+              <div id="payment-method-card" class="payment-method-card">
+                <div id="payment-method-select-wrap" class="mb-3 d-none">
+                  <label for="payment-method-select" class="form-label text-info">Método de pago</label>
+                  <select id="payment-method-select" class="form-select bg-dark text-info border-info"></select>
+                </div>
+                <h4 id="payment-method-title" class="h6 fw-bold text-white mb-2">Datos de pago</h4>
+                <div id="payment-method-currency" class="small text-info mb-2"></div>
+                <div id="payment-method-details" class="small text-light payment-method-details"></div>
+              </div>
+              <div id="payment-reference-group" class="mb-3">
+                <label for="payment-reference-input" class="form-label text-info">Número de Referencia</label>
+                <input type="text" id="payment-reference-input" class="form-control bg-dark text-info border-info" inputmode="numeric" autocomplete="off" placeholder="Inserte su número de referencia para comprobar el pago">
+                <div id="payment-reference-help" class="form-text text-secondary">Inserte su número de referencia para comprobar el pago.</div>
+              </div>
+              <div id="payment-phone-group">
+                <label for="payment-phone-input" class="form-label text-info">Número de teléfono real para contactarte</label>
+                <input type="tel" id="payment-phone-input" class="form-control bg-dark text-info border-info" autocomplete="tel" placeholder="Ej: 04121234567">
+              </div>
+            </div>
           </div>
-          <h4 id="payment-method-title" class="h6 fw-bold text-white mb-2">Datos de pago</h4>
-          <div id="payment-method-currency" class="small text-info mb-2"></div>
-          <div id="payment-method-details" class="small text-light payment-method-details"></div>
-        </div>
-        <div id="payment-reference-group" class="mb-3">
-          <label for="payment-reference-input" class="form-label text-info">Número de Referencia</label>
-          <input type="text" id="payment-reference-input" class="form-control bg-dark text-info border-info" inputmode="numeric" autocomplete="off" placeholder="Inserte su número de referencia para comprobar el pago">
-          <div id="payment-reference-help" class="form-text text-secondary">Inserte su número de referencia para comprobar el pago.</div>
-        </div>
-        <div id="payment-phone-group" class="mb-4">
-          <label for="payment-phone-input" class="form-label text-info">Número de teléfono real para contactarte</label>
-          <input type="tel" id="payment-phone-input" class="form-control bg-dark text-info border-info" autocomplete="tel" placeholder="Ej: 04121234567">
+          <div id="payment-points-panel" class="payment-mode-panel">
+            <div class="payment-mode-panel-inner">
+              <div class="payment-points-card">
+                <h4 class="h6 fw-bold text-white mb-2">Canje con premios</h4>
+                <div id="payment-win-points-copy" class="payment-win-points-copy"></div>
+                <div id="payment-win-points-message" class="payment-win-points-message mt-3"></div>
+              </div>
+            </div>
+          </div>
         </div>
         <button type="button" id="payment-submit-btn" class="btn btn-info w-100 fw-bold text-uppercase py-3">Pagado / Recargar</button>
         <button type="button" id="payment-cancel-order-btn" class="btn btn-danger w-100 fw-bold text-uppercase py-3 mt-3">Cancelar Orden</button>
@@ -734,6 +748,39 @@ include __DIR__ . "/includes/header.php";
     line-height: 1.45;
   }
 
+  .payment-mode-panels {
+    display: grid;
+    gap: 0.9rem;
+  }
+
+  .payment-mode-panel {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transform: translateY(12px);
+    transition: grid-template-rows 0.28s ease, opacity 0.24s ease, transform 0.24s ease;
+    pointer-events: none;
+  }
+
+  .payment-mode-panel.is-active {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  .payment-mode-panel-inner {
+    overflow: hidden;
+  }
+
+  .payment-points-card {
+    padding: 1rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(56, 189, 248, 0.22);
+    background: linear-gradient(180deg, rgba(8, 20, 36, 0.94), rgba(11, 30, 48, 0.9));
+    box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.05);
+  }
+
   .pack-win-points-badge {
     display: inline-flex;
     align-items: center;
@@ -795,6 +842,10 @@ include __DIR__ . "/includes/header.php";
     .payment-win-points-actions {
       grid-template-columns: 1fr;
       display: grid;
+    }
+
+    .payment-mode-panel {
+      transform: translateY(8px);
     }
 
     .payment-win-points-balance {
@@ -1031,6 +1082,8 @@ include __DIR__ . "/includes/header.php";
   const paymentMethodCurrency = document.getElementById('payment-method-currency');
   const paymentMethodDetails = document.getElementById('payment-method-details');
   const paymentWinPointsCard = document.getElementById('payment-win-points-card');
+  const paymentMoneyPanel = document.getElementById('payment-money-panel');
+  const paymentPointsPanel = document.getElementById('payment-points-panel');
   const paymentWinPointsBalance = document.getElementById('payment-win-points-balance');
   const paymentWinPointsCopy = document.getElementById('payment-win-points-copy');
   const paymentWinPointsMessage = document.getElementById('payment-win-points-message');
@@ -1134,14 +1187,11 @@ include __DIR__ . "/includes/header.php";
       paymentModePointsButton.classList.toggle('is-active', usingPoints);
       paymentModePointsButton.disabled = !canUsePoints;
     }
-    if (paymentMethodCard) {
-      paymentMethodCard.classList.toggle('d-none', usingPoints || !canUseMoney);
+    if (paymentMoneyPanel) {
+      paymentMoneyPanel.classList.toggle('is-active', !usingPoints && canUseMoney);
     }
-    if (paymentReferenceGroup) {
-      paymentReferenceGroup.classList.toggle('d-none', usingPoints || !canUseMoney);
-    }
-    if (paymentPhoneGroup) {
-      paymentPhoneGroup.classList.toggle('d-none', usingPoints || !canUseMoney);
+    if (paymentPointsPanel) {
+      paymentPointsPanel.classList.toggle('is-active', usingPoints);
     }
     if (paymentSubmitButton) {
       paymentSubmitButton.textContent = usingPoints
@@ -1157,6 +1207,12 @@ include __DIR__ . "/includes/header.php";
 
     if (!winPointsState.enabled || !winPointsState.loggedIn || !pack || !activePaymentOrder) {
       paymentWinPointsCard.classList.add('d-none');
+      if (paymentMoneyPanel) {
+        paymentMoneyPanel.classList.add('is-active');
+      }
+      if (paymentPointsPanel) {
+        paymentPointsPanel.classList.remove('is-active');
+      }
       if (activePaymentOrder) {
         activePaymentOrder.canUsePoints = false;
       }
