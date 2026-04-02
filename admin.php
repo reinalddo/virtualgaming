@@ -70,6 +70,33 @@ function is_valid_coupon_code(string $value): bool {
     return $value !== '' && preg_match('/^[A-Za-z0-9]+$/', $value) === 1;
 }
 
+function admin_coupons_win_points_enabled(): bool {
+    return trim((string) store_config_get('win_points', '0')) === '1';
+}
+
+function admin_coupon_ensure_points_column(PDO $pdo): void {
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM cupones LIKE 'permitir_acumular_puntos'");
+        $column = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : false;
+        if (!$column) {
+            $pdo->exec("ALTER TABLE cupones ADD COLUMN permitir_acumular_puntos TINYINT(1) NOT NULL DEFAULT 1 AFTER activo");
+        }
+    } catch (Throwable $exception) {
+    }
+}
+
+function admin_coupon_points_allowed_from_input(array $input, bool $featureEnabled, ?array $currentCoupon = null): int {
+    if ($featureEnabled) {
+        return isset($input['permitir_acumular_puntos']) ? 1 : 0;
+    }
+
+    if ($currentCoupon !== null) {
+        return !empty($currentCoupon['permitir_acumular_puntos']) ? 1 : 0;
+    }
+
+    return 0;
+}
+
 function admin_set_flash(string $type, string $message): void {
     $_SESSION['auth_flash'] = [
         'type' => $type,
@@ -743,6 +770,7 @@ switch ($seccion) {
             $fecha_expiracion = $_POST['fecha_expiracion'] ?? null;
             $limite_usos = ($_POST['limite_usos'] ?? '') !== '' ? intval($_POST['limite_usos']) : null;
             $activo = isset($_POST['activo']) ? 1 : 0;
+            $permitirAcumularPuntos = admin_coupon_points_allowed_from_input($_POST, admin_coupons_win_points_enabled());
             $influencerPayload = influencer_coupon_payload_from_input($_POST);
             $influencerErrors = influencer_coupon_validate_payload($influencerPayload);
 
@@ -756,7 +784,7 @@ switch ($seccion) {
                 if ($stmt_check->fetch()) {
                     admin_set_flash('error', 'Ya existe un cupón con ese código.');
                 } elseif ($codigo && $valor_descuento >= 0 && in_array($tipo_descuento, ['porcentaje', 'fijo'], true)) {
-                    $stmt = $pdo->prepare('INSERT INTO cupones (codigo, tipo_descuento, valor_descuento, fecha_expiracion, limite_usos, activo, nombre_influencer, telefono_influencer, email_influencer, comision_influencer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                    $stmt = $pdo->prepare('INSERT INTO cupones (codigo, tipo_descuento, valor_descuento, fecha_expiracion, limite_usos, activo, permitir_acumular_puntos, nombre_influencer, telefono_influencer, email_influencer, comision_influencer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
                     $stmt->execute([
                         $codigo,
                         $tipo_descuento,
@@ -764,6 +792,7 @@ switch ($seccion) {
                         $fecha_expiracion !== '' ? $fecha_expiracion : null,
                         $limite_usos,
                         $activo,
+                        $permitirAcumularPuntos,
                         $influencerPayload['nombre_influencer'],
                         $influencerPayload['telefono_influencer'],
                         $influencerPayload['email_influencer'],
@@ -790,6 +819,10 @@ switch ($seccion) {
             $fecha_expiracion = $_POST['fecha_expiracion'] ?? null;
             $limite_usos = ($_POST['limite_usos'] ?? '') !== '' ? intval($_POST['limite_usos']) : null;
             $activo = isset($_POST['activo']) ? 1 : 0;
+            $currentCouponStmt = $pdo->prepare('SELECT * FROM cupones WHERE id = ? LIMIT 1');
+            $currentCouponStmt->execute([$id]);
+            $currentCoupon = $currentCouponStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+            $permitirAcumularPuntos = admin_coupon_points_allowed_from_input($_POST, admin_coupons_win_points_enabled(), $currentCoupon);
             $influencerPayload = influencer_coupon_payload_from_input($_POST);
             $influencerErrors = influencer_coupon_validate_payload($influencerPayload);
 
@@ -803,7 +836,7 @@ switch ($seccion) {
                 if ($stmt_check->fetch()) {
                     admin_set_flash('error', 'Ya existe un cupón con ese código.');
                 } elseif ($id && $codigo && $valor_descuento >= 0 && in_array($tipo_descuento, ['porcentaje', 'fijo'], true)) {
-                    $stmt = $pdo->prepare('UPDATE cupones SET codigo=?, tipo_descuento=?, valor_descuento=?, fecha_expiracion=?, limite_usos=?, activo=?, nombre_influencer=?, telefono_influencer=?, email_influencer=?, comision_influencer=? WHERE id=?');
+                    $stmt = $pdo->prepare('UPDATE cupones SET codigo=?, tipo_descuento=?, valor_descuento=?, fecha_expiracion=?, limite_usos=?, activo=?, permitir_acumular_puntos=?, nombre_influencer=?, telefono_influencer=?, email_influencer=?, comision_influencer=? WHERE id=?');
                     $stmt->execute([
                         $codigo,
                         $tipo_descuento,
@@ -811,6 +844,7 @@ switch ($seccion) {
                         $fecha_expiracion !== '' ? $fecha_expiracion : null,
                         $limite_usos,
                         $activo,
+                        $permitirAcumularPuntos,
                         $influencerPayload['nombre_influencer'],
                         $influencerPayload['telefono_influencer'],
                         $influencerPayload['email_influencer'],
@@ -1722,6 +1756,7 @@ require_once __DIR__ . '/includes/header.php';
                 break;
             case 'cupones':
                 require_once __DIR__ . '/includes/db.php';
+                admin_coupon_ensure_points_column($pdo);
                 influencer_coupon_ensure_sales_table_pdo($pdo);
                 sync_coupon_usage_counts_pdo($pdo);
                 backfill_influencer_sales_pdo($pdo);
@@ -1786,6 +1821,7 @@ require_once __DIR__ . '/includes/header.php';
                 $currentInfluencerPhone = $edit_cupon ? trim((string) ($edit_cupon['telefono_influencer'] ?? '')) : '';
                 $currentInfluencerEmail = $edit_cupon ? trim((string) ($edit_cupon['email_influencer'] ?? '')) : '';
                 $hasLegacyInfluencer = $selectedInfluencerUserId === '' && ($currentInfluencerName !== '' || $currentInfluencerPhone !== '' || $currentInfluencerEmail !== '');
+                $winPointsCouponToggleEnabled = admin_coupons_win_points_enabled();
                 ?>
                 <h2 class="text-center mb-4" style="color:#00fff7;">Gestión de Cupones</h2>
 
@@ -1837,6 +1873,14 @@ require_once __DIR__ . '/includes/header.php';
                                 <label class="form-check-label" for="activoCheck" style="color:#00fff7;">Cupón activo</label>
                             </div>
                         </div>
+                        <?php if ($winPointsCouponToggleEnabled): ?>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="form-check">
+                                <input type="checkbox" name="permitir_acumular_puntos" class="form-check-input" id="permitirAcumularPuntosCheck" <?= $edit_cupon ? (!empty($edit_cupon['permitir_acumular_puntos']) ? 'checked' : '') : 'checked' ?>>
+                                <label class="form-check-label" for="permitirAcumularPuntosCheck" style="color:#00fff7;">Permitir Acumular Puntos</label>
+                            </div>
+                        </div>
+                        <?php endif; ?>
                         <div class="col-12 mt-2">
                             <div style="background:#0f172a; border:1px solid rgba(0,255,247,0.3); border-radius:16px; padding:1.25rem;">
                                 <div class="d-flex flex-column flex-xl-row justify-content-between align-items-xl-end gap-3 mb-3">
@@ -1981,6 +2025,9 @@ require_once __DIR__ . '/includes/header.php';
                                     <th style="color:#00fff7; background:#181f2a;">Descuento</th>
                                     <th style="color:#00fff7; background:#181f2a;">Influencer</th>
                                     <th style="color:#00fff7; background:#181f2a;">Comisión</th>
+                                    <?php if ($winPointsCouponToggleEnabled): ?>
+                                    <th style="color:#00fff7; background:#181f2a;">Acumula puntos</th>
+                                    <?php endif; ?>
                                     <th style="color:#00fff7; background:#181f2a;">Usos</th>
                                     <th style="color:#00fff7; background:#181f2a;">Activo</th>
                                     <th style="color:#00fff7; background:#181f2a;">Acciones</th>
@@ -2002,6 +2049,9 @@ require_once __DIR__ . '/includes/header.php';
                                             <div style="color:#8bd3ff; font-size:0.9em;"><?= htmlspecialchars(admin_display_value($c['email_influencer'] ?? null)) ?></div>
                                         </td>
                                         <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars(admin_display_value(isset($c['comision_influencer']) && (float) $c['comision_influencer'] > 0 ? admin_format_money($c['comision_influencer']) . '%' : null)) ?></td>
+                                        <?php if ($winPointsCouponToggleEnabled): ?>
+                                        <td style="background:#181f2a; color:#b2f6ff;"><?= !empty($c['permitir_acumular_puntos']) ? 'Sí' : 'No' ?></td>
+                                        <?php endif; ?>
                                         <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars((string) ($c['usos_actuales'] ?? 0)) ?> / <?= htmlspecialchars(admin_display_value($c['limite_usos'] ?? null, '∞')) ?></td>
                                         <td style="background:#181f2a; color:#b2f6ff;"><?= !empty($c['activo']) ? 'Sí' : 'No' ?></td>
                                         <td style="background:#181f2a;">
@@ -2025,6 +2075,9 @@ require_once __DIR__ . '/includes/header.php';
                                     <div style="color:#8bd3ff; font-size:0.9em;"><?= htmlspecialchars(admin_display_value($c['email_influencer'] ?? null)) ?></div>
                                 </div>
                                 <div style="margin-top:0.45rem; color:#b2f6ff;">Comisión: <?= htmlspecialchars(admin_display_value(isset($c['comision_influencer']) && (float) $c['comision_influencer'] > 0 ? admin_format_money($c['comision_influencer']) . '%' : null)) ?></div>
+                                <?php if ($winPointsCouponToggleEnabled): ?>
+                                <div style="margin-top:0.45rem; color:#b2f6ff;">Acumula puntos: <?= !empty($c['permitir_acumular_puntos']) ? 'Sí' : 'No' ?></div>
+                                <?php endif; ?>
                                 <div style="margin-top:0.45rem; color:#b2f6ff;">Usos: <?= htmlspecialchars((string) ($c['usos_actuales'] ?? 0)) ?> / <?= htmlspecialchars(admin_display_value($c['limite_usos'] ?? null, '∞')) ?></div>
                                 <div style="margin-top:0.45rem; color:#b2f6ff;">Activo: <?= !empty($c['activo']) ? 'Sí' : 'No' ?></div>
                                 <div style="display:flex; gap:1rem; margin-top:1rem; flex-wrap:wrap;">

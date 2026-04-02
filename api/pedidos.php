@@ -242,6 +242,29 @@ function coupon_table_exists(mysqli $mysqli): bool {
     return $res && $res->num_rows > 0;
 }
 
+function coupon_ensure_points_column(mysqli $mysqli): void {
+    if (!coupon_table_exists($mysqli)) {
+        return;
+    }
+
+    $result = $mysqli->query("SHOW COLUMNS FROM cupones LIKE 'permitir_acumular_puntos'");
+    if (!($result instanceof mysqli_result) || $result->num_rows === 0) {
+        $mysqli->query("ALTER TABLE cupones ADD COLUMN permitir_acumular_puntos TINYINT(1) NOT NULL DEFAULT 1 AFTER activo");
+    }
+}
+
+function coupon_allows_points_accumulation(?array $coupon): bool {
+    if (!win_points_enabled()) {
+        return false;
+    }
+
+    if (!$coupon) {
+        return true;
+    }
+
+    return !isset($coupon['permitir_acumular_puntos']) || (int) $coupon['permitir_acumular_puntos'] === 1;
+}
+
 function table_exists(mysqli $mysqli, string $tableName): bool {
     $safeName = $mysqli->real_escape_string($tableName);
     $res = $mysqli->query("SHOW TABLES LIKE '{$safeName}'");
@@ -333,6 +356,7 @@ function fetch_valid_coupon(mysqli $mysqli, string $code): ?array {
     if ($code === '' || !coupon_table_exists($mysqli)) {
         return null;
     }
+    coupon_ensure_points_column($mysqli);
     $stmt = $mysqli->prepare("SELECT * FROM cupones WHERE codigo = ? LIMIT 1");
     if (!$stmt) return null;
     $stmt->bind_param('s', $code);
@@ -350,6 +374,8 @@ function fetch_coupon_by_code(mysqli $mysqli, string $code): ?array {
     if ($code === '') {
         return null;
     }
+
+    coupon_ensure_points_column($mysqli);
 
     $stmt = $mysqli->prepare('SELECT * FROM cupones WHERE codigo = ? LIMIT 1');
     if (!$stmt) {
@@ -3210,7 +3236,8 @@ if ($action === 'create') {
 
     $winPointsAward = 0;
     $winPointsEligible = win_points_enabled() && $cliente_usuario_id !== null && $cliente_usuario_id > 0;
-    if ($winPointsEligible) {
+    $winPointsAllowedForOrder = $winPointsEligible;
+    if ($winPointsAllowedForOrder) {
         $winPointsAward = win_points_package_reward($selectedPackage);
     }
 
@@ -3271,6 +3298,10 @@ if ($action === 'create') {
         $couponData = fetch_valid_coupon($mysqli, $cupon);
         if (!$couponData) {
             json_error('Cupón inválido o vencido');
+        }
+        if (!coupon_allows_points_accumulation($couponData)) {
+            $winPointsAllowedForOrder = false;
+            $winPointsAward = 0;
         }
         $price = currency_apply_amount_rule(apply_coupon_to_price($price, $couponData), $selectedCurrency);
         // Registrar uso del cupón (best effort)
@@ -3351,7 +3382,7 @@ if ($action === 'create') {
         'remaining_seconds' => max(0, order_expiration_timestamp($storedOrder) - time()),
         'win_points' => [
             'enabled' => win_points_enabled(),
-            'eligible' => $winPointsEligible,
+            'eligible' => $winPointsAllowedForOrder,
             'award' => $winPointsAward,
             'name' => win_points_program_name(),
             'balance' => $winPointsEligible && $cliente_usuario_id !== null ? win_points_wallet_balance($mysqli, (int) $cliente_usuario_id) : 0,

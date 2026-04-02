@@ -438,6 +438,7 @@ CREATE TABLE IF NOT EXISTS cupones (
     limite_usos INT DEFAULT 0,
     usos_actuales INT NOT NULL DEFAULT 0,
     activo TINYINT(1) NOT NULL DEFAULT 1,
+    permitir_acumular_puntos TINYINT(1) NOT NULL DEFAULT 1,
     nombre_influencer VARCHAR(100) DEFAULT NULL,
     telefono_influencer VARCHAR(50) DEFAULT NULL,
     email_influencer VARCHAR(100) DEFAULT NULL,
