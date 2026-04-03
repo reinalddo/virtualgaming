@@ -422,10 +422,7 @@ include __DIR__ . "/includes/header.php";
             </div>
             <div id="payment-win-points-balance" class="payment-win-points-balance">0</div>
           </div>
-          <div class="payment-win-points-actions">
-            <button type="button" id="payment-mode-money-btn" class="payment-mode-btn">Pagar normal</button>
-            <button type="button" id="payment-mode-points-btn" class="payment-mode-btn">Usar premios</button>
-          </div>
+          <div id="payment-mode-options" class="payment-win-points-actions"></div>
         </div>
         <div class="payment-mode-panels mb-4">
           <div id="payment-money-panel" class="payment-mode-panel is-active">
@@ -714,7 +711,7 @@ include __DIR__ . "/includes/header.php";
   .payment-win-points-actions {
     display: grid;
     gap: 0.65rem;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   }
 
   .payment-mode-btn {
@@ -725,6 +722,7 @@ include __DIR__ . "/includes/header.php";
     background: rgba(15, 23, 42, 0.72);
     color: #cbd5e1;
     font-weight: 700;
+    text-align: center;
     transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease;
   }
 
@@ -1082,13 +1080,12 @@ include __DIR__ . "/includes/header.php";
   const paymentMethodCurrency = document.getElementById('payment-method-currency');
   const paymentMethodDetails = document.getElementById('payment-method-details');
   const paymentWinPointsCard = document.getElementById('payment-win-points-card');
+  const paymentModeOptions = document.getElementById('payment-mode-options');
   const paymentMoneyPanel = document.getElementById('payment-money-panel');
   const paymentPointsPanel = document.getElementById('payment-points-panel');
   const paymentWinPointsBalance = document.getElementById('payment-win-points-balance');
   const paymentWinPointsCopy = document.getElementById('payment-win-points-copy');
   const paymentWinPointsMessage = document.getElementById('payment-win-points-message');
-  const paymentModeMoneyButton = document.getElementById('payment-mode-money-btn');
-  const paymentModePointsButton = document.getElementById('payment-mode-points-btn');
   const paymentReferenceGroup = document.getElementById('payment-reference-group');
   const paymentReferenceInput = document.getElementById('payment-reference-input');
   const paymentReferenceHelp = document.getElementById('payment-reference-help');
@@ -1160,14 +1157,69 @@ include __DIR__ . "/includes/header.php";
     );
   }
 
-  function setActivePaymentMode(mode) {
+  function getPaymentModeButtons() {
+    return paymentModeOptions ? Array.from(paymentModeOptions.querySelectorAll('.payment-mode-btn')) : [];
+  }
+
+  function resolveSelectedPaymentMethod(currencyCode, preferredMethodId) {
+    const methods = getPaymentMethodsForCurrency(currencyCode);
+    if (!methods.length) {
+      return null;
+    }
+    if (preferredMethodId !== undefined && preferredMethodId !== null && String(preferredMethodId) !== '') {
+      const matchedMethod = methods.find((method) => String(method.id) === String(preferredMethodId));
+      if (matchedMethod) {
+        return matchedMethod;
+      }
+    }
+    return methods[0];
+  }
+
+  function paymentPointsOptionLabel(hasRule, requiredPoints) {
+    return hasRule ? `Usar ${formatWinPointsAmount(requiredPoints)}` : 'Sin canje disponible';
+  }
+
+  function renderPaymentModeOptions() {
+    if (!paymentModeOptions) {
+      return;
+    }
+
+    if (!activePaymentOrder || !paymentWinPointsCard || paymentWinPointsCard.classList.contains('d-none')) {
+      paymentModeOptions.innerHTML = '';
+      return;
+    }
+
+    const methods = getPaymentMethodsForCurrency(activePaymentOrder.currency);
+    const requiredPoints = Number(activePaymentOrder.pointsRequired || 0);
+    const hasRule = !!(activePaymentOrder.pack && activePaymentOrder.pack.redeemActive && requiredPoints > 0);
+    const buttonsHtml = methods.map((method) => {
+      const methodId = escapePaymentHtml(String(method.id));
+      const methodName = escapePaymentHtml(method.nombre || 'Método');
+      return `<button type="button" class="payment-mode-btn" data-payment-option="money" data-method-id="${methodId}">${methodName}</button>`;
+    }).join('');
+    const pointsHtml = `<button type="button" class="payment-mode-btn" data-payment-option="points">${escapePaymentHtml(paymentPointsOptionLabel(hasRule, requiredPoints))}</button>`;
+
+    paymentModeOptions.innerHTML = `${buttonsHtml}${pointsHtml}`;
+    getPaymentModeButtons().forEach((button) => {
+      button.addEventListener('click', function() {
+        const buttonMode = button.dataset.paymentOption === 'points' ? 'points' : 'money';
+        const methodId = buttonMode === 'money' ? button.dataset.methodId || '' : '';
+        setActivePaymentMode(buttonMode, methodId);
+      });
+    });
+  }
+
+  function setActivePaymentMode(mode, preferredMethodId) {
     if (!activePaymentOrder) {
       return;
     }
 
-    const canUseMoney = !!activePaymentOrder.canUseMoney;
+    const selectedMethod = resolveSelectedPaymentMethod(activePaymentOrder.currency, preferredMethodId || activePaymentOrder.selectedMethodId);
+    const canUseMoney = !!selectedMethod && !!activePaymentOrder.canUseMoney;
     const canUsePoints = !!activePaymentOrder.canUsePoints;
     let nextMode = mode === 'points' ? 'points' : 'money';
+
+    activePaymentOrder.selectedMethodId = selectedMethod ? String(selectedMethod.id) : '';
 
     if (nextMode === 'points' && !canUsePoints) {
       nextMode = canUseMoney ? 'money' : 'points';
@@ -1179,14 +1231,23 @@ include __DIR__ . "/includes/header.php";
     activePaymentOrder.paymentMode = nextMode;
     const usingPoints = nextMode === 'points';
 
-    if (paymentModeMoneyButton) {
-      paymentModeMoneyButton.classList.toggle('is-active', !usingPoints);
-      paymentModeMoneyButton.disabled = !canUseMoney;
+    if (paymentMethodSelect) {
+      paymentMethodSelect.value = selectedMethod ? String(selectedMethod.id) : '';
     }
-    if (paymentModePointsButton) {
-      paymentModePointsButton.classList.toggle('is-active', usingPoints);
-      paymentModePointsButton.disabled = !canUsePoints;
+    if (selectedMethod) {
+      renderPaymentMethodDetails(selectedMethod);
+    } else {
+      renderPaymentMethodDetails(null);
     }
+    getPaymentModeButtons().forEach((button) => {
+      const buttonMode = button.dataset.paymentOption === 'points' ? 'points' : 'money';
+      const buttonMethodId = button.dataset.methodId || '';
+      const isActive = buttonMode === 'points'
+        ? usingPoints
+        : (!usingPoints && String(buttonMethodId) === String(activePaymentOrder.selectedMethodId || ''));
+      button.classList.toggle('is-active', isActive);
+      button.disabled = buttonMode === 'points' ? !canUsePoints : !canUseMoney;
+    });
     if (paymentMoneyPanel) {
       paymentMoneyPanel.classList.toggle('is-active', !usingPoints && canUseMoney);
     }
@@ -1228,6 +1289,7 @@ include __DIR__ . "/includes/header.php";
     activePaymentOrder.canUseMoney = Boolean(currentMethod);
     activePaymentOrder.canUsePoints = canUsePoints;
     activePaymentOrder.pointsRequired = requiredPoints;
+    activePaymentOrder.selectedMethodId = currentMethod ? String(currentMethod.id) : '';
 
     paymentWinPointsCard.classList.remove('d-none');
     paymentWinPointsBalance.textContent = formatWinPointsAmount(currentBalance);
@@ -1238,12 +1300,6 @@ include __DIR__ . "/includes/header.php";
       paymentWinPointsCopy.textContent = `Tu saldo disponible se puede usar en los paquetes que tengan canje activo.`;
     }
 
-    if (paymentModePointsButton) {
-      paymentModePointsButton.textContent = hasRule
-        ? `Usar ${formatWinPointsAmount(requiredPoints)}`
-        : 'Sin canje disponible';
-    }
-
     if (hasRule && canUsePoints) {
       paymentWinPointsMessage.textContent = `Puedes canjear este paquete usando ${formatWinPointsAmount(requiredPoints)}.`;
     } else if (hasRule) {
@@ -1252,7 +1308,11 @@ include __DIR__ . "/includes/header.php";
       paymentWinPointsMessage.textContent = 'Este paquete no tiene una regla activa de canje por premios. Puedes pagar normal y seguir acumulando puntos.';
     }
 
-    setActivePaymentMode(activePaymentOrder.canUseMoney ? 'money' : 'points');
+    if (paymentMethodSelectWrap) {
+      paymentMethodSelectWrap.classList.add('d-none');
+    }
+    renderPaymentModeOptions();
+    setActivePaymentMode(activePaymentOrder.canUseMoney ? 'money' : 'points', activePaymentOrder.selectedMethodId);
   }
 
   function clearFieldValidation(field) {
@@ -1929,7 +1989,33 @@ include __DIR__ . "/includes/header.php";
   }
 
   function getPaymentMethodsForCurrency(currencyCode) {
-    return paymentMethodsByCurrency[String(currencyCode || '').toUpperCase()] || [];
+    const preferredCurrency = String(currencyCode || '').toUpperCase();
+    const methods = [];
+    const seenIds = new Set();
+
+    const appendMethods = (items) => {
+      (Array.isArray(items) ? items : []).forEach((method) => {
+        const methodId = String(method && method.id ? method.id : '');
+        if (!methodId || seenIds.has(methodId)) {
+          return;
+        }
+        seenIds.add(methodId);
+        methods.push(method);
+      });
+    };
+
+    if (preferredCurrency) {
+      appendMethods(paymentMethodsByCurrency[preferredCurrency]);
+    }
+
+    Object.keys(paymentMethodsByCurrency).forEach((currencyKey) => {
+      if (currencyKey === preferredCurrency) {
+        return;
+      }
+      appendMethods(paymentMethodsByCurrency[currencyKey]);
+    });
+
+    return methods;
   }
 
   function setPaymentAlert(message, type) {
@@ -2247,7 +2333,7 @@ include __DIR__ . "/includes/header.php";
   }
 
   function setPaymentFormDisabled(disabled) {
-    [paymentMethodSelect, paymentReferenceInput, paymentPhoneInput, paymentSubmitButton, paymentModeMoneyButton, paymentModePointsButton].forEach((field) => {
+    [paymentMethodSelect, paymentReferenceInput, paymentPhoneInput, paymentSubmitButton, ...getPaymentModeButtons()].forEach((field) => {
       if (field) {
         field.disabled = disabled;
       }
@@ -2310,6 +2396,9 @@ include __DIR__ . "/includes/header.php";
     activePack = null;
     if (paymentWinPointsCard) {
       paymentWinPointsCard.classList.add('d-none');
+    }
+    if (paymentModeOptions) {
+      paymentModeOptions.innerHTML = '';
     }
     resetPlayerVerificationState();
     packCards2.forEach((item) => item.classList.remove('neon-selected'));
@@ -2380,7 +2469,7 @@ include __DIR__ . "/includes/header.php";
     const currentMethod = renderPaymentMethodsByCurrency(pack.moneda || '');
     const canUsePoints = canRedeemPackWithPoints(pack);
     if (!currentMethod && !canUsePoints) {
-      showToast(`No hay métodos de pago activos para la moneda ${pack.moneda || ''}.`, 'error');
+      showToast('No hay métodos de pago activos disponibles.', 'error');
       return false;
     }
 
@@ -2396,6 +2485,7 @@ include __DIR__ . "/includes/header.php";
       canUseMoney: Boolean(currentMethod),
       canUsePoints,
       paymentMode: currentMethod ? 'money' : 'points',
+      selectedMethodId: currentMethod ? String(currentMethod.id) : '',
       pointsRequired: Number(pack.redeemRequiredPoints || 0),
       expiring: false,
     };
@@ -2513,6 +2603,13 @@ include __DIR__ . "/includes/header.php";
                 paymentMethodSelect.addEventListener('change', function() {
                   const methods = getPaymentMethodsForCurrency(activePaymentOrder ? activePaymentOrder.currency : (activePack ? activePack.moneda : ''));
                   const selectedMethod = methods.find((method) => String(method.id) === String(paymentMethodSelect.value)) || methods[0] || null;
+                  if (activePaymentOrder) {
+                    activePaymentOrder.selectedMethodId = selectedMethod ? String(selectedMethod.id) : '';
+                  }
+                  if (activePaymentOrder && paymentWinPointsCard && !paymentWinPointsCard.classList.contains('d-none')) {
+                    setActivePaymentMode('money', activePaymentOrder.selectedMethodId);
+                    return;
+                  }
                   renderPaymentMethodDetails(selectedMethod);
                 });
               }
@@ -2587,7 +2684,7 @@ include __DIR__ . "/includes/header.php";
 
                   const paymentMode = activePaymentOrder.paymentMode === 'points' ? 'points' : 'money';
                   const methods = getPaymentMethodsForCurrency(activePaymentOrder.currency);
-                  const selectedMethod = methods.find((method) => String(method.id) === String(paymentMethodSelect.value)) || methods[0] || null;
+                  const selectedMethod = methods.find((method) => String(method.id) === String(activePaymentOrder.selectedMethodId || paymentMethodSelect.value)) || methods[0] || null;
                   if (paymentMode === 'money' && !selectedMethod) {
                     setPaymentAlert('No hay un método de pago disponible para esta orden.', 'danger');
                     return;
@@ -2734,18 +2831,6 @@ include __DIR__ . "/includes/header.php";
                 });
               }
 
-              if (paymentModeMoneyButton) {
-                paymentModeMoneyButton.addEventListener('click', function() {
-                  setActivePaymentMode('money');
-                });
-              }
-
-              if (paymentModePointsButton) {
-                paymentModePointsButton.addEventListener('click', function() {
-                  setActivePaymentMode('points');
-                });
-              }
-
               if (monedaSelect) {
                 monedaSelect.addEventListener('change', function() {
                   const selectedOption = monedaSelect.options[monedaSelect.selectedIndex];
@@ -2853,7 +2938,7 @@ include __DIR__ . "/includes/header.php";
                 const paymentMethods = getPaymentMethodsForCurrency(pack.moneda || '');
                 const pointsCheckoutAvailable = canRedeemPackWithPoints(pack);
                 if (!paymentMethods.length && !pointsCheckoutAvailable) {
-                  showToast(`No hay métodos de pago activos para la moneda ${pack.moneda || ''}.`, 'error');
+                  showToast('No hay métodos de pago activos disponibles.', 'error');
                   return;
                 }
 
