@@ -447,15 +447,6 @@ include __DIR__ . "/includes/header.php";
               </div>
             </div>
           </div>
-          <div id="payment-points-panel" class="payment-mode-panel">
-            <div class="payment-mode-panel-inner">
-              <div class="payment-points-card">
-                <h4 class="h6 fw-bold text-white mb-2">Canje con premios</h4>
-                <div id="payment-win-points-copy" class="payment-win-points-copy"></div>
-                <div id="payment-win-points-message" class="payment-win-points-message mt-3"></div>
-              </div>
-            </div>
-          </div>
         </div>
         <button type="button" id="payment-submit-btn" class="btn btn-info w-100 fw-bold text-uppercase py-3">Pagado / Recargar</button>
         <button type="button" id="payment-cancel-order-btn" class="btn btn-danger w-100 fw-bold text-uppercase py-3 mt-3">Cancelar Orden</button>
@@ -711,32 +702,174 @@ include __DIR__ . "/includes/header.php";
   .payment-win-points-actions {
     display: grid;
     gap: 0.65rem;
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    grid-template-columns: 1fr;
+  }
+
+  .payment-mode-item {
+    border-radius: 1rem;
+    border: 1px solid rgba(56, 189, 248, 0.18);
+    background: rgba(15, 23, 42, 0.48);
+    box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.04);
+    overflow: hidden;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  }
+
+  .payment-mode-item.is-active {
+    border-color: rgba(34, 211, 238, 0.68);
+    background: linear-gradient(180deg, rgba(8, 47, 73, 0.54), rgba(15, 23, 42, 0.9));
+    box-shadow: 0 0 20px rgba(34, 211, 238, 0.12);
   }
 
   .payment-mode-btn {
-    min-height: 3rem;
-    padding: 0.8rem 0.95rem;
-    border-radius: 0.95rem;
-    border: 1px solid rgba(56, 189, 248, 0.2);
-    background: rgba(15, 23, 42, 0.72);
+    width: 100%;
+    min-height: 3.65rem;
+    padding: 0.95rem 1rem;
+    border: 0;
+    background: transparent;
     color: #cbd5e1;
     font-weight: 700;
-    text-align: center;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.9rem;
+    transition: color 0.2s ease;
   }
 
-  .payment-mode-btn.is-active {
-    border-color: rgba(34, 211, 238, 0.72);
-    background: linear-gradient(135deg, rgba(8, 47, 73, 0.94), rgba(8, 145, 178, 0.4));
+  .payment-mode-item.is-active .payment-mode-btn {
     color: #ecfeff;
-    box-shadow: 0 0 18px rgba(34, 211, 238, 0.16);
+  }
+
+  .payment-mode-btn-main {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .payment-mode-btn-radio {
+    width: 1.15rem;
+    height: 1.15rem;
+    border-radius: 999px;
+    border: 2px solid rgba(148, 163, 184, 0.65);
+    background: rgba(15, 23, 42, 0.85);
+    flex: 0 0 auto;
+    position: relative;
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+
+  .payment-mode-btn-radio::after {
+    content: '';
+    position: absolute;
+    inset: 0.18rem;
+    border-radius: 999px;
+    background: #22d3ee;
+    transform: scale(0);
+    transition: transform 0.18s ease;
+  }
+
+  .payment-mode-item.is-active .payment-mode-btn-radio {
+    border-color: rgba(34, 211, 238, 0.92);
+  }
+
+  .payment-mode-item.is-active .payment-mode-btn-radio::after {
+    transform: scale(1);
+  }
+
+  .payment-mode-btn-text {
+    display: grid;
+    gap: 0.14rem;
+    min-width: 0;
+  }
+
+  .payment-mode-btn-title {
+    font-size: 1rem;
+    line-height: 1.2;
+  }
+
+  .payment-mode-btn-meta {
+    color: #93c5fd;
+    font-size: 0.84rem;
+    font-weight: 500;
+    line-height: 1.3;
+  }
+
+  .payment-mode-btn-caret {
+    width: 0.72rem;
+    height: 0.72rem;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+    transition: transform 0.22s ease;
+    opacity: 0.82;
+    flex: 0 0 auto;
+    margin-right: 0.15rem;
+  }
+
+  .payment-mode-item.is-active .payment-mode-btn-caret {
+    transform: rotate(-135deg);
+  }
+
+  .payment-mode-item-body {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.24s ease;
+  }
+
+  .payment-mode-item.is-active .payment-mode-item-body {
+    grid-template-rows: 1fr;
+  }
+
+  .payment-mode-item-body-inner {
+    overflow: hidden;
+    padding: 0 1rem;
+    opacity: 0;
+    transform: translateY(-6px);
+    transition: padding 0.24s ease, opacity 0.2s ease, transform 0.2s ease;
+  }
+
+  .payment-mode-item.is-active .payment-mode-item-body-inner {
+    padding: 0 1rem 1rem;
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .payment-mode-item-card {
+    padding: 0.95rem 1rem;
+    border-radius: 0.95rem;
+    border: 1px solid rgba(56, 189, 248, 0.18);
+    background: rgba(8, 20, 36, 0.88);
+    box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.05);
+  }
+
+  .payment-mode-item-card.payment-mode-item-card-points {
+    border-color: rgba(34, 197, 94, 0.2);
+    background: linear-gradient(180deg, rgba(6, 36, 27, 0.92), rgba(8, 20, 36, 0.92));
+  }
+
+  .payment-mode-item-card-title {
+    color: #f8fafc;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+  }
+
+  .payment-mode-item-currency {
+    color: #22d3ee;
+    font-size: 0.92rem;
+    font-weight: 600;
+    margin-bottom: 0.6rem;
+  }
+
+  .payment-mode-item-details {
+    color: #e2e8f0;
+    font-size: 0.92rem;
+    line-height: 1.55;
   }
 
   .payment-mode-btn:disabled {
     cursor: not-allowed;
     opacity: 0.58;
-    box-shadow: none;
   }
 
   .payment-win-points-message {
@@ -1082,10 +1215,7 @@ include __DIR__ . "/includes/header.php";
   const paymentWinPointsCard = document.getElementById('payment-win-points-card');
   const paymentModeOptions = document.getElementById('payment-mode-options');
   const paymentMoneyPanel = document.getElementById('payment-money-panel');
-  const paymentPointsPanel = document.getElementById('payment-points-panel');
   const paymentWinPointsBalance = document.getElementById('payment-win-points-balance');
-  const paymentWinPointsCopy = document.getElementById('payment-win-points-copy');
-  const paymentWinPointsMessage = document.getElementById('payment-win-points-message');
   const paymentReferenceGroup = document.getElementById('payment-reference-group');
   const paymentReferenceInput = document.getElementById('payment-reference-input');
   const paymentReferenceHelp = document.getElementById('payment-reference-help');
@@ -1179,6 +1309,24 @@ include __DIR__ . "/includes/header.php";
     return hasRule ? `Usar ${formatWinPointsAmount(requiredPoints)}` : 'Sin canje disponible';
   }
 
+  function paymentMethodMetaLabel(method) {
+    const currencyLabel = `${method.moneda_nombre || ''}${method.moneda_clave ? ` (${method.moneda_clave})` : ''}`.trim();
+    return currencyLabel || 'Método de pago';
+  }
+
+  function paymentMethodAccordionMarkup(method) {
+    const methodName = escapePaymentHtml(method.nombre || 'Método de pago');
+    const methodMeta = escapePaymentHtml(paymentMethodMetaLabel(method));
+    const methodDetails = escapePaymentHtml(method.datos || '').replace(/\n/g, '<br>');
+    return `<div class="payment-mode-item-card"><div class="payment-mode-item-card-title">Datos para ${methodName}</div><div class="payment-mode-item-currency">${methodMeta}</div><div class="payment-mode-item-details">${methodDetails}</div></div>`;
+  }
+
+  function paymentPointsAccordionMarkup() {
+    const copy = escapePaymentHtml(String(activePaymentOrder && activePaymentOrder.pointsCopy ? activePaymentOrder.pointsCopy : ''));
+    const message = escapePaymentHtml(String(activePaymentOrder && activePaymentOrder.pointsMessage ? activePaymentOrder.pointsMessage : '')).replace(/\n/g, '<br>');
+    return `<div class="payment-mode-item-card payment-mode-item-card-points"><div class="payment-mode-item-card-title">Canje con premios</div><div class="payment-mode-item-details">${copy}</div><div class="payment-win-points-message mt-3">${message}</div></div>`;
+  }
+
   function renderPaymentModeOptions() {
     if (!paymentModeOptions) {
       return;
@@ -1195,9 +1343,11 @@ include __DIR__ . "/includes/header.php";
     const buttonsHtml = methods.map((method) => {
       const methodId = escapePaymentHtml(String(method.id));
       const methodName = escapePaymentHtml(method.nombre || 'Método');
-      return `<button type="button" class="payment-mode-btn" data-payment-option="money" data-method-id="${methodId}">${methodName}</button>`;
+      const methodMeta = escapePaymentHtml(paymentMethodMetaLabel(method));
+      return `<div class="payment-mode-item" data-payment-option="money" data-method-id="${methodId}"><button type="button" class="payment-mode-btn" data-payment-option="money" data-method-id="${methodId}" aria-expanded="false"><span class="payment-mode-btn-main"><span class="payment-mode-btn-radio" aria-hidden="true"></span><span class="payment-mode-btn-text"><span class="payment-mode-btn-title">${methodName}</span><span class="payment-mode-btn-meta">${methodMeta}</span></span></span><span class="payment-mode-btn-caret" aria-hidden="true"></span></button><div class="payment-mode-item-body"><div class="payment-mode-item-body-inner">${paymentMethodAccordionMarkup(method)}</div></div></div>`;
     }).join('');
-    const pointsHtml = `<button type="button" class="payment-mode-btn" data-payment-option="points">${escapePaymentHtml(paymentPointsOptionLabel(hasRule, requiredPoints))}</button>`;
+    const pointsMeta = escapePaymentHtml(formatWinPointsAmount(winPointsState.balance || 0));
+    const pointsHtml = `<div class="payment-mode-item" data-payment-option="points"><button type="button" class="payment-mode-btn" data-payment-option="points" aria-expanded="false"><span class="payment-mode-btn-main"><span class="payment-mode-btn-radio" aria-hidden="true"></span><span class="payment-mode-btn-text"><span class="payment-mode-btn-title">${escapePaymentHtml(paymentPointsOptionLabel(hasRule, requiredPoints))}</span><span class="payment-mode-btn-meta">Saldo disponible: ${pointsMeta}</span></span></span><span class="payment-mode-btn-caret" aria-hidden="true"></span></button><div class="payment-mode-item-body"><div class="payment-mode-item-body-inner">${paymentPointsAccordionMarkup()}</div></div></div>`;
 
     paymentModeOptions.innerHTML = `${buttonsHtml}${pointsHtml}`;
     getPaymentModeButtons().forEach((button) => {
@@ -1234,10 +1384,10 @@ include __DIR__ . "/includes/header.php";
     if (paymentMethodSelect) {
       paymentMethodSelect.value = selectedMethod ? String(selectedMethod.id) : '';
     }
-    if (selectedMethod) {
-      renderPaymentMethodDetails(selectedMethod);
-    } else {
-      renderPaymentMethodDetails(null);
+    renderPaymentMethodDetails(selectedMethod || null);
+    if (paymentMethodCard) {
+      const usingAccordion = paymentWinPointsCard && !paymentWinPointsCard.classList.contains('d-none');
+      paymentMethodCard.classList.toggle('d-none', usingAccordion);
     }
     getPaymentModeButtons().forEach((button) => {
       const buttonMode = button.dataset.paymentOption === 'points' ? 'points' : 'money';
@@ -1245,14 +1395,16 @@ include __DIR__ . "/includes/header.php";
       const isActive = buttonMode === 'points'
         ? usingPoints
         : (!usingPoints && String(buttonMethodId) === String(activePaymentOrder.selectedMethodId || ''));
+      const buttonItem = button.closest('.payment-mode-item');
       button.classList.toggle('is-active', isActive);
+      if (buttonItem) {
+        buttonItem.classList.toggle('is-active', isActive);
+      }
+      button.setAttribute('aria-expanded', isActive ? 'true' : 'false');
       button.disabled = buttonMode === 'points' ? !canUsePoints : !canUseMoney;
     });
     if (paymentMoneyPanel) {
       paymentMoneyPanel.classList.toggle('is-active', !usingPoints && canUseMoney);
-    }
-    if (paymentPointsPanel) {
-      paymentPointsPanel.classList.toggle('is-active', usingPoints);
     }
     if (paymentSubmitButton) {
       paymentSubmitButton.textContent = usingPoints
@@ -1268,11 +1420,11 @@ include __DIR__ . "/includes/header.php";
 
     if (!winPointsState.enabled || !winPointsState.loggedIn || !pack || !activePaymentOrder) {
       paymentWinPointsCard.classList.add('d-none');
+      if (paymentMethodCard) {
+        paymentMethodCard.classList.remove('d-none');
+      }
       if (paymentMoneyPanel) {
         paymentMoneyPanel.classList.add('is-active');
-      }
-      if (paymentPointsPanel) {
-        paymentPointsPanel.classList.remove('is-active');
       }
       if (activePaymentOrder) {
         activePaymentOrder.canUsePoints = false;
@@ -1295,17 +1447,17 @@ include __DIR__ . "/includes/header.php";
     paymentWinPointsBalance.textContent = formatWinPointsAmount(currentBalance);
 
     if (rewardPoints > 0) {
-      paymentWinPointsCopy.textContent = `Este paquete te entrega +${rewardPoints} ${winPointsState.name} cuando la recarga quede enviada.`;
+      activePaymentOrder.pointsCopy = `Este paquete te entrega +${rewardPoints} ${winPointsState.name} cuando la recarga quede enviada.`;
     } else {
-      paymentWinPointsCopy.textContent = `Tu saldo disponible se puede usar en los paquetes que tengan canje activo.`;
+      activePaymentOrder.pointsCopy = `Tu saldo disponible se puede usar en los paquetes que tengan canje activo.`;
     }
 
     if (hasRule && canUsePoints) {
-      paymentWinPointsMessage.textContent = `Puedes canjear este paquete usando ${formatWinPointsAmount(requiredPoints)}.`;
+      activePaymentOrder.pointsMessage = `Puedes canjear este paquete usando ${formatWinPointsAmount(requiredPoints)}.`;
     } else if (hasRule) {
-      paymentWinPointsMessage.textContent = `Necesitas ${formatWinPointsAmount(requiredPoints)} para canjear este paquete. Tu saldo actual es ${formatWinPointsAmount(currentBalance)}.`;
+      activePaymentOrder.pointsMessage = `Necesitas ${formatWinPointsAmount(requiredPoints)} para canjear este paquete. Tu saldo actual es ${formatWinPointsAmount(currentBalance)}.`;
     } else {
-      paymentWinPointsMessage.textContent = 'Este paquete no tiene una regla activa de canje por premios. Puedes pagar normal y seguir acumulando puntos.';
+      activePaymentOrder.pointsMessage = 'Este paquete no tiene una regla activa de canje por premios. Puedes pagar normal y seguir acumulando puntos.';
     }
 
     if (paymentMethodSelectWrap) {
@@ -2396,6 +2548,9 @@ include __DIR__ . "/includes/header.php";
     activePack = null;
     if (paymentWinPointsCard) {
       paymentWinPointsCard.classList.add('d-none');
+    }
+    if (paymentMethodCard) {
+      paymentMethodCard.classList.remove('d-none');
     }
     if (paymentModeOptions) {
       paymentModeOptions.innerHTML = '';
