@@ -714,7 +714,7 @@ include __DIR__ . "/includes/header.php";
     transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
   }
 
-  .payment-mode-item.is-active {
+  .payment-mode-item.is-selected {
     border-color: rgba(34, 211, 238, 0.68);
     background: linear-gradient(180deg, rgba(8, 47, 73, 0.54), rgba(15, 23, 42, 0.9));
     box-shadow: 0 0 20px rgba(34, 211, 238, 0.12);
@@ -736,7 +736,7 @@ include __DIR__ . "/includes/header.php";
     transition: color 0.2s ease;
   }
 
-  .payment-mode-item.is-active .payment-mode-btn {
+  .payment-mode-item.is-selected .payment-mode-btn {
     color: #ecfeff;
   }
 
@@ -769,11 +769,11 @@ include __DIR__ . "/includes/header.php";
     transition: transform 0.18s ease;
   }
 
-  .payment-mode-item.is-active .payment-mode-btn-radio {
+  .payment-mode-item.is-selected .payment-mode-btn-radio {
     border-color: rgba(34, 211, 238, 0.92);
   }
 
-  .payment-mode-item.is-active .payment-mode-btn-radio::after {
+  .payment-mode-item.is-selected .payment-mode-btn-radio::after {
     transform: scale(1);
   }
 
@@ -807,7 +807,7 @@ include __DIR__ . "/includes/header.php";
     margin-right: 0.15rem;
   }
 
-  .payment-mode-item.is-active .payment-mode-btn-caret {
+  .payment-mode-item.is-expanded .payment-mode-btn-caret {
     transform: rotate(-135deg);
   }
 
@@ -817,7 +817,7 @@ include __DIR__ . "/includes/header.php";
     transition: grid-template-rows 0.24s ease;
   }
 
-  .payment-mode-item.is-active .payment-mode-item-body {
+  .payment-mode-item.is-expanded .payment-mode-item-body {
     grid-template-rows: 1fr;
   }
 
@@ -829,7 +829,7 @@ include __DIR__ . "/includes/header.php";
     transition: padding 0.24s ease, opacity 0.2s ease, transform 0.2s ease;
   }
 
-  .payment-mode-item.is-active .payment-mode-item-body-inner {
+  .payment-mode-item.is-expanded .payment-mode-item-body-inner {
     padding: 0 1rem 1rem;
     opacity: 1;
     transform: translateY(0);
@@ -1309,6 +1309,20 @@ include __DIR__ . "/includes/header.php";
     return hasRule ? `Usar ${formatWinPointsAmount(requiredPoints)}` : 'Sin canje disponible';
   }
 
+  function paymentOptionKey(mode, methodId = '') {
+    return mode === 'points' ? 'points' : `money:${String(methodId || '')}`;
+  }
+
+  function shouldExpandSinglePaymentOption() {
+    if (!activePaymentOrder) {
+      return false;
+    }
+
+    const methods = getPaymentMethodsForCurrency(activePaymentOrder.currency);
+    const usableOptionCount = methods.length + (activePaymentOrder.canUsePoints ? 1 : 0);
+    return usableOptionCount === 1;
+  }
+
   function paymentMethodMetaLabel(method) {
     const currencyLabel = `${method.moneda_nombre || ''}${method.moneda_clave ? ` (${method.moneda_clave})` : ''}`.trim();
     return currencyLabel || 'Método de pago';
@@ -1354,12 +1368,12 @@ include __DIR__ . "/includes/header.php";
       button.addEventListener('click', function() {
         const buttonMode = button.dataset.paymentOption === 'points' ? 'points' : 'money';
         const methodId = buttonMode === 'money' ? button.dataset.methodId || '' : '';
-        setActivePaymentMode(buttonMode, methodId);
+        setActivePaymentMode(buttonMode, methodId, { expandSelected: true });
       });
     });
   }
 
-  function setActivePaymentMode(mode, preferredMethodId) {
+  function setActivePaymentMode(mode, preferredMethodId, options = {}) {
     if (!activePaymentOrder) {
       return;
     }
@@ -1380,6 +1394,13 @@ include __DIR__ . "/includes/header.php";
 
     activePaymentOrder.paymentMode = nextMode;
     const usingPoints = nextMode === 'points';
+    const selectedOptionKey = paymentOptionKey(nextMode, selectedMethod ? selectedMethod.id : '');
+
+    if (Object.prototype.hasOwnProperty.call(options, 'expandSelected')) {
+      activePaymentOrder.expandedPaymentOptionKey = options.expandSelected ? selectedOptionKey : '';
+    } else if (activePaymentOrder.expandedPaymentOptionKey === undefined) {
+      activePaymentOrder.expandedPaymentOptionKey = '';
+    }
 
     if (paymentMethodSelect) {
       paymentMethodSelect.value = selectedMethod ? String(selectedMethod.id) : '';
@@ -1392,15 +1413,17 @@ include __DIR__ . "/includes/header.php";
     getPaymentModeButtons().forEach((button) => {
       const buttonMode = button.dataset.paymentOption === 'points' ? 'points' : 'money';
       const buttonMethodId = button.dataset.methodId || '';
-      const isActive = buttonMode === 'points'
+      const isSelected = buttonMode === 'points'
         ? usingPoints
         : (!usingPoints && String(buttonMethodId) === String(activePaymentOrder.selectedMethodId || ''));
+      const isExpanded = paymentOptionKey(buttonMode, buttonMethodId) === String(activePaymentOrder.expandedPaymentOptionKey || '');
       const buttonItem = button.closest('.payment-mode-item');
-      button.classList.toggle('is-active', isActive);
+      button.classList.toggle('is-active', isSelected);
       if (buttonItem) {
-        buttonItem.classList.toggle('is-active', isActive);
+        buttonItem.classList.toggle('is-selected', isSelected);
+        buttonItem.classList.toggle('is-expanded', isExpanded);
       }
-      button.setAttribute('aria-expanded', isActive ? 'true' : 'false');
+      button.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
       button.disabled = buttonMode === 'points' ? !canUsePoints : !canUseMoney;
     });
     if (paymentMoneyPanel) {
@@ -1442,6 +1465,9 @@ include __DIR__ . "/includes/header.php";
     activePaymentOrder.canUsePoints = canUsePoints;
     activePaymentOrder.pointsRequired = requiredPoints;
     activePaymentOrder.selectedMethodId = currentMethod ? String(currentMethod.id) : '';
+    activePaymentOrder.expandedPaymentOptionKey = shouldExpandSinglePaymentOption()
+      ? paymentOptionKey(activePaymentOrder.canUseMoney ? 'money' : 'points', activePaymentOrder.selectedMethodId)
+      : '';
 
     paymentWinPointsCard.classList.remove('d-none');
     paymentWinPointsBalance.textContent = formatWinPointsAmount(currentBalance);
@@ -1464,7 +1490,11 @@ include __DIR__ . "/includes/header.php";
       paymentMethodSelectWrap.classList.add('d-none');
     }
     renderPaymentModeOptions();
-    setActivePaymentMode(activePaymentOrder.canUseMoney ? 'money' : 'points', activePaymentOrder.selectedMethodId);
+    setActivePaymentMode(
+      activePaymentOrder.canUseMoney ? 'money' : 'points',
+      activePaymentOrder.selectedMethodId,
+      { expandSelected: shouldExpandSinglePaymentOption() }
+    );
   }
 
   function clearFieldValidation(field) {
