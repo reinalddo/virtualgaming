@@ -44,7 +44,7 @@ if (!function_exists('admin_win_points_redirect')) {
 
 $adminUser = auth_sync_session_user();
 $adminUserRole = trim((string) ($adminUser['rol'] ?? ''));
-if (!$adminUser || $adminUserRole !== 'admin') {
+if (!$adminUser || !in_array($adminUserRole, ['admin', 'root'], true)) {
     admin_win_points_set_flash('error', 'No tienes permisos para acceder a Win Points.');
     $loginPath = function_exists('app_path') ? app_path('/login.php') : '/login.php';
     header('Location: ' . $loginPath);

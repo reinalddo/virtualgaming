@@ -6,7 +6,15 @@ require_once __DIR__ . '/includes/store_config.php';
 tenant_start_session();
 
 function admin_allowed_roles(): array {
-    return ['admin', 'empleado', 'influencer'];
+    return ['admin', 'empleado', 'influencer', 'root'];
+}
+
+function admin_is_root_role(string $role): bool {
+    return $role === 'root';
+}
+
+function admin_has_full_access(string $role): bool {
+    return in_array($role, ['admin', 'root'], true);
 }
 
 function admin_manageable_user_roles(): array {
@@ -27,7 +35,7 @@ function admin_default_section_for_role(string $role): string {
 }
 
 function admin_user_can_access_section(string $role, string $section): bool {
-    if ($role === 'admin') {
+    if (admin_has_full_access($role)) {
         return true;
     }
 
@@ -162,7 +170,7 @@ function admin_user_filters_from_input(array $input): array {
 }
 
 function admin_fetch_users(PDO $pdo, array $filters): array {
-    $sql = 'SELECT * FROM usuarios WHERE 1=1';
+    $sql = "SELECT * FROM usuarios WHERE 1=1 AND COALESCE(rol, 'usuario') <> 'root'";
     $params = [];
 
     if ($filters['nombre'] !== '') {
@@ -200,6 +208,184 @@ function admin_fetch_users(PDO $pdo, array $filters): array {
 function admin_display_phone($value): string {
     $phone = trim((string) $value);
     return $phone !== '' ? $phone : 'No disponible';
+}
+
+function admin_fetch_user_role(PDO $pdo, int $userId): string {
+    if ($userId <= 0) {
+        return '';
+    }
+
+    $stmt = $pdo->prepare('SELECT rol FROM usuarios WHERE id = ? LIMIT 1');
+    $stmt->execute([$userId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    return trim((string) ($row['rol'] ?? ''));
+}
+
+function admin_is_protected_user(PDO $pdo, int $userId): bool {
+    if ($userId === 1) {
+        return true;
+    }
+
+    return admin_fetch_user_role($pdo, $userId) === 'root';
+}
+
+function admin_extra_features_ensure_schema(): void {
+    static $ensured = false;
+
+    if ($ensured) {
+        return;
+    }
+
+    $mysqli = store_config_db();
+    $columns = [
+        'mostrar_a_cliente' => "ALTER TABLE configuracion_general ADD COLUMN mostrar_a_cliente TINYINT(1) DEFAULT 0 NULL AFTER actualizado_en",
+        'funcion_venta' => "ALTER TABLE configuracion_general ADD COLUMN funcion_venta VARCHAR(255) NULL AFTER mostrar_a_cliente",
+        'descripcion_venta' => "ALTER TABLE configuracion_general ADD COLUMN descripcion_venta VARCHAR(255) NULL AFTER funcion_venta",
+        'precio' => "ALTER TABLE configuracion_general ADD COLUMN precio INT NULL AFTER descripcion_venta",
+        'comision_venta' => "ALTER TABLE configuracion_general ADD COLUMN comision_venta INT NULL AFTER precio",
+    ];
+
+    foreach ($columns as $columnName => $alterSql) {
+        $columnNameEscaped = $mysqli->real_escape_string($columnName);
+        $result = $mysqli->query("SHOW COLUMNS FROM configuracion_general LIKE '{$columnNameEscaped}'");
+        if ($result instanceof mysqli_result) {
+            $column = $result->fetch_assoc();
+            $result->free();
+            if (!$column) {
+                $mysqli->query($alterSql);
+            }
+        }
+    }
+
+    $ensured = true;
+}
+
+function admin_extra_feature_is_active($value): bool {
+    $normalized = strtolower(trim((string) $value));
+    return !in_array($normalized, ['', '0', 'false', 'off', 'no', 'null'], true);
+}
+
+function admin_fetch_extra_features(): array {
+    admin_extra_features_ensure_schema();
+
+    $mysqli = store_config_db();
+    $sql = "SELECT id, clave, valor, descripcion, mostrar_a_cliente, funcion_venta, descripcion_venta, precio, comision_venta
+            FROM configuracion_general
+            WHERE COALESCE(mostrar_a_cliente, 0) = 1
+            ORDER BY COALESCE(NULLIF(TRIM(funcion_venta), ''), clave) ASC, id ASC";
+    $result = $mysqli->query($sql);
+    $features = [];
+
+    if ($result instanceof mysqli_result) {
+        while ($row = $result->fetch_assoc()) {
+            $basePrice = max(0, (int) ($row['precio'] ?? 0));
+            $commission = max(0, (int) ($row['comision_venta'] ?? 0));
+            $row['precio'] = $basePrice;
+            $row['comision_venta'] = $commission;
+            $row['precio_total'] = $basePrice + $commission;
+            $row['activa'] = admin_extra_feature_is_active($row['valor'] ?? '0');
+            $features[] = $row;
+        }
+        $result->free();
+    }
+
+    return $features;
+}
+
+function admin_update_extra_feature(int $featureId, int $commission, string $value): bool {
+    admin_extra_features_ensure_schema();
+
+    $mysqli = store_config_db();
+    $stmt = $mysqli->prepare('UPDATE configuracion_general SET valor = ?, comision_venta = ? WHERE id = ? AND COALESCE(mostrar_a_cliente, 0) = 1');
+    if (!$stmt) {
+        return false;
+    }
+
+    $normalizedValue = admin_extra_feature_is_active($value) ? '1' : '0';
+    $normalizedCommission = max(0, $commission);
+    $stmt->bind_param('sii', $normalizedValue, $normalizedCommission, $featureId);
+    $executed = $stmt->execute();
+    $stmt->close();
+
+    return $executed;
+}
+
+function admin_render_extra_features_table(array $features, bool $isRootViewer): string {
+    ob_start();
+
+    if (count($features) === 0) {
+        echo '<div class="alert alert-info" style="background:#10141a; color:#c9f9ff; border:1px solid #00fff7;">No hay funciones extra disponibles para este tenant en este momento.</div>';
+        return (string) ob_get_clean();
+    }
+
+    echo '<div class="table-responsive" style="background:#10141a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:1rem;">';
+    echo '<table class="table align-middle mb-0" style="background:#181f2a; color:#e9fdff; border-radius:12px;">';
+    echo '<thead style="background:#181f2a; color:#00fff7; border-bottom:2px solid #00fff7;">';
+    echo '<tr>';
+    if ($isRootViewer) {
+        echo '<th style="background:#181f2a; color:#00fff7;">Clave</th>';
+    }
+    echo '<th style="background:#181f2a; color:#00fff7;">Función</th>';
+    echo '<th style="background:#181f2a; color:#00fff7; min-width:240px;">Descripción</th>';
+    if ($isRootViewer) {
+        echo '<th style="background:#181f2a; color:#00fff7;">Tu ganancia</th>';
+        echo '<th style="background:#181f2a; color:#00fff7;">Comisión vendedor</th>';
+    }
+    echo '<th style="background:#181f2a; color:#00fff7;">Precio mostrado</th>';
+    echo '<th style="background:#181f2a; color:#00fff7;">Estado</th>';
+    if ($isRootViewer) {
+        echo '<th style="background:#181f2a; color:#00fff7; min-width:220px;">Acciones</th>';
+    }
+    echo '</tr>';
+    echo '</thead>';
+    echo '<tbody>';
+
+    foreach ($features as $feature) {
+        $featureId = (int) ($feature['id'] ?? 0);
+        $formId = 'extra-feature-form-' . $featureId;
+        $featureName = admin_display_value($feature['funcion_venta'] ?? '', (string) ($feature['clave'] ?? 'Función extra'));
+        $featureDescription = admin_display_value($feature['descripcion_venta'] ?? '', (string) ($feature['descripcion'] ?? 'Sin descripción disponible'));
+        $statusText = !empty($feature['activa']) ? 'Activa' : 'Desactivada';
+        $statusStyle = !empty($feature['activa'])
+            ? 'background:rgba(52,211,153,0.14); color:#86efac; border:1px solid rgba(52,211,153,0.45);'
+            : 'background:rgba(248,113,113,0.14); color:#fca5a5; border:1px solid rgba(248,113,113,0.45);';
+
+        echo '<tr style="background:#181f2a; color:#fff;">';
+        if ($isRootViewer) {
+            echo '<td style="background:#181f2a; color:#67e8f9; font-family:monospace;">' . htmlspecialchars((string) ($feature['clave'] ?? '')) . '</td>';
+        }
+        echo '<td style="background:#181f2a; color:#fff; font-weight:700;">' . htmlspecialchars($featureName) . '</td>';
+        echo '<td style="background:#181f2a; color:#c9f9ff;">' . htmlspecialchars($featureDescription) . '</td>';
+        if ($isRootViewer) {
+            echo '<td style="background:#181f2a; color:#67e8f9;">USD ' . htmlspecialchars(admin_format_money($feature['precio'] ?? 0)) . '</td>';
+            echo '<td style="background:#181f2a;">';
+            echo '<input type="number" min="0" step="1" name="comision_venta" value="' . htmlspecialchars((string) ($feature['comision_venta'] ?? 0)) . '" form="' . htmlspecialchars($formId) . '" class="form-control form-control-sm" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">';
+            echo '</td>';
+        }
+        echo '<td style="background:#181f2a; color:#fde68a; font-weight:700;">USD ' . htmlspecialchars(admin_format_money($feature['precio_total'] ?? 0)) . '</td>';
+        echo '<td style="background:#181f2a;"><span class="badge rounded-pill" style="' . $statusStyle . '">' . htmlspecialchars($statusText) . '</span></td>';
+        if ($isRootViewer) {
+            echo '<td style="background:#181f2a;">';
+            echo '<form id="' . htmlspecialchars($formId) . '" method="POST" class="d-flex flex-column gap-2">';
+            echo '<input type="hidden" name="guardar_funcion_extra" value="1">';
+            echo '<input type="hidden" name="feature_id" value="' . $featureId . '">';
+            echo '<label class="form-check d-flex align-items-center gap-2 mb-2" style="color:#c9f9ff;">';
+            echo '<input class="form-check-input" type="checkbox" name="activar_funcion" value="1" ' . (!empty($feature['activa']) ? 'checked' : '') . '>';
+            echo '<span>Activar módulo</span>';
+            echo '</label>';
+            echo '<button type="submit" class="btn btn-info btn-sm" style="background:#00fff7; color:#111827; border:none; box-shadow:0 0 10px #00fff7;">Guardar</button>';
+            echo '</form>';
+            echo '</td>';
+        }
+        echo '</tr>';
+    }
+
+    echo '</tbody>';
+    echo '</table>';
+    echo '</div>';
+
+    return (string) ob_get_clean();
 }
 
 function admin_fetch_influencer_users(PDO $pdo): array {
@@ -785,8 +971,8 @@ switch ($seccion) {
         require_once __DIR__ . '/includes/db.php';
         if (isset($_GET['borrar_usuario'])) {
             $id = intval($_GET['borrar_usuario']);
-            if ($id === 1) {
-                admin_set_flash('error', 'No puedes eliminar el admin principal.');
+            if (admin_is_protected_user($pdo, $id)) {
+                admin_set_flash('error', 'No puedes eliminar este usuario protegido.');
             } else {
                 $pdo->prepare('DELETE FROM usuarios WHERE id = ?')->execute([$id]);
                 admin_set_flash('success', 'Usuario eliminado.');
@@ -798,13 +984,40 @@ switch ($seccion) {
             $id = intval($_POST['id']);
             $nombre = trim($_POST['nombre'] ?? '');
             $rol = $_POST['rol'] ?? 'usuario';
-            if ($id && $nombre && array_key_exists($rol, admin_manageable_user_roles())) {
+            if (admin_is_protected_user($pdo, $id)) {
+                admin_set_flash('error', 'No puedes modificar este usuario protegido.');
+            } elseif ($id && $nombre && array_key_exists($rol, admin_manageable_user_roles())) {
                 $pdo->prepare('UPDATE usuarios SET nombre = ?, rol = ? WHERE id = ?')->execute([$nombre, $rol, $id]);
                 admin_set_flash('success', 'Usuario actualizado.');
             } else {
                 admin_set_flash('error', 'Datos inválidos para actualizar el usuario.');
             }
             admin_redirect('usuarios');
+        }
+        break;
+
+    case 'comprar-funciones-extra':
+        admin_extra_features_ensure_schema();
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['guardar_funcion_extra'])) {
+            if (!admin_is_root_role($adminUserRole)) {
+                admin_set_flash('error', 'Solo el usuario root puede activar módulos o cambiar la comisión de venta.');
+                admin_redirect('comprar-funciones-extra');
+            }
+
+            $featureId = intval($_POST['feature_id'] ?? 0);
+            $commission = max(0, intval($_POST['comision_venta'] ?? 0));
+            $value = isset($_POST['activar_funcion']) ? '1' : '0';
+
+            if ($featureId <= 0) {
+                admin_set_flash('error', 'La función seleccionada no es válida.');
+            } elseif (admin_update_extra_feature($featureId, $commission, $value)) {
+                admin_set_flash('success', 'Función extra actualizada correctamente.');
+            } else {
+                admin_set_flash('error', 'No se pudo actualizar la función extra.');
+            }
+
+            admin_redirect('comprar-funciones-extra');
         }
         break;
 
@@ -1603,6 +1816,7 @@ define('ADMIN_LAYOUT_EMBEDDED', true);
 
 $influencerInstructionsEnabled = store_config_get('instrucciones_influencer', '0') === '1';
 $adminInfluencerInstructionsPath = app_path('/admin/instrucciones-influencer');
+$adminExtraFeaturesPath = app_path('/admin/comprar-funciones-extra');
 
 // Header y menú igual al inicio
 require_once __DIR__ . '/includes/header.php';
@@ -1620,7 +1834,7 @@ require_once __DIR__ . '/includes/header.php';
             <div class="d-flex flex-wrap justify-content-center gap-3">
                 <a href="/admin/pedidos" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>📋</span>Pedidos</a>
                 <a href="/admin/movimientos" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>💳</span>Movimientos</a>
-                <?php if ($adminUserRole === 'admin'): ?>
+                <?php if (admin_has_full_access($adminUserRole)): ?>
                 <a href="/admin/usuarios" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>👤</span>Usuarios</a>
                 <a href="/admin/juegos" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>🎮</span>Juegos</a>
                 <a href="/admin/monedas" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>💵</span>Monedas</a>
@@ -1628,6 +1842,7 @@ require_once __DIR__ . '/includes/header.php';
                 <a href="/admin/win-points" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>🏆</span>Win Points</a>
                 <?php endif; ?>
                 <a href="/admin/cupones" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>✏️</span>Cupones</a>
+                <a href="<?= htmlspecialchars($adminExtraFeaturesPath, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>🧩</span>Comprar Funciones Extra</a>
                 <?php if ($influencerInstructionsEnabled): ?>
                 <a href="<?= htmlspecialchars($adminInfluencerInstructionsPath, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>🤝</span>Instrucciones Influencer</a>
                 <?php endif; ?>
@@ -1645,9 +1860,11 @@ require_once __DIR__ . '/includes/header.php';
                 // Borrar usuario
                 if (isset($_GET['borrar_usuario'])) {
                     $id = intval($_GET['borrar_usuario']);
-                    if ($id !== 1) { // No permitir borrar admin principal
+                    if (!admin_is_protected_user($pdo, $id)) {
                         $pdo->prepare('DELETE FROM usuarios WHERE id = ?')->execute([$id]);
                         echo '<div class="text-green-400 mb-2">Usuario eliminado.</div>';
+                    } else {
+                        echo '<div class="text-danger mb-2">No puedes eliminar este usuario protegido.</div>';
                     }
                 }
                 // Edición de usuario (solo nombre y rol)
@@ -1655,7 +1872,9 @@ require_once __DIR__ . '/includes/header.php';
                     $id = intval($_POST['id']);
                     $nombre = trim($_POST['nombre'] ?? '');
                     $rol = $_POST['rol'] ?? 'usuario';
-                    if ($id && $nombre && array_key_exists($rol, admin_manageable_user_roles())) {
+                    if (admin_is_protected_user($pdo, $id)) {
+                        echo '<div class="text-danger mb-2">No puedes modificar este usuario protegido.</div>';
+                    } elseif ($id && $nombre && array_key_exists($rol, admin_manageable_user_roles())) {
                         $pdo->prepare('UPDATE usuarios SET nombre = ?, rol = ? WHERE id = ?')->execute([$nombre, $rol, $id]);
                         echo '<div class="text-green-400 mb-2">Usuario actualizado.</div>';
                     }
@@ -1766,6 +1985,17 @@ require_once __DIR__ . '/includes/header.php';
     }
 })();
 </script>';
+                break;
+            case 'comprar-funciones-extra':
+                $isRootViewer = admin_is_root_role($adminUserRole);
+                $extraFeatures = admin_fetch_extra_features();
+                echo '<h2 class="display-6 fw-bold text-info mb-4">Comprar Funciones Extra</h2>';
+                echo '<div class="config-section-note mb-4">';
+                echo $isRootViewer
+                    ? 'Aquí controlas qué funciones extra están activas para este tenant y cuánto se suma de comisión al precio mostrado.'
+                    : 'Aquí se muestran las funciones extra disponibles para este tenant. El precio visible ya incluye la comisión configurada para la venta.';
+                echo '</div>';
+                echo admin_render_extra_features_table($extraFeatures, $isRootViewer);
                 break;
             case 'juegos':
                 echo '<h2 class="text-2xl font-semibold mb-8 text-cyan-300">Gestión de Juegos</h2>';

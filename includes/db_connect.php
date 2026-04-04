@@ -48,8 +48,15 @@ if ($roleColumnResult instanceof mysqli_result) {
     $roleColumn = $roleColumnResult->fetch_assoc();
     $roleColumnResult->free();
     $roleType = strtolower((string) ($roleColumn['Type'] ?? ''));
-    if ($roleType !== '' && (strpos($roleType, "'empleado'") === false || strpos($roleType, "'influencer'") === false)) {
-        $mysqli->query("ALTER TABLE usuarios MODIFY rol ENUM('admin','empleado','influencer','usuario') NOT NULL DEFAULT 'usuario'");
+    if (
+        $roleType !== ''
+        && (
+            strpos($roleType, "'empleado'") === false
+            || strpos($roleType, "'influencer'") === false
+            || strpos($roleType, "'root'") === false
+        )
+    ) {
+        $mysqli->query("ALTER TABLE usuarios MODIFY rol ENUM('admin','usuario','empleado','influencer','root') NOT NULL DEFAULT 'usuario'");
     }
 }
 
@@ -77,5 +84,23 @@ if ($lastPurchasePhoneColumnResult instanceof mysqli_result) {
     $lastPurchasePhoneColumnResult->free();
     if (!$lastPurchasePhoneColumnExists) {
         $mysqli->query("ALTER TABLE usuarios ADD COLUMN last_purchase_phone VARCHAR(50) NULL AFTER last_purchase_user_identifier");
+    }
+}
+
+$extraFeatureColumns = [
+    'mostrar_a_cliente' => "ALTER TABLE configuracion_general ADD COLUMN mostrar_a_cliente TINYINT(1) DEFAULT 0 NULL AFTER actualizado_en",
+    'funcion_venta' => "ALTER TABLE configuracion_general ADD COLUMN funcion_venta VARCHAR(255) NULL AFTER mostrar_a_cliente",
+    'descripcion_venta' => "ALTER TABLE configuracion_general ADD COLUMN descripcion_venta VARCHAR(255) NULL AFTER funcion_venta",
+    'precio' => "ALTER TABLE configuracion_general ADD COLUMN precio INT NULL AFTER descripcion_venta",
+    'comision_venta' => "ALTER TABLE configuracion_general ADD COLUMN comision_venta INT NULL AFTER precio",
+];
+foreach ($extraFeatureColumns as $columnName => $alterSql) {
+    $columnResult = $mysqli->query("SHOW COLUMNS FROM configuracion_general LIKE '" . $mysqli->real_escape_string($columnName) . "'");
+    if ($columnResult instanceof mysqli_result) {
+        $columnExists = $columnResult->fetch_assoc();
+        $columnResult->free();
+        if (!$columnExists) {
+            $mysqli->query($alterSql);
+        }
     }
 }

@@ -1274,6 +1274,7 @@ if (!function_exists('win_points_fetch_admin_users')) {
         $phoneSelect = win_points_users_has_phone_column($mysqli) ? 'u.telefono' : "'' AS telefono";
         $sql = "SELECT u.id, u.nombre, u.email, {$phoneSelect}, u.rol
                 FROM usuarios u
+                WHERE COALESCE(u.rol, 'usuario') <> 'root'
                 ORDER BY u.nombre ASC, u.email ASC, u.id ASC";
         $result = $mysqli->query($sql);
         if ($result instanceof mysqli_result) {
@@ -1422,6 +1423,7 @@ if (!function_exists('win_points_fetch_admin_wallets')) {
                 FROM usuarios u
                 LEFT JOIN win_points_wallets w ON w.user_id = u.id
                 LEFT JOIN win_points_transactions t ON t.user_id = u.id
+            WHERE COALESCE(u.rol, 'usuario') <> 'root'
                 GROUP BY {$groupBy}
                 ORDER BY COALESCE(w.balance, 0) DESC, u.nombre ASC, u.email ASC";
         $result = $mysqli->query($sql);
@@ -1465,7 +1467,7 @@ if (!function_exists('win_points_fetch_admin_transactions')) {
         $resolvedLimit = max(1, min(300, $limit));
         $sql = "SELECT t.*, u.nombre AS usuario_nombre, u.email AS usuario_email, p.juego_nombre, p.paquete_nombre
                 FROM win_points_transactions t
-                LEFT JOIN usuarios u ON u.id = t.user_id
+                LEFT JOIN usuarios u ON u.id = t.user_id AND COALESCE(u.rol, 'usuario') <> 'root'
                 LEFT JOIN pedidos p ON p.id = t.order_id
                 ORDER BY t.created_at DESC, t.id DESC
                 LIMIT {$resolvedLimit}";

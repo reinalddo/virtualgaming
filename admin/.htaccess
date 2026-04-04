@@ -4,6 +4,7 @@ RewriteEngine On
 RewriteRule ^dashboard$ ../admin.php?seccion=dashboard [L,QSA]
 RewriteRule ^usuarios$ ../admin.php?seccion=usuarios [L,QSA]
 RewriteRule ^cupones$ ../admin.php?seccion=cupones [L,QSA]
+RewriteRule ^comprar-funciones-extra$ ../admin.php?seccion=comprar-funciones-extra [L,QSA]
 RewriteRule ^configuracion$ ../admin.php?seccion=configuracion [L,QSA]
 RewriteRule ^movimientos$ ../admin.php?seccion=movimientos [L,QSA]
 RewriteRule ^monedas$ monedas.php [L,QSA]

@@ -388,7 +388,12 @@ CREATE TABLE IF NOT EXISTS configuracion_general (
     clave VARCHAR(64) NOT NULL UNIQUE,
     valor TEXT NOT NULL,
     descripcion VARCHAR(255) DEFAULT NULL,
-    actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    mostrar_a_cliente TINYINT(1) DEFAULT 0 NULL,
+    funcion_venta VARCHAR(255) DEFAULT NULL,
+    descripcion_venta VARCHAR(255) DEFAULT NULL,
+    precio INT DEFAULT NULL,
+    comision_venta INT DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 SQL;
 bootstrap_exec($mysqli, $configGeneralSql, 'No se pudo asegurar la tabla configuracion_general');

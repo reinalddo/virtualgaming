@@ -54,7 +54,7 @@ $winPointsModalExpirationText = !empty($winPointsUserSummary['is_expired'])
   : (in_array($winPointsExpirationStatus, ['active', 'warning'], true) && $winPointsDaysLabel !== ''
     ? 'Vence en ' . $winPointsDaysLabel . ($winPointsExpiresAtLabel !== '' && $winPointsExpiresAtLabel !== 'Sin saldo' ? ' | ' . $winPointsExpiresAtLabel : '')
     : ($winPointsDaysLabel !== '' ? $winPointsDaysLabel : 'Sin saldo'));
-$authUserCanAccessAdmin = in_array($authUserRole, ['admin', 'empleado', 'influencer'], true);
+$authUserCanAccessAdmin = in_array($authUserRole, ['admin', 'empleado', 'influencer', 'root'], true);
 $authUserAdminHome = $authUserRole === 'influencer'
   ? app_path('/admin/cupones') . '?tab=influencers'
   : app_path('/admin/dashboard');
@@ -111,6 +111,7 @@ $adminMovementsUrl = app_path('/admin/movimientos');
 $adminUsersUrl = app_path('/admin/usuarios');
 $adminCouponsUrl = app_path('/admin/cupones');
 $adminConfigUrl = app_path('/admin/configuracion');
+$adminExtraFeaturesUrl = app_path('/admin/comprar-funciones-extra');
 $adminInfluencerInstructionsUrl = app_path('/admin/instrucciones-influencer');
 $influencerJoinUrl = app_path('/quiero-unirme');
 $influencerInstructionsEnabled = store_config_get('instrucciones_influencer', '0') === '1';
@@ -473,11 +474,12 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
                 <a href="<?php echo htmlspecialchars($adminDashboardUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Dashboard</a>
                 <a href="<?php echo htmlspecialchars($adminOrdersUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Pedidos</a>
                 <a href="<?php echo htmlspecialchars($adminMovementsUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Movimientos</a>
-                <?php if ($authUserRole === 'admin'): ?>
+                <?php if (in_array($authUserRole, ['admin', 'root'], true)): ?>
                   <a href="<?php echo htmlspecialchars($adminGamesUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Juegos</a>
                   <a href="<?php echo htmlspecialchars($adminCurrenciesUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Monedas</a>
                   <a href="<?php echo htmlspecialchars($adminUsersUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Usuarios</a>
                   <a href="<?php echo htmlspecialchars($adminCouponsUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Cupones</a>
+                  <a href="<?php echo htmlspecialchars($adminExtraFeaturesUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Funciones Extra</a>
                   <?php if ($influencerInstructionsEnabled): ?>
                     <a href="<?php echo htmlspecialchars($adminInfluencerInstructionsUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-admin border rounded-3 px-4 py-3 fw-semibold">Instrucciones Influencer</a>
                   <?php endif; ?>

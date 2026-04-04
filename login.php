@@ -50,7 +50,7 @@ $_SESSION["auth_user"] = [
 ];
 $_SESSION["auth_flash"] = ["type" => "success", "message" => "Inicio de sesión exitoso."];
 
-if (($user["rol"] ?? "") === "admin") {
+if (in_array(($user["rol"] ?? ""), ["admin", "root"], true)) {
   header("Location: " . app_path('/admin/dashboard'));
   exit;
 }
