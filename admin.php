@@ -242,6 +242,115 @@ function admin_match_coupon_influencer_user_id(array $users, ?array $coupon): st
     return '';
 }
 
+function admin_normalize_influencer_user_filter($value, array $users): string {
+    $userId = trim((string) $value);
+    if ($userId === '') {
+        return '';
+    }
+
+    foreach ($users as $user) {
+        if ((string) ($user['id'] ?? '') === $userId) {
+            return $userId;
+        }
+    }
+
+    return '';
+}
+
+function admin_match_influencer_sale_user_id(array $users, array $sale): string {
+    $saleEmail = strtolower(trim((string) ($sale['email_influencer'] ?? '')));
+    $salePhone = trim((string) ($sale['telefono_influencer'] ?? ''));
+    $saleName = trim((string) ($sale['nombre_influencer'] ?? ''));
+    $saleNameNormalized = function_exists('mb_strtolower') ? mb_strtolower($saleName, 'UTF-8') : strtolower($saleName);
+
+    foreach ($users as $user) {
+        if ($saleEmail !== '' && strtolower(trim((string) ($user['email'] ?? ''))) === $saleEmail) {
+            return (string) ($user['id'] ?? '');
+        }
+    }
+
+    foreach ($users as $user) {
+        if ($salePhone !== '' && trim((string) ($user['telefono'] ?? '')) === $salePhone) {
+            return (string) ($user['id'] ?? '');
+        }
+    }
+
+    foreach ($users as $user) {
+        $userName = trim((string) ($user['nombre'] ?? ''));
+        $userNameNormalized = function_exists('mb_strtolower') ? mb_strtolower($userName, 'UTF-8') : strtolower($userName);
+        if ($saleNameNormalized !== '' && $userNameNormalized === $saleNameNormalized) {
+            return (string) ($user['id'] ?? '');
+        }
+    }
+
+    return '';
+}
+
+function admin_filter_influencer_sales_by_user(array $sales, array $users, string $userId): array {
+    if ($userId === '') {
+        return array_values($sales);
+    }
+
+    return array_values(array_filter($sales, static function ($sale) use ($users, $userId) {
+        return admin_match_influencer_sale_user_id($users, $sale) === $userId;
+    }));
+}
+
+function admin_build_influencer_sales_totals(array $sales): array {
+    $totals = [
+        'pendiente' => ['count' => 0, 'amounts' => []],
+        'pagado' => ['count' => 0, 'amounts' => []],
+        'todos' => ['count' => 0, 'amounts' => []],
+    ];
+
+    foreach ($sales as $sale) {
+        $status = trim((string) ($sale['estado_pago_influencer'] ?? $sale['estado_pago'] ?? 'pendiente'));
+        if (!in_array($status, ['pendiente', 'pagado'], true)) {
+            $status = 'pendiente';
+        }
+
+        $currency = trim((string) ($sale['moneda'] ?? ''));
+        if ($currency === '') {
+            $currency = 'Sin moneda';
+        }
+
+        $amount = round((float) ($sale['total_comision'] ?? 0), 2);
+        foreach (['todos', $status] as $bucket) {
+            $totals[$bucket]['count']++;
+            if (!isset($totals[$bucket]['amounts'][$currency])) {
+                $totals[$bucket]['amounts'][$currency] = 0.0;
+            }
+            $totals[$bucket]['amounts'][$currency] += $amount;
+        }
+    }
+
+    foreach ($totals as $bucket => $data) {
+        if (!empty($data['amounts'])) {
+            ksort($data['amounts']);
+            foreach ($data['amounts'] as $currency => $amount) {
+                $totals[$bucket]['amounts'][$currency] = round((float) $amount, 2);
+            }
+        }
+    }
+
+    return $totals;
+}
+
+function admin_format_influencer_total_amounts(array $amounts): string {
+    if (empty($amounts)) {
+        return '0.00';
+    }
+
+    $parts = [];
+    foreach ($amounts as $currency => $amount) {
+        $label = trim((string) $currency);
+        $formattedAmount = admin_format_money($amount);
+        $parts[] = $label !== '' ? $label . ' ' . $formattedAmount : $formattedAmount;
+    }
+
+    return implode(' | ', $parts);
+}
+
 function admin_build_influencer_sales_identity_filter(array $user): array {
     $clauses = [];
     $params = [];
@@ -741,6 +850,7 @@ switch ($seccion) {
             $redirectFilter = admin_normalize_influencer_payment_filter($_POST['filtro_estado_pago'] ?? 'pendiente');
             $redirectDateFrom = admin_normalize_date_filter($_POST['fecha_desde'] ?? null);
             $redirectDateTo = admin_normalize_date_filter($_POST['fecha_hasta'] ?? null);
+            $redirectInfluencerUserId = admin_normalize_influencer_user_filter($_POST['filtro_influencer_usuario'] ?? '', admin_fetch_influencer_users($pdo));
             if ($pedidoId > 0) {
                 $stmt = $pdo->prepare('UPDATE pedidos SET estado_pago_influencer = ? WHERE id = ?');
                 $stmt->execute([$nuevoEstadoPago, $pedidoId]);
@@ -754,6 +864,9 @@ switch ($seccion) {
             }
             if ($redirectDateTo !== null) {
                 $redirectQuery['fecha_hasta'] = $redirectDateTo;
+            }
+            if ($redirectInfluencerUserId !== '') {
+                $redirectQuery['filtro_influencer_usuario'] = $redirectInfluencerUserId;
             }
             admin_redirect('cupones', $redirectQuery);
         }
@@ -1773,15 +1886,21 @@ require_once __DIR__ . '/includes/header.php';
                 $influencerDateTo = admin_normalize_date_filter($_GET['fecha_hasta'] ?? null);
                 $cupones = $pdo->query('SELECT * FROM cupones ORDER BY id DESC')->fetchAll(PDO::FETCH_ASSOC);
                 $influencerUsers = admin_fetch_influencer_users($pdo);
+                $selectedInfluencerFilterId = $isInfluencerViewer ? '' : admin_normalize_influencer_user_filter($_GET['filtro_influencer_usuario'] ?? '', $influencerUsers);
+                $selectedInfluencerFilterUser = null;
+                if ($selectedInfluencerFilterId !== '') {
+                    foreach ($influencerUsers as $influencerUser) {
+                        if ((string) ($influencerUser['id'] ?? '') === $selectedInfluencerFilterId) {
+                            $selectedInfluencerFilterUser = $influencerUser;
+                            break;
+                        }
+                    }
+                }
                 $influencerSalesSql = "SELECT s.*, p.estado_pago_influencer, p.juego_nombre
                     FROM cupones_influencer_ventas s
                     INNER JOIN pedidos p ON p.id = s.pedido_id
                     WHERE 1=1";
                 $influencerSalesParams = [];
-                if ($influencerPaymentFilter !== 'todos') {
-                    $influencerSalesSql .= ' AND p.estado_pago_influencer = ?';
-                    $influencerSalesParams[] = $influencerPaymentFilter;
-                }
                 if ($influencerDateFrom !== null) {
                     $influencerSalesSql .= ' AND DATE(s.creado_en) >= ?';
                     $influencerSalesParams[] = $influencerDateFrom;
@@ -1802,7 +1921,21 @@ require_once __DIR__ . '/includes/header.php';
                 $influencerSalesSql .= ' ORDER BY s.creado_en DESC';
                 $influencerSalesStmt = $pdo->prepare($influencerSalesSql);
                 $influencerSalesStmt->execute($influencerSalesParams);
-                $influencerSales = $influencerSalesStmt->fetchAll(PDO::FETCH_ASSOC);
+                $influencerSalesAllStates = $influencerSalesStmt->fetchAll(PDO::FETCH_ASSOC);
+                if (!$isInfluencerViewer && $selectedInfluencerFilterId !== '') {
+                    $influencerSalesAllStates = admin_filter_influencer_sales_by_user($influencerSalesAllStates, $influencerUsers, $selectedInfluencerFilterId);
+                }
+                $influencerSalesTotals = admin_build_influencer_sales_totals($influencerSalesAllStates);
+                $influencerSales = $influencerSalesAllStates;
+                if ($influencerPaymentFilter !== 'todos') {
+                    $influencerSales = array_values(array_filter($influencerSales, static function ($sale) use ($influencerPaymentFilter) {
+                        $status = trim((string) ($sale['estado_pago_influencer'] ?? $sale['estado_pago'] ?? 'pendiente'));
+                        if (!in_array($status, ['pendiente', 'pagado'], true)) {
+                            $status = 'pendiente';
+                        }
+                        return $status === $influencerPaymentFilter;
+                    }));
+                }
                 $edit_cupon = null;
                 if (isset($_GET['editar_cupon'])) {
                     $edit_id = intval($_GET['editar_cupon']);
@@ -1822,6 +1955,21 @@ require_once __DIR__ . '/includes/header.php';
                 $currentInfluencerEmail = $edit_cupon ? trim((string) ($edit_cupon['email_influencer'] ?? '')) : '';
                 $hasLegacyInfluencer = $selectedInfluencerUserId === '' && ($currentInfluencerName !== '' || $currentInfluencerPhone !== '' || $currentInfluencerEmail !== '');
                 $winPointsCouponToggleEnabled = admin_coupons_win_points_enabled();
+                $selectedInfluencerFilterLabel = 'Todos los influencers';
+                if ($isInfluencerViewer) {
+                    $selectedInfluencerFilterLabel = trim((string) ($adminUser['full_name'] ?? $adminUser['nombre'] ?? $adminUser['email'] ?? 'Tus comisiones'));
+                    if ($selectedInfluencerFilterLabel === '') {
+                        $selectedInfluencerFilterLabel = 'Tus comisiones';
+                    }
+                } elseif ($selectedInfluencerFilterUser) {
+                    $selectedInfluencerFilterLabel = trim((string) ($selectedInfluencerFilterUser['nombre'] ?? ''));
+                    if ($selectedInfluencerFilterLabel === '') {
+                        $selectedInfluencerFilterLabel = trim((string) ($selectedInfluencerFilterUser['email'] ?? ''));
+                    }
+                    if ($selectedInfluencerFilterLabel === '') {
+                        $selectedInfluencerFilterLabel = 'Influencer seleccionado';
+                    }
+                }
                 ?>
                 <h2 class="text-center mb-4" style="color:#00fff7;">Gestión de Cupones</h2>
 
@@ -2099,7 +2247,31 @@ require_once __DIR__ . '/includes/header.php';
                         <form method="GET" action="" class="row g-3 align-items-end mb-4">
                             <input type="hidden" name="seccion" value="cupones">
                             <input type="hidden" name="tab" value="influencers">
-                            <div class="col-md-4">
+                            <?php if (!$isInfluencerViewer): ?>
+                            <div class="col-lg-4 col-md-6">
+                                <label class="form-label" style="color:#00fff7;">Filtrar usuario</label>
+                                <select name="filtro_influencer_usuario" class="form-select" onchange="this.form.submit()" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
+                                    <option value="">Todos los influencers</option>
+                                    <?php foreach ($influencerUsers as $influencerUser): ?>
+                                        <?php
+                                        $filterOptionId = (string) ($influencerUser['id'] ?? '');
+                                        $filterOptionName = trim((string) ($influencerUser['nombre'] ?? ''));
+                                        $filterOptionEmail = trim((string) ($influencerUser['email'] ?? ''));
+                                        $filterOptionPhone = trim((string) ($influencerUser['telefono'] ?? ''));
+                                        $filterOptionLabel = $filterOptionName !== '' ? $filterOptionName : $filterOptionEmail;
+                                        if ($filterOptionEmail !== '' && $filterOptionEmail !== $filterOptionLabel) {
+                                            $filterOptionLabel .= ' | ' . $filterOptionEmail;
+                                        }
+                                        if ($filterOptionPhone !== '') {
+                                            $filterOptionLabel .= ' | ' . $filterOptionPhone;
+                                        }
+                                        ?>
+                                        <option value="<?= htmlspecialchars($filterOptionId) ?>" <?= $selectedInfluencerFilterId === $filterOptionId ? 'selected' : '' ?>><?= htmlspecialchars($filterOptionLabel) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <?php endif; ?>
+                            <div class="<?= $isInfluencerViewer ? 'col-lg-4 col-md-4' : 'col-lg-3 col-md-6' ?>">
                                 <label class="form-label" style="color:#00fff7;">Filtrar estado</label>
                                 <select name="filtro_estado_pago" class="form-select" onchange="this.form.submit()" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
                                     <option value="pendiente" <?= $influencerPaymentFilter === 'pendiente' ? 'selected' : '' ?>>Mostrar Solo Pendientes</option>
@@ -2107,19 +2279,41 @@ require_once __DIR__ . '/includes/header.php';
                                     <option value="todos" <?= $influencerPaymentFilter === 'todos' ? 'selected' : '' ?>>Mostrar Todos</option>
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="<?= $isInfluencerViewer ? 'col-lg-3 col-md-4' : 'col-lg-2 col-md-6' ?>">
                                 <label class="form-label" style="color:#00fff7;">Desde</label>
                                 <input type="date" name="fecha_desde" value="<?= htmlspecialchars((string) ($influencerDateFrom ?? '')) ?>" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
                             </div>
-                            <div class="col-md-3">
+                            <div class="<?= $isInfluencerViewer ? 'col-lg-3 col-md-4' : 'col-lg-2 col-md-6' ?>">
                                 <label class="form-label" style="color:#00fff7;">Hasta</label>
                                 <input type="date" name="fecha_hasta" value="<?= htmlspecialchars((string) ($influencerDateTo ?? '')) ?>" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
                             </div>
-                            <div class="col-md-2 d-flex gap-2">
+                            <div class="col-12 d-flex gap-2 justify-content-md-end">
                                 <button type="submit" class="btn btn-info flex-fill" style="background:#00fff7; color:#181f2a; border:none; box-shadow:0 0 8px #00fff7;">Filtrar</button>
                                 <a href="<?= htmlspecialchars($influencerTabLink) ?>" class="btn btn-outline-info flex-fill" style="border:1px solid #00fff7; color:#00fff7;">Limpiar</a>
                             </div>
                         </form>
+                        <?php
+                        $influencerSummaryCards = [
+                            'pendiente' => ['title' => 'Pendientes', 'accent' => '#f59e0b', 'shadow' => 'rgba(245, 158, 11, 0.28)'],
+                            'pagado' => ['title' => 'Pagados', 'accent' => '#22c55e', 'shadow' => 'rgba(34, 197, 94, 0.24)'],
+                            'todos' => ['title' => 'Todos', 'accent' => '#00fff7', 'shadow' => 'rgba(0, 255, 247, 0.22)'],
+                        ];
+                        ?>
+                        <div class="mb-3" style="color:#7dd3fc;">
+                            Resumen actual: <?= htmlspecialchars($selectedInfluencerFilterLabel) ?>
+                        </div>
+                        <div class="row g-3 mb-4">
+                            <?php foreach ($influencerSummaryCards as $summaryKey => $summaryConfig): ?>
+                                <?php $summaryBucket = $influencerSalesTotals[$summaryKey] ?? ['count' => 0, 'amounts' => []]; ?>
+                                <div class="col-12 col-md-4">
+                                    <div style="height:100%; background:linear-gradient(135deg, rgba(15,23,42,0.96), rgba(24,31,42,0.92)); border:1px solid <?= htmlspecialchars($summaryConfig['accent']) ?>; border-radius:16px; padding:1rem 1.1rem; box-shadow:0 0 20px <?= htmlspecialchars($summaryConfig['shadow']) ?>;">
+                                        <div style="font-size:0.82rem; letter-spacing:0.08em; text-transform:uppercase; color:<?= htmlspecialchars($summaryConfig['accent']) ?>; font-weight:700;"><?= htmlspecialchars($summaryConfig['title']) ?></div>
+                                        <div style="margin-top:0.55rem; color:#ffffff; font-size:1.2rem; font-weight:700;"><?= htmlspecialchars(admin_format_influencer_total_amounts($summaryBucket['amounts'] ?? [])) ?></div>
+                                        <div style="margin-top:0.35rem; color:#b2f6ff; font-size:0.92rem;"><?= (int) ($summaryBucket['count'] ?? 0) ?> venta(s)</div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
                         <?php if (empty($influencerSales)): ?>
                             <p class="mb-0" style="color:#b2f6ff;">Aún no hay ventas registradas para cupones de influencers.</p>
                         <?php else: ?>
@@ -2162,6 +2356,7 @@ require_once __DIR__ . '/includes/header.php';
                                                             <input type="hidden" name="filtro_estado_pago" value="<?= htmlspecialchars($influencerPaymentFilter) ?>">
                                                             <input type="hidden" name="fecha_desde" value="<?= htmlspecialchars((string) ($influencerDateFrom ?? '')) ?>">
                                                             <input type="hidden" name="fecha_hasta" value="<?= htmlspecialchars((string) ($influencerDateTo ?? '')) ?>">
+                                                            <input type="hidden" name="filtro_influencer_usuario" value="<?= htmlspecialchars($selectedInfluencerFilterId) ?>">
                                                             <select name="estado_pago_influencer" class="form-select form-select-sm" onchange="this.form.submit()" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
                                                                 <option value="pendiente" <?= ($sale['estado_pago_influencer'] ?? 'pendiente') === 'pendiente' ? 'selected' : '' ?>>Pendiente</option>
                                                                 <option value="pagado" <?= ($sale['estado_pago_influencer'] ?? 'pendiente') === 'pagado' ? 'selected' : '' ?>>Pagado</option>
@@ -2197,6 +2392,7 @@ require_once __DIR__ . '/includes/header.php';
                                                 <input type="hidden" name="filtro_estado_pago" value="<?= htmlspecialchars($influencerPaymentFilter) ?>">
                                                 <input type="hidden" name="fecha_desde" value="<?= htmlspecialchars((string) ($influencerDateFrom ?? '')) ?>">
                                                 <input type="hidden" name="fecha_hasta" value="<?= htmlspecialchars((string) ($influencerDateTo ?? '')) ?>">
+                                                <input type="hidden" name="filtro_influencer_usuario" value="<?= htmlspecialchars($selectedInfluencerFilterId) ?>">
                                                 <label class="form-label" style="color:#00fff7;">Pendiente/Pagado</label>
                                                 <select name="estado_pago_influencer" class="form-select form-select-sm" onchange="this.form.submit()" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
                                                     <option value="pendiente" <?= ($sale['estado_pago_influencer'] ?? 'pendiente') === 'pendiente' ? 'selected' : '' ?>>Pendiente</option>
