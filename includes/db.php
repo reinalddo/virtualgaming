@@ -33,5 +33,17 @@ try {
     if (!$phoneColumn) {
         $pdo->exec("ALTER TABLE usuarios ADD COLUMN telefono VARCHAR(50) NULL AFTER email");
     }
+
+    $lastPurchaseIdentifierColumnStmt = $pdo->query("SHOW COLUMNS FROM usuarios LIKE 'last_purchase_user_identifier'");
+    $lastPurchaseIdentifierColumn = $lastPurchaseIdentifierColumnStmt ? $lastPurchaseIdentifierColumnStmt->fetch() : false;
+    if (!$lastPurchaseIdentifierColumn) {
+        $pdo->exec("ALTER TABLE usuarios ADD COLUMN last_purchase_user_identifier VARCHAR(150) NULL AFTER telefono");
+    }
+
+    $lastPurchasePhoneColumnStmt = $pdo->query("SHOW COLUMNS FROM usuarios LIKE 'last_purchase_phone'");
+    $lastPurchasePhoneColumn = $lastPurchasePhoneColumnStmt ? $lastPurchasePhoneColumnStmt->fetch() : false;
+    if (!$lastPurchasePhoneColumn) {
+        $pdo->exec("ALTER TABLE usuarios ADD COLUMN last_purchase_phone VARCHAR(50) NULL AFTER last_purchase_user_identifier");
+    }
 } catch (Throwable $exception) {
 }

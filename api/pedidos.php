@@ -754,6 +754,50 @@ function sanitize_str(?string $value, int $max = 255): ?string {
     return substr($clean, 0, $max);
 }
 
+function update_user_last_purchase_details(mysqli $mysqli, int $userId, ?string $userIdentifier = null, ?string $phone = null): void {
+    if ($userId <= 0) {
+        return;
+    }
+
+    $normalizedIdentifier = sanitize_str($userIdentifier, 150);
+    $normalizedPhone = sanitize_str($phone, 50);
+    if ($normalizedIdentifier === null && $normalizedPhone === null) {
+        return;
+    }
+
+    if ($normalizedIdentifier !== null && $normalizedPhone !== null) {
+        $stmt = $mysqli->prepare('UPDATE usuarios SET last_purchase_user_identifier = ?, last_purchase_phone = ? WHERE id = ? LIMIT 1');
+        if (!$stmt) {
+            return;
+        }
+        $stmt->bind_param('ssi', $normalizedIdentifier, $normalizedPhone, $userId);
+    } elseif ($normalizedIdentifier !== null) {
+        $stmt = $mysqli->prepare('UPDATE usuarios SET last_purchase_user_identifier = ? WHERE id = ? LIMIT 1');
+        if (!$stmt) {
+            return;
+        }
+        $stmt->bind_param('si', $normalizedIdentifier, $userId);
+    } else {
+        $stmt = $mysqli->prepare('UPDATE usuarios SET last_purchase_phone = ? WHERE id = ? LIMIT 1');
+        if (!$stmt) {
+            return;
+        }
+        $stmt->bind_param('si', $normalizedPhone, $userId);
+    }
+
+    $stmt->execute();
+    $stmt->close();
+
+    if (!empty($_SESSION['auth_user']) && (int) ($_SESSION['auth_user']['id'] ?? 0) === $userId) {
+        if ($normalizedIdentifier !== null) {
+            $_SESSION['auth_user']['last_purchase_user_identifier'] = $normalizedIdentifier;
+        }
+        if ($normalizedPhone !== null) {
+            $_SESSION['auth_user']['last_purchase_phone'] = $normalizedPhone;
+        }
+    }
+}
+
 function email_escape(?string $value): string {
     return htmlspecialchars((string) ($value ?? ''), ENT_QUOTES, 'UTF-8');
 }
@@ -3328,6 +3372,7 @@ if ($action === 'create') {
     }
     $order_id = $mysqli->insert_id;
     $stmt->close();
+    update_user_last_purchase_details($mysqli, (int) ($cliente_usuario_id ?? 0), $user_identifier, null);
     sync_coupon_usage_counts_safe($mysqli);
     $storedOrder = fetch_order_by_id($mysqli, $order_id);
     if ($storedOrder === null) {
@@ -3731,6 +3776,7 @@ if ($action === 'submit_payment') {
         json_error('No se pudieron guardar los datos del pago.', 500);
     }
     $stmt->close();
+    update_user_last_purchase_details($mysqli, (int) ($order['cliente_usuario_id'] ?? 0), (string) ($order['user_identifier'] ?? ''), $phone);
 
     $updatedOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
     $adminEmail = resolve_admin_email($mysqli);

@@ -233,6 +233,9 @@ CREATE TABLE IF NOT EXISTS usuarios (
     password VARCHAR(255) NOT NULL,
     nombre VARCHAR(120) DEFAULT NULL,
     email VARCHAR(180) DEFAULT NULL,
+    telefono VARCHAR(50) DEFAULT NULL,
+    last_purchase_user_identifier VARCHAR(150) DEFAULT NULL,
+    last_purchase_phone VARCHAR(50) DEFAULT NULL,
     rol ENUM('admin','empleado','usuario') NOT NULL DEFAULT 'usuario',
     reset_requested_at DATETIME DEFAULT NULL,
     creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -247,6 +250,15 @@ bootstrap_exec(
     "ALTER TABLE usuarios MODIFY rol ENUM('admin','empleado','usuario') NOT NULL DEFAULT 'usuario'",
     'No se pudo actualizar el enum del rol en usuarios'
 );
+if (!bootstrap_table_has_column($mysqli, 'usuarios', 'telefono')) {
+    bootstrap_exec($mysqli, "ALTER TABLE usuarios ADD COLUMN telefono VARCHAR(50) NULL AFTER email", 'No se pudo asegurar la columna telefono en usuarios');
+}
+if (!bootstrap_table_has_column($mysqli, 'usuarios', 'last_purchase_user_identifier')) {
+    bootstrap_exec($mysqli, "ALTER TABLE usuarios ADD COLUMN last_purchase_user_identifier VARCHAR(150) NULL AFTER telefono", 'No se pudo asegurar la columna last_purchase_user_identifier en usuarios');
+}
+if (!bootstrap_table_has_column($mysqli, 'usuarios', 'last_purchase_phone')) {
+    bootstrap_exec($mysqli, "ALTER TABLE usuarios ADD COLUMN last_purchase_phone VARCHAR(50) NULL AFTER last_purchase_user_identifier", 'No se pudo asegurar la columna last_purchase_phone en usuarios');
+}
 
 $currenciesSql = <<<'SQL'
 CREATE TABLE IF NOT EXISTS monedas (

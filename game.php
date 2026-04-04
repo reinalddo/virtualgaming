@@ -12,12 +12,28 @@ currency_ensure_schema();
 $paymentSupportWhatsappBase = store_config_whatsapp_link(store_config_get('whatsapp', ''));
 $loggedUserId = 0;
 $loggedUserEmail = '';
+$loggedUserLastPurchaseIdentifier = '';
+$loggedUserLastPurchasePhone = '';
 tenant_start_session();
 if (!empty($_SESSION['auth_user']['id'])) {
   $loggedUserId = (int) $_SESSION['auth_user']['id'];
 }
 if (!empty($_SESSION['auth_user']['email'])) {
   $loggedUserEmail = (string) $_SESSION['auth_user']['email'];
+}
+if ($loggedUserId > 0) {
+  $stmt = $mysqli->prepare('SELECT last_purchase_user_identifier, last_purchase_phone FROM usuarios WHERE id = ? LIMIT 1');
+  if ($stmt) {
+    $stmt->bind_param('i', $loggedUserId);
+    $stmt->execute();
+    $savedPurchaseResult = $stmt->get_result();
+    $savedPurchaseData = $savedPurchaseResult ? $savedPurchaseResult->fetch_assoc() : null;
+    $stmt->close();
+    if (is_array($savedPurchaseData)) {
+      $loggedUserLastPurchaseIdentifier = trim((string) ($savedPurchaseData['last_purchase_user_identifier'] ?? ''));
+      $loggedUserLastPurchasePhone = trim((string) ($savedPurchaseData['last_purchase_phone'] ?? ''));
+    }
+  }
 }
 payment_methods_ensure_table();
 $paymentMethodsByCurrency = payment_methods_active_by_currency();
@@ -325,7 +341,7 @@ include __DIR__ . "/includes/header.php";
         <div class="col-md-6 col-12" id="player-primary-field">
           <label class="form-label text-info" id="player-primary-label">ID de usuario</label>
           <div class="d-flex flex-column flex-sm-row gap-2 align-items-stretch">
-            <input type="text" id="order-user-id" name="user_id" placeholder="Ej: 12345678" class="form-control bg-dark text-info border-info" required />
+            <input type="text" id="order-user-id" name="user_id" placeholder="Ej: 12345678" value="<?= htmlspecialchars($loggedUserLastPurchaseIdentifier, ENT_QUOTES, 'UTF-8') ?>" class="form-control bg-dark text-info border-info" required />
             <button type="button" id="verify-player-button" class="btn btn-outline-info fw-bold text-nowrap<?= $playerVerificationConfig ? '' : ' d-none' ?>"><?= htmlspecialchars((string) ($playerVerificationConfig['buttonLabel'] ?? 'Verificar nombre del jugador'), ENT_QUOTES, 'UTF-8') ?></button>
           </div>
           <div id="player-verification-feedback" class="d-none mt-2"></div>
@@ -443,7 +459,7 @@ include __DIR__ . "/includes/header.php";
               </div>
               <div id="payment-phone-group">
                 <label for="payment-phone-input" class="form-label text-info">Número de teléfono real para contactarte</label>
-                <input type="tel" id="payment-phone-input" class="form-control bg-dark text-info border-info" autocomplete="tel" placeholder="Ej: 04121234567">
+                <input type="tel" id="payment-phone-input" class="form-control bg-dark text-info border-info" autocomplete="tel" value="<?= htmlspecialchars($loggedUserLastPurchasePhone, ENT_QUOTES, 'UTF-8') ?>" placeholder="Ej: 04121234567">
               </div>
             </div>
           </div>
@@ -1148,6 +1164,8 @@ include __DIR__ . "/includes/header.php";
   // Todas las variables y lógica JS en un solo bloque
   const appBasePath = <?= json_encode($scriptDir, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const defaultOrderEmail = <?= json_encode($loggedUserEmail, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+  let defaultOrderUserIdentifier = <?= json_encode($loggedUserLastPurchaseIdentifier, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+  let defaultPaymentPhone = <?= json_encode($loggedUserLastPurchasePhone, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const paymentMethodsByCurrency = <?= json_encode($paymentMethodsByCurrency, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const paymentSupportWhatsappBase = <?= json_encode($paymentSupportWhatsappBase, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const winPointsState = <?= json_encode([
@@ -1240,6 +1258,23 @@ include __DIR__ . "/includes/header.php";
     inputMode: 'text',
     maxLength: 150
   };
+
+  function restoreStoredPurchaseDefaults(force = false) {
+    if (playerPrimaryInput) {
+      if (playerPrimaryInput.tagName === 'SELECT') {
+        const hasStoredOption = Array.from(playerPrimaryInput.options).some((option) => String(option.value) === String(defaultOrderUserIdentifier || ''));
+        if ((force || !playerPrimaryInput.value) && hasStoredOption) {
+          playerPrimaryInput.value = defaultOrderUserIdentifier || '';
+        }
+      } else if (force || playerPrimaryInput.value.trim() === '') {
+        playerPrimaryInput.value = defaultOrderUserIdentifier || '';
+      }
+    }
+
+    if (paymentPhoneInput && (force || paymentPhoneInput.value.trim() === '')) {
+      paymentPhoneInput.value = defaultPaymentPhone || '';
+    }
+  }
   let playerVerificationState = {
     verified: false,
     playerName: '',
@@ -1664,6 +1699,8 @@ include __DIR__ . "/includes/header.php";
       const primaryFieldName = String(primaryConfig.name || defaultPrimaryField.name);
       if (shouldShowPrimaryField && existingValues[primaryFieldName] && playerPrimaryInput.value.trim() === '') {
         playerPrimaryInput.value = existingValues[primaryFieldName];
+      } else if (shouldShowPrimaryField && primaryFieldName === String(defaultPrimaryField.name) && defaultOrderUserIdentifier !== '' && playerPrimaryInput.value.trim() === '') {
+        playerPrimaryInput.value = defaultOrderUserIdentifier;
       }
 
       if (!shouldShowPrimaryField) {
@@ -2670,6 +2707,7 @@ include __DIR__ . "/includes/header.php";
   function resetCheckoutState() {
     orderForm.reset();
     orderForm.email.value = defaultOrderEmail || '';
+    restoreStoredPurchaseDefaults(true);
     couponInput.value = '';
     couponInput.disabled = false;
     if (applyCouponButton) {
@@ -2701,7 +2739,7 @@ include __DIR__ . "/includes/header.php";
     if (resetState) {
       activePaymentOrder = null;
       paymentReferenceInput.value = '';
-      paymentPhoneInput.value = '';
+      paymentPhoneInput.value = defaultPaymentPhone || '';
       clearPaymentSupportUi();
       setCancelOrderButtonMode('cancel');
       if (paymentWinPointsCard) {
@@ -2781,7 +2819,7 @@ include __DIR__ . "/includes/header.php";
     paymentSummaryProduct.textContent = pack.name || 'Producto';
     paymentSummaryTotal.textContent = totalText;
     paymentReferenceInput.value = '';
-    paymentPhoneInput.value = '';
+    paymentPhoneInput.value = defaultPaymentPhone || '';
     setPaymentFormDisabled(false);
     setPaymentAlert('', 'info');
     clearPaymentSupportUi();
@@ -3028,6 +3066,9 @@ include __DIR__ . "/includes/header.php";
                     if (data && data.win_points && Number.isFinite(Number(data.win_points.balance))) {
                       applyWinPointsUserSummary(data.win_points);
                       renderWinPointsPaymentState(activePaymentOrder.pack || activePack, selectedMethod);
+                    }
+                    if (paymentMode === 'money' && phone) {
+                      defaultPaymentPhone = phone;
                     }
 
                     setOverlayVisible(loadingModal, false);
@@ -3340,6 +3381,9 @@ include __DIR__ . "/includes/header.php";
                     }
                   }
                   if (data && data.ok) {
+                    if (userId) {
+                      defaultOrderUserIdentifier = userId;
+                    }
                     if (data.win_points && Number.isFinite(Number(data.win_points.balance))) {
                       applyWinPointsUserSummary(data.win_points);
                     }

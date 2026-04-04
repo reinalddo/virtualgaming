@@ -61,3 +61,21 @@ if ($phoneColumnResult instanceof mysqli_result) {
         $mysqli->query("ALTER TABLE usuarios ADD COLUMN telefono VARCHAR(50) NULL AFTER email");
     }
 }
+
+$lastPurchaseIdentifierColumnResult = $mysqli->query("SHOW COLUMNS FROM usuarios LIKE 'last_purchase_user_identifier'");
+if ($lastPurchaseIdentifierColumnResult instanceof mysqli_result) {
+    $lastPurchaseIdentifierColumnExists = $lastPurchaseIdentifierColumnResult->fetch_assoc();
+    $lastPurchaseIdentifierColumnResult->free();
+    if (!$lastPurchaseIdentifierColumnExists) {
+        $mysqli->query("ALTER TABLE usuarios ADD COLUMN last_purchase_user_identifier VARCHAR(150) NULL AFTER telefono");
+    }
+}
+
+$lastPurchasePhoneColumnResult = $mysqli->query("SHOW COLUMNS FROM usuarios LIKE 'last_purchase_phone'");
+if ($lastPurchasePhoneColumnResult instanceof mysqli_result) {
+    $lastPurchasePhoneColumnExists = $lastPurchasePhoneColumnResult->fetch_assoc();
+    $lastPurchasePhoneColumnResult->free();
+    if (!$lastPurchasePhoneColumnExists) {
+        $mysqli->query("ALTER TABLE usuarios ADD COLUMN last_purchase_phone VARCHAR(50) NULL AFTER last_purchase_user_identifier");
+    }
+}
