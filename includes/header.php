@@ -122,6 +122,27 @@ if ($influencerInstructionsEnabled) {
 $mainStylesPath = __DIR__ . '/../assets/css/estilos.css';
 $mainStylesVersion = asset_version($mainStylesPath);
 $themeVariablesCss = store_theme_css_variables();
+$requestUri = str_replace('\\', '/', (string) ($_SERVER['REQUEST_URI'] ?? ''));
+$scriptName = str_replace('\\', '/', (string) ($_SERVER['PHP_SELF'] ?? ''));
+$isAdminInterface = preg_match('#/admin(?:/|$)#i', $requestUri) === 1 || preg_match('#/(admin[^/]*\.php)$#i', $scriptName) === 1;
+$publicBackgroundSettings = store_config_public_background_settings();
+$publicBackgroundMediaUrl = trim((string) ($publicBackgroundSettings['asset_path'] ?? ''));
+$publicBackgroundMediaType = trim((string) ($publicBackgroundSettings['media_type'] ?? ''));
+if ($publicBackgroundMediaUrl !== '' && store_config_is_managed_public_background_path($publicBackgroundMediaUrl)) {
+  $publicBackgroundAbsolutePath = tenant_resolve_public_path($publicBackgroundMediaUrl);
+  if ($publicBackgroundAbsolutePath !== null && is_file($publicBackgroundAbsolutePath)) {
+    $publicBackgroundMediaUrl .= '?v=' . rawurlencode((string) filemtime($publicBackgroundAbsolutePath));
+  }
+}
+$renderPublicMediaBackground = !$isAdminInterface
+  && ($publicBackgroundSettings['mode'] ?? 'normal') === 'media'
+  && !empty($publicBackgroundSettings['has_media'])
+  && $publicBackgroundMediaUrl !== ''
+  && in_array($publicBackgroundMediaType, ['image', 'video'], true);
+$publicBackgroundOverlay = store_theme_rgba(
+  (string) ($publicBackgroundSettings['overlay_color'] ?? '#081018'),
+  ((int) ($publicBackgroundSettings['overlay_opacity'] ?? 52)) / 100
+);
 $googleAuthEnabled = google_oauth_is_configured();
 $googleAuthLoginUrl = $googleAuthEnabled ? google_oauth_login_url() : '';
 $pageCanonicalUrl = app_url('/');
@@ -184,6 +205,33 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
       background: radial-gradient(circle at top, var(--theme-body-glow) 0%, var(--theme-bg-main) 48%, var(--theme-bg-deep) 100%);
       color: var(--theme-text);
     }
+    body.site-media-background-active {
+      background: var(--theme-bg-main);
+    }
+    .site-media-background {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      pointer-events: none;
+      background: var(--theme-bg-main);
+    }
+    .site-media-background__media,
+    .site-media-background__overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+    .site-media-background__media {
+      object-fit: cover;
+      object-position: center center;
+      filter: saturate(1.02);
+    }
+    .site-shell-frame {
+      position: relative;
+      z-index: 1;
+    }
     .glow-ring {
       box-shadow: 0 0 0.75rem rgba(var(--theme-primary-rgb), 0.4), 0 0 2.2rem rgba(var(--theme-secondary-rgb), 0.2);
     }
@@ -227,6 +275,34 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
     window.__TVG_API_PEDIDOS = <?php echo json_encode(app_path('/api/pedidos.php'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
     window.__TVG_API_ACCOUNT = <?php echo json_encode(app_path('/api/account.php'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
     document.addEventListener('DOMContentLoaded', function() {
+      var publicBackgroundVideo = document.querySelector('[data-site-background-video]');
+      if (publicBackgroundVideo) {
+        var desiredVolume = Number(publicBackgroundVideo.getAttribute('data-volume') || '0');
+        var soundEnabled = publicBackgroundVideo.getAttribute('data-sound-enabled') === '1';
+        var startBackgroundPlayback = function() {
+          var playPromise = publicBackgroundVideo.play();
+          if (playPromise && typeof playPromise.catch === 'function') {
+            playPromise.catch(function() {});
+          }
+        };
+
+        publicBackgroundVideo.volume = Math.max(0, Math.min(1, desiredVolume));
+        publicBackgroundVideo.muted = !soundEnabled;
+        startBackgroundPlayback();
+
+        if (soundEnabled) {
+          var unlockBackgroundAudio = function() {
+            publicBackgroundVideo.muted = false;
+            publicBackgroundVideo.volume = Math.max(0, Math.min(1, desiredVolume));
+            startBackgroundPlayback();
+          };
+
+          document.addEventListener('click', unlockBackgroundAudio, { once: true });
+          document.addEventListener('touchstart', unlockBackgroundAudio, { once: true });
+          document.addEventListener('keydown', unlockBackgroundAudio, { once: true });
+        }
+      }
+
       var menuToggle = document.getElementById('menu-toggle');
       var menuPanel = document.getElementById('menu-panel');
       var menuOverlay = document.getElementById('menu-overlay');
@@ -250,8 +326,28 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
     });
   </script>
 </head>
-<body class="bg-dark text-light min-vh-100">
-  <div class="position-relative min-vh-100 overflow-hidden">
+<body class="bg-dark text-light min-vh-100<?php echo $renderPublicMediaBackground ? ' site-media-background-active' : ''; ?>">
+  <?php if ($renderPublicMediaBackground): ?>
+  <div class="site-media-background" aria-hidden="true">
+    <?php if ($publicBackgroundMediaType === 'video'): ?>
+      <video
+        class="site-media-background__media"
+        src="<?php echo htmlspecialchars($publicBackgroundMediaUrl, ENT_QUOTES, 'UTF-8'); ?>"
+        autoplay
+        loop
+        playsinline
+        preload="auto"
+        data-site-background-video
+        data-sound-enabled="<?php echo !empty($publicBackgroundSettings['sound_enabled']) ? '1' : '0'; ?>"
+        data-volume="<?php echo htmlspecialchars((string) ($publicBackgroundSettings['volume_ratio'] ?? 0), ENT_QUOTES, 'UTF-8'); ?>"
+      ></video>
+    <?php else: ?>
+      <img class="site-media-background__media" src="<?php echo htmlspecialchars($publicBackgroundMediaUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="">
+    <?php endif; ?>
+    <div class="site-media-background__overlay" style="background:<?php echo htmlspecialchars($publicBackgroundOverlay, ENT_QUOTES, 'UTF-8'); ?>;"></div>
+  </div>
+  <?php endif; ?>
+  <div class="position-relative min-vh-100 overflow-hidden site-shell-frame">
     <div class="position-absolute top-0 start-50 translate-middle-x rounded-circle" style="height:18rem;width:18rem;background:rgba(var(--theme-primary-rgb),0.15);filter:blur(48px);pointer-events:none;"></div>
     <div class="position-absolute bottom-0 end-0 rounded-circle" style="height:16rem;width:16rem;background:rgba(var(--theme-success-rgb),0.10);filter:blur(48px);pointer-events:none;"></div>
 

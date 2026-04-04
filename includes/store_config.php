@@ -218,6 +218,12 @@ function store_config_descriptions(): array {
         'meta_titulo' => 'Título SEO usado en la etiqueta title y en etiquetas Open Graph/Twitter',
         'meta_descripcion' => 'Descripción SEO usada en la etiqueta meta description para Google y redes sociales',
         'logo_tienda' => 'Ruta del logo visible en el encabezado',
+        'fondo_publico_modo' => 'Define si el sitio público usa el fondo normal del tema o un fondo multimedia fijo.',
+        'fondo_publico_media' => 'Ruta del archivo multimedia fijo usado como fondo del sitio público.',
+        'fondo_publico_overlay_color' => 'Color de la capa superpuesta colocada sobre el fondo multimedia del sitio público.',
+        'fondo_publico_overlay_opacity' => 'Nivel de opacidad de la capa superpuesta sobre el fondo multimedia del sitio público.',
+        'fondo_publico_audio_activo' => 'Activa o desactiva el audio del video de fondo en el sitio público.',
+        'fondo_publico_volumen' => 'Nivel de volumen del video de fondo del sitio público expresado entre 0 y 100.',
         'instrucciones_influencer' => 'Activa o desactiva el modulo publico y administrativo de Instrucciones Influencer',
         'google_analytics_activo' => 'Activa o desactiva la inserción del script de Google Analytics o Google Tag en el footer público',
         'google_analytics_script' => 'Código script completo de Google Analytics o Google Tag que se inserta en el footer público',
@@ -275,6 +281,12 @@ function store_config_defaults(): array {
         'meta_titulo' => 'TVirtualGaming | Tienda de monedas digitales',
         'meta_descripcion' => 'Compra monedas y recargas digitales en TVirtualGaming. Recibe ofertas, promociones y novedades directamente en tu WhatsApp.',
         'logo_tienda' => '',
+        'fondo_publico_modo' => 'normal',
+        'fondo_publico_media' => '',
+        'fondo_publico_overlay_color' => '#081018',
+        'fondo_publico_overlay_opacity' => '52',
+        'fondo_publico_audio_activo' => '0',
+        'fondo_publico_volumen' => '35',
         'instrucciones_influencer' => '0',
         'google_analytics_activo' => '0',
         'google_analytics_script' => '',
@@ -337,6 +349,58 @@ function store_config_normalize_hex_color(string $value, string $fallback = '#00
     }
 
     return $normalized;
+}
+
+function store_config_normalize_public_background_mode(string $value): string {
+    return trim(strtolower($value)) === 'media' ? 'media' : 'normal';
+}
+
+function store_config_normalize_percentage($value, int $default = 0): int {
+    if ($value === null || $value === '') {
+        return max(0, min(100, $default));
+    }
+
+    if (!is_numeric($value)) {
+        return max(0, min(100, $default));
+    }
+
+    return max(0, min(100, (int) round((float) $value)));
+}
+
+function store_config_public_background_media_type_from_path(string $path): string {
+    $cleanPath = (string) (parse_url($path, PHP_URL_PATH) ?: $path);
+    $extension = strtolower(pathinfo($cleanPath, PATHINFO_EXTENSION));
+
+    if (in_array($extension, ['mp4', 'webm', 'ogg'], true)) {
+        return 'video';
+    }
+
+    if (in_array($extension, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
+        return 'image';
+    }
+
+    return '';
+}
+
+function store_config_public_background_settings(bool $refresh = false): array {
+    $config = store_config_all($refresh);
+    $mode = store_config_normalize_public_background_mode((string) ($config['fondo_publico_modo'] ?? 'normal'));
+    $assetPath = trim((string) ($config['fondo_publico_media'] ?? ''));
+    $mediaType = store_config_public_background_media_type_from_path($assetPath);
+    $soundEnabled = ((string) ($config['fondo_publico_audio_activo'] ?? '0')) === '1';
+    $volume = store_config_normalize_percentage($config['fondo_publico_volumen'] ?? '35', 35);
+
+    return [
+        'mode' => $mode,
+        'asset_path' => $assetPath,
+        'has_media' => $assetPath !== '' && $mediaType !== '',
+        'media_type' => $mediaType,
+        'overlay_color' => store_config_normalize_hex_color((string) ($config['fondo_publico_overlay_color'] ?? '#081018'), '#081018'),
+        'overlay_opacity' => store_config_normalize_percentage($config['fondo_publico_overlay_opacity'] ?? '52', 52),
+        'sound_enabled' => $soundEnabled,
+        'volume' => $volume,
+        'volume_ratio' => max(0, min(1, $volume / 100)),
+    ];
 }
 
 function store_theme_base_values(bool $refresh = false): array {
@@ -904,8 +968,23 @@ function store_config_is_managed_logo_path(string $relativePath): bool {
     return tenant_is_managed_path($relativePath, 'store');
 }
 
+function store_config_is_managed_public_background_path(string $relativePath): bool {
+    return tenant_is_managed_path($relativePath, 'store/backgrounds');
+}
+
 function store_config_delete_logo_file(string $relativePath): void {
     if ($relativePath === '' || !store_config_is_managed_logo_path($relativePath)) {
+        return;
+    }
+
+    $absolutePath = tenant_resolve_public_path($relativePath);
+    if ($absolutePath !== null && is_file($absolutePath)) {
+        @unlink($absolutePath);
+    }
+}
+
+function store_config_delete_public_background_media_file(string $relativePath): void {
+    if ($relativePath === '' || !store_config_is_managed_public_background_path($relativePath)) {
         return;
     }
 
@@ -972,4 +1051,85 @@ function store_config_store_logo_upload(array $file): array {
 
 function store_config_store_recharge_notification_logo_upload(array $file): array {
     return store_config_store_named_logo_upload($file, 'recharge-notification-logo');
+}
+
+function store_config_store_public_background_media_upload(array $file): array {
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        return ['success' => true, 'path' => ''];
+    }
+
+    if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+        return ['success' => false, 'message' => 'No se pudo cargar el fondo multimedia.'];
+    }
+
+    $tmpName = $file['tmp_name'] ?? '';
+    if ($tmpName === '' || !is_uploaded_file($tmpName)) {
+        return ['success' => false, 'message' => 'El archivo del fondo multimedia no es válido.'];
+    }
+
+    if (($file['size'] ?? 0) > 25 * 1024 * 1024) {
+        return ['success' => false, 'message' => 'El fondo multimedia no puede superar 25 MB.'];
+    }
+
+    $mime = '';
+    if (function_exists('finfo_open')) {
+        $finfo = @finfo_open(FILEINFO_MIME_TYPE);
+        if ($finfo !== false) {
+            $mime = (string) (@finfo_file($finfo, $tmpName) ?: '');
+            finfo_close($finfo);
+        }
+    }
+
+    if ($mime === '' && function_exists('mime_content_type')) {
+        $mime = (string) (@mime_content_type($tmpName) ?: '');
+    }
+
+    $allowed = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+        'image/gif' => 'gif',
+        'video/mp4' => 'mp4',
+        'video/webm' => 'webm',
+        'video/ogg' => 'ogg',
+    ];
+    $extensionMap = [
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'png' => 'image/png',
+        'webp' => 'image/webp',
+        'gif' => 'image/gif',
+        'mp4' => 'video/mp4',
+        'webm' => 'video/webm',
+        'ogg' => 'video/ogg',
+    ];
+
+    if (!isset($allowed[$mime])) {
+        $extension = strtolower(pathinfo((string) ($file['name'] ?? ''), PATHINFO_EXTENSION));
+        if ($extension === '' || !isset($extensionMap[$extension])) {
+            return ['success' => false, 'message' => 'Formato de fondo no permitido. Usa MP4, WEBM, OGG, JPG, PNG, WEBP o GIF.'];
+        }
+        $mime = $extensionMap[$extension];
+    }
+
+    if (str_starts_with($mime, 'image/')) {
+        $imageInfo = @getimagesize($tmpName);
+        if ($imageInfo === false) {
+            return ['success' => false, 'message' => 'La imagen de fondo no es válida.'];
+        }
+    }
+
+    $targetDir = tenant_upload_absolute_dir('store/backgrounds');
+    if (!is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
+        return ['success' => false, 'message' => 'No se pudo crear la carpeta del fondo multimedia.'];
+    }
+
+    $fileName = 'site-background-' . date('YmdHis') . '-' . bin2hex(random_bytes(4)) . '.' . $allowed[$mime];
+    $targetPath = $targetDir . DIRECTORY_SEPARATOR . $fileName;
+
+    if (!move_uploaded_file($tmpName, $targetPath)) {
+        return ['success' => false, 'message' => 'No se pudo guardar el fondo multimedia en el servidor.'];
+    }
+
+    return ['success' => true, 'path' => tenant_upload_public_path('store/backgrounds', $fileName, true)];
 }
