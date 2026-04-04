@@ -40,6 +40,23 @@ if (!function_exists('win_points_guest_message')) {
     }
 }
 
+if (!function_exists('win_points_normalize_expiration_days')) {
+    function win_points_normalize_expiration_days($value): int {
+        $days = (int) $value;
+        if ($days <= 0) {
+            $days = 180;
+        }
+
+        return max(1, min(3650, $days));
+    }
+}
+
+if (!function_exists('win_points_expiration_days')) {
+    function win_points_expiration_days(): int {
+        return win_points_normalize_expiration_days(store_config_get('win_points_expiration_days', '180'));
+    }
+}
+
 if (!function_exists('win_points_icon_path')) {
     function win_points_icon_path(): string {
         return trim(store_config_get('win_points_icon', ''));
@@ -116,6 +133,7 @@ if (!function_exists('win_points_config')) {
             'icon_url' => win_points_icon_url(),
             'badge_background_color' => win_points_badge_background_color(),
             'badge_text_color' => win_points_badge_text_color(),
+            'expiration_days' => win_points_expiration_days(),
             'default_award' => win_points_default_award(),
             'guest_message' => win_points_guest_message(),
         ];
@@ -162,16 +180,19 @@ if (!function_exists('win_points_ensure_schema')) {
             "CREATE TABLE IF NOT EXISTS win_points_wallets (
                 user_id INT NOT NULL PRIMARY KEY,
                 balance INT NOT NULL DEFAULT 0,
+                expiration_reference_at DATETIME NULL DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                INDEX idx_win_points_wallets_balance (balance)
+                INDEX idx_win_points_wallets_balance (balance),
+                INDEX idx_win_points_wallets_expiration_reference (expiration_reference_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
         );
 
         $walletColumns = [
             'user_id' => "ALTER TABLE win_points_wallets ADD COLUMN user_id INT NOT NULL PRIMARY KEY",
             'balance' => "ALTER TABLE win_points_wallets ADD COLUMN balance INT NOT NULL DEFAULT 0 AFTER user_id",
-            'created_at' => "ALTER TABLE win_points_wallets ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER balance",
+            'expiration_reference_at' => "ALTER TABLE win_points_wallets ADD COLUMN expiration_reference_at DATETIME NULL DEFAULT NULL AFTER balance",
+            'created_at' => "ALTER TABLE win_points_wallets ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER expiration_reference_at",
             'updated_at' => "ALTER TABLE win_points_wallets ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at",
         ];
         $walletColumnResult = $mysqli->query('SHOW COLUMNS FROM win_points_wallets');
@@ -189,6 +210,10 @@ if (!function_exists('win_points_ensure_schema')) {
         $walletIndexResult = $mysqli->query("SHOW INDEX FROM win_points_wallets WHERE Key_name = 'idx_win_points_wallets_balance'");
         if (!($walletIndexResult instanceof mysqli_result) || $walletIndexResult->num_rows === 0) {
             $mysqli->query('ALTER TABLE win_points_wallets ADD INDEX idx_win_points_wallets_balance (balance)');
+        }
+        $walletExpirationIndexResult = $mysqli->query("SHOW INDEX FROM win_points_wallets WHERE Key_name = 'idx_win_points_wallets_expiration_reference'");
+        if (!($walletExpirationIndexResult instanceof mysqli_result) || $walletExpirationIndexResult->num_rows === 0) {
+            $mysqli->query('ALTER TABLE win_points_wallets ADD INDEX idx_win_points_wallets_expiration_reference (expiration_reference_at)');
         }
 
         $mysqli->query(
@@ -350,45 +375,205 @@ if (!function_exists('win_points_wallet_balance')) {
 
         win_points_ensure_schema();
         win_points_ensure_wallet($mysqli, $userId);
-        $stmt = $mysqli->prepare('SELECT balance FROM win_points_wallets WHERE user_id = ? LIMIT 1');
+        $walletState = win_points_fetch_wallet_state($mysqli, $userId);
+        return (int) ($walletState['effective_balance'] ?? 0);
+    }
+}
+
+if (!function_exists('win_points_wallet_expiration_empty')) {
+    function win_points_wallet_expiration_empty(?int $expirationDays = null): array {
+        return [
+            'expiration_days' => $expirationDays ?? win_points_expiration_days(),
+            'expiration_reference_at' => null,
+            'expires_at' => null,
+            'expires_at_iso' => null,
+            'expires_at_label' => 'Sin saldo',
+            'days_remaining' => null,
+            'days_remaining_label' => 'Sin saldo',
+            'is_expired' => false,
+            'status' => 'no_balance',
+        ];
+    }
+}
+
+if (!function_exists('win_points_compute_expiration_data')) {
+    function win_points_compute_expiration_data(?string $referenceAt, int $balance, ?int $expirationDays = null): array {
+        $resolvedDays = $expirationDays ?? win_points_expiration_days();
+        if ($balance <= 0) {
+            return win_points_wallet_expiration_empty($resolvedDays);
+        }
+
+        $referenceAt = trim((string) $referenceAt);
+        if ($referenceAt === '') {
+            return [
+                'expiration_days' => $resolvedDays,
+                'expiration_reference_at' => null,
+                'expires_at' => null,
+                'expires_at_iso' => null,
+                'expires_at_label' => 'Por definir',
+                'days_remaining' => null,
+                'days_remaining_label' => 'Por definir',
+                'is_expired' => false,
+                'status' => 'pending_reference',
+            ];
+        }
+
+        try {
+            $referenceDate = new DateTimeImmutable($referenceAt);
+            $expiresDate = $referenceDate->modify('+' . $resolvedDays . ' days');
+        } catch (Throwable $exception) {
+            return [
+                'expiration_days' => $resolvedDays,
+                'expiration_reference_at' => null,
+                'expires_at' => null,
+                'expires_at_iso' => null,
+                'expires_at_label' => 'Por definir',
+                'days_remaining' => null,
+                'days_remaining_label' => 'Por definir',
+                'is_expired' => false,
+                'status' => 'pending_reference',
+            ];
+        }
+
+        $nowTimestamp = time();
+        $expiresTimestamp = $expiresDate->getTimestamp();
+        $remainingSeconds = $expiresTimestamp - $nowTimestamp;
+
+        if ($remainingSeconds <= 0) {
+            return [
+                'expiration_days' => $resolvedDays,
+                'expiration_reference_at' => $referenceDate->format('Y-m-d H:i:s'),
+                'expires_at' => $expiresDate->format('Y-m-d H:i:s'),
+                'expires_at_iso' => $expiresDate->format(DATE_ATOM),
+                'expires_at_label' => $expiresDate->format('d/m/Y H:i'),
+                'days_remaining' => 0,
+                'days_remaining_label' => 'Vencidos',
+                'is_expired' => true,
+                'status' => 'expired',
+            ];
+        }
+
+        $daysRemaining = (int) ceil($remainingSeconds / 86400);
+
+        return [
+            'expiration_days' => $resolvedDays,
+            'expiration_reference_at' => $referenceDate->format('Y-m-d H:i:s'),
+            'expires_at' => $expiresDate->format('Y-m-d H:i:s'),
+            'expires_at_iso' => $expiresDate->format(DATE_ATOM),
+            'expires_at_label' => $expiresDate->format('d/m/Y H:i'),
+            'days_remaining' => $daysRemaining,
+            'days_remaining_label' => $daysRemaining === 1 ? '1 dia' : ($daysRemaining . ' dias'),
+            'is_expired' => false,
+            'status' => $daysRemaining <= 7 ? 'warning' : 'active',
+        ];
+    }
+}
+
+if (!function_exists('win_points_find_wallet_reference_at')) {
+    function win_points_find_wallet_reference_at(mysqli $mysqli, int $userId, array $walletRow = []): ?string {
+        if ($userId <= 0) {
+            return null;
+        }
+
+        $stmt = $mysqli->prepare(
+            "SELECT MAX(created_at) AS last_reference_at
+             FROM win_points_transactions
+             WHERE user_id = ?
+               AND points_delta > 0
+               AND transaction_type IN ('earn', 'admin_adjustment')"
+        );
+        if ($stmt) {
+            $stmt->bind_param('i', $userId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $row = $result instanceof mysqli_result ? $result->fetch_assoc() : null;
+            $stmt->close();
+            $referenceAt = trim((string) ($row['last_reference_at'] ?? ''));
+            if ($referenceAt !== '') {
+                return $referenceAt;
+            }
+        }
+
+        foreach (['updated_at', 'created_at'] as $fallbackKey) {
+            $fallbackValue = trim((string) ($walletRow[$fallbackKey] ?? ''));
+            if ($fallbackValue !== '') {
+                return $fallbackValue;
+            }
+        }
+
+        return null;
+    }
+}
+
+if (!function_exists('win_points_resolve_wallet_reference_at')) {
+    function win_points_resolve_wallet_reference_at(mysqli $mysqli, int $userId, array $walletRow, bool $persist = false): ?string {
+        $referenceAt = trim((string) ($walletRow['expiration_reference_at'] ?? ''));
+        if ($referenceAt !== '') {
+            return $referenceAt;
+        }
+
+        if ((int) ($walletRow['balance'] ?? 0) <= 0) {
+            return null;
+        }
+
+        $referenceAt = win_points_find_wallet_reference_at($mysqli, $userId, $walletRow);
+        if ($persist && $referenceAt !== null && trim($referenceAt) !== '') {
+            $stmt = $mysqli->prepare('UPDATE win_points_wallets SET expiration_reference_at = ? WHERE user_id = ?');
+            if ($stmt) {
+                $stmt->bind_param('si', $referenceAt, $userId);
+                $stmt->execute();
+                $stmt->close();
+            }
+        }
+
+        return $referenceAt !== null && trim($referenceAt) !== '' ? $referenceAt : null;
+    }
+}
+
+if (!function_exists('win_points_fetch_wallet_state')) {
+    function win_points_fetch_wallet_state(mysqli $mysqli, int $userId): array {
+        if ($userId <= 0) {
+            return [
+                'user_id' => 0,
+                'balance' => 0,
+                'effective_balance' => 0,
+            ] + win_points_wallet_expiration_empty();
+        }
+
+        win_points_ensure_schema();
+        win_points_ensure_wallet($mysqli, $userId);
+        $stmt = $mysqli->prepare('SELECT user_id, balance, expiration_reference_at, created_at, updated_at FROM win_points_wallets WHERE user_id = ? LIMIT 1');
         if (!$stmt) {
-            return 0;
+            return [
+                'user_id' => $userId,
+                'balance' => 0,
+                'effective_balance' => 0,
+            ] + win_points_wallet_expiration_empty();
         }
         $stmt->bind_param('i', $userId);
         $stmt->execute();
         $result = $stmt->get_result();
         $row = $result instanceof mysqli_result ? $result->fetch_assoc() : null;
         $stmt->close();
-        return (int) ($row['balance'] ?? 0);
+
+        $walletRow = is_array($row) ? $row : [
+            'user_id' => $userId,
+            'balance' => 0,
+            'expiration_reference_at' => null,
+            'created_at' => null,
+            'updated_at' => null,
+        ];
+        $referenceAt = win_points_resolve_wallet_reference_at($mysqli, $userId, $walletRow, true);
+        $expiration = win_points_compute_expiration_data($referenceAt, (int) ($walletRow['balance'] ?? 0));
+
+        return array_merge($walletRow, $expiration, [
+            'effective_balance' => !empty($expiration['is_expired']) ? 0 : (int) ($walletRow['balance'] ?? 0),
+        ]);
     }
 }
 
-if (!function_exists('win_points_record_transaction')) {
-    function win_points_record_transaction(mysqli $mysqli, int $userId, int $pointsDelta, string $type, string $description = '', ?int $orderId = null, ?int $gameId = null, ?int $packageId = null, ?int $actorUserId = null, array $metadata = []): array {
-        win_points_ensure_schema();
-        win_points_ensure_wallet($mysqli, $userId);
-
-        $walletStmt = $mysqli->prepare('SELECT balance FROM win_points_wallets WHERE user_id = ? LIMIT 1 FOR UPDATE');
-        if (!$walletStmt) {
-            throw new RuntimeException('No se pudo bloquear la wallet de premios.');
-        }
-        $walletStmt->bind_param('i', $userId);
-        $walletStmt->execute();
-        $walletResult = $walletStmt->get_result();
-        $walletRow = $walletResult instanceof mysqli_result ? $walletResult->fetch_assoc() : null;
-        $walletStmt->close();
-
-        $currentBalance = (int) ($walletRow['balance'] ?? 0);
-        $nextBalance = $currentBalance + $pointsDelta;
-
-        $updateStmt = $mysqli->prepare('UPDATE win_points_wallets SET balance = ? WHERE user_id = ?');
-        if (!$updateStmt) {
-            throw new RuntimeException('No se pudo actualizar el saldo de premios.');
-        }
-        $updateStmt->bind_param('ii', $nextBalance, $userId);
-        $updateStmt->execute();
-        $updateStmt->close();
-
+if (!function_exists('win_points_insert_transaction_row')) {
+    function win_points_insert_transaction_row(mysqli $mysqli, int $userId, int $pointsDelta, string $type, int $balanceAfter, string $description = '', ?int $orderId = null, ?int $gameId = null, ?int $packageId = null, ?int $actorUserId = null, array $metadata = []): int {
         $metadataJson = json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         if (!is_string($metadataJson)) {
             $metadataJson = '{}';
@@ -402,10 +587,97 @@ if (!function_exists('win_points_record_transaction')) {
         $resolvedGameId = $gameId ?? 0;
         $resolvedPackageId = $packageId ?? 0;
         $resolvedActorUserId = $actorUserId ?? 0;
-        $insertStmt->bind_param('iiiiisiiss', $userId, $resolvedOrderId, $resolvedGameId, $resolvedPackageId, $resolvedActorUserId, $type, $pointsDelta, $nextBalance, $description, $metadataJson);
+        $insertStmt->bind_param('iiiiisiiss', $userId, $resolvedOrderId, $resolvedGameId, $resolvedPackageId, $resolvedActorUserId, $type, $pointsDelta, $balanceAfter, $description, $metadataJson);
         $insertStmt->execute();
         $transactionId = (int) $insertStmt->insert_id;
         $insertStmt->close();
+
+        return $transactionId;
+    }
+}
+
+if (!function_exists('win_points_transaction_refreshes_expiration')) {
+    function win_points_transaction_refreshes_expiration(string $type, int $pointsDelta, array $metadata = []): bool {
+        if (array_key_exists('refresh_expiration', $metadata)) {
+            return (bool) $metadata['refresh_expiration'];
+        }
+
+        if ($pointsDelta <= 0) {
+            return false;
+        }
+
+        return in_array($type, ['earn', 'admin_adjustment'], true);
+    }
+}
+
+if (!function_exists('win_points_record_transaction')) {
+    function win_points_record_transaction(mysqli $mysqli, int $userId, int $pointsDelta, string $type, string $description = '', ?int $orderId = null, ?int $gameId = null, ?int $packageId = null, ?int $actorUserId = null, array $metadata = []): array {
+        win_points_ensure_schema();
+        win_points_ensure_wallet($mysqli, $userId);
+
+        $walletStmt = $mysqli->prepare('SELECT balance, expiration_reference_at, created_at, updated_at FROM win_points_wallets WHERE user_id = ? LIMIT 1 FOR UPDATE');
+        if (!$walletStmt) {
+            throw new RuntimeException('No se pudo bloquear la wallet de premios.');
+        }
+        $walletStmt->bind_param('i', $userId);
+        $walletStmt->execute();
+        $walletResult = $walletStmt->get_result();
+        $walletRow = $walletResult instanceof mysqli_result ? $walletResult->fetch_assoc() : null;
+        $walletStmt->close();
+
+        $currentBalance = (int) ($walletRow['balance'] ?? 0);
+        $referenceAt = win_points_resolve_wallet_reference_at($mysqli, $userId, $walletRow ?? [], false);
+        $expiration = win_points_compute_expiration_data($referenceAt, $currentBalance);
+
+        if (!empty($expiration['is_expired']) && $currentBalance > 0) {
+            $expiredBalance = $currentBalance;
+            $expireUpdateStmt = $mysqli->prepare('UPDATE win_points_wallets SET balance = 0, expiration_reference_at = ? WHERE user_id = ?');
+            if (!$expireUpdateStmt) {
+                throw new RuntimeException('No se pudo actualizar la wallet vencida de premios.');
+            }
+            $resolvedReferenceAt = $expiration['expiration_reference_at'] ?? $referenceAt;
+            $expireUpdateStmt->bind_param('si', $resolvedReferenceAt, $userId);
+            $expireUpdateStmt->execute();
+            $expireUpdateStmt->close();
+
+            win_points_insert_transaction_row(
+                $mysqli,
+                $userId,
+                -$expiredBalance,
+                'expiration',
+                0,
+                'Vencimiento automatico de ' . win_points_program_name() . ' por inactividad de recarga.',
+                null,
+                null,
+                null,
+                null,
+                [
+                    'expired_balance' => $expiredBalance,
+                    'expiration_days' => (int) ($expiration['expiration_days'] ?? win_points_expiration_days()),
+                    'expiration_reference_at' => $resolvedReferenceAt,
+                ]
+            );
+
+            $currentBalance = 0;
+        }
+
+        $nextBalance = $currentBalance + $pointsDelta;
+        $nextReferenceAt = $referenceAt;
+        if (win_points_transaction_refreshes_expiration($type, $pointsDelta, $metadata)) {
+            $nextReferenceAt = date('Y-m-d H:i:s');
+        } elseif ($currentBalance <= 0 && $nextBalance <= 0) {
+            $nextReferenceAt = null;
+        }
+
+        $updateStmt = $mysqli->prepare('UPDATE win_points_wallets SET balance = ?, expiration_reference_at = ? WHERE user_id = ?');
+        if (!$updateStmt) {
+            throw new RuntimeException('No se pudo actualizar el saldo de premios.');
+        }
+        $updateStmt->bind_param('isi', $nextBalance, $nextReferenceAt, $userId);
+        $updateStmt->execute();
+        $updateStmt->close();
+
+        $transactionId = win_points_insert_transaction_row($mysqli, $userId, $pointsDelta, $type, $nextBalance, $description, $orderId, $gameId, $packageId, $actorUserId, $metadata);
 
         return [
             'transaction_id' => $transactionId,
@@ -542,10 +814,11 @@ if (!function_exists('win_points_fetch_user_summary')) {
                 'earned' => 0,
                 'spent' => 0,
                 'transactions' => 0,
-            ];
+            ] + win_points_wallet_expiration_empty();
         }
 
-        $balance = win_points_wallet_balance($mysqli, $userId);
+        $walletState = win_points_fetch_wallet_state($mysqli, $userId);
+        $balance = (int) ($walletState['effective_balance'] ?? 0);
         $stmt = $mysqli->prepare(
             "SELECT
                 COALESCE(SUM(CASE WHEN transaction_type = 'earn' THEN points_delta ELSE 0 END), 0) AS earned_points,
@@ -560,6 +833,16 @@ if (!function_exists('win_points_fetch_user_summary')) {
                 'earned' => 0,
                 'spent' => 0,
                 'transactions' => 0,
+            ] + [
+                'expiration_days' => (int) ($walletState['expiration_days'] ?? win_points_expiration_days()),
+                'expiration_reference_at' => $walletState['expiration_reference_at'] ?? null,
+                'expires_at' => $walletState['expires_at'] ?? null,
+                'expires_at_iso' => $walletState['expires_at_iso'] ?? null,
+                'expires_at_label' => $walletState['expires_at_label'] ?? 'Sin saldo',
+                'days_remaining' => $walletState['days_remaining'] ?? null,
+                'days_remaining_label' => $walletState['days_remaining_label'] ?? 'Sin saldo',
+                'is_expired' => !empty($walletState['is_expired']),
+                'expiration_status' => (string) ($walletState['status'] ?? 'no_balance'),
             ];
         }
         $stmt->bind_param('i', $userId);
@@ -573,7 +856,46 @@ if (!function_exists('win_points_fetch_user_summary')) {
             'earned' => (int) ($row['earned_points'] ?? 0),
             'spent' => (int) ($row['spent_points'] ?? 0),
             'transactions' => (int) ($row['total_transactions'] ?? 0),
+            'expiration_days' => (int) ($walletState['expiration_days'] ?? win_points_expiration_days()),
+            'expiration_reference_at' => $walletState['expiration_reference_at'] ?? null,
+            'expires_at' => $walletState['expires_at'] ?? null,
+            'expires_at_iso' => $walletState['expires_at_iso'] ?? null,
+            'expires_at_label' => $walletState['expires_at_label'] ?? 'Sin saldo',
+            'days_remaining' => $walletState['days_remaining'] ?? null,
+            'days_remaining_label' => $walletState['days_remaining_label'] ?? 'Sin saldo',
+            'is_expired' => !empty($walletState['is_expired']),
+            'expiration_status' => (string) ($walletState['status'] ?? 'no_balance'),
         ];
+    }
+}
+
+if (!function_exists('win_points_empty_user_summary')) {
+    function win_points_empty_user_summary(): array {
+        return [
+            'balance' => 0,
+            'earned' => 0,
+            'spent' => 0,
+            'transactions' => 0,
+        ] + win_points_wallet_expiration_empty();
+    }
+}
+
+if (!function_exists('win_points_response_payload')) {
+    function win_points_response_payload(mysqli $mysqli, ?int $userId = null, array $extra = []): array {
+        $summary = $userId !== null && $userId > 0
+            ? win_points_fetch_user_summary($mysqli, $userId)
+            : win_points_empty_user_summary();
+
+        return array_merge([
+            'name' => win_points_program_name(),
+            'balance' => (int) ($summary['balance'] ?? 0),
+            'days_remaining' => $summary['days_remaining'] ?? null,
+            'days_remaining_label' => (string) ($summary['days_remaining_label'] ?? 'Sin saldo'),
+            'expires_at' => $summary['expires_at'] ?? null,
+            'expires_at_label' => (string) ($summary['expires_at_label'] ?? 'Sin saldo'),
+            'is_expired' => !empty($summary['is_expired']),
+            'expiration_status' => (string) ($summary['expiration_status'] ?? 'no_balance'),
+        ], $extra);
     }
 }
 
@@ -956,9 +1278,33 @@ if (!function_exists('win_points_fetch_admin_users')) {
         $result = $mysqli->query($sql);
         if ($result instanceof mysqli_result) {
             while ($row = $result->fetch_assoc()) {
+                $walletState = win_points_fetch_wallet_state($mysqli, (int) ($row['id'] ?? 0));
+                $row['balance'] = (int) ($walletState['effective_balance'] ?? 0);
+                $row['expiration_days'] = (int) ($walletState['expiration_days'] ?? win_points_expiration_days());
+                $row['expiration_reference_at'] = $walletState['expiration_reference_at'] ?? null;
+                $row['expires_at'] = $walletState['expires_at'] ?? null;
+                $row['expires_at_iso'] = $walletState['expires_at_iso'] ?? null;
+                $row['expires_at_label'] = $walletState['expires_at_label'] ?? 'Sin saldo';
+                $row['days_remaining'] = $walletState['days_remaining'] ?? null;
+                $row['days_remaining_label'] = $walletState['days_remaining_label'] ?? 'Sin saldo';
+                $row['is_expired'] = !empty($walletState['is_expired']);
+                $row['expiration_status'] = (string) ($walletState['status'] ?? 'no_balance');
                 $rows[] = $row;
             }
         }
+        usort($rows, static function (array $left, array $right): int {
+            $balanceComparison = (int) ($right['balance'] ?? 0) <=> (int) ($left['balance'] ?? 0);
+            if ($balanceComparison !== 0) {
+                return $balanceComparison;
+            }
+
+            $nameComparison = strcasecmp((string) ($left['nombre'] ?? ''), (string) ($right['nombre'] ?? ''));
+            if ($nameComparison !== 0) {
+                return $nameComparison;
+            }
+
+            return strcasecmp((string) ($left['email'] ?? ''), (string) ($right['email'] ?? ''));
+        });
         return $rows;
     }
 }
@@ -1081,9 +1427,33 @@ if (!function_exists('win_points_fetch_admin_wallets')) {
         $result = $mysqli->query($sql);
         if ($result instanceof mysqli_result) {
             while ($row = $result->fetch_assoc()) {
+                $walletState = win_points_fetch_wallet_state($mysqli, (int) ($row['id'] ?? 0));
+                $row['balance'] = (int) ($walletState['effective_balance'] ?? 0);
+                $row['expiration_days'] = (int) ($walletState['expiration_days'] ?? win_points_expiration_days());
+                $row['expiration_reference_at'] = $walletState['expiration_reference_at'] ?? null;
+                $row['expires_at'] = $walletState['expires_at'] ?? null;
+                $row['expires_at_iso'] = $walletState['expires_at_iso'] ?? null;
+                $row['expires_at_label'] = $walletState['expires_at_label'] ?? 'Sin saldo';
+                $row['days_remaining'] = $walletState['days_remaining'] ?? null;
+                $row['days_remaining_label'] = $walletState['days_remaining_label'] ?? 'Sin saldo';
+                $row['is_expired'] = !empty($walletState['is_expired']);
+                $row['expiration_status'] = (string) ($walletState['status'] ?? 'no_balance');
                 $rows[] = $row;
             }
         }
+        usort($rows, static function (array $left, array $right): int {
+            $balanceComparison = (int) ($right['balance'] ?? 0) <=> (int) ($left['balance'] ?? 0);
+            if ($balanceComparison !== 0) {
+                return $balanceComparison;
+            }
+
+            $nameComparison = strcasecmp((string) ($left['nombre'] ?? ''), (string) ($right['nombre'] ?? ''));
+            if ($nameComparison !== 0) {
+                return $nameComparison;
+            }
+
+            return strcasecmp((string) ($left['email'] ?? ''), (string) ($right['email'] ?? ''));
+        });
         return $rows;
     }
 }

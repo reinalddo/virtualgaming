@@ -3380,13 +3380,11 @@ if ($action === 'create') {
         'created_at' => date(DATE_ATOM, isset($storedOrder['creado_en_ts']) ? (int) $storedOrder['creado_en_ts'] : time()),
         'expires_at' => order_expiration_iso($storedOrder),
         'remaining_seconds' => max(0, order_expiration_timestamp($storedOrder) - time()),
-        'win_points' => [
+        'win_points' => win_points_response_payload($mysqli, $winPointsEligible && $cliente_usuario_id !== null ? (int) $cliente_usuario_id : null, [
             'enabled' => win_points_enabled(),
             'eligible' => $winPointsAllowedForOrder,
             'award' => $winPointsAward,
-            'name' => win_points_program_name(),
-            'balance' => $winPointsEligible && $cliente_usuario_id !== null ? win_points_wallet_balance($mysqli, (int) $cliente_usuario_id) : 0,
-        ]
+        ])
     ]);
 }
 
@@ -3461,11 +3459,9 @@ if ($action === 'submit_payment') {
                 'estado' => 'pagado',
                 'verified' => true,
                 'payment_mode' => 'points',
-                'win_points' => [
-                    'name' => win_points_program_name(),
+                'win_points' => win_points_response_payload($mysqli, $sessionUserId, [
                     'spent' => $requiredPoints,
-                    'balance' => win_points_wallet_balance($mysqli, $sessionUserId),
-                ],
+                ]),
             ]);
         }
 
@@ -3531,11 +3527,9 @@ if ($action === 'submit_payment') {
                 'provider_reference' => $providerReference,
                 'provider_message' => $providerMessage,
                 'provider_code' => $providerCode,
-                'win_points' => [
-                    'name' => win_points_program_name(),
+                'win_points' => win_points_response_payload($mysqli, $sessionUserId, [
                     'spent' => $requiredPoints,
-                    'balance' => win_points_wallet_balance($mysqli, $sessionUserId),
-                ],
+                ]),
             ]);
         }
 
@@ -3595,11 +3589,9 @@ if ($action === 'submit_payment') {
                             'provider_reference' => $providerReference,
                             'provider_message' => $providerMessage,
                             'provider_code' => $providerCode,
-                            'win_points' => [
-                                'name' => win_points_program_name(),
+                            'win_points' => win_points_response_payload($mysqli, $sessionUserId, [
                                 'spent' => $requiredPoints,
-                                'balance' => win_points_wallet_balance($mysqli, $sessionUserId),
-                            ],
+                            ]),
                         ]);
                     }
 
@@ -3622,11 +3614,9 @@ if ($action === 'submit_payment') {
                             'reasons' => [$providerMessage],
                             'provider_reference' => $providerReference,
                             'provider_message' => $providerMessage,
-                            'win_points' => [
-                                'name' => win_points_program_name(),
+                            'win_points' => win_points_response_payload($mysqli, $sessionUserId, [
                                 'spent' => 0,
-                                'balance' => win_points_wallet_balance($mysqli, $sessionUserId),
-                            ],
+                            ]),
                         ]);
                     }
                 }
@@ -3646,11 +3636,9 @@ if ($action === 'submit_payment') {
                 'provider_reference' => $providerReference,
                 'provider_message' => $providerMessage,
                 'provider_code' => $providerCode,
-                'win_points' => [
-                    'name' => win_points_program_name(),
+                'win_points' => win_points_response_payload($mysqli, $sessionUserId, [
                     'spent' => $requiredPoints,
-                    'balance' => win_points_wallet_balance($mysqli, $sessionUserId),
-                ],
+                ]),
             ]);
         }
 
@@ -3690,11 +3678,9 @@ if ($action === 'submit_payment') {
             'reasons' => [$providerMessage],
             'provider_reference' => $providerReference,
             'provider_message' => $providerMessage,
-            'win_points' => [
-                'name' => win_points_program_name(),
+            'win_points' => win_points_response_payload($mysqli, $sessionUserId, [
                 'spent' => 0,
-                'balance' => win_points_wallet_balance($mysqli, $sessionUserId),
-            ],
+            ]),
         ]);
     }
 

@@ -58,6 +58,7 @@ $menuScript = <<<'SCRIPT'
   const userRewardsCards = document.getElementById("user-rewards-cards");
   const userRewardsModalTitle = document.getElementById("user-rewards-modal-title");
   const userRewardsBalanceValue = document.getElementById("user-rewards-balance-value");
+  const userRewardsExpirationValue = document.getElementById("user-rewards-expiration-value");
   const userRewardsEarnedValue = document.getElementById("user-rewards-earned-value");
   const userRewardsSpentValue = document.getElementById("user-rewards-spent-value");
   const userRewardsTransactionsValue = document.getElementById("user-rewards-transactions-value");
@@ -69,6 +70,7 @@ $menuScript = <<<'SCRIPT'
   const userMenuEmail = document.getElementById("user-menu-email");
   const userMenuRewardsName = document.getElementById("user-menu-rewards-name");
   const userMenuRewardsBalance = document.getElementById("user-menu-rewards-balance");
+  const userMenuRewardsExpiration = document.getElementById("user-menu-rewards-expiration");
 
   const showElement = (element, displayClass) => {
     if (!element) {
@@ -183,8 +185,24 @@ $menuScript = <<<'SCRIPT'
       award_reversal: "Reverso de premio",
       redeem_refund: "Reembolso de canje",
       admin_adjustment: "Ajuste manual",
+      expiration: "Vencimiento",
     };
     return labels[type] || type || "Movimiento";
+  };
+
+  const rewardsExpirationText = (summary, includeDate = false) => {
+    const status = String(summary?.expiration_status || "").trim();
+    const daysLabel = String(summary?.days_remaining_label || "").trim();
+    const expiresLabel = String(summary?.expires_at_label || "").trim();
+    if (status === "expired") {
+      return includeDate && expiresLabel && expiresLabel !== "Sin saldo" ? `Vencidos | ${expiresLabel}` : "Vencidos";
+    }
+    if ((status === "active" || status === "warning") && daysLabel !== "") {
+      return includeDate && expiresLabel && expiresLabel !== "Sin saldo"
+        ? `Vence en ${daysLabel} | ${expiresLabel}`
+        : `Vence en ${daysLabel}`;
+    }
+    return daysLabel || "Sin saldo";
   };
 
   const formatPointsNumber = (value) => {
@@ -289,11 +307,17 @@ $menuScript = <<<'SCRIPT'
     if (userMenuRewardsBalance) {
       userMenuRewardsBalance.textContent = formatPointsNumber(summary.balance || 0);
     }
+    if (userMenuRewardsExpiration) {
+      userMenuRewardsExpiration.textContent = rewardsExpirationText(summary, false);
+    }
     if (userRewardsModalTitle) {
       userRewardsModalTitle.textContent = `Mis ${programName}`;
     }
     if (userRewardsBalanceValue) {
       userRewardsBalanceValue.textContent = formatPointsNumber(summary.balance || 0);
+    }
+    if (userRewardsExpirationValue) {
+      userRewardsExpirationValue.textContent = rewardsExpirationText(summary, true);
     }
     if (userRewardsEarnedValue) {
       userRewardsEarnedValue.textContent = formatPointsNumber(summary.earned || 0);

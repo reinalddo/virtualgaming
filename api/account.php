@@ -107,12 +107,7 @@ if ($action === 'rewards') {
         account_json_ok([
             'enabled' => false,
             'config' => $config,
-            'summary' => [
-                'balance' => 0,
-                'earned' => 0,
-                'spent' => 0,
-                'transactions' => 0,
-            ],
+            'summary' => win_points_empty_user_summary(),
             'transactions' => [],
         ]);
     }

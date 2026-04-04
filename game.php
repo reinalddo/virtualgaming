@@ -77,7 +77,7 @@ $winPointsBadgeInsetColor = win_points_hex_to_rgba($winPointsBadgeTextColor, 0.0
 $winPointsGuestMessage = (string) ($winPointsConfig['guest_message'] ?? '');
 $winPointsUserSummary = $winPointsEnabled && $loggedUserId > 0
   ? win_points_fetch_user_summary($mysqli, $loggedUserId)
-  : ['balance' => 0, 'earned' => 0, 'spent' => 0, 'transactions' => 0];
+  : win_points_empty_user_summary();
 $winPointsPackageRewards = $winPointsEnabled
   ? win_points_fetch_game_package_rewards($mysqli, (int) ($game['id'] ?? 0))
   : [];
@@ -1277,6 +1277,48 @@ include __DIR__ . "/includes/header.php";
 
   function formatWinPointsAmount(points) {
     return `${Number(points || 0).toLocaleString('en-US')} ${winPointsState.name || 'Win Points'}`;
+  }
+
+  function formatWinPointsExpirationText(summary, includeDate = false) {
+    const status = String((summary && summary.expiration_status) || '').trim();
+    const daysLabel = String((summary && summary.days_remaining_label) || '').trim();
+    const expiresLabel = String((summary && summary.expires_at_label) || '').trim();
+    if (status === 'expired') {
+      return includeDate && expiresLabel && expiresLabel !== 'Sin saldo' ? `Vencidos | ${expiresLabel}` : 'Vencidos';
+    }
+    if ((status === 'active' || status === 'warning') && daysLabel !== '') {
+      return includeDate && expiresLabel && expiresLabel !== 'Sin saldo'
+        ? `Vence en ${daysLabel} | ${expiresLabel}`
+        : `Vence en ${daysLabel}`;
+    }
+    return daysLabel || 'Sin saldo';
+  }
+
+  function applyWinPointsUserSummary(summary) {
+    if (!summary || !Number.isFinite(Number(summary.balance))) {
+      return;
+    }
+
+    const refreshedBalance = Number(summary.balance);
+    const userMenuRewardsBalance = document.getElementById('user-menu-rewards-balance');
+    const userRewardsBalanceValue = document.getElementById('user-rewards-balance-value');
+    const userMenuRewardsExpiration = document.getElementById('user-menu-rewards-expiration');
+    const userRewardsExpirationValue = document.getElementById('user-rewards-expiration-value');
+
+    winPointsState.balance = refreshedBalance;
+
+    if (userMenuRewardsBalance) {
+      userMenuRewardsBalance.textContent = refreshedBalance.toLocaleString('en-US');
+    }
+    if (userRewardsBalanceValue) {
+      userRewardsBalanceValue.textContent = refreshedBalance.toLocaleString('en-US');
+    }
+    if (userMenuRewardsExpiration) {
+      userMenuRewardsExpiration.textContent = formatWinPointsExpirationText(summary, false);
+    }
+    if (userRewardsExpirationValue) {
+      userRewardsExpirationValue.textContent = formatWinPointsExpirationText(summary, true);
+    }
   }
 
   function canRedeemPackWithPoints(pack) {
@@ -2984,7 +3026,7 @@ include __DIR__ . "/includes/header.php";
                     }
 
                     if (data && data.win_points && Number.isFinite(Number(data.win_points.balance))) {
-                      winPointsState.balance = Number(data.win_points.balance);
+                      applyWinPointsUserSummary(data.win_points);
                       renderWinPointsPaymentState(activePaymentOrder.pack || activePack, selectedMethod);
                     }
 
@@ -3299,16 +3341,7 @@ include __DIR__ . "/includes/header.php";
                   }
                   if (data && data.ok) {
                     if (data.win_points && Number.isFinite(Number(data.win_points.balance))) {
-                      const refreshedBalance = Number(data.win_points.balance);
-                      const userMenuRewardsBalance = document.getElementById('user-menu-rewards-balance');
-                      const userRewardsBalanceValue = document.getElementById('user-rewards-balance-value');
-                      winPointsState.balance = refreshedBalance;
-                      if (userMenuRewardsBalance) {
-                        userMenuRewardsBalance.textContent = refreshedBalance.toLocaleString('en-US');
-                      }
-                      if (userRewardsBalanceValue) {
-                        userRewardsBalanceValue.textContent = refreshedBalance.toLocaleString('en-US');
-                      }
+                      applyWinPointsUserSummary(data.win_points);
                     }
                     const opened = openPaymentModal(data.order_id, data.expires_at, data.remaining_seconds, pack, userId, selectedPrice.textContent, email);
                     if (opened) {

@@ -37,10 +37,23 @@ $authUserPhone = trim((string) ($authUser['telefono'] ?? ''));
 $authUserRole = strtolower(trim((string) ($authUser['rol'] ?? '')));
 $winPointsProgramEnabled = win_points_enabled();
 $winPointsProgramConfig = $winPointsProgramEnabled ? win_points_config() : ['name' => 'Win Points', 'icon_url' => ''];
-$winPointsUserSummary = ['balance' => 0, 'earned' => 0, 'spent' => 0, 'transactions' => 0];
+$winPointsUserSummary = win_points_empty_user_summary();
 if ($winPointsProgramEnabled && $authUser && !empty($authUser['id'])) {
   $winPointsUserSummary = win_points_fetch_user_summary(win_points_db(), (int) $authUser['id']);
 }
+$winPointsExpirationStatus = trim((string) ($winPointsUserSummary['expiration_status'] ?? 'no_balance'));
+$winPointsDaysLabel = trim((string) ($winPointsUserSummary['days_remaining_label'] ?? 'Sin saldo'));
+$winPointsExpiresAtLabel = trim((string) ($winPointsUserSummary['expires_at_label'] ?? ''));
+$winPointsMenuExpirationText = !empty($winPointsUserSummary['is_expired'])
+  ? 'Vencidos'
+  : (in_array($winPointsExpirationStatus, ['active', 'warning'], true) && $winPointsDaysLabel !== ''
+    ? 'Vence en ' . $winPointsDaysLabel
+    : ($winPointsDaysLabel !== '' ? $winPointsDaysLabel : 'Sin saldo'));
+$winPointsModalExpirationText = !empty($winPointsUserSummary['is_expired'])
+  ? ($winPointsExpiresAtLabel !== '' && $winPointsExpiresAtLabel !== 'Sin saldo' ? 'Vencidos | ' . $winPointsExpiresAtLabel : 'Vencidos')
+  : (in_array($winPointsExpirationStatus, ['active', 'warning'], true) && $winPointsDaysLabel !== ''
+    ? 'Vence en ' . $winPointsDaysLabel . ($winPointsExpiresAtLabel !== '' && $winPointsExpiresAtLabel !== 'Sin saldo' ? ' | ' . $winPointsExpiresAtLabel : '')
+    : ($winPointsDaysLabel !== '' ? $winPointsDaysLabel : 'Sin saldo'));
 $authUserCanAccessAdmin = in_array($authUserRole, ['admin', 'empleado', 'influencer'], true);
 $authUserAdminHome = $authUserRole === 'influencer'
   ? app_path('/admin/cupones') . '?tab=influencers'
@@ -292,20 +305,22 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
                 <div id="user-menu-email" class="small text-info text-break"><?php echo htmlspecialchars($authUserEmail, ENT_QUOTES, 'UTF-8'); ?></div>
               </div>
               <?php if ($winPointsProgramEnabled): ?>
-              <div id="user-menu-rewards-card" class="rounded-4 border border-info-subtle px-3 py-2 mb-2" style="background:rgba(8,15,24,0.82);box-shadow:0 0 14px rgba(var(--theme-primary-rgb),0.12);">
-                <div class="d-flex align-items-center justify-content-between gap-3">
-                  <div class="d-flex align-items-center gap-2 min-w-0">
+              <div id="user-menu-rewards-card" class="rounded-4 border border-info-subtle px-3 py-3 mb-2" style="background:rgba(8,15,24,0.82);box-shadow:0 0 14px rgba(var(--theme-primary-rgb),0.12);">
+                <div class="d-flex align-items-center gap-2 min-w-0 mb-3">
                     <?php if (($winPointsProgramConfig['icon_url'] ?? '') !== ''): ?>
                       <img src="<?php echo htmlspecialchars((string) $winPointsProgramConfig['icon_url'], ENT_QUOTES, 'UTF-8'); ?>" alt="<?php echo htmlspecialchars((string) ($winPointsProgramConfig['name'] ?? 'Win Points'), ENT_QUOTES, 'UTF-8'); ?>" style="width:30px;height:30px;border-radius:10px;object-fit:cover;border:1px solid rgba(var(--theme-primary-rgb),0.28);">
                     <?php else: ?>
                       <span class="d-inline-flex align-items-center justify-content-center rounded-3 fw-bold text-info" style="width:30px;height:30px;background:rgba(var(--theme-primary-rgb),0.12);border:1px solid rgba(var(--theme-primary-rgb),0.22);">WP</span>
                     <?php endif; ?>
-                    <div class="min-w-0">
-                      <div id="user-menu-rewards-name" class="fw-semibold text-light text-truncate"><?php echo htmlspecialchars((string) ($winPointsProgramConfig['name'] ?? 'Win Points'), ENT_QUOTES, 'UTF-8'); ?></div>
-                      <div class="small text-secondary">Saldo disponible</div>
-                    </div>
+                    <div id="user-menu-rewards-name" class="fw-semibold text-light text-truncate"><?php echo htmlspecialchars((string) ($winPointsProgramConfig['name'] ?? 'Win Points'), ENT_QUOTES, 'UTF-8'); ?></div>
                   </div>
+                <div class="d-flex align-items-center justify-content-between gap-3 mb-2">
+                  <div class="small text-secondary">Saldo disponible</div>
                   <div id="user-menu-rewards-balance" class="fw-bold text-info"><?php echo number_format((int) ($winPointsUserSummary['balance'] ?? 0)); ?></div>
+                </div>
+                <div class="d-flex align-items-center justify-content-between gap-3">
+                  <div class="small text-warning">Dias de vencimiento</div>
+                  <div id="user-menu-rewards-expiration" class="small fw-semibold text-warning text-end"><?php echo htmlspecialchars($winPointsMenuExpirationText, ENT_QUOTES, 'UTF-8'); ?></div>
                 </div>
               </div>
               <button type="button" class="btn btn-outline-info w-100 rounded-3 border mb-2 fw-semibold" data-user-open="rewards">Mis <?php echo htmlspecialchars((string) ($winPointsProgramConfig['name'] ?? 'Win Points'), ENT_QUOTES, 'UTF-8'); ?></button>
@@ -520,6 +535,7 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
                     <div class="rounded-4 border border-info-subtle p-3 h-100" style="background:rgba(8,15,24,0.82);">
                       <div class="small text-uppercase text-secondary mb-1">Saldo</div>
                       <div id="user-rewards-balance-value" class="h4 fw-bold text-info mb-0"><?php echo number_format((int) ($winPointsUserSummary['balance'] ?? 0)); ?></div>
+                      <div id="user-rewards-expiration-value" class="small text-secondary mt-2"><?php echo htmlspecialchars($winPointsModalExpirationText, ENT_QUOTES, 'UTF-8'); ?></div>
                     </div>
                   </div>
                   <div class="col-sm-6 col-lg-3">

@@ -64,8 +64,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         if (isset($_POST['save_win_points_program'])) {
             $programName = trim((string) ($_POST['win_points_name'] ?? ''));
-          $badgeBackgroundColor = win_points_normalize_hex_color($_POST['win_points_badge_background_color'] ?? '', '#3E2D07');
-          $badgeTextColor = win_points_normalize_hex_color($_POST['win_points_badge_text_color'] ?? '', '#FCD34D');
+            $badgeBackgroundColor = win_points_normalize_hex_color($_POST['win_points_badge_background_color'] ?? '', '#3E2D07');
+            $badgeTextColor = win_points_normalize_hex_color($_POST['win_points_badge_text_color'] ?? '', '#FCD34D');
+            $expirationDays = win_points_normalize_expiration_days($_POST['win_points_expiration_days'] ?? 180);
             $currentIcon = store_config_get('win_points_icon', '');
             $nextIcon = $currentIcon;
             $hasUpload = isset($_FILES['win_points_icon']) && (($_FILES['win_points_icon']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
@@ -89,6 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             store_config_upsert('win_points_name', $programName);
             store_config_upsert('win_points_badge_background_color', $badgeBackgroundColor);
             store_config_upsert('win_points_badge_text_color', $badgeTextColor);
+            store_config_upsert('win_points_expiration_days', (string) $expirationDays);
             store_config_delete('win_points_default_award');
 
             if ($nextIcon === '') {
@@ -143,6 +145,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $winPointsConfig = win_points_config();
 $winPointsBadgeBackgroundColor = (string) ($winPointsConfig['badge_background_color'] ?? '#3E2D07');
 $winPointsBadgeTextColor = (string) ($winPointsConfig['badge_text_color'] ?? '#FCD34D');
+$winPointsExpirationDays = (int) ($winPointsConfig['expiration_days'] ?? 180);
 $winPointsBadgeBorderColor = win_points_hex_to_rgba($winPointsBadgeTextColor, 0.28);
 $winPointsBadgeInsetColor = win_points_hex_to_rgba($winPointsBadgeTextColor, 0.08);
 $packageOptions = win_points_fetch_admin_package_options($mysqli);
@@ -172,6 +175,7 @@ $transactionTypeLabels = [
     'award_reversal' => 'Reverso de premio',
     'redeem_refund' => 'Reembolso de canje',
     'admin_adjustment' => 'Ajuste manual',
+  'expiration' => 'Vencimiento',
 ];
 
 include __DIR__ . '/includes/header.php';
@@ -551,6 +555,11 @@ include __DIR__ . '/includes/header.php';
               <input type="color" name="win_points_badge_text_color" value="<?= htmlspecialchars($winPointsBadgeTextColor, ENT_QUOTES, 'UTF-8') ?>" class="form-control form-control-color bg-dark border-info w-100" style="height:3rem;" data-win-points-badge-text-input>
               <div class="form-text mt-2">Color del texto y realce del distintivo.</div>
             </div>
+            <div class="col-md-6">
+              <label class="form-label text-info">Dias de vencimiento</label>
+              <input type="number" min="1" max="3650" name="win_points_expiration_days" value="<?= $winPointsExpirationDays ?>" class="form-control bg-dark text-info border-info" required>
+              <div class="form-text mt-2">Cada nueva recarga que otorgue premios reinicia este contador para el saldo del usuario.</div>
+            </div>
             <div class="col-md-5">
               <label class="form-label text-info">Vista previa</label>
               <div class="win-points-icon-upload-stage" data-win-points-icon-stage data-default-src="<?= htmlspecialchars($winPointsConfig['icon_url'], ENT_QUOTES, 'UTF-8') ?>">
@@ -833,7 +842,7 @@ include __DIR__ . '/includes/header.php';
 
           <div class="win-points-mobile-stack">
             <?php foreach ($adminWallets as $walletIndex => $wallet): ?>
-              <div class="win-points-mobile-card" data-wp-item="wallets" data-wp-key="wallet-<?= (int) $walletIndex ?>" data-wp-extra="<?= ((int) ($wallet['balance'] ?? 0)) > 0 ? 'positive' : 'zero' ?>" data-wp-filter="<?= htmlspecialchars(trim((string) (($wallet['nombre'] ?? '') . ' ' . ($wallet['email'] ?? '') . ' ' . ($wallet['telefono'] ?? '') . ' ' . (int) ($wallet['balance'] ?? 0) . ' ' . (int) ($wallet['earned_points'] ?? 0) . ' ' . (int) ($wallet['spent_points'] ?? 0))), ENT_QUOTES, 'UTF-8') ?>">
+              <div class="win-points-mobile-card" data-wp-item="wallets" data-wp-key="wallet-<?= (int) $walletIndex ?>" data-wp-extra="<?= ((int) ($wallet['balance'] ?? 0)) > 0 ? 'positive' : 'zero' ?>" data-wp-filter="<?= htmlspecialchars(trim((string) (($wallet['nombre'] ?? '') . ' ' . ($wallet['email'] ?? '') . ' ' . ($wallet['telefono'] ?? '') . ' ' . (int) ($wallet['balance'] ?? 0) . ' ' . (int) ($wallet['earned_points'] ?? 0) . ' ' . (int) ($wallet['spent_points'] ?? 0) . ' ' . ($wallet['days_remaining_label'] ?? ''))), ENT_QUOTES, 'UTF-8') ?>">
                 <div class="win-points-mobile-field">
                   <span class="win-points-mobile-label">Usuario</span>
                   <div><?= htmlspecialchars((string) ($wallet['nombre'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
@@ -871,6 +880,16 @@ include __DIR__ . '/includes/header.php';
                       <div class="text-info fw-bold"><?= number_format((int) ($wallet['balance'] ?? 0)) ?></div>
                     </div>
                   </div>
+                  <div class="col-6">
+                    <div class="win-points-mobile-field">
+                      <span class="win-points-mobile-label">Dias restantes</span>
+                      <div class="<?= !empty($wallet['is_expired']) ? 'text-danger' : 'text-light' ?> fw-bold"><?= htmlspecialchars((string) ($wallet['days_remaining_label'] ?? 'Sin saldo'), ENT_QUOTES, 'UTF-8') ?></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="win-points-mobile-field">
+                  <span class="win-points-mobile-label">Vence</span>
+                  <div><?= htmlspecialchars((string) ($wallet['expires_at_label'] ?? 'Sin saldo'), ENT_QUOTES, 'UTF-8') ?></div>
                 </div>
                 <div class="win-points-mobile-field">
                   <span class="win-points-mobile-label">Ultimo movimiento</span>
@@ -890,12 +909,13 @@ include __DIR__ . '/includes/header.php';
                   <th class="text-end">Gastados</th>
                   <th class="text-end">Movimientos</th>
                   <th class="text-end">Saldo</th>
+                  <th>Dias restantes</th>
                   <th>Ultimo movimiento</th>
                 </tr>
               </thead>
               <tbody>
                 <?php foreach ($adminWallets as $walletIndex => $wallet): ?>
-                  <tr data-wp-item="wallets" data-wp-key="wallet-<?= (int) $walletIndex ?>" data-wp-extra="<?= ((int) ($wallet['balance'] ?? 0)) > 0 ? 'positive' : 'zero' ?>" data-wp-filter="<?= htmlspecialchars(trim((string) (($wallet['nombre'] ?? '') . ' ' . ($wallet['email'] ?? '') . ' ' . ($wallet['telefono'] ?? '') . ' ' . (int) ($wallet['balance'] ?? 0) . ' ' . (int) ($wallet['earned_points'] ?? 0) . ' ' . (int) ($wallet['spent_points'] ?? 0))), ENT_QUOTES, 'UTF-8') ?>">
+                  <tr data-wp-item="wallets" data-wp-key="wallet-<?= (int) $walletIndex ?>" data-wp-extra="<?= ((int) ($wallet['balance'] ?? 0)) > 0 ? 'positive' : 'zero' ?>" data-wp-filter="<?= htmlspecialchars(trim((string) (($wallet['nombre'] ?? '') . ' ' . ($wallet['email'] ?? '') . ' ' . ($wallet['telefono'] ?? '') . ' ' . (int) ($wallet['balance'] ?? 0) . ' ' . (int) ($wallet['earned_points'] ?? 0) . ' ' . (int) ($wallet['spent_points'] ?? 0) . ' ' . ($wallet['days_remaining_label'] ?? ''))), ENT_QUOTES, 'UTF-8') ?>">
                     <td data-label="Usuario"><?= htmlspecialchars((string) ($wallet['nombre'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
                     <td data-label="Correo"><?= htmlspecialchars((string) ($wallet['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
                     <td data-label="Telefono"><?= htmlspecialchars(trim((string) ($wallet['telefono'] ?? '')) !== '' ? (string) $wallet['telefono'] : 'No disponible', ENT_QUOTES, 'UTF-8') ?></td>
@@ -903,6 +923,10 @@ include __DIR__ . '/includes/header.php';
                     <td class="text-end text-warning fw-bold" data-label="Gastados"><?= number_format((int) ($wallet['spent_points'] ?? 0)) ?></td>
                     <td class="text-end text-light" data-label="Movimientos"><?= number_format((int) ($wallet['total_transactions'] ?? 0)) ?></td>
                     <td class="text-end fw-bold text-info" data-label="Saldo"><?= number_format((int) ($wallet['balance'] ?? 0)) ?></td>
+                    <td data-label="Dias restantes">
+                      <div class="fw-bold <?= !empty($wallet['is_expired']) ? 'text-danger' : 'text-light' ?>"><?= htmlspecialchars((string) ($wallet['days_remaining_label'] ?? 'Sin saldo'), ENT_QUOTES, 'UTF-8') ?></div>
+                      <div class="small text-secondary">Vence: <?= htmlspecialchars((string) ($wallet['expires_at_label'] ?? 'Sin saldo'), ENT_QUOTES, 'UTF-8') ?></div>
+                    </td>
                     <td data-label="Ultimo movimiento"><?= htmlspecialchars((string) ($wallet['last_transaction_at'] ?? 'Sin movimientos'), ENT_QUOTES, 'UTF-8') ?></td>
                   </tr>
                 <?php endforeach; ?>
