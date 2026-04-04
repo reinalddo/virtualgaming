@@ -1247,6 +1247,9 @@ include __DIR__ . "/includes/header.php";
     pending: false,
     serverUnavailable: false,
   };
+  let playerVerificationAutoTimer = null;
+  let playerVerificationRequestSeq = 0;
+  let playerVerificationPendingSignature = '';
 
   function parseRequiredFields(rawValue) {
     try {
@@ -1748,7 +1751,22 @@ include __DIR__ . "/includes/header.php";
     playerVerificationFeedback.textContent = message;
   }
 
+  function clearPlayerVerificationAutoTimer() {
+    if (playerVerificationAutoTimer) {
+      window.clearTimeout(playerVerificationAutoTimer);
+      playerVerificationAutoTimer = null;
+    }
+  }
+
+  function invalidatePlayerVerificationRequests() {
+    playerVerificationRequestSeq += 1;
+    playerVerificationPendingSignature = '';
+    clearPlayerVerificationAutoTimer();
+  }
+
   function resetPlayerVerificationState(clearFeedback = true) {
+    clearPlayerVerificationAutoTimer();
+    playerVerificationPendingSignature = '';
     playerVerificationState = {
       verified: false,
       playerName: '',
@@ -1763,6 +1781,8 @@ include __DIR__ . "/includes/header.php";
   }
 
   function setPlayerVerificationUnavailableState(signature, message) {
+    clearPlayerVerificationAutoTimer();
+    playerVerificationPendingSignature = '';
     playerVerificationState = {
       verified: false,
       playerName: '',
@@ -1833,26 +1853,52 @@ include __DIR__ . "/includes/header.php";
 
     const payload = buildPlayerVerificationPayload();
     const hasInputs = hasPlayerVerificationInputs(payload);
+    const currentSignature = String(payload.signature || '');
 
     if (!hasInputs) {
+      invalidatePlayerVerificationRequests();
       resetPlayerVerificationState();
       syncPlayerVerificationUi();
       return;
     }
 
-    if (playerVerificationState.signature !== '' && playerVerificationState.signature !== payload.signature) {
+    if (playerVerificationPendingSignature !== '' && playerVerificationPendingSignature !== currentSignature) {
+      playerVerificationRequestSeq += 1;
+      playerVerificationPendingSignature = '';
+    }
+
+    if (playerVerificationState.signature !== '' && playerVerificationState.signature !== currentSignature) {
       resetPlayerVerificationState();
     }
 
     syncPlayerVerificationUi();
+
+    const alreadyHandledCurrentSignature = currentSignature !== '' && (
+      (playerVerificationState.signature === currentSignature && (playerVerificationState.verified || playerVerificationState.serverUnavailable))
+      || playerVerificationPendingSignature === currentSignature
+    );
+
+    if (alreadyHandledCurrentSignature) {
+      return;
+    }
+
+    clearPlayerVerificationAutoTimer();
+    playerVerificationAutoTimer = window.setTimeout(() => {
+      verifyCurrentPlayer({ autoTriggered: true, expectedSignature: currentSignature });
+    }, 450);
   }
 
-  async function verifyCurrentPlayer() {
+  async function verifyCurrentPlayer(options = {}) {
     if (!playerVerificationConfig) {
       return;
     }
 
+    clearPlayerVerificationAutoTimer();
+
     const payload = buildPlayerVerificationPayload();
+    if (options.expectedSignature && payload.signature !== options.expectedSignature) {
+      return;
+    }
     if (!hasPlayerVerificationInputs(payload)) {
       setPlayerVerificationFeedback('danger', playerVerificationConfig.requiresZone
         ? 'Debes ingresar el ID del jugador y la Zona ID para verificar.'
@@ -1860,6 +1906,9 @@ include __DIR__ . "/includes/header.php";
       updateButtonState();
       return;
     }
+
+    const requestId = ++playerVerificationRequestSeq;
+    playerVerificationPendingSignature = payload.signature;
 
     playerVerificationState.pending = true;
     playerVerificationState.serverUnavailable = false;
@@ -1886,6 +1935,10 @@ include __DIR__ . "/includes/header.php";
         data = null;
       }
 
+      if (requestId !== playerVerificationRequestSeq) {
+        return;
+      }
+
       if (response.ok && data && data.ok) {
         playerVerificationState = {
           verified: true,
@@ -1906,8 +1959,15 @@ include __DIR__ . "/includes/header.php";
         }
       }
     } catch (error) {
+      if (requestId !== playerVerificationRequestSeq) {
+        return;
+      }
       setPlayerVerificationUnavailableState(payload.signature, 'No se pudo verificar el jugador en este momento.');
     } finally {
+      if (requestId !== playerVerificationRequestSeq) {
+        return;
+      }
+      playerVerificationPendingSignature = '';
       playerVerificationState.pending = false;
       syncPlayerVerificationUi();
       updateButtonState();
