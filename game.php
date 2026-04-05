@@ -10,6 +10,104 @@ require_once __DIR__ . "/includes/player_verification.php";
 require_once __DIR__ . "/includes/win_points.php";
 currency_ensure_schema();
 $paymentSupportWhatsappBase = store_config_whatsapp_link(store_config_get('whatsapp', ''));
+
+function fetch_user_legacy_purchase_defaults(mysqli $mysqli, int $userId): array {
+  $defaults = [
+    'user_identifier' => '',
+    'phone' => '',
+  ];
+
+  if ($userId <= 0) {
+    return $defaults;
+  }
+
+  $stmt = $mysqli->prepare('SELECT last_purchase_user_identifier, last_purchase_phone FROM usuarios WHERE id = ? LIMIT 1');
+  if (!$stmt) {
+    return $defaults;
+  }
+
+  $stmt->bind_param('i', $userId);
+  $stmt->execute();
+  $result = $stmt->get_result();
+  $row = $result ? $result->fetch_assoc() : null;
+  $stmt->close();
+
+  if (!is_array($row)) {
+    return $defaults;
+  }
+
+  $defaults['user_identifier'] = trim((string) ($row['last_purchase_user_identifier'] ?? ''));
+  $defaults['phone'] = trim((string) ($row['last_purchase_phone'] ?? ''));
+
+  return $defaults;
+}
+
+function fetch_user_game_purchase_defaults(mysqli $mysqli, int $userId, int $gameId): array {
+  $defaults = [
+    'has_history' => false,
+    'user_identifier' => '',
+    'phone' => '',
+  ];
+
+  if ($userId <= 0 || $gameId <= 0) {
+    return $defaults;
+  }
+
+  $tableResult = $mysqli->query("SHOW TABLES LIKE 'pedidos'");
+  if (!($tableResult instanceof mysqli_result) || $tableResult->num_rows === 0) {
+    return $defaults;
+  }
+
+  $stmt = $mysqli->prepare(
+    "SELECT
+        EXISTS(
+          SELECT 1
+          FROM pedidos p
+          WHERE p.cliente_usuario_id = ? AND p.juego_id = ?
+          LIMIT 1
+        ) AS has_history,
+        (
+          SELECT TRIM(p.user_identifier)
+          FROM pedidos p
+          WHERE p.cliente_usuario_id = ?
+            AND p.juego_id = ?
+            AND p.user_identifier IS NOT NULL
+            AND TRIM(p.user_identifier) <> ''
+          ORDER BY p.actualizado_en DESC, p.id DESC
+          LIMIT 1
+        ) AS user_identifier,
+        (
+          SELECT TRIM(p.telefono_contacto)
+          FROM pedidos p
+          WHERE p.cliente_usuario_id = ?
+            AND p.juego_id = ?
+            AND p.telefono_contacto IS NOT NULL
+            AND TRIM(p.telefono_contacto) <> ''
+          ORDER BY p.actualizado_en DESC, p.id DESC
+          LIMIT 1
+        ) AS phone"
+  );
+  if (!$stmt) {
+    return $defaults;
+  }
+
+  $stmt->bind_param('iiiiii', $userId, $gameId, $userId, $gameId, $userId, $gameId);
+  $stmt->execute();
+  $result = $stmt->get_result();
+  $row = $result ? $result->fetch_assoc() : null;
+  $stmt->close();
+
+  if (!is_array($row)) {
+    return $defaults;
+  }
+
+  $defaults['has_history'] = !empty($row['has_history']);
+  $defaults['user_identifier'] = trim((string) ($row['user_identifier'] ?? ''));
+  $defaults['phone'] = trim((string) ($row['phone'] ?? ''));
+
+  return $defaults;
+}
+
 $loggedUserId = 0;
 $loggedUserEmail = '';
 $loggedUserLastPurchaseIdentifier = '';
@@ -20,20 +118,6 @@ if (!empty($_SESSION['auth_user']['id'])) {
 }
 if (!empty($_SESSION['auth_user']['email'])) {
   $loggedUserEmail = (string) $_SESSION['auth_user']['email'];
-}
-if ($loggedUserId > 0) {
-  $stmt = $mysqli->prepare('SELECT last_purchase_user_identifier, last_purchase_phone FROM usuarios WHERE id = ? LIMIT 1');
-  if ($stmt) {
-    $stmt->bind_param('i', $loggedUserId);
-    $stmt->execute();
-    $savedPurchaseResult = $stmt->get_result();
-    $savedPurchaseData = $savedPurchaseResult ? $savedPurchaseResult->fetch_assoc() : null;
-    $stmt->close();
-    if (is_array($savedPurchaseData)) {
-      $loggedUserLastPurchaseIdentifier = trim((string) ($savedPurchaseData['last_purchase_user_identifier'] ?? ''));
-      $loggedUserLastPurchasePhone = trim((string) ($savedPurchaseData['last_purchase_phone'] ?? ''));
-    }
-  }
 }
 payment_methods_ensure_table();
 $paymentMethodsByCurrency = payment_methods_active_by_currency();
@@ -70,6 +154,18 @@ if (!$game && !$requestedGame) {
 }
 if (!$game) {
   die('Juego no encontrado.');
+}
+
+if ($loggedUserId > 0) {
+  $legacyPurchaseDefaults = fetch_user_legacy_purchase_defaults($mysqli, $loggedUserId);
+  $loggedUserLastPurchaseIdentifier = $legacyPurchaseDefaults['user_identifier'];
+  $loggedUserLastPurchasePhone = $legacyPurchaseDefaults['phone'];
+
+  $gamePurchaseDefaults = fetch_user_game_purchase_defaults($mysqli, $loggedUserId, (int) ($game['id'] ?? 0));
+  if (!empty($gamePurchaseDefaults['has_history'])) {
+    $loggedUserLastPurchaseIdentifier = $gamePurchaseDefaults['user_identifier'];
+    $loggedUserLastPurchasePhone = $gamePurchaseDefaults['phone'];
+  }
 }
 
 if ($requestedGame) {
