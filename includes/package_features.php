@@ -251,12 +251,9 @@ if (!function_exists('package_feature_pairs_from_request')) {
     }
 }
 
-if (!function_exists('package_assign_features_to_package')) {
-    function package_assign_features_to_package(mysqli $mysqli, int $packageId, array $existingIds, array $newFeatures = []): void {
+if (!function_exists('package_feature_resolve_ids')) {
+    function package_feature_resolve_ids(mysqli $mysqli, array $existingIds, array $newFeatures = []): array {
         package_features_ensure_schema($mysqli);
-        if ($packageId <= 0) {
-            return;
-        }
 
         $orderedIds = [];
         foreach ($existingIds as $featureId) {
@@ -277,6 +274,25 @@ if (!function_exists('package_assign_features_to_package')) {
             }
         }
 
+        return $orderedIds;
+    }
+}
+
+if (!function_exists('package_assign_feature_ids_to_package')) {
+    function package_assign_feature_ids_to_package(mysqli $mysqli, int $packageId, array $featureIds): void {
+        package_features_ensure_schema($mysqli);
+        if ($packageId <= 0) {
+            return;
+        }
+
+        $normalizedIds = [];
+        foreach ($featureIds as $featureId) {
+            $normalizedId = (int) $featureId;
+            if ($normalizedId > 0 && !in_array($normalizedId, $normalizedIds, true)) {
+                $normalizedIds[] = $normalizedId;
+            }
+        }
+
         $deleteStmt = $mysqli->prepare('DELETE FROM paquete_caracteristicas_asignadas WHERE paquete_id = ?');
         if ($deleteStmt) {
             $deleteStmt->bind_param('i', $packageId);
@@ -284,7 +300,7 @@ if (!function_exists('package_assign_features_to_package')) {
             $deleteStmt->close();
         }
 
-        if (empty($orderedIds)) {
+        if (empty($normalizedIds)) {
             return;
         }
 
@@ -293,12 +309,23 @@ if (!function_exists('package_assign_features_to_package')) {
             return;
         }
 
-        foreach ($orderedIds as $index => $featureId) {
+        foreach ($normalizedIds as $index => $featureId) {
             $order = $index + 1;
             $insertStmt->bind_param('iii', $packageId, $featureId, $order);
             $insertStmt->execute();
         }
         $insertStmt->close();
+    }
+}
+
+if (!function_exists('package_assign_features_to_package')) {
+    function package_assign_features_to_package(mysqli $mysqli, int $packageId, array $existingIds, array $newFeatures = []): void {
+        package_features_ensure_schema($mysqli);
+        if ($packageId <= 0) {
+            return;
+        }
+
+        package_assign_feature_ids_to_package($mysqli, $packageId, package_feature_resolve_ids($mysqli, $existingIds, $newFeatures));
     }
 }
 
@@ -363,5 +390,60 @@ if (!function_exists('package_features_for_packages')) {
         $stmt->close();
 
         return $map;
+    }
+}
+
+if (!function_exists('package_apply_feature_ids_to_game_packages')) {
+    function package_apply_feature_ids_to_game_packages(mysqli $mysqli, int $gameId, array $featureIds, bool $replaceExisting = false, ?int $excludePackageId = null): void {
+        package_features_ensure_schema($mysqli);
+        $normalizedGameId = (int) $gameId;
+        if ($normalizedGameId <= 0) {
+            return;
+        }
+
+        $resolvedFeatureIds = [];
+        foreach ($featureIds as $featureId) {
+            $normalizedId = (int) $featureId;
+            if ($normalizedId > 0 && !in_array($normalizedId, $resolvedFeatureIds, true)) {
+                $resolvedFeatureIds[] = $normalizedId;
+            }
+        }
+
+        if (empty($resolvedFeatureIds)) {
+            return;
+        }
+
+        $stmt = $mysqli->prepare('SELECT id FROM juego_paquetes WHERE juego_id = ? ORDER BY CASE WHEN orden IS NULL THEN 1 ELSE 0 END, orden ASC, id ASC');
+        if (!$stmt) {
+            return;
+        }
+
+        $stmt->bind_param('i', $normalizedGameId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $packageIds = [];
+        if ($result instanceof mysqli_result) {
+            while ($row = $result->fetch_assoc()) {
+                $packageId = (int) ($row['id'] ?? 0);
+                if ($packageId <= 0) {
+                    continue;
+                }
+                if ($excludePackageId !== null && $packageId === (int) $excludePackageId) {
+                    continue;
+                }
+                $packageIds[] = $packageId;
+            }
+        }
+        $stmt->close();
+
+        foreach ($packageIds as $packageId) {
+            $packageFeatureIds = $replaceExisting ? [] : package_feature_catalog_ids_for_package($mysqli, $packageId);
+            foreach ($resolvedFeatureIds as $featureId) {
+                if (!in_array($featureId, $packageFeatureIds, true)) {
+                    $packageFeatureIds[] = $featureId;
+                }
+            }
+            package_assign_feature_ids_to_package($mysqli, $packageId, $packageFeatureIds);
+        }
     }
 }
