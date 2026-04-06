@@ -784,6 +784,18 @@ $googleCallbackUrl = google_oauth_callback_url();
               <input type="hidden" name="config_section" value="api-banco">
               <div class="config-section-note mb-4">Configura aquí los datos de conexión al banco usados para verificar automáticamente los pagos.</div>
 
+              <?php
+                $bankPreviewBaseUrl = store_config_normalize_bank_api_base_url((string) ($cfg['ff_bank_api_base_url'] ?? 'https://pagonorte.net'));
+                if ($bankPreviewBaseUrl === '') {
+                  $bankPreviewBaseUrl = 'https://pagonorte.net';
+                }
+                $bankPreviewUrl = store_config_build_bank_movements_url($bankPreviewBaseUrl, [
+                  'posicion' => trim((string) ($cfg['ff_bank_posicion'] ?? '')),
+                  'token' => trim((string) ($cfg['ff_bank_token'] ?? '')),
+                  'password' => trim((string) ($cfg['ff_bank_clave'] ?? '')),
+                ]);
+              ?>
+
               <?php $bankAvailableDays = trim((string) ($cfg['ff_bank_dias_disponibles'] ?? '')); ?>
               <?php if ($bankAvailableDays !== ''): ?>
                 <div class="alert alert-info rounded-4 mb-4" role="status">
@@ -817,11 +829,61 @@ $googleCallbackUrl = google_oauth_callback_url();
                     <input type="text" name="ff_bank_clave" value="<?= htmlspecialchars($cfg['ff_bank_clave'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" pattern="^[A-Za-z0-9._!-]+$">
                     <div class="form-text">Solo letras, números y estos caracteres especiales: . - _ ! sin espacios.</div>
                   </div>
+                  <div class="col-12">
+                    <label class="form-label">Enlace final enviado a la API</label>
+                    <input type="text" id="bank-api-preview-url" value="<?= htmlspecialchars($bankPreviewUrl, ENT_QUOTES, 'UTF-8') ?>" class="form-control" readonly onclick="this.select()">
+                    <div class="form-text">Este campo es solo de lectura y se actualiza automáticamente con el enlace exacto que se enviará a la API bancaria.</div>
+                  </div>
                 </div>
               </div>
 
               <button type="submit" class="neon-btn w-100 py-3 mt-4">Guardar datos de conexión del banco</button>
             </form>
+            <script>
+              (function() {
+                const baseInput = document.querySelector('input[name="ff_bank_api_base_url"]');
+                const positionInput = document.querySelector('select[name="ff_bank_posicion"]');
+                const tokenInput = document.querySelector('input[name="ff_bank_token"]');
+                const passwordInput = document.querySelector('input[name="ff_bank_clave"]');
+                const previewInput = document.getElementById('bank-api-preview-url');
+
+                if (!baseInput || !positionInput || !tokenInput || !passwordInput || !previewInput) {
+                  return;
+                }
+
+                const buildPreviewUrl = function() {
+                  let baseUrl = String(baseInput.value || '').trim();
+                  if (baseUrl === '') {
+                    baseUrl = 'https://pagonorte.net';
+                  }
+                  baseUrl = baseUrl.replace(/\/+$/, '');
+                  let endpointUrl = baseUrl;
+                  try {
+                    const parsedUrl = new URL(baseUrl);
+                    endpointUrl = /\.jsp$/i.test(parsedUrl.pathname || '')
+                      ? parsedUrl.toString().replace(/\?$/, '')
+                      : (baseUrl + '/recargas/movimientos.jsp');
+                  } catch (error) {
+                    endpointUrl = /\.jsp$/i.test(baseUrl)
+                      ? baseUrl
+                      : (baseUrl + '/recargas/movimientos.jsp');
+                  }
+                  const query = new URLSearchParams({
+                    posicion: String(positionInput.value || '').trim(),
+                    token: String(tokenInput.value || '').trim(),
+                    password: String(passwordInput.value || '').trim()
+                  });
+                  previewInput.value = endpointUrl + '?' + query.toString();
+                };
+
+                [baseInput, positionInput, tokenInput, passwordInput].forEach((field) => {
+                  field.addEventListener('input', buildPreviewUrl);
+                  field.addEventListener('change', buildPreviewUrl);
+                });
+
+                buildPreviewUrl();
+              })();
+            </script>
           <?php elseif ($activeTab === 'api-free-fire'): ?>
             <form method="post">
               <input type="hidden" name="config_section" value="api-free-fire">

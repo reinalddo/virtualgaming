@@ -1043,7 +1043,12 @@ function store_config_build_bank_movements_url(string $baseUrl, array $queryPara
         $normalizedBaseUrl = 'https://pagonorte.net';
     }
 
-    return $normalizedBaseUrl . '/recargas/movimientos.jsp?' . http_build_query($queryParams);
+    $path = trim((string) parse_url($normalizedBaseUrl, PHP_URL_PATH));
+    $endpointUrl = preg_match('/\.jsp$/i', $path) === 1
+        ? $normalizedBaseUrl
+        : ($normalizedBaseUrl . '/recargas/movimientos.jsp');
+
+    return $endpointUrl . '?' . http_build_query($queryParams);
 }
 
 function store_config_extract_youtube_video_id(string $value): string {
