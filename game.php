@@ -3180,6 +3180,16 @@ include __DIR__ . "/includes/header.php";
       ];
     }
 
+    if (providerFlow === 'inventory_shortage') {
+      title = 'No hay recargas suficientes en este momento';
+      summary = 'Tu pago ya fue verificado, pero por los momentos no hay disponibilidad suficiente para completar la recarga automática.';
+      steps = [
+        'Tu pedido quedó en estado verificado y no necesitas volver a pagar.',
+        'Nuestro equipo enviará la recarga en cuanto haya disponibilidad nuevamente.',
+        'Si deseas acelerar la atención, contáctanos por WhatsApp y comparte tu comprobante.'
+      ];
+    }
+
     renderSupportCard(paymentModalReasons, title, summary, steps, reasons);
     renderSupportCard(paymentStatusModalReasons, title, summary, steps, reasons);
     renderSupportActionLinks(reference, totalText);

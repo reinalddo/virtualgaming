@@ -14,6 +14,7 @@ require_once __DIR__ . '/../includes/influencer_coupons.php';
 require_once __DIR__ . '/../includes/payment_methods.php';
 require_once __DIR__ . '/../includes/store_config.php';
 require_once __DIR__ . '/../includes/recargas_api.php';
+require_once __DIR__ . '/../includes/recharge_availability.php';
 require_once __DIR__ . '/../includes/recharge_notifications.php';
 require_once __DIR__ . '/../includes/win_points.php';
 
@@ -59,6 +60,7 @@ if (!function_exists('ensure_mysqli_connection')) {
 
 currency_ensure_schema();
 payment_methods_ensure_table();
+recharge_availability_ensure_columns($mysqli);
 
 function ensure_pedidos_table(mysqli $mysqli): void {
     $create = "CREATE TABLE IF NOT EXISTS pedidos (
@@ -1717,6 +1719,9 @@ function order_provider_flow_from_row(array $order): string {
     }
 
     $providerStatus = strtolower(trim((string) ($order['recargas_api_estado'] ?? '')));
+    if ($providerStatus === 'inventory_shortage' || recharge_availability_message_indicates_inventory_shortage((string) ($order['ff_api_mensaje'] ?? ''))) {
+        return 'inventory_shortage';
+    }
     if ($providerStatus === 'pending_confirmation') {
         return 'tracking';
     }
@@ -2785,6 +2790,158 @@ function notify_free_fire_recharge_failure(
     }
 }
 
+function build_order_support_whatsapp_link(array $order): string {
+    $whatsapp = trim((string) store_config_get('whatsapp', ''));
+    if ($whatsapp === '') {
+        return '';
+    }
+
+    $message = implode("\n", [
+        'Hola, necesito apoyo con una recarga pendiente por falta de disponibilidad.',
+        'Pedido: #' . (int) ($order['id'] ?? 0),
+        'Juego: ' . trim((string) ($order['juego_nombre'] ?? '-')),
+        'Paquete: ' . trim((string) ($order['paquete_nombre'] ?? '-')),
+        'ID Jugador: ' . trim((string) ($order['user_identifier'] ?? '-')),
+        'Referencia: ' . trim((string) ($order['numero_referencia'] ?? '-')),
+        'Correo: ' . trim((string) ($order['email'] ?? '-')),
+    ]);
+
+    return store_config_whatsapp_link_with_message($whatsapp, $message);
+}
+
+function notify_provider_inventory_shortage(
+    mysqli $mysqli,
+    array $order,
+    string $paymentMethodName,
+    string $referenceNumber,
+    string $phone,
+    string $providerMessage,
+    array $lockInfo = []
+): void {
+    $orderId = (int) ($order['id'] ?? 0);
+    if ($orderId <= 0) {
+        return;
+    }
+
+    $adminEmail = resolve_admin_email($mysqli);
+    $brandingImages = email_branding_embedded_images();
+    $gameName = trim((string) ($order['juego_nombre'] ?? 'tu juego')) ?: 'tu juego';
+    $providerMessageText = '<p style="margin:0 0 10px;">Respuesta del proveedor: <strong>' . email_escape($providerMessage) . '</strong></p>';
+    $whatsappLink = build_order_support_whatsapp_link($order);
+    $whatsappHtml = $whatsappLink !== ''
+        ? '<p style="margin:0 0 10px;"><a href="' . email_escape($whatsappLink) . '" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:12px 18px;border-radius:999px;background:#25d366;color:#081018;text-decoration:none;font-weight:700;">Hablar por WhatsApp con el administrador</a></p>'
+        : '';
+    $lockSummary = 'Juego bloqueado automáticamente. Paquetes desactivados: ' . max(0, (int) ($lockInfo['packages_updated'] ?? 0)) . '.';
+
+    $customerHtml = render_order_email('Pago verificado, recarga pendiente por disponibilidad', 'Cliente',
+        '<p style="margin:0 0 10px;">Tu pago fue verificado correctamente, pero por los momentos no hay suficientes recargas disponibles para completar la entrega automática de ' . email_escape($gameName) . '.</p>'
+        . '<p style="margin:0 0 10px;">Tu pedido quedó en estado <strong style="color:#f59e0b;">Verificado</strong> y enviaremos la recarga en cuanto tengamos disponibilidad.</p>'
+        . '<p style="margin:0 0 10px;">Si deseas acelerar la atención, puedes escribirnos por WhatsApp y compartir tu comprobante.</p>'
+        . $whatsappHtml
+        . $providerMessageText,
+        [
+            'order_id' => $orderId,
+            'game_name' => $order['juego_nombre'] ?? '',
+            'pack_name' => $order['paquete_nombre'] ?? '',
+            'pack_amount' => $order['paquete_cantidad'] ?? '',
+            'currency' => $order['moneda'] ?? '',
+            'price' => number_format((float) ($order['precio'] ?? 0), 2, '.', ','),
+            'user_identifier' => $order['user_identifier'] ?? '',
+            'email' => $order['email'] ?? '',
+            'coupon' => $order['cupon'] ?? null,
+            'payment_method' => $paymentMethodName,
+            'reference_number' => $referenceNumber,
+            'phone' => $phone,
+            'status' => 'Verificado',
+        ],
+        '#f59e0b'
+    );
+    $adminHtml = render_order_email('Pago verificado, disponibilidad insuficiente', 'Administrador',
+        '<p style="margin:0 0 10px;">El pago fue verificado, pero el proveedor reportó disponibilidad insuficiente para ' . email_escape($gameName) . '.</p>'
+        . '<p style="margin:0 0 10px;">El pedido quedó en estado <strong style="color:#f59e0b;">Verificado</strong> para entrega manual y el catálogo se bloqueó automáticamente por prevención.</p>'
+        . '<p style="margin:0 0 10px;">' . email_escape($lockSummary) . '</p>'
+        . '<p style="margin:0 0 10px;">Reactiva luego el juego completo o solo los paquetes con disponibilidad, y usa el botón <strong>Enviar recarga</strong> cuando repongas saldo.</p>'
+        . $providerMessageText,
+        [
+            'order_id' => $orderId,
+            'game_name' => $order['juego_nombre'] ?? '',
+            'pack_name' => $order['paquete_nombre'] ?? '',
+            'pack_amount' => $order['paquete_cantidad'] ?? '',
+            'currency' => $order['moneda'] ?? '',
+            'price' => number_format((float) ($order['precio'] ?? 0), 2, '.', ','),
+            'user_identifier' => $order['user_identifier'] ?? '',
+            'email' => $order['email'] ?? '',
+            'coupon' => $order['cupon'] ?? null,
+            'payment_method' => $paymentMethodName,
+            'reference_number' => $referenceNumber,
+            'phone' => $phone,
+            'status' => 'Verificado',
+        ],
+        '#f59e0b'
+    );
+
+    if (!empty($order['email']) && filter_var($order['email'], FILTER_VALIDATE_EMAIL)) {
+        send_app_mail((string) $order['email'], "Pago verificado, recarga pendiente #{$orderId}", $customerHtml, null, $brandingImages);
+    }
+    if ($adminEmail !== null) {
+        send_app_mail($adminEmail, "Disponibilidad insuficiente #{$orderId}", $adminHtml, null, $brandingImages);
+    }
+}
+
+function mark_order_inventory_shortage_review(
+    mysqli $mysqli,
+    array $order,
+    string $expectedStatus,
+    string $referenceNumber,
+    string $phone,
+    string $providerReference,
+    string $providerMessage,
+    string $providerPayload,
+    string $providerOrderId = '',
+    string $providerCode = ''
+): array {
+    $orderId = (int) ($order['id'] ?? 0);
+    if ($orderId <= 0) {
+        throw new RuntimeException('Pedido inválido para revisión por disponibilidad.');
+    }
+
+    $paidStatus = 'pagado';
+    $providerState = 'inventory_shortage';
+    $providerHistoryJson = append_provider_history(
+        $order['recargas_api_historial_json'] ?? null,
+        build_provider_history_entry(
+            'inventory_shortage',
+            $providerState,
+            $paidStatus,
+            $providerMessage,
+            $providerReference,
+            $providerOrderId,
+            $providerCode
+        )
+    );
+
+    $stmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, telefono_contacto = ?, ff_api_referencia = ?, ff_api_mensaje = ?, ff_api_payload = ?, recargas_api_pedido_id = ?, recargas_api_estado = ?, recargas_api_codigo_entregado = ?, recargas_api_ultimo_check = NOW(), recargas_api_historial_json = ?, estado = ? WHERE id = ? AND estado = ?");
+    if (!$stmt) {
+        throw new RuntimeException('No se pudo preparar el pedido para revisión por disponibilidad.');
+    }
+
+    $stmt->bind_param('ssssssssssis', $referenceNumber, $phone, $providerReference, $providerMessage, $providerPayload, $providerOrderId, $providerState, $providerCode, $providerHistoryJson, $paidStatus, $orderId, $expectedStatus);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        throw new RuntimeException('No se pudo actualizar el pedido para revisión por disponibilidad.');
+    }
+    $stmt->close();
+
+    $updatedOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
+    $lockInfo = recharge_availability_lock_game_and_packages($mysqli, (int) ($updatedOrder['juego_id'] ?? 0));
+
+    return [
+        'order' => $updatedOrder,
+        'lock' => $lockInfo,
+        'provider_status' => $providerState,
+    ];
+}
+
 function notify_catalog_purchase_pending(
     mysqli $mysqli,
     array $order,
@@ -3277,6 +3434,12 @@ if ($action === 'create') {
     if (!$selectedPackage) {
         json_error('El paquete seleccionado no existe para este juego.');
     }
+    if (!recharge_availability_is_game_active($mysqli, (int) $game_id)) {
+        json_error('Este juego no está disponible en este momento.');
+    }
+    if (!recharge_availability_is_package_active($mysqli, $package_id, (int) $game_id)) {
+        json_error('Este paquete no está disponible en este momento.');
+    }
 
     $winPointsAward = 0;
     $winPointsEligible = win_points_enabled() && $cliente_usuario_id !== null && $cliente_usuario_id > 0;
@@ -3575,6 +3738,78 @@ if ($action === 'submit_payment') {
                 'win_points' => win_points_response_payload($mysqli, $sessionUserId, [
                     'spent' => $requiredPoints,
                 ]),
+            ]);
+        }
+
+        $inventoryShortage = recharge_availability_message_indicates_inventory_shortage($providerMessage);
+        if ($inventoryShortage) {
+            try {
+                $shortageResult = mark_order_inventory_shortage_review(
+                    $mysqli,
+                    $updatedOrder,
+                    'pendiente',
+                    '',
+                    '',
+                    $providerReference,
+                    $providerMessage,
+                    $providerPayload,
+                    $providerOrderId,
+                    $providerCode
+                );
+            } catch (Throwable $e) {
+                json_error($e->getMessage(), 500);
+            }
+
+            $paidOrder = $shortageResult['order'];
+            recharge_notifications_emit_for_order($mysqli, $paidOrder);
+            json_response([
+                'ok' => true,
+                'message' => 'Por los momentos no hay suficientes recargas disponibles. Tu pedido quedó verificado y enviaremos la recarga en unos momentos.',
+                'order_id' => $orderId,
+                'estado' => 'pagado',
+                'verified' => true,
+                'payment_mode' => 'points',
+                'provider_flow' => 'inventory_shortage',
+                'provider_status' => 'inventory_shortage',
+                'reasons' => [$providerMessage],
+                'provider_reference' => $providerReference,
+                'provider_message' => $providerMessage,
+                'provider_code' => $providerCode,
+                'win_points' => win_points_response_payload($mysqli, $sessionUserId, [
+                    'spent' => $requiredPoints,
+                ]),
+            ], 200, static function () use ($mysqli, $paidOrder, $providerMessage, $shortageResult): void {
+                notify_provider_inventory_shortage($mysqli, $paidOrder, 'Canje por premios', '', '', $providerMessage, $shortageResult['lock'] ?? []);
+            });
+        }
+
+        $inventoryShortage = recharge_availability_message_indicates_inventory_shortage($providerMessage);
+        if ($inventoryShortage) {
+            try {
+                $shortageResult = mark_order_inventory_shortage_review(
+                    $mysqli,
+                    $order,
+                    'pagado',
+                    $verifiedReference,
+                    $phone,
+                    $providerReference,
+                    $providerMessage,
+                    $providerPayload,
+                    $providerOrderId
+                );
+            } catch (Throwable $e) {
+                json_error($e->getMessage(), 500);
+            }
+
+            json_response([
+                'ok' => true,
+                'message' => 'No hay suficientes recargas disponibles. El pedido sigue verificado y el catálogo quedó bloqueado por prevención.',
+                'order_id' => $orderId,
+                'estado' => 'pagado',
+                'provider_flow' => 'inventory_shortage',
+                'provider_status' => 'inventory_shortage',
+                'provider_reference' => $providerReference,
+                'provider_message' => $providerMessage,
             ]);
         }
 
@@ -3945,6 +4180,45 @@ if ($action === 'submit_payment') {
                 });
             }
 
+            $inventoryShortage = recharge_availability_message_indicates_inventory_shortage($providerMessage);
+            if ($inventoryShortage) {
+                try {
+                    $shortageResult = mark_order_inventory_shortage_review(
+                        $mysqli,
+                        $updatedOrder,
+                        'pendiente',
+                        $verifiedReference,
+                        $phone,
+                        $providerReference,
+                        $providerMessage,
+                        $providerPayload,
+                        $providerOrderId,
+                        $providerCode
+                    );
+                } catch (Throwable $e) {
+                    json_error($e->getMessage(), 500);
+                }
+
+                $paidOrder = $shortageResult['order'];
+                recharge_notifications_emit_for_order($mysqli, $paidOrder);
+                json_response([
+                    'ok' => true,
+                    'message' => 'Por los momentos no hay suficientes recargas disponibles. Tu pedido quedó verificado y enviaremos la recarga en unos momentos.',
+                    'order_id' => $orderId,
+                    'estado' => 'pagado',
+                    'verified' => true,
+                    'provider_flow' => 'inventory_shortage',
+                    'provider_status' => 'inventory_shortage',
+                    'reasons' => [$providerMessage],
+                    'provider_reference' => $providerReference,
+                    'provider_message' => $providerMessage,
+                    'provider_code' => $providerCode,
+                ], 200, static function () use ($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerMessage, $shortageResult): void {
+                    register_influencer_coupon_sale($mysqli, $paidOrder);
+                    notify_provider_inventory_shortage($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerMessage, $shortageResult['lock'] ?? []);
+                });
+            }
+
             $manualProcessing = !empty($freeFireResult['manual_processing']);
             $acceptedLike = !empty($freeFireResult['accepted'])
                 || ($manualProcessing && provider_message_indicates_pending_lookup($providerMessage));
@@ -4285,7 +4559,7 @@ if ($action === 'order_status') {
     }
 
     $attemptSync = !empty($_POST['attempt_sync']) || !empty($_GET['attempt_sync']);
-    if ($attemptSync && (string) ($order['estado'] ?? '') === 'pagado') {
+    if ($attemptSync && (string) ($order['estado'] ?? '') === 'pagado' && order_provider_flow_from_row($order) !== 'inventory_shortage') {
         try {
             $providerOrderId = trim((string) ($order['recargas_api_pedido_id'] ?? ''));
             if ($providerOrderId !== '') {
@@ -4546,6 +4820,35 @@ if ($action === 'admin_retry_recharge') {
             $order['recargas_api_historial_json'] ?? null,
             build_provider_history_entry('admin_retry_purchase', $providerState, 'pagado', $providerMessage, $providerReference, $providerOrderId)
         );
+        $inventoryShortage = recharge_availability_message_indicates_inventory_shortage($providerMessage);
+        if ($inventoryShortage) {
+            try {
+                $shortageResult = mark_order_inventory_shortage_review(
+                    $mysqli,
+                    $order,
+                    'pagado',
+                    $verifiedReference,
+                    $phone,
+                    $providerReference,
+                    $providerMessage,
+                    $providerPayload
+                );
+            } catch (Throwable $e) {
+                json_error($e->getMessage(), 500);
+            }
+
+            json_response([
+                'ok' => true,
+                'message' => 'No hay suficientes recargas disponibles. El pedido sigue verificado y el catálogo quedó bloqueado por prevención.',
+                'order_id' => $orderId,
+                'estado' => 'pagado',
+                'provider_flow' => 'inventory_shortage',
+                'provider_status' => 'inventory_shortage',
+                'provider_reference' => $providerReference,
+                'provider_message' => $providerMessage,
+            ]);
+        }
+
         $stmt = $mysqli->prepare("UPDATE pedidos SET ff_api_referencia = ?, ff_api_mensaje = ?, ff_api_payload = ?, recargas_api_historial_json = ? WHERE id = ? AND estado = 'pagado'");
         if (!$stmt) {
             json_error('No se pudo guardar el intento de recarga.', 500);

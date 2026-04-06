@@ -5,6 +5,7 @@ require_once '../includes/db_connect.php';
 require_once '../includes/tenant.php';
 require_once '../includes/recargas_api.php';
 require_once '../includes/package_features.php';
+require_once '../includes/recharge_availability.php';
 require_once '../includes/win_points.php';
 
 function admin_packages_is_ajax_request(): bool {
@@ -228,10 +229,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_paquete_activo
     $packageId = intval($_POST['paquete_id']);
     $activeValue = intval($_POST['activo']) === 1 ? 1 : 0;
     if ($packageId > 0) {
-        $stmtToggle = $mysqli->prepare("UPDATE juego_paquetes SET activo = ? WHERE id = ? AND juego_id = ?");
-        $stmtToggle->bind_param('iii', $activeValue, $packageId, $juego_id);
-        $stmtToggle->execute();
-        $stmtToggle->close();
+        recharge_availability_set_package_active($mysqli, $packageId, $juego_id, $activeValue === 1);
         if (admin_packages_is_ajax_request()) {
             admin_packages_json_response(['ok' => true, 'id' => $packageId, 'activo' => $activeValue]);
         }
@@ -243,12 +241,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_paquete_activo
 if (isset($_GET['toggle_activo'])) {
     $toggleId = intval($_GET['toggle_activo']);
     if ($toggleId > 0) {
-        $stmtToggle = $mysqli->prepare("UPDATE juego_paquetes SET activo = IF(COALESCE(activo, 1) = 1, 0, 1) WHERE id = ? AND juego_id = ?");
-        $stmtToggle->bind_param('ii', $toggleId, $juego_id);
-        $stmtToggle->execute();
-        $stmtToggle->close();
+        $nextActive = !recharge_availability_is_package_active($mysqli, $toggleId, $juego_id);
+        recharge_availability_set_package_active($mysqli, $toggleId, $juego_id, $nextActive);
         if (admin_packages_is_ajax_request()) {
-            admin_packages_json_response(['ok' => true, 'id' => $toggleId]);
+            admin_packages_json_response(['ok' => true, 'id' => $toggleId, 'activo' => $nextActive ? 1 : 0]);
         }
     }
     header('Location: ' . $adminPackageBaseUrl . '/' . $juego_id);
@@ -314,6 +310,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_paquete_id'])) {
         $stmt->bind_param('ssssidiii', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_paquete_api, $edit_cantidad, $edit_precio, $edit_win_points_reward, $edit_activo, $edit_id);
     }
     $stmt->execute();
+    if ($edit_activo === 1) {
+        recharge_availability_set_game_active($mysqli, $juego_id, true);
+    }
     $editAssignedFeatureIds = $_POST['edit_assigned_feature_id'] ?? [];
     $editAssignedFeatureNames = $_POST['edit_assigned_feature_name'] ?? [];
     $editAssignedFeatureIcons = $_POST['edit_assigned_feature_icon'] ?? [];
@@ -355,6 +354,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['cla
     $stmt->bind_param('issssidisii', $juego_id, $nombre, $clave, $monto_ff, $paquete_api, $cantidad, $precio, $win_points_reward, $imagen_icono, $activo, $orden);
     $stmt->execute();
     $newPackageId = (int) $mysqli->insert_id;
+    if ($activo === 1) {
+        recharge_availability_set_game_active($mysqli, $juego_id, true);
+    }
     package_assign_features_to_package(
         $mysqli,
         $newPackageId,
