@@ -750,9 +750,9 @@ include '../includes/header.php';
         <h3 class="h5 text-neon mb-2">Aplicar a todos</h3>
         <p class="small mb-4" style="color:#8be9fd;">Elige cómo deseas propagar esta caracteristica al resto de paquetes del juego actual.</p>
         <div class="d-grid gap-2">
-            <button type="button" id="package-feature-apply-replace" class="btn btn-outline-danger text-start">Eliminar caracteristicas de los demas paquetes del juego</button>
-            <button type="button" id="package-feature-apply-add" class="btn btn-outline-info text-start">Agregar esta caracteristica a los demas paquetes</button>
-            <button type="button" id="package-feature-apply-cancel" class="btn btn-secondary text-start">Cancelar</button>
+            <button type="button" id="package-feature-apply-replace" class="btn btn-outline-danger text-start" onclick="window.selectPackageFeatureApplyMode('replace')">Eliminar caracteristicas de los demas paquetes del juego</button>
+            <button type="button" id="package-feature-apply-add" class="btn btn-outline-info text-start" onclick="window.selectPackageFeatureApplyMode('add')">Agregar esta caracteristica a los demas paquetes</button>
+            <button type="button" id="package-feature-apply-cancel" class="btn btn-secondary text-start" onclick="window.closePackageFeatureApplyModal()">Cancelar</button>
         </div>
     </div>
 </div>
@@ -1169,6 +1169,18 @@ if (typeof window.closePackageFeatureApplyModal !== 'function') {
     };
 }
 
+if (typeof window.selectPackageFeatureApplyMode !== 'function') {
+    window.selectPackageFeatureApplyMode = function(mode) {
+        const normalizedMode = mode === 'replace' ? 'replace' : (mode === 'add' ? 'add' : '');
+        if (normalizedMode !== '' && window.__packageFeatureApplyTarget) {
+            window.__packageFeatureApplyTarget.value = normalizedMode;
+            const button = window.__packageFeatureApplyTarget.closest('.row') ? window.__packageFeatureApplyTarget.closest('.row').querySelector('[data-package-feature-apply-button]') : null;
+            window.syncPackageFeatureApplyButton(button);
+        }
+        window.closePackageFeatureApplyModal();
+    };
+}
+
 if (typeof window.syncPackageFeatureApplyButton !== 'function') {
     window.syncPackageFeatureApplyButton = function(button) {
         if (!button) {
@@ -1211,24 +1223,14 @@ const packageFeatureApplyModal = document.getElementById('package-feature-apply-
 if (packageFeatureApplyReplaceButton && !packageFeatureApplyReplaceButton.dataset.boundAction) {
     packageFeatureApplyReplaceButton.dataset.boundAction = '1';
     packageFeatureApplyReplaceButton.addEventListener('click', function() {
-        if (window.__packageFeatureApplyTarget) {
-            window.__packageFeatureApplyTarget.value = 'replace';
-            const button = window.__packageFeatureApplyTarget.closest('.row') ? window.__packageFeatureApplyTarget.closest('.row').querySelector('[data-package-feature-apply-button]') : null;
-            window.syncPackageFeatureApplyButton(button);
-        }
-        window.closePackageFeatureApplyModal();
+        window.selectPackageFeatureApplyMode('replace');
     });
 }
 
 if (packageFeatureApplyAddButton && !packageFeatureApplyAddButton.dataset.boundAction) {
     packageFeatureApplyAddButton.dataset.boundAction = '1';
     packageFeatureApplyAddButton.addEventListener('click', function() {
-        if (window.__packageFeatureApplyTarget) {
-            window.__packageFeatureApplyTarget.value = 'add';
-            const button = window.__packageFeatureApplyTarget.closest('.row') ? window.__packageFeatureApplyTarget.closest('.row').querySelector('[data-package-feature-apply-button]') : null;
-            window.syncPackageFeatureApplyButton(button);
-        }
-        window.closePackageFeatureApplyModal();
+        window.selectPackageFeatureApplyMode('add');
     });
 }
 
