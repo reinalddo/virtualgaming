@@ -124,6 +124,196 @@ function store_theme_definitions(): array {
             'default' => '#D8FBFF',
             'description' => 'Color del texto e icono para las caracteristicas del paquete mostradas en el encabezado de pago minimalista',
         ],
+        'theme_payment_main_overlay_bg' => [
+            'label' => 'Pago overlay principal',
+            'default' => '#050A14',
+            'description' => 'Color del fondo superpuesto de la ventana principal de pago',
+        ],
+        'theme_payment_main_modal_bg' => [
+            'label' => 'Pago modal principal fondo',
+            'default' => '#111827',
+            'description' => 'Color de fondo del panel principal de la ventana de pago',
+        ],
+        'theme_payment_main_modal_border' => [
+            'label' => 'Pago modal principal borde',
+            'default' => '#22D3EE',
+            'description' => 'Color del borde del panel principal de la ventana de pago',
+        ],
+        'theme_payment_main_title' => [
+            'label' => 'Pago modal principal títulos',
+            'default' => '#F8FAFC',
+            'description' => 'Color de los títulos y encabezados dentro de la ventana principal de pago',
+        ],
+        'theme_payment_main_text' => [
+            'label' => 'Pago modal principal texto',
+            'default' => '#CBD5E1',
+            'description' => 'Color del texto descriptivo dentro de la ventana principal de pago',
+        ],
+        'theme_payment_main_timer_bg' => [
+            'label' => 'Pago temporizador fondo',
+            'default' => '#7F1D1D',
+            'description' => 'Color de fondo de la franja que muestra el tiempo restante de la orden',
+        ],
+        'theme_payment_main_timer_border' => [
+            'label' => 'Pago temporizador borde',
+            'default' => '#F87171',
+            'description' => 'Color del borde de la franja que muestra el tiempo restante de la orden',
+        ],
+        'theme_payment_main_timer_text' => [
+            'label' => 'Pago temporizador texto',
+            'default' => '#F87171',
+            'description' => 'Color del texto del temporizador de la orden en la ventana de pago',
+        ],
+        'theme_payment_main_card_bg' => [
+            'label' => 'Pago tarjetas fondo',
+            'default' => '#080F18',
+            'description' => 'Color de fondo de las tarjetas internas del modal de pago, como resumen y métodos',
+        ],
+        'theme_payment_main_card_border' => [
+            'label' => 'Pago tarjetas borde',
+            'default' => '#164E63',
+            'description' => 'Color del borde de las tarjetas internas del modal de pago',
+        ],
+        'theme_payment_main_input_bg' => [
+            'label' => 'Pago campos fondo',
+            'default' => '#111827',
+            'description' => 'Color de fondo de los campos de entrada y select dentro de la ventana de pago',
+        ],
+        'theme_payment_main_input_border' => [
+            'label' => 'Pago campos borde',
+            'default' => '#22D3EE',
+            'description' => 'Color del borde de los campos de entrada y select dentro de la ventana de pago',
+        ],
+        'theme_payment_main_input_text' => [
+            'label' => 'Pago campos texto',
+            'default' => '#22D3EE',
+            'description' => 'Color del texto de los campos de entrada y select dentro de la ventana de pago',
+        ],
+        'theme_payment_main_button_bg' => [
+            'label' => 'Pago botón principal fondo',
+            'default' => '#22D3EE',
+            'description' => 'Color de fondo del botón principal del modal de pago',
+        ],
+        'theme_payment_main_button_text' => [
+            'label' => 'Pago botón principal texto',
+            'default' => '#081018',
+            'description' => 'Color del texto del botón principal del modal de pago',
+        ],
+        'theme_payment_main_cancel_bg' => [
+            'label' => 'Pago botón cancelar fondo',
+            'default' => '#F87171',
+            'description' => 'Color de fondo del botón para cancelar la orden en el modal de pago',
+        ],
+        'theme_payment_main_cancel_text' => [
+            'label' => 'Pago botón cancelar texto',
+            'default' => '#F8FAFC',
+            'description' => 'Color del texto del botón para cancelar la orden en el modal de pago',
+        ],
+        'theme_payment_processing_overlay_bg' => [
+            'label' => 'Procesando overlay',
+            'default' => '#050A14',
+            'description' => 'Color del fondo superpuesto para la ventana de Procesando pedido',
+        ],
+        'theme_payment_processing_modal_bg' => [
+            'label' => 'Procesando fondo',
+            'default' => '#111827',
+            'description' => 'Color de fondo del modal Procesando pedido',
+        ],
+        'theme_payment_processing_modal_border' => [
+            'label' => 'Procesando borde',
+            'default' => '#22D3EE',
+            'description' => 'Color del borde del modal Procesando pedido',
+        ],
+        'theme_payment_processing_spinner' => [
+            'label' => 'Procesando spinner',
+            'default' => '#34D399',
+            'description' => 'Color del indicador circular del modal Procesando pedido',
+        ],
+        'theme_payment_processing_title' => [
+            'label' => 'Procesando título',
+            'default' => '#22D3EE',
+            'description' => 'Color del título del modal Procesando pedido',
+        ],
+        'theme_payment_processing_text' => [
+            'label' => 'Procesando texto',
+            'default' => '#F8FAFC',
+            'description' => 'Color del texto descriptivo del modal Procesando pedido',
+        ],
+        'theme_payment_sending_overlay_bg' => [
+            'label' => 'Enviando overlay',
+            'default' => '#050A14',
+            'description' => 'Color del fondo superpuesto para la ventana de Enviando orden',
+        ],
+        'theme_payment_sending_modal_bg' => [
+            'label' => 'Enviando fondo',
+            'default' => '#111827',
+            'description' => 'Color de fondo del modal Enviando orden',
+        ],
+        'theme_payment_sending_modal_border' => [
+            'label' => 'Enviando borde',
+            'default' => '#22D3EE',
+            'description' => 'Color del borde del modal Enviando orden',
+        ],
+        'theme_payment_sending_spinner' => [
+            'label' => 'Enviando spinner',
+            'default' => '#22D3EE',
+            'description' => 'Color del indicador circular del modal Enviando orden',
+        ],
+        'theme_payment_sending_title' => [
+            'label' => 'Enviando título',
+            'default' => '#22D3EE',
+            'description' => 'Color del título del modal Enviando orden',
+        ],
+        'theme_payment_sending_text' => [
+            'label' => 'Enviando texto',
+            'default' => '#F8FAFC',
+            'description' => 'Color del texto descriptivo del modal Enviando orden',
+        ],
+        'theme_payment_status_overlay_bg' => [
+            'label' => 'Pago exitoso overlay',
+            'default' => '#050A14',
+            'description' => 'Color del fondo superpuesto para la ventana final de estado del pago',
+        ],
+        'theme_payment_status_modal_bg' => [
+            'label' => 'Pago exitoso fondo',
+            'default' => '#111827',
+            'description' => 'Color de fondo del modal final de estado del pago',
+        ],
+        'theme_payment_status_modal_border' => [
+            'label' => 'Pago exitoso borde',
+            'default' => '#22D3EE',
+            'description' => 'Color del borde del modal final de estado del pago',
+        ],
+        'theme_payment_status_text' => [
+            'label' => 'Pago exitoso texto',
+            'default' => '#F8FAFC',
+            'description' => 'Color del texto descriptivo del modal final de estado del pago',
+        ],
+        'theme_payment_status_title_info' => [
+            'label' => 'Pago exitoso título info',
+            'default' => '#22D3EE',
+            'description' => 'Color del título cuando el modal final muestra un estado informativo',
+        ],
+        'theme_payment_status_title_success' => [
+            'label' => 'Pago exitoso título éxito',
+            'default' => '#34D399',
+            'description' => 'Color del título cuando el modal final muestra un pago exitoso',
+        ],
+        'theme_payment_status_title_danger' => [
+            'label' => 'Pago exitoso título error',
+            'default' => '#F87171',
+            'description' => 'Color del título cuando el modal final muestra un error o revisión requerida',
+        ],
+        'theme_payment_status_button_bg' => [
+            'label' => 'Pago exitoso botón fondo',
+            'default' => '#22D3EE',
+            'description' => 'Color de fondo del botón principal del modal final de estado del pago',
+        ],
+        'theme_payment_status_button_text' => [
+            'label' => 'Pago exitoso botón texto',
+            'default' => '#081018',
+            'description' => 'Color del texto del botón principal del modal final de estado del pago',
+        ],
         'theme_float_whatsapp_bg' => [
             'label' => 'Flotante WhatsApp',
             'default' => '#22C55E',
@@ -255,6 +445,9 @@ function store_config_descriptions(): array {
         'fondo_publico_audio_activo' => 'Activa o desactiva el audio del video de fondo en el sitio público.',
         'fondo_publico_volumen' => 'Nivel de volumen del video de fondo del sitio público expresado entre 0 y 100.',
         'encabezado_pago' => 'Activa el resumen minimalista con icono, precio y caracteristicas dentro del modal de pago.',
+        'ventana_pago_config' => 'Activa la personalización avanzada de colores y textos para la ventana de pago, incluyendo estados previos y posteriores a la compra.',
+        'ventana_pago_enviando_titulo' => 'Texto principal que se muestra en el modal Enviando orden.',
+        'ventana_pago_enviando_mensaje' => 'Texto explicativo que se muestra debajo del título en el modal Enviando orden.',
         'instrucciones_influencer' => 'Activa o desactiva el modulo publico y administrativo de Instrucciones Influencer',
         'google_analytics_activo' => 'Activa o desactiva la inserción del script de Google Analytics o Google Tag en el footer público',
         'google_analytics_script' => 'Código script completo de Google Analytics o Google Tag que se inserta en el footer público',
@@ -319,6 +512,9 @@ function store_config_defaults(): array {
         'fondo_publico_audio_activo' => '0',
         'fondo_publico_volumen' => '35',
         'encabezado_pago' => '0',
+        'ventana_pago_config' => '0',
+        'ventana_pago_enviando_titulo' => 'Enviando orden...',
+        'ventana_pago_enviando_mensaje' => 'Estamos registrando tu comprobante y procesando la orden según la moneda del pedido. No cierres esta ventana.',
         'instrucciones_influencer' => '0',
         'google_analytics_activo' => '0',
         'google_analytics_script' => '',
@@ -697,6 +893,16 @@ function store_theme_css_variables(): string {
         '--bs-link-color' => $theme['theme_primary'],
         '--bs-link-hover-color' => $theme['theme_highlight'],
     ];
+
+    foreach ($theme as $key => $value) {
+        if (!str_starts_with($key, 'theme_')) {
+            continue;
+        }
+
+        $cssBaseName = str_replace('_', '-', substr($key, 6));
+        $variables['--theme-' . $cssBaseName] = $value;
+        $variables['--theme-' . $cssBaseName . '-rgb'] = store_theme_rgb_string($value);
+    }
 
     $lines = [];
     foreach ($variables as $name => $value) {

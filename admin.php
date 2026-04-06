@@ -1541,6 +1541,31 @@ switch ($seccion) {
                     admin_redirect('configuracion', ['tab' => 'personalizar-colores']);
                 }
 
+                $configDescriptions = store_config_descriptions();
+                if (array_key_exists('ventana_pago_enviando_titulo', $_POST)) {
+                    $sendingTitle = trim((string) ($_POST['ventana_pago_enviando_titulo'] ?? ''));
+                    if ($sendingTitle === '') {
+                        $sendingTitle = 'Enviando orden...';
+                    }
+                    if (!store_config_upsert('ventana_pago_enviando_titulo', $sendingTitle, $configDescriptions['ventana_pago_enviando_titulo'] ?? 'Texto principal que se muestra en el modal Enviando orden.')) {
+                        admin_set_flash('error', 'No se pudo guardar el texto principal del modal Enviando orden.');
+                        define('ADMIN_CONFIG_POST_HANDLED', true);
+                        admin_redirect('configuracion', ['tab' => 'personalizar-colores']);
+                    }
+                }
+
+                if (array_key_exists('ventana_pago_enviando_mensaje', $_POST)) {
+                    $sendingMessage = trim((string) ($_POST['ventana_pago_enviando_mensaje'] ?? ''));
+                    if ($sendingMessage === '') {
+                        $sendingMessage = 'Estamos registrando tu comprobante y procesando la orden según la moneda del pedido. No cierres esta ventana.';
+                    }
+                    if (!store_config_upsert('ventana_pago_enviando_mensaje', $sendingMessage, $configDescriptions['ventana_pago_enviando_mensaje'] ?? 'Texto explicativo que se muestra debajo del título en el modal Enviando orden.')) {
+                        admin_set_flash('error', 'No se pudo guardar el texto explicativo del modal Enviando orden.');
+                        define('ADMIN_CONFIG_POST_HANDLED', true);
+                        admin_redirect('configuracion', ['tab' => 'personalizar-colores']);
+                    }
+                }
+
                 admin_set_flash('success', 'Paleta de colores actualizada.');
             }
 

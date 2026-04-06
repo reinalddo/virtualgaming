@@ -199,6 +199,15 @@ $winPointsRedemptionRules = $winPointsEnabled
   ? win_points_fetch_game_redemption_rules($mysqli, (int) ($game['id'] ?? 0))
   : [];
 $paymentHeaderMinimalEnabled = store_config_get('encabezado_pago', '0') === '1';
+$paymentWindowConfigEnabled = store_config_get('ventana_pago_config', '0') === '1';
+$paymentSendingOrderTitle = trim((string) store_config_get('ventana_pago_enviando_titulo', 'Enviando orden...'));
+if ($paymentSendingOrderTitle === '') {
+  $paymentSendingOrderTitle = 'Enviando orden...';
+}
+$paymentSendingOrderMessage = trim((string) store_config_get('ventana_pago_enviando_mensaje', 'Estamos registrando tu comprobante y procesando la orden según la moneda del pedido. No cierres esta ventana.'));
+if ($paymentSendingOrderMessage === '') {
+  $paymentSendingOrderMessage = 'Estamos registrando tu comprobante y procesando la orden según la moneda del pedido. No cierres esta ventana.';
+}
 
 $scriptDir = app_base_path();
 $pageTitle = store_config_get('nombre_tienda', 'TVirtualGaming') . " | " . ($game["nombre"] ?? "Juego");
@@ -476,29 +485,29 @@ include __DIR__ . "/includes/header.php";
 
 
   <!-- Modal Loading Bootstrap -->
-  <div id="loading-modal" class="modal fade app-overlay-modal" tabindex="-1" aria-hidden="true">
+  <div id="loading-modal" class="modal fade app-overlay-modal<?= $paymentWindowConfigEnabled ? ' payment-window-theme-enabled' : '' ?>" tabindex="-1" aria-hidden="true" data-payment-loading-state="processing">
     <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content bg-dark border-info text-center p-4">
+      <div class="modal-content bg-dark border-info text-center p-4 payment-loading-modal-content<?= $paymentWindowConfigEnabled ? ' payment-window-theme-enabled' : '' ?>">
         <div class="mb-3">
           <svg width="48" height="48" viewBox="0 0 50 50">
-            <circle cx="25" cy="25" r="20" fill="none" stroke="#34d399" stroke-width="5" stroke-linecap="round" stroke-dasharray="31.4 31.4" transform="rotate(-90 25 25)">
+            <circle id="loading-modal-spinner-circle" cx="25" cy="25" r="20" fill="none" stroke="#34d399" stroke-width="5" stroke-linecap="round" stroke-dasharray="31.4 31.4" transform="rotate(-90 25 25)">
               <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite"/>
             </circle>
           </svg>
         </div>
-        <h4 id="loading-modal-title" class="fw-bold text-info mb-2">Procesando pedido...</h4>
-        <p id="loading-modal-message" class="text-light mb-0 small">Espera un momento mientras completamos la operación.</p>
+        <h4 id="loading-modal-title" class="fw-bold text-info mb-2 payment-loading-modal-title">Procesando pedido...</h4>
+        <p id="loading-modal-message" class="text-light mb-0 small payment-loading-modal-message">Espera un momento mientras completamos la operación.</p>
       </div>
     </div>
   </div>
-  <div id="payment-status-modal" class="modal fade app-overlay-modal" tabindex="-1" aria-hidden="true">
+  <div id="payment-status-modal" class="modal fade app-overlay-modal<?= $paymentWindowConfigEnabled ? ' payment-window-theme-enabled' : '' ?>" tabindex="-1" aria-hidden="true" data-payment-status-state="info">
     <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content bg-dark border-info text-center p-4">
-        <h4 id="payment-status-modal-title" class="fw-bold text-info mb-3">Estado de la operación</h4>
-        <p id="payment-status-modal-message" class="text-light mb-4 small">Tu solicitud fue procesada.</p>
+      <div class="modal-content bg-dark border-info text-center p-4 payment-status-modal-content<?= $paymentWindowConfigEnabled ? ' payment-window-theme-enabled' : '' ?>">
+        <h4 id="payment-status-modal-title" class="fw-bold text-info mb-3 payment-status-modal-title">Estado de la operación</h4>
+        <p id="payment-status-modal-message" class="text-light mb-4 small payment-status-modal-message">Tu solicitud fue procesada.</p>
         <div id="payment-status-modal-reasons" class="d-none payment-reasons-card mb-3 text-start"></div>
         <div id="payment-status-modal-actions" class="d-none payment-support-actions mb-4"></div>
-        <button type="button" id="payment-status-modal-accept" class="btn btn-info fw-bold px-4">Aceptar</button>
+        <button type="button" id="payment-status-modal-accept" class="btn btn-info fw-bold px-4 payment-status-modal-accept-btn<?= $paymentWindowConfigEnabled ? ' payment-window-theme-enabled' : '' ?>">Aceptar</button>
       </div>
     </div>
   </div>
@@ -516,9 +525,9 @@ include __DIR__ . "/includes/header.php";
     </div>
   </div>
 
-  <div id="payment-modal" class="modal fade app-overlay-modal" tabindex="-1" aria-hidden="true">
+  <div id="payment-modal" class="modal fade app-overlay-modal<?= $paymentWindowConfigEnabled ? ' payment-window-theme-enabled payment-main-modal-theme-enabled' : '' ?>" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered payment-modal-dialog">
-      <div class="modal-content payment-modal-content text-light border-info">
+      <div class="modal-content payment-modal-content text-light border-info<?= $paymentWindowConfigEnabled ? ' payment-modal-skin-enabled' : '' ?>">
         <div class="payment-expiration-banner" id="payment-expiration-banner">
           <span>La orden expira en:</span>
           <strong id="payment-timer-value">30:00</strong>
@@ -580,8 +589,8 @@ include __DIR__ . "/includes/header.php";
             </div>
           </div>
         </div>
-        <button type="button" id="payment-submit-btn" class="btn btn-info w-100 fw-bold text-uppercase py-3">Pagado / Recargar</button>
-        <button type="button" id="payment-cancel-order-btn" class="btn btn-danger w-100 fw-bold text-uppercase py-3 mt-3">Cancelar Orden</button>
+        <button type="button" id="payment-submit-btn" class="btn btn-info w-100 fw-bold text-uppercase py-3 payment-submit-btn-theme<?= $paymentWindowConfigEnabled ? ' payment-window-theme-enabled' : '' ?>">Pagado / Recargar</button>
+        <button type="button" id="payment-cancel-order-btn" class="btn btn-danger w-100 fw-bold text-uppercase py-3 mt-3 payment-cancel-btn-theme<?= $paymentWindowConfigEnabled ? ' payment-window-theme-enabled' : '' ?>">Cancelar Orden</button>
       </div>
     </div>
   </div>
@@ -926,6 +935,171 @@ include __DIR__ . "/includes/header.php";
   .payment-support-link:hover {
     color: #ffffff;
     box-shadow: 0 0 22px rgba(16, 185, 129, 0.28);
+  }
+
+  #payment-modal.payment-main-modal-theme-enabled {
+    background: rgba(var(--theme-payment-main-overlay-bg-rgb, 5, 10, 20), 0.78);
+  }
+
+  .payment-modal-content.payment-modal-skin-enabled {
+    color: var(--theme-payment-main-text, #CBD5E1);
+    background: linear-gradient(180deg, rgba(var(--theme-payment-main-modal-bg-rgb, 17, 24, 39), 0.98), rgba(var(--theme-payment-main-modal-bg-rgb, 17, 24, 39), 0.94));
+    border: 1px solid rgba(var(--theme-payment-main-modal-border-rgb, 34, 211, 238), 0.56);
+    box-shadow: 0 0 28px rgba(var(--theme-payment-main-modal-border-rgb, 34, 211, 238), 0.16);
+  }
+
+  .payment-modal-content.payment-modal-skin-enabled .payment-expiration-banner {
+    border-color: rgba(var(--theme-payment-main-timer-border-rgb, 248, 113, 113), 0.5);
+    background: rgba(var(--theme-payment-main-timer-bg-rgb, 127, 29, 29), 0.2);
+    color: var(--theme-payment-main-timer-text, #F87171);
+  }
+
+  .payment-modal-content.payment-modal-skin-enabled .payment-summary-card,
+  .payment-modal-content.payment-modal-skin-enabled .payment-method-card,
+  .payment-modal-content.payment-modal-skin-enabled .payment-win-points-card,
+  .payment-modal-content.payment-modal-skin-enabled .payment-mode-item,
+  .payment-modal-content.payment-modal-skin-enabled .payment-mode-item-card,
+  .payment-modal-content.payment-modal-skin-enabled .payment-reasons-card {
+    background: rgba(var(--theme-payment-main-card-bg-rgb, 8, 15, 24), 0.82);
+    border-color: rgba(var(--theme-payment-main-card-border-rgb, 22, 78, 99), 0.46);
+  }
+
+  .payment-modal-content.payment-modal-skin-enabled .payment-summary-card-title,
+  .payment-modal-content.payment-modal-skin-enabled .payment-summary-minimal-title,
+  .payment-modal-content.payment-modal-skin-enabled .payment-summary-row strong,
+  .payment-modal-content.payment-modal-skin-enabled .payment-summary-minimal-user strong,
+  .payment-modal-content.payment-modal-skin-enabled #payment-method-title,
+  .payment-modal-content.payment-modal-skin-enabled .payment-win-points-title,
+  .payment-modal-content.payment-modal-skin-enabled .payment-mode-item-card-title,
+  .payment-modal-content.payment-modal-skin-enabled .payment-reasons-title,
+  .payment-modal-content.payment-modal-skin-enabled .form-label {
+    color: var(--theme-payment-main-title, #F8FAFC) !important;
+  }
+
+  .payment-modal-content.payment-modal-skin-enabled .payment-summary-row,
+  .payment-modal-content.payment-modal-skin-enabled .payment-summary-minimal-user,
+  .payment-modal-content.payment-modal-skin-enabled .payment-method-details,
+  .payment-modal-content.payment-modal-skin-enabled .payment-win-points-copy,
+  .payment-modal-content.payment-modal-skin-enabled .payment-mode-item-currency,
+  .payment-modal-content.payment-modal-skin-enabled .payment-mode-item-details,
+  .payment-modal-content.payment-modal-skin-enabled .payment-reasons-summary,
+  .payment-modal-content.payment-modal-skin-enabled .payment-reasons-steps,
+  .payment-modal-content.payment-modal-skin-enabled .payment-reasons-card ul,
+  .payment-modal-content.payment-modal-skin-enabled .form-text {
+    color: var(--theme-payment-main-text, #CBD5E1) !important;
+  }
+
+  .payment-modal-content.payment-modal-skin-enabled .payment-summary-total {
+    border-top-color: rgba(var(--theme-payment-main-card-border-rgb, 22, 78, 99), 0.3);
+  }
+
+  .payment-modal-content.payment-modal-skin-enabled .payment-summary-total strong,
+  .payment-modal-content.payment-modal-skin-enabled .payment-summary-minimal-total,
+  .payment-modal-content.payment-modal-skin-enabled .payment-method-currency,
+  .payment-modal-content.payment-modal-skin-enabled .payment-reasons-caption {
+    color: var(--theme-payment-main-title, #F8FAFC) !important;
+  }
+
+  .payment-modal-content.payment-modal-skin-enabled .form-control,
+  .payment-modal-content.payment-modal-skin-enabled .form-select {
+    background: var(--theme-payment-main-input-bg, #111827) !important;
+    border-color: var(--theme-payment-main-input-border, #22D3EE) !important;
+    color: var(--theme-payment-main-input-text, #22D3EE) !important;
+  }
+
+  .payment-modal-content.payment-modal-skin-enabled .form-control::placeholder {
+    color: rgba(var(--theme-payment-main-input-text-rgb, 34, 211, 238), 0.65) !important;
+  }
+
+  .payment-submit-btn-theme.payment-window-theme-enabled {
+    background: var(--theme-payment-main-button-bg, #22D3EE) !important;
+    border-color: rgba(var(--theme-payment-main-button-bg-rgb, 34, 211, 238), 0.88) !important;
+    color: var(--theme-payment-main-button-text, #081018) !important;
+  }
+
+  .payment-cancel-btn-theme.payment-window-theme-enabled {
+    background: var(--theme-payment-main-cancel-bg, #F87171) !important;
+    border-color: rgba(var(--theme-payment-main-cancel-bg-rgb, 248, 113, 113), 0.88) !important;
+    color: var(--theme-payment-main-cancel-text, #F8FAFC) !important;
+  }
+
+  .payment-modal-content.payment-modal-skin-enabled .payment-support-link {
+    border-color: rgba(var(--theme-payment-main-button-bg-rgb, 34, 211, 238), 0.65);
+    background: linear-gradient(135deg, rgba(var(--theme-payment-main-button-bg-rgb, 34, 211, 238), 0.88), rgba(var(--theme-payment-main-button-bg-rgb, 34, 211, 238), 0.72));
+    color: var(--theme-payment-main-button-text, #081018);
+  }
+
+  #loading-modal.payment-window-theme-enabled[data-payment-loading-state="processing"] {
+    background: rgba(var(--theme-payment-processing-overlay-bg-rgb, 5, 10, 20), 0.78);
+  }
+
+  #loading-modal.payment-window-theme-enabled[data-payment-loading-state="sending"] {
+    background: rgba(var(--theme-payment-sending-overlay-bg-rgb, 5, 10, 20), 0.78);
+  }
+
+  #loading-modal.payment-window-theme-enabled[data-payment-loading-state="processing"] .payment-loading-modal-content {
+    background: linear-gradient(180deg, rgba(var(--theme-payment-processing-modal-bg-rgb, 17, 24, 39), 0.98), rgba(var(--theme-payment-processing-modal-bg-rgb, 17, 24, 39), 0.94));
+    border: 1px solid rgba(var(--theme-payment-processing-modal-border-rgb, 34, 211, 238), 0.56);
+  }
+
+  #loading-modal.payment-window-theme-enabled[data-payment-loading-state="processing"] #loading-modal-spinner-circle {
+    stroke: var(--theme-payment-processing-spinner, #34D399);
+  }
+
+  #loading-modal.payment-window-theme-enabled[data-payment-loading-state="processing"] .payment-loading-modal-title {
+    color: var(--theme-payment-processing-title, #22D3EE) !important;
+  }
+
+  #loading-modal.payment-window-theme-enabled[data-payment-loading-state="processing"] .payment-loading-modal-message {
+    color: var(--theme-payment-processing-text, #F8FAFC) !important;
+  }
+
+  #loading-modal.payment-window-theme-enabled[data-payment-loading-state="sending"] .payment-loading-modal-content {
+    background: linear-gradient(180deg, rgba(var(--theme-payment-sending-modal-bg-rgb, 17, 24, 39), 0.98), rgba(var(--theme-payment-sending-modal-bg-rgb, 17, 24, 39), 0.94));
+    border: 1px solid rgba(var(--theme-payment-sending-modal-border-rgb, 34, 211, 238), 0.56);
+  }
+
+  #loading-modal.payment-window-theme-enabled[data-payment-loading-state="sending"] #loading-modal-spinner-circle {
+    stroke: var(--theme-payment-sending-spinner, #22D3EE);
+  }
+
+  #loading-modal.payment-window-theme-enabled[data-payment-loading-state="sending"] .payment-loading-modal-title {
+    color: var(--theme-payment-sending-title, #22D3EE) !important;
+  }
+
+  #loading-modal.payment-window-theme-enabled[data-payment-loading-state="sending"] .payment-loading-modal-message {
+    color: var(--theme-payment-sending-text, #F8FAFC) !important;
+  }
+
+  #payment-status-modal.payment-window-theme-enabled {
+    background: rgba(var(--theme-payment-status-overlay-bg-rgb, 5, 10, 20), 0.78);
+  }
+
+  #payment-status-modal.payment-window-theme-enabled .payment-status-modal-content {
+    background: linear-gradient(180deg, rgba(var(--theme-payment-status-modal-bg-rgb, 17, 24, 39), 0.98), rgba(var(--theme-payment-status-modal-bg-rgb, 17, 24, 39), 0.94));
+    border: 1px solid rgba(var(--theme-payment-status-modal-border-rgb, 34, 211, 238), 0.56);
+  }
+
+  #payment-status-modal.payment-window-theme-enabled .payment-status-modal-message {
+    color: var(--theme-payment-status-text, #F8FAFC) !important;
+  }
+
+  #payment-status-modal.payment-window-theme-enabled[data-payment-status-state="info"] .payment-status-modal-title {
+    color: var(--theme-payment-status-title-info, #22D3EE) !important;
+  }
+
+  #payment-status-modal.payment-window-theme-enabled[data-payment-status-state="success"] .payment-status-modal-title {
+    color: var(--theme-payment-status-title-success, #34D399) !important;
+  }
+
+  #payment-status-modal.payment-window-theme-enabled[data-payment-status-state="danger"] .payment-status-modal-title {
+    color: var(--theme-payment-status-title-danger, #F87171) !important;
+  }
+
+  .payment-status-modal-accept-btn.payment-window-theme-enabled {
+    background: var(--theme-payment-status-button-bg, #22D3EE) !important;
+    border-color: rgba(var(--theme-payment-status-button-bg-rgb, 34, 211, 238), 0.88) !important;
+    color: var(--theme-payment-status-button-text, #081018) !important;
   }
 
   .payment-confirm-overlay {
@@ -1471,6 +1645,11 @@ include __DIR__ . "/includes/header.php";
   const loadingModal = document.getElementById('loading-modal');
   const loadingModalTitle = document.getElementById('loading-modal-title');
   const loadingModalMessage = document.getElementById('loading-modal-message');
+  const paymentWindowThemeEnabled = <?php echo $paymentWindowConfigEnabled ? 'true' : 'false'; ?>;
+  const paymentSendingOrderContent = {
+    title: <?php echo json_encode($paymentSendingOrderTitle, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>,
+    message: <?php echo json_encode($paymentSendingOrderMessage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>
+  };
   const paymentStatusModal = document.getElementById('payment-status-modal');
   const paymentStatusModalTitle = document.getElementById('payment-status-modal-title');
   const paymentStatusModalMessage = document.getElementById('payment-status-modal-message');
@@ -2496,12 +2675,15 @@ include __DIR__ . "/includes/header.php";
     }
   }
 
-  function setLoadingModalContent(title, message) {
+  function setLoadingModalContent(title, message, state = 'processing') {
     if (loadingModalTitle) {
       loadingModalTitle.textContent = title || 'Procesando pedido...';
     }
     if (loadingModalMessage) {
       loadingModalMessage.textContent = message || 'Espera un momento mientras completamos la operación.';
+    }
+    if (loadingModal && paymentWindowThemeEnabled) {
+      loadingModal.setAttribute('data-payment-loading-state', state === 'sending' ? 'sending' : 'processing');
     }
   }
 
@@ -2532,6 +2714,10 @@ include __DIR__ . "/includes/header.php";
     }
     if (paymentStatusModalMessage) {
       paymentStatusModalMessage.textContent = message || 'Tu solicitud fue procesada.';
+    }
+    if (paymentStatusModal && paymentWindowThemeEnabled) {
+      const normalizedType = type === 'success' || type === 'danger' ? type : 'info';
+      paymentStatusModal.setAttribute('data-payment-status-state', normalizedType);
     }
     scrollPaymentModalToTop();
     setOverlayVisible(paymentStatusModal, true);
@@ -3409,10 +3595,11 @@ include __DIR__ . "/includes/header.php";
                   setPaymentFormDisabled(true);
                   setPaymentAlert('', 'info');
                   setLoadingModalContent(
-                    paymentMode === 'points' ? 'Canjeando premios...' : 'Enviando orden...',
+                    paymentMode === 'points' ? 'Canjeando premios...' : (paymentSendingOrderContent.title || 'Enviando orden...'),
                     paymentMode === 'points'
                       ? 'Estamos validando tu saldo y procesando la recarga con tus premios. No cierres esta ventana.'
-                      : 'Estamos registrando tu comprobante y procesando la orden según la moneda del pedido. No cierres esta ventana.'
+                      : (paymentSendingOrderContent.message || 'Estamos registrando tu comprobante y procesando la orden según la moneda del pedido. No cierres esta ventana.'),
+                    paymentMode === 'points' ? 'processing' : 'sending'
                   );
                   setOverlayVisible(loadingModal, true);
                   fetch(buildAppUrl('/api/pedidos.php'), {
@@ -3727,7 +3914,7 @@ include __DIR__ . "/includes/header.php";
 
                 console.log('Datos enviados a pedidos.php:', pedidoData);
                 btn.disabled = true;
-                setLoadingModalContent('Procesando pedido...', 'Estamos registrando tu pedido para abrir el formulario de pago.');
+                setLoadingModalContent('Procesando pedido...', 'Estamos registrando tu pedido para abrir el formulario de pago.', 'processing');
                 setOverlayVisible(loadingModal, true);
 
                 fetch(buildAppUrl('/api/pedidos.php'), {

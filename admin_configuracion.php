@@ -61,6 +61,69 @@ $themeDefinitions = store_theme_definitions();
 $themeBaseValues = store_theme_base_values();
 $themeValues = store_theme_values();
 $paymentHeaderMinimalEnabled = ($cfg['encabezado_pago'] ?? '0') === '1';
+$paymentWindowConfigEnabled = ($cfg['ventana_pago_config'] ?? '0') === '1';
+$paymentWindowSendingTitle = trim((string) ($cfg['ventana_pago_enviando_titulo'] ?? 'Enviando orden...'));
+if ($paymentWindowSendingTitle === '') {
+  $paymentWindowSendingTitle = 'Enviando orden...';
+}
+$paymentWindowSendingMessage = trim((string) ($cfg['ventana_pago_enviando_mensaje'] ?? 'Estamos registrando tu comprobante y procesando la orden según la moneda del pedido. No cierres esta ventana.'));
+if ($paymentWindowSendingMessage === '') {
+  $paymentWindowSendingMessage = 'Estamos registrando tu comprobante y procesando la orden según la moneda del pedido. No cierres esta ventana.';
+}
+$paymentWindowThemeGroups = [
+  'Ventana de pago principal' => [
+    'theme_payment_main_overlay_bg',
+    'theme_payment_main_modal_bg',
+    'theme_payment_main_modal_border',
+    'theme_payment_main_title',
+    'theme_payment_main_text',
+    'theme_payment_main_timer_bg',
+    'theme_payment_main_timer_border',
+    'theme_payment_main_timer_text',
+    'theme_payment_main_card_bg',
+    'theme_payment_main_card_border',
+    'theme_payment_main_input_bg',
+    'theme_payment_main_input_border',
+    'theme_payment_main_input_text',
+    'theme_payment_main_button_bg',
+    'theme_payment_main_button_text',
+    'theme_payment_main_cancel_bg',
+    'theme_payment_main_cancel_text',
+  ],
+  'Procesando pedido' => [
+    'theme_payment_processing_overlay_bg',
+    'theme_payment_processing_modal_bg',
+    'theme_payment_processing_modal_border',
+    'theme_payment_processing_spinner',
+    'theme_payment_processing_title',
+    'theme_payment_processing_text',
+  ],
+  'Enviando orden' => [
+    'theme_payment_sending_overlay_bg',
+    'theme_payment_sending_modal_bg',
+    'theme_payment_sending_modal_border',
+    'theme_payment_sending_spinner',
+    'theme_payment_sending_title',
+    'theme_payment_sending_text',
+  ],
+  'Pago exitoso y estado final' => [
+    'theme_payment_status_overlay_bg',
+    'theme_payment_status_modal_bg',
+    'theme_payment_status_modal_border',
+    'theme_payment_status_text',
+    'theme_payment_status_title_info',
+    'theme_payment_status_title_success',
+    'theme_payment_status_title_danger',
+    'theme_payment_status_button_bg',
+    'theme_payment_status_button_text',
+  ],
+];
+$paymentWindowThemeKeys = [];
+foreach ($paymentWindowThemeGroups as $groupKeys) {
+  foreach ($groupKeys as $groupKey) {
+    $paymentWindowThemeKeys[] = $groupKey;
+  }
+}
 $themeFieldGroups = [
   'Fondos y paneles' => ['theme_bg_main', 'theme_bg_alt', 'theme_surface', 'theme_surface_alt', 'theme_border'],
   'Neón y acciones' => ['theme_primary', 'theme_highlight', 'theme_secondary', 'theme_success'],
@@ -73,6 +136,11 @@ $themeFieldGroups = [
 ];
 if ($paymentHeaderMinimalEnabled) {
   $themeFieldGroups['Características de paquetes'] = ['theme_package_feature_bg', 'theme_package_feature_border', 'theme_package_feature_text'];
+}
+if ($paymentWindowConfigEnabled) {
+  foreach ($paymentWindowThemeGroups as $paymentWindowGroupTitle => $paymentWindowGroupKeys) {
+    $themeFieldGroups[$paymentWindowGroupTitle] = $paymentWindowGroupKeys;
+  }
 }
 $themeFieldGroups['Textos y estados'] = ['theme_text', 'theme_text_muted', 'theme_price_text', 'theme_price_muted', 'theme_warning', 'theme_danger'];
 $startupPopupMode = 'none';
@@ -774,6 +842,11 @@ $googleCallbackUrl = google_oauth_callback_url();
                 <input type="hidden" name="theme_package_feature_border" value="<?= htmlspecialchars($themeValues['theme_package_feature_border'], ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" name="theme_package_feature_text" value="<?= htmlspecialchars($themeValues['theme_package_feature_text'], ENT_QUOTES, 'UTF-8') ?>">
               <?php endif; ?>
+              <?php if (!$paymentWindowConfigEnabled): ?>
+                <?php foreach ($paymentWindowThemeKeys as $paymentWindowThemeKey): ?>
+                  <input type="hidden" name="<?= htmlspecialchars($paymentWindowThemeKey, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars($themeValues[$paymentWindowThemeKey], ENT_QUOTES, 'UTF-8') ?>">
+                <?php endforeach; ?>
+              <?php endif; ?>
               <div class="config-section-note mb-4">Los valores `theme_*` quedan como base fija. Aquí solo editas una copia activa de esa paleta. Si el cliente quiere volver al diseño original, puedes restaurar la copia editable desde los valores base.</div>
               <div class="theme-accordion" data-theme-accordion>
                 <?php foreach ($themeFieldGroups as $groupTitle => $groupKeys): ?>
@@ -799,6 +872,18 @@ $googleCallbackUrl = google_oauth_callback_url();
                             </div>
                           </div>
                         <?php endforeach; ?>
+                        <?php if ($paymentWindowConfigEnabled && $groupTitle === 'Enviando orden'): ?>
+                          <div class="col-12">
+                            <div class="theme-swatch-card">
+                              <label class="form-label fw-semibold">Texto principal del modal</label>
+                              <input type="text" name="ventana_pago_enviando_titulo" value="<?= htmlspecialchars($paymentWindowSendingTitle, ENT_QUOTES, 'UTF-8') ?>" class="form-control mb-3" maxlength="120" placeholder="Enviando orden...">
+                              <div class="form-text mb-3">Este texto reemplaza el título del modal mostrado mientras se envía la orden.</div>
+                              <label class="form-label fw-semibold">Texto explicativo debajo del título</label>
+                              <textarea name="ventana_pago_enviando_mensaje" class="form-control" rows="3" maxlength="500" placeholder="Explica aquí qué está ocurriendo mientras se procesa la orden."><?= htmlspecialchars($paymentWindowSendingMessage, ENT_QUOTES, 'UTF-8') ?></textarea>
+                              <div class="form-text">Este texto se mostrará debajo del título del modal Enviando orden.</div>
+                            </div>
+                          </div>
+                        <?php endif; ?>
                       </div>
                     </div>
                   </div>
