@@ -7,8 +7,10 @@ require_once __DIR__ . "/includes/payment_methods.php";
 require_once __DIR__ . "/includes/recargas_api.php";
 require_once __DIR__ . "/includes/slugify.php";
 require_once __DIR__ . "/includes/player_verification.php";
+require_once __DIR__ . "/includes/package_features.php";
 require_once __DIR__ . "/includes/win_points.php";
 currency_ensure_schema();
+package_features_ensure_schema($mysqli);
 $paymentSupportWhatsappBase = store_config_whatsapp_link(store_config_get('whatsapp', ''));
 
 function fetch_user_legacy_purchase_defaults(mysqli $mysqli, int $userId): array {
@@ -196,6 +198,7 @@ $winPointsPackageRewards = $winPointsEnabled
 $winPointsRedemptionRules = $winPointsEnabled
   ? win_points_fetch_game_redemption_rules($mysqli, (int) ($game['id'] ?? 0))
   : [];
+$paymentHeaderMinimalEnabled = store_config_get('encabezado_pago', '0') === '1';
 
 $scriptDir = app_base_path();
 $pageTitle = store_config_get('nombre_tienda', 'TVirtualGaming') . " | " . ($game["nombre"] ?? "Juego");
@@ -219,7 +222,7 @@ include __DIR__ . "/includes/header.php";
         <?php 
           $carRes = $mysqli->query("SELECT caracteristica FROM juego_caracteristicas WHERE juego_id=" . intval($game['id']));
           while ($row = $carRes->fetch_assoc()) {
-            echo '<span class="badge rounded-pill border border-info text-info px-2 py-1 bg-dark">' . htmlspecialchars($row['caracteristica']) . '</span>';
+            echo '<span class="game-feature-badge">' . htmlspecialchars($row['caracteristica']) . '</span>';
           }
         ?>
       </div>
@@ -282,6 +285,7 @@ include __DIR__ . "/includes/header.php";
     while ($pack = $resPaq->fetch_assoc()) {
       $paquetes[] = $pack;
     }
+    $packageFeaturesByPackage = package_features_for_packages($mysqli, array_map(static fn (array $package): int => (int) ($package['id'] ?? 0), $paquetes));
   ?>
   <div class="row row-cols-2 row-cols-sm-3 row-cols-lg-4 g-3 mb-4" id="pack-grid">
     <?php foreach ($paquetes as $pack):
@@ -296,9 +300,12 @@ include __DIR__ . "/includes/header.php";
         $packWinPointsRequired = max(0, (int) (($packWinPointsRule['required_points'] ?? 0)));
         $packWinPointsRuleActive = is_array($packWinPointsRule) && !empty($packWinPointsRule['activo']) && $packWinPointsRequired > 0;
         $apiRequiredFields = [];
+        $packFeatures = $packageFeaturesByPackage[$packId] ?? [];
         if ($usesCatalogApi && $packApiId > 0 && isset($apiProductsById[$packApiId])) {
           $apiRequiredFields = recargas_api_describe_required_fields($apiProductsById[$packApiId]);
         }
+        $img_paquete = !empty($pack['imagen_icono']) ? $pack['imagen_icono'] : (!empty($game['imagen_paquete']) ? $game['imagen_paquete'] : null);
+        $packImageUrl = package_feature_public_asset_url($img_paquete);
     ?>
       <div class="col">
         <button type="button" class="pack-card card border-info bg-dark text-start w-100 h-100 shadow-sm"
@@ -312,14 +319,13 @@ include __DIR__ . "/includes/header.php";
           data-win-points-reward="<?= $packWinPointsReward ?>"
           data-win-points-required="<?= $packWinPointsRequired ?>"
           data-win-points-active="<?= $packWinPointsRuleActive ? '1' : '0' ?>"
+          data-package-image="<?= htmlspecialchars($packImageUrl, ENT_QUOTES, 'UTF-8') ?>"
+          data-package-features="<?= htmlspecialchars(json_encode($packFeatures, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8') ?>"
           data-moneda="<?= htmlspecialchars($clave_moneda) ?>">
           <div class="card-body p-0 d-flex flex-column">
-            <?php 
-              $img_paquete = !empty($pack['imagen_icono']) ? $pack['imagen_icono'] : (!empty($game['imagen_paquete']) ? $game['imagen_paquete'] : null);
-            ?>
             <div class="pack-card-media">
               <?php if ($img_paquete): ?>
-                <img src="<?= htmlspecialchars(app_path('/' . ltrim((string) $img_paquete, '/')), ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?>" class="pack-card-image" />
+                <img src="<?= htmlspecialchars($packImageUrl, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?>" class="pack-card-image" />
               <?php else: ?>
                 <span class="pack-card-placeholder">PK</span>
               <?php endif; ?>
@@ -520,8 +526,22 @@ include __DIR__ . "/includes/header.php";
         <div id="payment-modal-alert" class="d-none alert mb-3"></div>
         <div id="payment-modal-reasons" class="d-none payment-reasons-card mb-3"></div>
         <div id="payment-modal-actions" class="d-none payment-support-actions mb-4"></div>
-        <div class="payment-summary-card mb-4">
-          <h3 class="h5 fw-bold text-white mb-3">Resumen de Pago</h3>
+        <div class="payment-summary-card mb-4<?= $paymentHeaderMinimalEnabled ? ' payment-summary-card--minimal' : '' ?>">
+          <div class="payment-summary-minimal">
+            <div class="payment-summary-minimal-media">
+              <img id="payment-summary-image" src="" alt="Paquete" class="payment-summary-minimal-image d-none" />
+              <span id="payment-summary-image-placeholder" class="payment-summary-minimal-placeholder">PK</span>
+            </div>
+            <div class="payment-summary-minimal-copy">
+              <h3 id="payment-summary-minimal-product" class="payment-summary-minimal-title">-</h3>
+              <div id="payment-summary-features" class="payment-summary-features d-none"></div>
+              <div class="payment-summary-minimal-user">ID Jugador: <strong id="payment-summary-minimal-user">-</strong></div>
+            </div>
+            <div class="payment-summary-minimal-price">
+              <div id="payment-summary-minimal-total" class="payment-summary-minimal-total">-</div>
+            </div>
+          </div>
+          <h3 class="payment-summary-card-title h5 fw-bold text-white mb-3">Resumen de Pago</h3>
           <div class="payment-summary-row"><span>ID Jugador:</span><strong id="payment-summary-user">-</strong></div>
           <div class="payment-summary-row"><span>Producto:</span><strong id="payment-summary-product">-</strong></div>
           <div class="payment-summary-row payment-summary-total"><span>Total a pagar:</span><strong id="payment-summary-total">-</strong></div>
@@ -529,8 +549,8 @@ include __DIR__ . "/includes/header.php";
         <div id="payment-win-points-card" class="payment-win-points-card d-none">
           <div class="payment-win-points-header">
             <div>
-              <div class="payment-win-points-title">Premios disponibles</div>
-              <div class="payment-win-points-copy">Elige si deseas completar esta orden con transferencia o con tus premios acumulados.</div>
+              <div id="payment-win-points-title" class="payment-win-points-title">Premios disponibles</div>
+              <div id="payment-win-points-copy" class="payment-win-points-copy">Elige si deseas completar esta orden con transferencia o con tus premios acumulados.</div>
             </div>
             <div id="payment-win-points-balance" class="payment-win-points-balance">0</div>
           </div>
@@ -651,6 +671,161 @@ include __DIR__ . "/includes/header.php";
     border-radius: 1rem;
     background: rgba(8, 15, 24, 0.74);
     border: 1px solid rgba(34, 211, 238, 0.15);
+  }
+
+  .payment-summary-card-title {
+    margin-bottom: 1rem;
+  }
+
+  .payment-summary-minimal {
+    display: none;
+    grid-template-columns: 78px minmax(0, 1fr) auto;
+    gap: 1rem;
+    align-items: start;
+  }
+
+  .payment-summary-card--minimal .payment-summary-minimal {
+    display: grid;
+  }
+
+  .payment-summary-card--minimal .payment-summary-card-title,
+  .payment-summary-card--minimal .payment-summary-row {
+    display: none;
+  }
+
+  .payment-summary-minimal-media {
+    width: 78px;
+    height: 78px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 1.35rem;
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(22, 78, 99, 0.48));
+    border: 1px solid rgba(34, 211, 238, 0.28);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+    overflow: hidden;
+  }
+
+  .payment-summary-minimal-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .payment-summary-minimal-placeholder {
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    color: #67e8f9;
+  }
+
+  .payment-summary-minimal-copy {
+    min-width: 0;
+  }
+
+  .payment-summary-minimal-title {
+    margin: 0;
+    color: #f8fafc;
+    font-size: 1.08rem;
+    font-weight: 700;
+  }
+
+  .payment-summary-minimal-price {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    min-width: max-content;
+    padding-top: 0.15rem;
+  }
+
+  .payment-summary-minimal-total {
+    color: #22d3ee;
+    font-size: 1.35rem;
+    font-weight: 800;
+    line-height: 1;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .payment-summary-minimal-user {
+    margin-top: 0.8rem;
+    color: #cbd5e1;
+    font-size: 0.92rem;
+  }
+
+  .payment-summary-minimal-user strong {
+    color: #f8fafc;
+  }
+
+  .game-feature-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.34rem 0.7rem;
+    border-radius: 999px;
+    border: 1px solid var(--theme-game-feature-border, #164E63);
+    background: var(--theme-game-feature-bg, #0E1722);
+    color: var(--theme-game-feature-text, #22D3EE);
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1.1;
+    box-shadow: inset 0 0 0 1px rgba(var(--theme-game-feature-border-rgb, 22, 78, 99), 0.14);
+  }
+
+  .payment-summary-features {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.42rem;
+    margin-top: 0.62rem;
+  }
+
+  .payment-summary-feature {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.38rem;
+    padding: 0.34rem 0.64rem;
+    border-radius: 999px;
+    background: var(--theme-package-feature-bg, #0F172A);
+    border: 1px solid var(--theme-package-feature-border, #164E63);
+    color: var(--theme-package-feature-text, #D8FBFF);
+    font-size: 0.76rem;
+    font-weight: 600;
+    line-height: 1.05;
+  }
+
+  .payment-summary-feature-icon {
+    display: inline-flex;
+    width: 0.82rem;
+    height: 0.82rem;
+    color: var(--theme-package-feature-text, #D8FBFF);
+  }
+
+  .payment-summary-feature-icon svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  @media (max-width: 480px) {
+    .payment-summary-minimal {
+      grid-template-columns: 68px minmax(0, 1fr);
+      gap: 0.85rem;
+    }
+
+    .payment-summary-minimal-media {
+      width: 68px;
+      height: 68px;
+    }
+
+    .payment-summary-minimal-price {
+      grid-column: 2;
+      justify-content: flex-start;
+      padding-top: 0;
+    }
+
+    .payment-summary-minimal-total {
+      text-align: left;
+      font-size: 1.22rem;
+    }
   }
 
   .payment-summary-row {
@@ -1273,6 +1448,8 @@ include __DIR__ . "/includes/header.php";
     'balance' => (int) ($winPointsUserSummary['balance'] ?? 0),
   ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const gameUsesCatalogApi = <?= $usesCatalogApi ? 'true' : 'false' ?>;
+  const paymentHeaderMinimalEnabled = <?= $paymentHeaderMinimalEnabled ? 'true' : 'false' ?>;
+  const packageFeatureIconSvgMap = <?= json_encode(package_feature_icon_svg_map(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const packCards2 = Array.from(document.querySelectorAll('.pack-card'));
   const selectedPack = document.getElementById("selected-pack");
   const selectedPrice = document.getElementById("selected-price");
@@ -1317,9 +1494,16 @@ include __DIR__ . "/includes/header.php";
   }
   let paymentStatusPollTimer = null;
   const paymentTimerValue = document.getElementById('payment-timer-value');
+  const paymentSummaryCard = document.querySelector('.payment-summary-card');
   const paymentSummaryUser = document.getElementById('payment-summary-user');
   const paymentSummaryProduct = document.getElementById('payment-summary-product');
   const paymentSummaryTotal = document.getElementById('payment-summary-total');
+  const paymentSummaryMinimalUser = document.getElementById('payment-summary-minimal-user');
+  const paymentSummaryMinimalProduct = document.getElementById('payment-summary-minimal-product');
+  const paymentSummaryMinimalTotal = document.getElementById('payment-summary-minimal-total');
+  const paymentSummaryImage = document.getElementById('payment-summary-image');
+  const paymentSummaryImagePlaceholder = document.getElementById('payment-summary-image-placeholder');
+  const paymentSummaryFeatures = document.getElementById('payment-summary-features');
   const paymentMethodSelectWrap = document.getElementById('payment-method-select-wrap');
   const paymentMethodSelect = document.getElementById('payment-method-select');
   const paymentMethodCard = document.getElementById('payment-method-card');
@@ -1327,6 +1511,8 @@ include __DIR__ . "/includes/header.php";
   const paymentMethodCurrency = document.getElementById('payment-method-currency');
   const paymentMethodDetails = document.getElementById('payment-method-details');
   const paymentWinPointsCard = document.getElementById('payment-win-points-card');
+  const paymentWinPointsTitle = document.getElementById('payment-win-points-title');
+  const paymentWinPointsCopy = document.getElementById('payment-win-points-copy');
   const paymentModeOptions = document.getElementById('payment-mode-options');
   const paymentMoneyPanel = document.getElementById('payment-money-panel');
   const paymentWinPointsBalance = document.getElementById('payment-win-points-balance');
@@ -1391,6 +1577,17 @@ include __DIR__ . "/includes/header.php";
     }
   }
 
+  function parsePackageFeatures(rawValue) {
+    try {
+      const parsed = JSON.parse(String(rawValue || '[]'));
+      return Array.isArray(parsed)
+        ? parsed.filter((feature) => feature && typeof feature === 'object' && String(feature.name || '').trim() !== '')
+        : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
   function buildPackStateFromCard(card) {
     return {
       id: card.dataset.packageId,
@@ -1402,8 +1599,63 @@ include __DIR__ . "/includes/header.php";
       rewardPoints: Number(card.dataset.winPointsReward || 0),
       redeemRequiredPoints: Number(card.dataset.winPointsRequired || 0),
       redeemActive: card.dataset.winPointsActive === '1',
-      requiredFields: parseRequiredFields(card.dataset.requiredFields)
+      requiredFields: parseRequiredFields(card.dataset.requiredFields),
+      imageUrl: String(card.dataset.packageImage || ''),
+      features: parsePackageFeatures(card.dataset.packageFeatures)
     };
+  }
+
+  function paymentSummaryFeatureIconMarkup(iconKey) {
+    const safeKey = String(iconKey || 'sparkles').trim();
+    return packageFeatureIconSvgMap[safeKey] || packageFeatureIconSvgMap.sparkles || '';
+  }
+
+  function renderPaymentSummary(pack, userId, totalText) {
+    const safeUser = userId || '-';
+    const safeProduct = (pack && pack.name) ? pack.name : 'Producto';
+    const safeTotal = totalText || '-';
+
+    paymentSummaryUser.textContent = safeUser;
+    paymentSummaryProduct.textContent = safeProduct;
+    paymentSummaryTotal.textContent = safeTotal;
+
+    if (!paymentHeaderMinimalEnabled || !paymentSummaryCard) {
+      return;
+    }
+
+    if (paymentSummaryMinimalUser) {
+      paymentSummaryMinimalUser.textContent = safeUser;
+    }
+    if (paymentSummaryMinimalProduct) {
+      paymentSummaryMinimalProduct.textContent = safeProduct;
+    }
+    if (paymentSummaryMinimalTotal) {
+      paymentSummaryMinimalTotal.textContent = safeTotal;
+    }
+
+    const imageUrl = String((pack && pack.imageUrl) || '').trim();
+    if (paymentSummaryImage) {
+      paymentSummaryImage.src = imageUrl;
+      paymentSummaryImage.alt = safeProduct;
+      paymentSummaryImage.classList.toggle('d-none', imageUrl === '');
+    }
+    if (paymentSummaryImagePlaceholder) {
+      paymentSummaryImagePlaceholder.classList.toggle('d-none', imageUrl !== '');
+    }
+
+    if (paymentSummaryFeatures) {
+      const features = Array.isArray(pack && pack.features) ? pack.features : [];
+      if (features.length === 0) {
+        paymentSummaryFeatures.innerHTML = '';
+        paymentSummaryFeatures.classList.add('d-none');
+      } else {
+        paymentSummaryFeatures.innerHTML = features.map((feature) => {
+          const iconMarkup = paymentSummaryFeatureIconMarkup(feature && feature.icon ? feature.icon : 'sparkles');
+          return `<span class="payment-summary-feature"><span class="payment-summary-feature-icon" aria-hidden="true">${iconMarkup}</span><span>${escapePaymentHtml(feature && feature.name ? feature.name : '')}</span></span>`;
+        }).join('');
+        paymentSummaryFeatures.classList.remove('d-none');
+      }
+    }
   }
 
   function formatWinPointsAmount(points) {
@@ -1530,6 +1782,7 @@ include __DIR__ . "/includes/header.php";
     const methods = getPaymentMethodsForCurrency(activePaymentOrder.currency);
     const requiredPoints = Number(activePaymentOrder.pointsRequired || 0);
     const hasRule = !!(activePaymentOrder.pack && activePaymentOrder.pack.redeemActive && requiredPoints > 0);
+    const showPointsOption = !!(winPointsState.enabled && winPointsState.loggedIn && hasRule);
     const buttonsHtml = methods.map((method) => {
       const methodId = escapePaymentHtml(String(method.id));
       const methodName = escapePaymentHtml(method.nombre || 'Método');
@@ -1539,7 +1792,7 @@ include __DIR__ . "/includes/header.php";
     const pointsMeta = escapePaymentHtml(formatWinPointsAmount(winPointsState.balance || 0));
     const pointsHtml = `<div class="payment-mode-item" data-payment-option="points"><button type="button" class="payment-mode-btn" data-payment-option="points" aria-expanded="false"><span class="payment-mode-btn-main"><span class="payment-mode-btn-radio" aria-hidden="true"></span><span class="payment-mode-btn-text"><span class="payment-mode-btn-title">${escapePaymentHtml(paymentPointsOptionLabel(hasRule, requiredPoints))}</span><span class="payment-mode-btn-meta">Saldo disponible: ${pointsMeta}</span></span></span><span class="payment-mode-btn-caret" aria-hidden="true"></span></button><div class="payment-mode-item-body"><div class="payment-mode-item-body-inner">${paymentPointsAccordionMarkup()}</div></div></div>`;
 
-    paymentModeOptions.innerHTML = `${buttonsHtml}${pointsHtml}`;
+    paymentModeOptions.innerHTML = showPointsOption ? `${buttonsHtml}${pointsHtml}` : buttonsHtml;
     getPaymentModeButtons().forEach((button) => {
       button.addEventListener('click', function() {
         const buttonMode = button.dataset.paymentOption === 'points' ? 'points' : 'money';
@@ -1617,17 +1870,8 @@ include __DIR__ . "/includes/header.php";
       return;
     }
 
-    if (!winPointsState.enabled || !winPointsState.loggedIn || !pack || !activePaymentOrder) {
+    if (!pack || !activePaymentOrder) {
       paymentWinPointsCard.classList.add('d-none');
-      if (paymentMethodCard) {
-        paymentMethodCard.classList.remove('d-none');
-      }
-      if (paymentMoneyPanel) {
-        paymentMoneyPanel.classList.add('is-active');
-      }
-      if (activePaymentOrder) {
-        activePaymentOrder.canUsePoints = false;
-      }
       return;
     }
 
@@ -1636,30 +1880,62 @@ include __DIR__ . "/includes/header.php";
     const hasRule = !!pack.redeemActive && requiredPoints > 0;
     const currentBalance = Number(winPointsState.balance || 0);
     const canUsePoints = hasRule && currentBalance >= requiredPoints;
+    const showRewardsState = !!(winPointsState.enabled && winPointsState.loggedIn);
 
     activePaymentOrder.canUseMoney = Boolean(currentMethod);
-    activePaymentOrder.canUsePoints = canUsePoints;
-    activePaymentOrder.pointsRequired = requiredPoints;
+    activePaymentOrder.canUsePoints = showRewardsState ? canUsePoints : false;
+    activePaymentOrder.pointsRequired = showRewardsState ? requiredPoints : 0;
     activePaymentOrder.selectedMethodId = currentMethod ? String(currentMethod.id) : '';
     activePaymentOrder.expandedPaymentOptionKey = shouldExpandSinglePaymentOption()
       ? paymentOptionKey(activePaymentOrder.canUseMoney ? 'money' : 'points', activePaymentOrder.selectedMethodId)
       : '';
 
-    paymentWinPointsCard.classList.remove('d-none');
-    paymentWinPointsBalance.textContent = formatWinPointsAmount(currentBalance);
-
-    if (rewardPoints > 0) {
-      activePaymentOrder.pointsCopy = `Este paquete te entrega +${rewardPoints} ${winPointsState.name} cuando la recarga quede enviada.`;
-    } else {
-      activePaymentOrder.pointsCopy = `Tu saldo disponible se puede usar en los paquetes que tengan canje activo.`;
+    if (!currentMethod) {
+      paymentWinPointsCard.classList.add('d-none');
+      if (paymentMethodCard) {
+        paymentMethodCard.classList.remove('d-none');
+      }
+      return;
     }
 
-    if (hasRule && canUsePoints) {
+    paymentWinPointsCard.classList.remove('d-none');
+
+    if (showRewardsState) {
+      if (paymentWinPointsTitle) {
+        paymentWinPointsTitle.textContent = 'Premios disponibles';
+      }
+      if (paymentWinPointsCopy) {
+        paymentWinPointsCopy.textContent = 'Elige si deseas completar esta orden con transferencia o con tus premios acumulados.';
+      }
+      paymentWinPointsBalance.textContent = formatWinPointsAmount(currentBalance);
+      paymentWinPointsBalance.classList.remove('d-none');
+    } else {
+      if (paymentWinPointsTitle) {
+        paymentWinPointsTitle.textContent = 'Metodos de pago disponibles';
+      }
+      if (paymentWinPointsCopy) {
+        paymentWinPointsCopy.textContent = 'Elige el metodo con el que deseas completar esta orden.';
+      }
+      paymentWinPointsBalance.textContent = '';
+      paymentWinPointsBalance.classList.add('d-none');
+    }
+
+    if (showRewardsState && rewardPoints > 0) {
+      activePaymentOrder.pointsCopy = `Este paquete te entrega +${rewardPoints} ${winPointsState.name} cuando la recarga quede enviada.`;
+    } else {
+      activePaymentOrder.pointsCopy = showRewardsState
+        ? `Tu saldo disponible se puede usar en los paquetes que tengan canje activo.`
+        : '';
+    }
+
+    if (showRewardsState && hasRule && canUsePoints) {
       activePaymentOrder.pointsMessage = `Puedes canjear este paquete usando ${formatWinPointsAmount(requiredPoints)}.`;
-    } else if (hasRule) {
+    } else if (showRewardsState && hasRule) {
       activePaymentOrder.pointsMessage = `Necesitas ${formatWinPointsAmount(requiredPoints)} para canjear este paquete. Tu saldo actual es ${formatWinPointsAmount(currentBalance)}.`;
     } else {
-      activePaymentOrder.pointsMessage = 'Este paquete no tiene una regla activa de canje por premios. Puedes pagar normal y seguir acumulando puntos.';
+      activePaymentOrder.pointsMessage = showRewardsState
+        ? 'Este paquete no tiene una regla activa de canje por premios. Puedes pagar normal y seguir acumulando puntos.'
+        : '';
     }
 
     if (paymentMethodSelectWrap) {
@@ -1667,7 +1943,7 @@ include __DIR__ . "/includes/header.php";
     }
     renderPaymentModeOptions();
     setActivePaymentMode(
-      activePaymentOrder.canUseMoney ? 'money' : 'points',
+      showRewardsState ? (activePaymentOrder.canUseMoney ? 'money' : 'points') : 'money',
       activePaymentOrder.selectedMethodId,
       { expandSelected: shouldExpandSinglePaymentOption() }
     );
@@ -2911,9 +3187,7 @@ include __DIR__ . "/includes/header.php";
       expiring: false,
     };
 
-    paymentSummaryUser.textContent = userId;
-    paymentSummaryProduct.textContent = pack.name || 'Producto';
-    paymentSummaryTotal.textContent = totalText;
+    renderPaymentSummary(pack, userId, totalText);
     paymentReferenceInput.value = '';
     paymentPhoneInput.value = defaultPaymentPhone || '';
     setPaymentFormDisabled(false);

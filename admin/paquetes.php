@@ -4,6 +4,7 @@
 require_once '../includes/db_connect.php';
 require_once '../includes/tenant.php';
 require_once '../includes/recargas_api.php';
+require_once '../includes/package_features.php';
 require_once '../includes/win_points.php';
 
 function admin_packages_is_ajax_request(): bool {
@@ -115,10 +116,54 @@ function free_fire_api_amount_label(string $amount): string {
     return $amount . ' - ' . $option['suggested_name'] . ' - ' . $option['diamonds'];
 }
 
+function admin_package_feature_icon_options_html(array $iconOptions, string $selected = 'sparkles'): string {
+    $selectedIcon = package_feature_normalize_icon($selected);
+    $iconSymbols = [
+        'sparkles' => '✦',
+        'diamond' => '◆',
+        'lightning' => '⚡',
+        'shield' => '🛡',
+        'gift' => '🎁',
+        'controller' => '🎮',
+        'trophy' => '🏆',
+        'rocket' => '🚀',
+        'star' => '★',
+        'layers' => '▣',
+    ];
+    $html = '';
+    foreach ($iconOptions as $iconKey => $label) {
+        $optionLabel = trim((string) (($iconSymbols[$iconKey] ?? '•') . ' ' . $label));
+        $html .= '<option value="' . htmlspecialchars($iconKey, ENT_QUOTES, 'UTF-8') . '"'
+            . ($selectedIcon === $iconKey ? ' selected' : '')
+            . '>' . htmlspecialchars($optionLabel, ENT_QUOTES, 'UTF-8') . '</option>';
+    }
+    return $html;
+}
+
+function admin_package_feature_badges_html(array $features): string {
+    if (empty($features)) {
+        return '';
+    }
+
+    ob_start();
+    ?>
+    <div class="d-flex flex-wrap gap-2 mt-2">
+        <?php foreach ($features as $feature): ?>
+            <span class="badge rounded-pill d-inline-flex align-items-center gap-2 px-3 py-2" style="background:rgba(15,23,42,0.9);border:1px solid rgba(34,211,238,0.28);color:#d8fbff;">
+                <?= package_feature_render_icon((string) ($feature['icon'] ?? 'sparkles'), 'package-feature-badge-icon') ?>
+                <span><?= htmlspecialchars((string) ($feature['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+            </span>
+        <?php endforeach; ?>
+    </div>
+    <?php
+    return trim((string) ob_get_clean());
+}
+
 ensure_juego_paquetes_monto_ff_column($mysqli);
 ensure_juego_paquetes_activo_column($mysqli);
 ensure_juego_paquetes_paquete_api_column($mysqli);
 ensure_juego_paquetes_orden_column($mysqli);
+package_features_ensure_schema($mysqli);
 win_points_ensure_schema();
 
 $adminGamesUrl = app_path('/admin/juegos');
@@ -159,6 +204,24 @@ if ($usesApiCatalog) {
     } catch (Throwable $e) {
         $apiProductsError = $e->getMessage();
     }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['package_feature_catalog_action'])) {
+    $catalogAction = trim((string) ($_POST['package_feature_catalog_action'] ?? ''));
+    $featureId = (int) ($_POST['package_feature_id'] ?? 0);
+    $featureName = (string) ($_POST['package_feature_name'] ?? '');
+    $featureIcon = (string) ($_POST['package_feature_icon'] ?? 'sparkles');
+
+    if ($catalogAction === 'create') {
+        package_feature_catalog_find_or_create($mysqli, $featureName, $featureIcon);
+    } elseif ($catalogAction === 'update' && $featureId > 0) {
+        package_feature_catalog_update($mysqli, $featureId, $featureName, $featureIcon);
+    } elseif ($catalogAction === 'delete' && $featureId > 0) {
+        package_feature_catalog_delete($mysqli, $featureId);
+    }
+
+    header('Location: ' . $adminPackageBaseUrl . '/' . $juego_id);
+    exit;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_paquete_activo'], $_POST['paquete_id'], $_POST['activo'])) {
@@ -222,6 +285,7 @@ if (isset($_GET['eliminar'])) {
     $stmt = $mysqli->prepare("DELETE FROM juego_paquetes WHERE id=? AND juego_id=?");
     $stmt->bind_param('ii', $del_id, $juego_id);
     $stmt->execute();
+    package_delete_feature_assignments($mysqli, $del_id);
     // Borrar la imagen física si existe y no está vacía
     if ($img_path) {
         admin_package_delete_upload((string) $img_path);
@@ -250,6 +314,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_paquete_id'])) {
         $stmt->bind_param('ssssidiii', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_paquete_api, $edit_cantidad, $edit_precio, $edit_win_points_reward, $edit_activo, $edit_id);
     }
     $stmt->execute();
+    $editAssignedFeatureIds = $_POST['edit_assigned_feature_id'] ?? [];
+    $editAssignedFeatureNames = $_POST['edit_assigned_feature_name'] ?? [];
+    $editAssignedFeatureIcons = $_POST['edit_assigned_feature_icon'] ?? [];
+    foreach ($editAssignedFeatureIds as $index => $featureId) {
+        $normalizedFeatureId = (int) $featureId;
+        if ($normalizedFeatureId <= 0) {
+            continue;
+        }
+        package_feature_catalog_update(
+            $mysqli,
+            $normalizedFeatureId,
+            (string) ($editAssignedFeatureNames[$index] ?? ''),
+            (string) ($editAssignedFeatureIcons[$index] ?? 'sparkles')
+        );
+    }
+    package_assign_features_to_package(
+        $mysqli,
+        $edit_id,
+        $_POST['edit_package_feature_ids'] ?? [],
+        package_feature_pairs_from_request($_POST['edit_new_feature_name'] ?? [], $_POST['edit_new_feature_icon'] ?? [])
+    );
     header('Location: ' . $adminPackageBaseUrl . '/' . $juego_id);
     exit;
 }
@@ -269,6 +354,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['cla
     $stmt = $mysqli->prepare("INSERT INTO juego_paquetes (juego_id, nombre, clave, monto_ff, paquete_api, cantidad, precio, win_points_reward, imagen_icono, activo, orden) VALUES (?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?, ?, ?)");
     $stmt->bind_param('issssidisii', $juego_id, $nombre, $clave, $monto_ff, $paquete_api, $cantidad, $precio, $win_points_reward, $imagen_icono, $activo, $orden);
     $stmt->execute();
+    $newPackageId = (int) $mysqli->insert_id;
+    package_assign_features_to_package(
+        $mysqli,
+        $newPackageId,
+        $_POST['package_feature_ids'] ?? [],
+        package_feature_pairs_from_request($_POST['new_feature_name'] ?? [], $_POST['new_feature_icon'] ?? [])
+    );
     header('Location: ' . $adminPackageBaseUrl . '/' . $juego_id);
     exit;
 }
@@ -279,6 +371,10 @@ $res->bind_param('i', $juego_id);
 $res->execute();
 $result = $res->get_result();
 $paquetes = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+$packageFeatureCatalog = package_feature_catalog_all($mysqli);
+$packageFeatureIconOptions = package_feature_icon_options();
+$packageFeaturesByPackage = package_features_for_packages($mysqli, array_map(static fn (array $package): int => (int) ($package['id'] ?? 0), $paquetes));
+$packageFeatureIconOptionsHtml = admin_package_feature_icon_options_html($packageFeatureIconOptions);
 
 // Incluir header
 include '../includes/header.php';
@@ -334,6 +430,31 @@ include '../includes/header.php';
             <input type="file" name="imagen_icono" accept="image/*" class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;" onchange="previewNuevoPaqueteImg(event)">
         </div>
         <div class="col-12">
+            <div class="rounded-4 p-3" style="background:#101826;border:1px solid rgba(34,211,238,0.18);">
+                <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-3">
+                    <div>
+                        <div class="text-neon fw-semibold">Caracteristicas reutilizables</div>
+                        <div class="small" style="color:#8be9fd;">Selecciona caracteristicas ya creadas o agrega nuevas sin salir del formulario.</div>
+                    </div>
+                    <button type="button" class="btn btn-outline-info btn-sm" onclick="window.addPackageFeatureRow('package-new-features', 'new_feature_name[]', 'new_feature_icon[]', <?= htmlspecialchars(json_encode($packageFeatureIconOptionsHtml, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8') ?>)">Nueva caracteristica</button>
+                </div>
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    <?php if (!empty($packageFeatureCatalog)): ?>
+                        <?php foreach ($packageFeatureCatalog as $feature): ?>
+                            <label class="badge rounded-pill d-inline-flex align-items-center gap-2 px-3 py-2" style="cursor:pointer;background:rgba(15,23,42,0.92);border:1px solid rgba(34,211,238,0.28);color:#d8fbff;">
+                                <input type="checkbox" name="package_feature_ids[]" value="<?= (int) ($feature['id'] ?? 0) ?>" class="form-check-input mt-0 me-1" style="float:none;">
+                                <?= package_feature_render_icon((string) ($feature['icon'] ?? 'sparkles'), 'package-feature-badge-icon') ?>
+                                <span><?= htmlspecialchars((string) ($feature['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                            </label>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <span class="small" style="color:#8be9fd;">Aun no hay caracteristicas guardadas en el catalogo.</span>
+                    <?php endif; ?>
+                </div>
+                <div id="package-new-features" class="d-grid gap-2"></div>
+            </div>
+        </div>
+        <div class="col-12">
             <div class="form-check mt-2">
                 <input type="checkbox" name="activo" class="form-check-input" id="paqueteActivoCheck" checked>
                 <label class="form-check-label text-neon" for="paqueteActivoCheck">Paquete activo / publicado</label>
@@ -346,6 +467,59 @@ include '../includes/header.php';
             <button type="submit" class="btn neon-btn-info w-100">Agregar paquete</button>
         </div>
     </form>
+    <div class="mb-4 rounded-4 p-4" style="background:#181f2a;border:1px solid rgba(34,211,238,0.18);box-shadow:0 0 20px rgba(34,211,238,0.08);">
+        <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-2 mb-3">
+            <div>
+                <h3 class="h5 text-neon mb-1">Catalogo de caracteristicas</h3>
+                <p class="mb-0 small" style="color:#8be9fd;">Edita el nombre e icono de cada caracteristica para reutilizarla en varios paquetes.</p>
+            </div>
+        </div>
+        <form method="post" class="row g-3 align-items-end mb-4">
+            <input type="hidden" name="package_feature_catalog_action" value="create">
+            <div class="col-md-4">
+                <label class="form-label text-neon">Icono</label>
+                <div class="d-flex align-items-center gap-2" data-package-feature-editor>
+                    <select name="package_feature_icon" data-package-feature-icon-select class="form-select" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;"><?= $packageFeatureIconOptionsHtml ?></select>
+                    <span data-package-feature-icon-preview class="d-inline-flex align-items-center justify-content-center rounded-3 flex-shrink-0" style="width:44px;height:44px;background:#0f172a;border:1px solid rgba(34,211,238,0.22);color:#67e8f9;"><?= package_feature_render_icon('sparkles') ?></span>
+                </div>
+            </div>
+            <div class="col-md-5">
+                <label class="form-label text-neon">Nombre</label>
+                <input type="text" name="package_feature_name" class="form-control" required placeholder="Ej: Entrega inmediata" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn neon-btn-info w-100">Guardar en catalogo</button>
+            </div>
+        </form>
+        <div class="d-grid gap-3">
+            <?php foreach ($packageFeatureCatalog as $feature): ?>
+                <form method="post" class="row g-2 align-items-center rounded-4 p-3" style="background:#101826;border:1px solid rgba(34,211,238,0.14);">
+                    <input type="hidden" name="package_feature_id" value="<?= (int) ($feature['id'] ?? 0) ?>">
+                    <div class="col-md-3">
+                        <label class="form-label text-neon small mb-1">Icono</label>
+                        <div class="d-flex align-items-center gap-2" data-package-feature-editor>
+                            <select name="package_feature_icon" data-package-feature-icon-select class="form-select" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;"><?= admin_package_feature_icon_options_html($packageFeatureIconOptions, (string) ($feature['icon'] ?? 'sparkles')) ?></select>
+                            <span data-package-feature-icon-preview class="d-inline-flex align-items-center justify-content-center rounded-3 flex-shrink-0" style="width:44px;height:44px;background:#0f172a;border:1px solid rgba(34,211,238,0.22);color:#67e8f9;"><?= package_feature_render_icon((string) ($feature['icon'] ?? 'sparkles')) ?></span>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label text-neon small mb-1">Nombre</label>
+                        <input type="text" name="package_feature_name" value="<?= htmlspecialchars((string) ($feature['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" class="form-control" required style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
+                    </div>
+                    <div class="col-md-2 text-center">
+                        <span class="badge rounded-pill d-inline-flex align-items-center gap-2 px-3 py-2" style="background:rgba(15,23,42,0.92);border:1px solid rgba(34,211,238,0.28);color:#d8fbff;">
+                            <?= package_feature_render_icon((string) ($feature['icon'] ?? 'sparkles'), 'package-feature-badge-icon') ?>
+                            <span>ID <?= (int) ($feature['id'] ?? 0) ?></span>
+                        </span>
+                    </div>
+                    <div class="col-md-2 d-flex gap-2">
+                        <button type="submit" name="package_feature_catalog_action" value="update" class="btn neon-btn-info btn-sm flex-fill">Actualizar</button>
+                        <button type="submit" name="package_feature_catalog_action" value="delete" class="btn btn-danger btn-sm flex-fill" onclick="return confirm('¿Eliminar esta caracteristica del catalogo?')">Borrar</button>
+                    </div>
+                </form>
+            <?php endforeach; ?>
+        </div>
+    </div>
     <?php if ($usesApiCatalog && $apiProductsError !== null): ?>
         <div class="alert alert-warning mb-4">No se pudieron cargar los productos de la categoría API: <?= htmlspecialchars($apiProductsError, ENT_QUOTES, 'UTF-8') ?></div>
     <?php elseif ($usesApiCatalog && empty($apiProducts)): ?>
@@ -372,6 +546,7 @@ include '../includes/header.php';
             </thead>
             <tbody>
             <?php foreach ($paquetes as $p): ?>
+                <?php $packageFeatures = $packageFeaturesByPackage[(int) ($p['id'] ?? 0)] ?? []; ?>
                 <tr style="background:#181f2a; color:#fff;">
                     <td style="background:#181f2a;">
                         <?php if (!empty($p['imagen_icono'])): ?>
@@ -382,7 +557,10 @@ include '../includes/header.php';
                             <span class="fst-italic text-secondary">Sin imagen</span>
                         <?php endif; ?>
                     </td>
-                    <td class="fw-semibold text-neon" style="background:#181f2a; color:#22d3ee;"><?= htmlspecialchars($p['nombre']) ?></td>
+                    <td class="fw-semibold text-neon" style="background:#181f2a; color:#22d3ee;">
+                        <div><?= htmlspecialchars($p['nombre']) ?></div>
+                        <?= admin_package_feature_badges_html($packageFeatures) ?>
+                    </td>
                     <td style="background:#181f2a; color:#fff;"><?= htmlspecialchars($p['clave']) ?></td>
                     <td class="text-center" style="background:#181f2a;">
                         <form method="post" action="<?= htmlspecialchars($adminPackageBaseUrl, ENT_QUOTES, 'UTF-8') ?>/<?= $juego_id ?>" class="d-inline-flex align-items-center gap-2 m-0 js-ajax-order-form">
@@ -424,6 +602,7 @@ include '../includes/header.php';
     <div class="d-md-none">
         <div class="row gy-4">
             <?php foreach ($paquetes as $p): ?>
+            <?php $packageFeatures = $packageFeaturesByPackage[(int) ($p['id'] ?? 0)] ?? []; ?>
             <div class="col-12">
                 <div class="card neon-card p-3" style="background:#181f2a; border:2px solid #22d3ee; box-shadow:0 0 16px #22d3ee,0 0 4px #2dd4bf; color:#22d3ee;">
                     <div class="d-flex align-items-center mb-2">
@@ -453,6 +632,7 @@ include '../includes/header.php';
                         </div>
                     </div>
                     <div style="color:#fff;"><span class="fw-semibold">Clave:</span> <?= htmlspecialchars($p['clave']) ?></div>
+                    <?= admin_package_feature_badges_html($packageFeatures) ?>
                     <?php if ($usesApiCatalog): ?>
                         <?php $apiProductId = (int) ($p['paquete_api'] ?? 0); ?>
                         <div style="color:#fff;"><span class="fw-semibold">Producto API:</span> <?= htmlspecialchars($apiProductId > 0 && isset($apiProductsById[$apiProductId]) ? recargas_api_product_label($apiProductsById[$apiProductId]) : ($apiProductId > 0 ? 'ID ' . $apiProductId : '—'), ENT_QUOTES, 'UTF-8') ?></div>
@@ -490,11 +670,16 @@ if (isset($_GET['editar'])) {
     $res_edit->bind_param('ii', $edit_id, $juego_id);
     $res_edit->execute();
     $paq_edit = $res_edit->get_result()->fetch_assoc();
+    $paqEditFeatureIds = package_feature_catalog_ids_for_package($mysqli, $edit_id);
+    $paqEditFeatures = $packageFeaturesByPackage[$edit_id] ?? [];
     if ($paq_edit):
 ?>
-<div class="fixed-top w-100 h-100 d-flex align-items-center justify-content-center" style="background:rgba(0,0,0,0.7);z-index:1050;">
-    <form method="post" enctype="multipart/form-data" class="bg-dark neon-card p-4 rounded-4 position-relative" style="max-width:500px;width:100%;box-shadow:0 0 2rem #22d3ee33;">
-        <h3 class="text-neon mb-3">Editar paquete</h3>
+<div class="fixed-top w-100 h-100 d-flex align-items-start justify-content-center" style="background:rgba(0,0,0,0.7);z-index:1050;overflow-y:auto;padding:1rem;">
+    <form method="post" enctype="multipart/form-data" class="bg-dark neon-card p-4 rounded-4 position-relative" style="max-width:560px;width:100%;max-height:calc(100vh - 2rem);overflow-y:auto;box-shadow:0 0 2rem #22d3ee33;">
+        <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
+            <h3 class="text-neon mb-0">Editar paquete</h3>
+            <a href="<?= htmlspecialchars($adminPackageBaseUrl, ENT_QUOTES, 'UTF-8') ?>/<?= $juego_id ?>" class="btn btn-outline-info btn-sm flex-shrink-0">Cerrar</a>
+        </div>
         <input type="hidden" name="edit_paquete_id" value="<?= $paq_edit['id'] ?>">
         <div class="mb-3">
             <label class="form-label text-neon">Nombre</label>
@@ -551,11 +736,86 @@ if (isset($_GET['editar'])) {
                 <img id="preview-edit-paquete-img" src="#" alt="Previsualización" style="display:none;max-width:120px;max-height:120px;border-radius:0.75rem;box-shadow:0 0 0.5rem #22d3ee55;" />
             </div>
         </div>
+        <div class="mb-3 rounded-4 p-3" style="background:#101826;border:1px solid rgba(34,211,238,0.18);">
+            <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-3">
+                <div>
+                    <div class="text-neon fw-semibold">Caracteristicas del paquete</div>
+                    <div class="small" style="color:#8be9fd;">Puedes reutilizar caracteristicas existentes o crear nuevas para este paquete.</div>
+                </div>
+                <button type="button" class="btn btn-outline-info btn-sm" onclick="window.addPackageFeatureRow('edit-package-new-features', 'edit_new_feature_name[]', 'edit_new_feature_icon[]', <?= htmlspecialchars(json_encode($packageFeatureIconOptionsHtml, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8') ?>)">Nueva caracteristica</button>
+            </div>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <?php if (!empty($packageFeatureCatalog)): ?>
+                    <?php foreach ($packageFeatureCatalog as $feature): ?>
+                        <label class="badge rounded-pill d-inline-flex align-items-center gap-2 px-3 py-2" style="cursor:pointer;background:rgba(15,23,42,0.92);border:1px solid rgba(34,211,238,0.28);color:#d8fbff;">
+                            <input type="checkbox" name="edit_package_feature_ids[]" value="<?= (int) ($feature['id'] ?? 0) ?>" class="form-check-input mt-0 me-1" style="float:none;" <?= in_array((int) ($feature['id'] ?? 0), $paqEditFeatureIds, true) ? 'checked' : '' ?>>
+                            <?= package_feature_render_icon((string) ($feature['icon'] ?? 'sparkles'), 'package-feature-badge-icon') ?>
+                            <span><?= htmlspecialchars((string) ($feature['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                        </label>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <span class="small" style="color:#8be9fd;">Aun no hay caracteristicas guardadas en el catalogo.</span>
+                <?php endif; ?>
+            </div>
+            <?php if (!empty($paqEditFeatures)): ?>
+                <div class="d-grid gap-2 mb-3">
+                    <div class="small fw-semibold" style="color:#8be9fd;">Editar caracteristicas asignadas</div>
+                    <?php foreach ($paqEditFeatures as $feature): ?>
+                        <div class="row g-2 align-items-center rounded-4 p-2" style="background:#0f172a;border:1px solid rgba(34,211,238,0.12);">
+                            <input type="hidden" name="edit_assigned_feature_id[]" value="<?= (int) ($feature['id'] ?? 0) ?>">
+                            <div class="col-md-4">
+                                <label class="form-label text-neon small mb-1">Icono</label>
+                                <div class="d-flex align-items-center gap-2" data-package-feature-editor>
+                                    <select name="edit_assigned_feature_icon[]" data-package-feature-icon-select class="form-select" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;"><?= admin_package_feature_icon_options_html($packageFeatureIconOptions, (string) ($feature['icon'] ?? 'sparkles')) ?></select>
+                                    <span data-package-feature-icon-preview class="d-inline-flex align-items-center justify-content-center rounded-3 flex-shrink-0" style="width:44px;height:44px;background:#0f172a;border:1px solid rgba(34,211,238,0.22);color:#67e8f9;"><?= package_feature_render_icon((string) ($feature['icon'] ?? 'sparkles')) ?></span>
+                                </div>
+                            </div>
+                            <div class="col-md-8">
+                                <label class="form-label text-neon small mb-1">Nombre</label>
+                                <input type="text" name="edit_assigned_feature_name[]" value="<?= htmlspecialchars((string) ($feature['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;" required>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+            <div id="edit-package-new-features" class="d-grid gap-2"></div>
+        </div>
         <button type="submit" name="edit_paquete_submit" class="btn neon-btn-info w-100 mt-3">Guardar cambios</button>
-        <a href="<?= htmlspecialchars($adminPackageBaseUrl, ENT_QUOTES, 'UTF-8') ?>/<?= $juego_id ?>" class="position-absolute top-0 end-0 m-3 text-neon fs-3" style="text-decoration:none;">&times;</a>
     </form>
 </div>
 <script>
+const adminPackageFeatureIconMap = <?= json_encode(package_feature_icon_svg_map(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+
+function updatePackageFeatureIconPreview(select) {
+    if (!select) {
+        return;
+    }
+
+    const editor = select.closest('[data-package-feature-editor]');
+    const preview = editor ? editor.querySelector('[data-package-feature-icon-preview]') : null;
+    if (!preview) {
+        return;
+    }
+
+    const iconKey = String(select.value || 'sparkles').trim();
+    preview.innerHTML = adminPackageFeatureIconMap[iconKey] || adminPackageFeatureIconMap.sparkles || '';
+}
+
+function bindPackageFeatureIconPreview(root = document) {
+    root.querySelectorAll('[data-package-feature-icon-select]').forEach((select) => {
+        if (select.dataset.iconPreviewBound === '1') {
+            updatePackageFeatureIconPreview(select);
+            return;
+        }
+
+        select.dataset.iconPreviewBound = '1';
+        select.addEventListener('change', function() {
+            updatePackageFeatureIconPreview(this);
+        });
+        updatePackageFeatureIconPreview(select);
+    });
+}
+
 function previewNuevoPaqueteImg(event) {
     const input = event.target;
     const img = document.getElementById('preview-nuevo-paquete-img');
@@ -732,6 +992,49 @@ if (typeof window.previewEditPaqueteImg !== 'function') {
         }
     };
 }
+
+if (typeof window.removePackageFeatureRow !== 'function') {
+    window.removePackageFeatureRow = function(button) {
+        const row = button ? button.closest('.package-feature-inline-row') : null;
+        if (row) {
+            row.remove();
+        }
+    };
+}
+
+if (typeof window.addPackageFeatureRow !== 'function') {
+    window.addPackageFeatureRow = function(containerId, nameField, iconField, iconOptionsHtml) {
+        const container = document.getElementById(containerId);
+        if (!container) {
+            return;
+        }
+
+        const row = document.createElement('div');
+        row.className = 'package-feature-inline-row d-grid gap-2';
+        row.innerHTML = `
+            <div class="row g-2 align-items-center rounded-4 p-2" style="background:#0f172a;border:1px solid rgba(34,211,238,0.12);">
+                <div class="col-md-4">
+                    <label class="form-label text-neon small mb-1">Icono</label>
+                    <div class="d-flex align-items-center gap-2" data-package-feature-editor>
+                        <select name="${iconField}" data-package-feature-icon-select class="form-select" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">${iconOptionsHtml}</select>
+                        <span data-package-feature-icon-preview class="d-inline-flex align-items-center justify-content-center rounded-3 flex-shrink-0" style="width:44px;height:44px;background:#0f172a;border:1px solid rgba(34,211,238,0.22);color:#67e8f9;"></span>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label text-neon small mb-1">Nombre</label>
+                    <input type="text" name="${nameField}" class="form-control" placeholder="Nombre de la caracteristica" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label text-neon small mb-1 d-block">Accion</label>
+                    <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="window.removePackageFeatureRow(this)">Quitar</button>
+                </div>
+            </div>`;
+        container.appendChild(row);
+        bindPackageFeatureIconPreview(row);
+    };
+}
+
+bindPackageFeatureIconPreview();
 
 if (typeof window.submitAjaxAdminForm !== 'function') {
     window.submitAjaxAdminForm = async function(form, requestData = null) {

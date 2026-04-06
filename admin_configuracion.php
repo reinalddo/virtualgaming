@@ -60,16 +60,21 @@ $galleryForm = [
 $themeDefinitions = store_theme_definitions();
 $themeBaseValues = store_theme_base_values();
 $themeValues = store_theme_values();
+$paymentHeaderMinimalEnabled = ($cfg['encabezado_pago'] ?? '0') === '1';
 $themeFieldGroups = [
   'Fondos y paneles' => ['theme_bg_main', 'theme_bg_alt', 'theme_surface', 'theme_surface_alt', 'theme_border'],
   'Neón y acciones' => ['theme_primary', 'theme_highlight', 'theme_secondary', 'theme_success'],
   'Botones y paquetes' => ['theme_button_primary', 'theme_button_secondary', 'theme_button_surface'],
+  'Características de juegos' => ['theme_game_feature_bg', 'theme_game_feature_border', 'theme_game_feature_text'],
   'Botones flotantes' => ['theme_float_whatsapp_bg', 'theme_float_whatsapp_text', 'theme_float_channel_bg', 'theme_float_channel_text'],
   'Notificaciones de recargas' => ['theme_live_notification_bg', 'theme_live_notification_border', 'theme_live_notification_accent', 'theme_live_notification_text', 'theme_live_notification_muted'],
   'Ventana inicial' => ['theme_startup_popup_surface', 'theme_startup_popup_border', 'theme_startup_popup_accent', 'theme_startup_popup_chip', 'theme_startup_popup_button_text'],
   'Ventana inicial con video' => ['theme_startup_video_popup_surface', 'theme_startup_video_popup_border', 'theme_startup_video_popup_accent', 'theme_startup_video_popup_button_bg', 'theme_startup_video_popup_button_text'],
-  'Textos y estados' => ['theme_text', 'theme_text_muted', 'theme_price_text', 'theme_price_muted', 'theme_warning', 'theme_danger'],
 ];
+if ($paymentHeaderMinimalEnabled) {
+  $themeFieldGroups['Características de paquetes'] = ['theme_package_feature_bg', 'theme_package_feature_border', 'theme_package_feature_text'];
+}
+$themeFieldGroups['Textos y estados'] = ['theme_text', 'theme_text_muted', 'theme_price_text', 'theme_price_muted', 'theme_warning', 'theme_danger'];
 $startupPopupMode = 'none';
 if (($cfg['inicio_popup_video_activo'] ?? '0') === '1') {
   $startupPopupMode = 'video';
@@ -287,6 +292,75 @@ $googleCallbackUrl = google_oauth_callback_url();
     text-transform: uppercase;
     font-size: 0.85rem;
     font-weight: 700;
+  }
+  .theme-accordion {
+    display: grid;
+    gap: 0.9rem;
+  }
+  .theme-accordion-item {
+    border-radius: 18px;
+    border: 1px solid rgba(var(--theme-primary-rgb), 0.2);
+    background: rgba(var(--theme-bg-alt-rgb), 0.42);
+    box-shadow: 0 0 20px rgba(var(--theme-primary-rgb), 0.06);
+    overflow: hidden;
+  }
+  .theme-accordion-trigger {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.15rem;
+    border: 0;
+    background: linear-gradient(180deg, rgba(var(--theme-bg-alt-rgb), 0.84), rgba(var(--theme-surface-rgb), 0.72));
+    color: var(--theme-text);
+    text-align: left;
+  }
+  .theme-accordion-trigger:hover {
+    background: linear-gradient(180deg, rgba(var(--theme-bg-alt-rgb), 0.94), rgba(var(--theme-surface-rgb), 0.82));
+  }
+  .theme-accordion-trigger:focus-visible {
+    outline: 2px solid rgba(var(--theme-primary-rgb), 0.88);
+    outline-offset: -2px;
+  }
+  .theme-accordion-trigger::after {
+    content: '';
+    flex: 0 0 auto;
+    width: 0.72rem;
+    height: 0.72rem;
+    border-right: 2px solid rgba(var(--theme-primary-rgb), 0.92);
+    border-bottom: 2px solid rgba(var(--theme-primary-rgb), 0.92);
+    transform: rotate(45deg);
+    transition: transform 0.18s ease;
+    margin-right: 0.2rem;
+  }
+  .theme-accordion-item.is-open .theme-accordion-trigger::after {
+    transform: rotate(-135deg);
+    margin-top: 0.3rem;
+  }
+  .theme-accordion-label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.18rem;
+    min-width: 0;
+  }
+  .theme-accordion-title {
+    color: var(--theme-highlight);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+  .theme-accordion-copy {
+    color: rgba(var(--theme-text-muted-rgb), 0.92);
+    font-size: 0.8rem;
+  }
+  .theme-accordion-panel {
+    display: none;
+    padding: 0 1.15rem 1.15rem;
+  }
+  .theme-accordion-item.is-open .theme-accordion-panel {
+    display: block;
   }
   .theme-default-note {
     color: rgba(var(--theme-text-muted-rgb), 0.92);
@@ -695,25 +769,37 @@ $googleCallbackUrl = google_oauth_callback_url();
           <?php elseif ($activeTab === 'personalizar-colores'): ?>
             <form method="post">
               <input type="hidden" name="config_section" value="personalizar-colores">
+              <?php if (!$paymentHeaderMinimalEnabled): ?>
+                <input type="hidden" name="theme_package_feature_bg" value="<?= htmlspecialchars($themeValues['theme_package_feature_bg'], ENT_QUOTES, 'UTF-8') ?>">
+                <input type="hidden" name="theme_package_feature_border" value="<?= htmlspecialchars($themeValues['theme_package_feature_border'], ENT_QUOTES, 'UTF-8') ?>">
+                <input type="hidden" name="theme_package_feature_text" value="<?= htmlspecialchars($themeValues['theme_package_feature_text'], ENT_QUOTES, 'UTF-8') ?>">
+              <?php endif; ?>
               <div class="config-section-note mb-4">Los valores `theme_*` quedan como base fija. Aquí solo editas una copia activa de esa paleta. Si el cliente quiere volver al diseño original, puedes restaurar la copia editable desde los valores base.</div>
-              <div class="row g-4">
+              <div class="theme-accordion" data-theme-accordion>
                 <?php foreach ($themeFieldGroups as $groupTitle => $groupKeys): ?>
-                  <div class="col-12">
-                    <div class="theme-group-title mb-3"><?= htmlspecialchars($groupTitle, ENT_QUOTES, 'UTF-8') ?></div>
-                    <div class="row g-3">
-                      <?php foreach ($groupKeys as $themeKey): ?>
-                        <?php $definition = $themeDefinitions[$themeKey]; ?>
-                        <div class="col-md-6 col-xl-4">
-                          <div class="theme-swatch-card">
-                            <div class="theme-swatch-preview mb-3" style="background: <?= htmlspecialchars($themeValues[$themeKey], ENT_QUOTES, 'UTF-8') ?>;"></div>
-                            <label class="form-label fw-semibold"><?= htmlspecialchars($definition['label'], ENT_QUOTES, 'UTF-8') ?></label>
-                            <input type="color" name="<?= htmlspecialchars($themeKey, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars($themeValues[$themeKey], ENT_QUOTES, 'UTF-8') ?>" class="form-control form-control-color mb-2">
-                            <div class="small text-info mb-1">Editable: <?= htmlspecialchars($themeValues[$themeKey], ENT_QUOTES, 'UTF-8') ?></div>
-                            <div class="theme-default-note mb-2">Base fija: <?= htmlspecialchars($themeBaseValues[$themeKey], ENT_QUOTES, 'UTF-8') ?></div>
-                            <div class="form-text"><?= htmlspecialchars($definition['description'], ENT_QUOTES, 'UTF-8') ?></div>
+                  <div class="theme-accordion-item" data-theme-accordion-item data-theme-accordion-key="<?= htmlspecialchars($groupTitle, ENT_QUOTES, 'UTF-8') ?>">
+                    <button type="button" class="theme-accordion-trigger" data-theme-accordion-trigger aria-expanded="false">
+                      <span class="theme-accordion-label">
+                        <span class="theme-accordion-title"><?= htmlspecialchars($groupTitle, ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="theme-accordion-copy"><?= count($groupKeys) ?> colores disponibles en esta sección.</span>
+                      </span>
+                    </button>
+                    <div class="theme-accordion-panel" data-theme-accordion-panel>
+                      <div class="row g-3">
+                        <?php foreach ($groupKeys as $themeKey): ?>
+                          <?php $definition = $themeDefinitions[$themeKey]; ?>
+                          <div class="col-md-6 col-xl-4">
+                            <div class="theme-swatch-card">
+                              <div class="theme-swatch-preview mb-3" style="background: <?= htmlspecialchars($themeValues[$themeKey], ENT_QUOTES, 'UTF-8') ?>;"></div>
+                              <label class="form-label fw-semibold"><?= htmlspecialchars($definition['label'], ENT_QUOTES, 'UTF-8') ?></label>
+                              <input type="color" name="<?= htmlspecialchars($themeKey, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars($themeValues[$themeKey], ENT_QUOTES, 'UTF-8') ?>" class="form-control form-control-color mb-2">
+                              <div class="small text-info mb-1">Editable: <?= htmlspecialchars($themeValues[$themeKey], ENT_QUOTES, 'UTF-8') ?></div>
+                              <div class="theme-default-note mb-2">Base fija: <?= htmlspecialchars($themeBaseValues[$themeKey], ENT_QUOTES, 'UTF-8') ?></div>
+                              <div class="form-text"><?= htmlspecialchars($definition['description'], ENT_QUOTES, 'UTF-8') ?></div>
+                            </div>
                           </div>
-                        </div>
-                      <?php endforeach; ?>
+                        <?php endforeach; ?>
+                      </div>
                     </div>
                   </div>
                 <?php endforeach; ?>
@@ -723,6 +809,68 @@ $googleCallbackUrl = google_oauth_callback_url();
                 <button type="submit" name="restore_theme_defaults" value="1" class="btn theme-reset-btn" onclick="return confirm('Esto reemplazará la paleta editable actual por los valores base. ¿Deseas continuar?');">Restaurar a default</button>
               </div>
             </form>
+            <script>
+              (function () {
+                const accordion = document.querySelector('[data-theme-accordion]');
+                if (!accordion) {
+                  return;
+                }
+
+                const items = Array.from(accordion.querySelectorAll('[data-theme-accordion-item]'));
+                const storageKey = 'theme-color-accordion-open:' + window.location.pathname;
+                const closeAllItems = () => {
+                  items.forEach((item) => {
+                    const trigger = item.querySelector('[data-theme-accordion-trigger]');
+                    item.classList.remove('is-open');
+                    if (trigger) {
+                      trigger.setAttribute('aria-expanded', 'false');
+                    }
+                  });
+                };
+                const setOpenItem = (targetItem) => {
+                  closeAllItems();
+                  if (!targetItem) {
+                    sessionStorage.removeItem(storageKey);
+                    return;
+                  }
+
+                  const trigger = targetItem.querySelector('[data-theme-accordion-trigger]');
+                  targetItem.classList.add('is-open');
+                  if (trigger) {
+                    trigger.setAttribute('aria-expanded', 'true');
+                  }
+                  sessionStorage.setItem(storageKey, targetItem.getAttribute('data-theme-accordion-key') || '');
+                };
+
+                items.forEach((item) => {
+                  const trigger = item.querySelector('[data-theme-accordion-trigger]');
+                  if (!trigger) {
+                    return;
+                  }
+
+                  trigger.addEventListener('click', function () {
+                    if (item.classList.contains('is-open')) {
+                      setOpenItem(null);
+                      return;
+                    }
+                    setOpenItem(item);
+                  });
+                });
+
+                const savedKey = sessionStorage.getItem(storageKey);
+                if (!savedKey) {
+                  closeAllItems();
+                  return;
+                }
+
+                const savedItem = items.find((item) => item.getAttribute('data-theme-accordion-key') === savedKey);
+                if (savedItem) {
+                  setOpenItem(savedItem);
+                } else {
+                  closeAllItems();
+                }
+              }());
+            </script>
           <?php elseif ($activeTab === 'ventana-inicial'): ?>
             <form method="post">
               <input type="hidden" name="config_section" value="ventana-inicial">

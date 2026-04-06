@@ -17,6 +17,12 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('theme_button_primary', '#22D3EE', 'Color principal para botones, acciones y llamadas principales'),
 ('theme_button_secondary', '#2DD4BF', 'Color secundario para degradados y hover de botones'),
 ('theme_button_surface', '#0E1722', 'Color base para botones oscuros, menú y tarjetas seleccionables'),
+('theme_game_feature_bg', '#0E1722', 'Color de fondo para las caracteristicas visibles en la ficha publica del juego'),
+('theme_game_feature_border', '#164E63', 'Color del borde para las caracteristicas visibles en la ficha publica del juego'),
+('theme_game_feature_text', '#22D3EE', 'Color del texto para las caracteristicas visibles en la ficha publica del juego'),
+('theme_package_feature_bg', '#0F172A', 'Color de fondo para las caracteristicas del paquete mostradas en el encabezado de pago minimalista'),
+('theme_package_feature_border', '#164E63', 'Color del borde para las caracteristicas del paquete mostradas en el encabezado de pago minimalista'),
+('theme_package_feature_text', '#D8FBFF', 'Color del texto e icono para las caracteristicas del paquete mostradas en el encabezado de pago minimalista'),
 ('theme_float_whatsapp_bg', '#22C55E', 'Color principal del botón flotante de WhatsApp'),
 ('theme_float_whatsapp_text', '#F8FAFC', 'Color del texto e icono del botón flotante de WhatsApp'),
 ('theme_float_channel_bg', '#1F2937', 'Color principal del botón flotante del canal de difusión'),
@@ -62,6 +68,18 @@ UNION ALL
 SELECT 'theme_custom_button_secondary', valor, 'Copia editable: Color secundario para degradados y hover de botones' FROM configuracion_general WHERE clave = 'theme_button_secondary'
 UNION ALL
 SELECT 'theme_custom_button_surface', valor, 'Copia editable: Color base para botones oscuros, menú y tarjetas seleccionables' FROM configuracion_general WHERE clave = 'theme_button_surface'
+UNION ALL
+SELECT 'theme_custom_game_feature_bg', valor, 'Copia editable: Color de fondo para las caracteristicas visibles en la ficha publica del juego' FROM configuracion_general WHERE clave = 'theme_game_feature_bg'
+UNION ALL
+SELECT 'theme_custom_game_feature_border', valor, 'Copia editable: Color del borde para las caracteristicas visibles en la ficha publica del juego' FROM configuracion_general WHERE clave = 'theme_game_feature_border'
+UNION ALL
+SELECT 'theme_custom_game_feature_text', valor, 'Copia editable: Color del texto para las caracteristicas visibles en la ficha publica del juego' FROM configuracion_general WHERE clave = 'theme_game_feature_text'
+UNION ALL
+SELECT 'theme_custom_package_feature_bg', valor, 'Copia editable: Color de fondo para las caracteristicas del paquete mostradas en el encabezado de pago minimalista' FROM configuracion_general WHERE clave = 'theme_package_feature_bg'
+UNION ALL
+SELECT 'theme_custom_package_feature_border', valor, 'Copia editable: Color del borde para las caracteristicas del paquete mostradas en el encabezado de pago minimalista' FROM configuracion_general WHERE clave = 'theme_package_feature_border'
+UNION ALL
+SELECT 'theme_custom_package_feature_text', valor, 'Copia editable: Color del texto e icono para las caracteristicas del paquete mostradas en el encabezado de pago minimalista' FROM configuracion_general WHERE clave = 'theme_package_feature_text'
 UNION ALL
 SELECT 'theme_custom_float_whatsapp_bg', valor, 'Copia editable: Color principal del botón flotante de WhatsApp' FROM configuracion_general WHERE clave = 'theme_float_whatsapp_bg'
 UNION ALL
