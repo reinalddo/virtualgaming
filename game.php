@@ -208,6 +208,11 @@ $paymentSendingOrderMessage = trim((string) store_config_get('ventana_pago_envia
 if ($paymentSendingOrderMessage === '') {
   $paymentSendingOrderMessage = 'Estamos registrando tu comprobante y procesando la orden según la moneda del pedido. No cierres esta ventana.';
 }
+$paymentSuccessTitle = trim((string) store_config_get('ventana_pago_exitoso_titulo', 'Pago exitoso'));
+if ($paymentSuccessTitle === '') {
+  $paymentSuccessTitle = 'Pago exitoso';
+}
+$paymentSuccessExtraMessage = trim((string) store_config_get('ventana_pago_exitoso_mensaje_extra', ''));
 
 $scriptDir = app_base_path();
 $pageTitle = store_config_get('nombre_tienda', 'TVirtualGaming') . " | " . ($game["nombre"] ?? "Juego");
@@ -505,6 +510,7 @@ include __DIR__ . "/includes/header.php";
       <div class="modal-content bg-dark border-info text-center p-4 payment-status-modal-content<?= $paymentWindowConfigEnabled ? ' payment-window-theme-enabled' : '' ?>">
         <h4 id="payment-status-modal-title" class="fw-bold text-info mb-3 payment-status-modal-title">Estado de la operación</h4>
         <p id="payment-status-modal-message" class="text-light mb-4 small payment-status-modal-message">Tu solicitud fue procesada.</p>
+        <p id="payment-status-modal-extra-message" class="d-none text-light opacity-75 mb-4 small payment-status-modal-extra-message"></p>
         <div id="payment-status-modal-reasons" class="d-none payment-reasons-card mb-3 text-start"></div>
         <div id="payment-status-modal-actions" class="d-none payment-support-actions mb-4"></div>
         <button type="button" id="payment-status-modal-accept" class="btn btn-info fw-bold px-4 payment-status-modal-accept-btn<?= $paymentWindowConfigEnabled ? ' payment-window-theme-enabled' : '' ?>">Aceptar</button>
@@ -1650,9 +1656,14 @@ include __DIR__ . "/includes/header.php";
     title: <?php echo json_encode($paymentSendingOrderTitle, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>,
     message: <?php echo json_encode($paymentSendingOrderMessage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>
   };
+  const paymentSuccessContent = {
+    title: <?php echo json_encode($paymentSuccessTitle, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>,
+    extraMessage: <?php echo json_encode($paymentSuccessExtraMessage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>
+  };
   const paymentStatusModal = document.getElementById('payment-status-modal');
   const paymentStatusModalTitle = document.getElementById('payment-status-modal-title');
   const paymentStatusModalMessage = document.getElementById('payment-status-modal-message');
+  const paymentStatusModalExtraMessage = document.getElementById('payment-status-modal-extra-message');
   const paymentStatusModalReasons = document.getElementById('payment-status-modal-reasons');
   const paymentStatusModalActions = document.getElementById('payment-status-modal-actions');
   const paymentStatusModalAccept = document.getElementById('payment-status-modal-accept');
@@ -2707,16 +2718,33 @@ include __DIR__ . "/includes/header.php";
   }
 
   function showPaymentStatusModal(title, message, type) {
+    const normalizedType = type === 'success' || type === 'danger' ? type : 'info';
+    const successExtraMessage = normalizedType === 'success'
+      ? String(paymentSuccessContent.extraMessage || '').trim()
+      : '';
     if (paymentStatusModalTitle) {
-      paymentStatusModalTitle.textContent = title || 'Estado de la operación';
+      const resolvedTitle = normalizedType === 'success'
+        ? (String(paymentSuccessContent.title || '').trim() || title || 'Pago exitoso')
+        : (title || 'Estado de la operación');
+      paymentStatusModalTitle.textContent = resolvedTitle;
       paymentStatusModalTitle.classList.remove('text-info', 'text-success', 'text-danger');
-      paymentStatusModalTitle.classList.add(type === 'success' ? 'text-success' : (type === 'danger' ? 'text-danger' : 'text-info'));
+      paymentStatusModalTitle.classList.add(normalizedType === 'success' ? 'text-success' : (normalizedType === 'danger' ? 'text-danger' : 'text-info'));
     }
     if (paymentStatusModalMessage) {
       paymentStatusModalMessage.textContent = message || 'Tu solicitud fue procesada.';
+      paymentStatusModalMessage.classList.toggle('mb-2', successExtraMessage !== '');
+      paymentStatusModalMessage.classList.toggle('mb-4', successExtraMessage === '');
+    }
+    if (paymentStatusModalExtraMessage) {
+      if (successExtraMessage !== '') {
+        paymentStatusModalExtraMessage.textContent = successExtraMessage;
+        paymentStatusModalExtraMessage.classList.remove('d-none');
+      } else {
+        paymentStatusModalExtraMessage.textContent = '';
+        paymentStatusModalExtraMessage.classList.add('d-none');
+      }
     }
     if (paymentStatusModal && paymentWindowThemeEnabled) {
-      const normalizedType = type === 'success' || type === 'danger' ? type : 'info';
       paymentStatusModal.setAttribute('data-payment-status-state', normalizedType);
     }
     scrollPaymentModalToTop();

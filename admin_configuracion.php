@@ -70,6 +70,11 @@ $paymentWindowSendingMessage = trim((string) ($cfg['ventana_pago_enviando_mensaj
 if ($paymentWindowSendingMessage === '') {
   $paymentWindowSendingMessage = 'Estamos registrando tu comprobante y procesando la orden según la moneda del pedido. No cierres esta ventana.';
 }
+$paymentWindowSuccessTitle = trim((string) ($cfg['ventana_pago_exitoso_titulo'] ?? 'Pago exitoso'));
+if ($paymentWindowSuccessTitle === '') {
+  $paymentWindowSuccessTitle = 'Pago exitoso';
+}
+$paymentWindowSuccessExtraMessage = trim((string) ($cfg['ventana_pago_exitoso_mensaje_extra'] ?? ''));
 $paymentWindowThemeGroups = [
   'Ventana de pago principal' => [
     'theme_payment_main_overlay_bg',
@@ -881,6 +886,18 @@ $googleCallbackUrl = google_oauth_callback_url();
                               <label class="form-label fw-semibold">Texto explicativo debajo del título</label>
                               <textarea name="ventana_pago_enviando_mensaje" class="form-control" rows="3" maxlength="500" placeholder="Explica aquí qué está ocurriendo mientras se procesa la orden."><?= htmlspecialchars($paymentWindowSendingMessage, ENT_QUOTES, 'UTF-8') ?></textarea>
                               <div class="form-text">Este texto se mostrará debajo del título del modal Enviando orden.</div>
+                            </div>
+                          </div>
+                        <?php endif; ?>
+                        <?php if ($paymentWindowConfigEnabled && $groupTitle === 'Pago exitoso y estado final'): ?>
+                          <div class="col-12">
+                            <div class="theme-swatch-card">
+                              <label class="form-label fw-semibold">Título cuando el pago es exitoso</label>
+                              <input type="text" name="ventana_pago_exitoso_titulo" value="<?= htmlspecialchars($paymentWindowSuccessTitle, ENT_QUOTES, 'UTF-8') ?>" class="form-control mb-3" maxlength="120" placeholder="Pago exitoso">
+                              <div class="form-text mb-3">Este texto reemplaza el título del modal final cuando la operación termina con éxito.</div>
+                              <label class="form-label fw-semibold">Texto adicional debajo del mensaje principal</label>
+                              <textarea name="ventana_pago_exitoso_mensaje_extra" class="form-control" rows="3" maxlength="500" placeholder="Agrega aquí un texto complementario opcional para el cliente."><?= htmlspecialchars($paymentWindowSuccessExtraMessage, ENT_QUOTES, 'UTF-8') ?></textarea>
+                              <div class="form-text">Este texto aparecerá debajo del mensaje principal del modal final solo cuando el pago sea exitoso.</div>
                             </div>
                           </div>
                         <?php endif; ?>

@@ -1566,6 +1566,27 @@ switch ($seccion) {
                     }
                 }
 
+                if (array_key_exists('ventana_pago_exitoso_titulo', $_POST)) {
+                    $successTitle = trim((string) ($_POST['ventana_pago_exitoso_titulo'] ?? ''));
+                    if ($successTitle === '') {
+                        $successTitle = 'Pago exitoso';
+                    }
+                    if (!store_config_upsert('ventana_pago_exitoso_titulo', $successTitle, $configDescriptions['ventana_pago_exitoso_titulo'] ?? 'Texto principal que se muestra en el modal final cuando el pago es exitoso.')) {
+                        admin_set_flash('error', 'No se pudo guardar el título del modal Pago exitoso.');
+                        define('ADMIN_CONFIG_POST_HANDLED', true);
+                        admin_redirect('configuracion', ['tab' => 'personalizar-colores']);
+                    }
+                }
+
+                if (array_key_exists('ventana_pago_exitoso_mensaje_extra', $_POST)) {
+                    $successExtraMessage = trim((string) ($_POST['ventana_pago_exitoso_mensaje_extra'] ?? ''));
+                    if (!store_config_upsert('ventana_pago_exitoso_mensaje_extra', $successExtraMessage, $configDescriptions['ventana_pago_exitoso_mensaje_extra'] ?? 'Texto adicional opcional que se muestra debajo del mensaje principal en el modal final exitoso.')) {
+                        admin_set_flash('error', 'No se pudo guardar el texto adicional del modal Pago exitoso.');
+                        define('ADMIN_CONFIG_POST_HANDLED', true);
+                        admin_redirect('configuracion', ['tab' => 'personalizar-colores']);
+                    }
+                }
+
                 admin_set_flash('success', 'Paleta de colores actualizada.');
             }
 
