@@ -266,6 +266,67 @@ function admin_extra_feature_is_active($value): bool {
     return !in_array($normalized, ['', '0', 'false', 'off', 'no', 'null'], true);
 }
 
+function admin_humanize_extra_feature_label($value): string {
+    $label = trim((string) $value);
+    if ($label === '') {
+        return 'Funcion extra';
+    }
+
+    $normalized = preg_replace('/[_-]+/', ' ', $label) ?? $label;
+    $normalized = trim(preg_replace('/\s+/', ' ', $normalized) ?? $normalized);
+    if ($normalized === '') {
+        return 'Funcion extra';
+    }
+
+    return ucwords($normalized);
+}
+
+function admin_extra_features_whatsapp_config_key(): string {
+    return 'funciones_extra_whatsapp_numero';
+}
+
+function admin_normalize_whatsapp_number($value): string {
+    $normalized = preg_replace('/\D+/', '', (string) $value);
+    return trim((string) $normalized);
+}
+
+function admin_extra_features_whatsapp_number(): string {
+    $moduleSpecificNumber = admin_normalize_whatsapp_number(store_config_get(admin_extra_features_whatsapp_config_key(), ''));
+    if ($moduleSpecificNumber !== '') {
+        return $moduleSpecificNumber;
+    }
+
+    return admin_normalize_whatsapp_number(store_config_get('whatsapp', ''));
+}
+
+function admin_build_extra_feature_whatsapp_link(string $whatsappNumber, string $featureName): string {
+    $normalizedNumber = admin_normalize_whatsapp_number($whatsappNumber);
+    if ($normalizedNumber === '') {
+        return '';
+    }
+
+    $message = 'Hola, quisiera la función "' . trim($featureName) . '" en mi página web';
+    return 'https://wa.me/' . rawurlencode($normalizedNumber) . '?text=' . rawurlencode($message);
+}
+
+function admin_render_extra_features_whatsapp_settings(string $whatsappNumber): string {
+    ob_start();
+    echo '<div class="mb-4" style="border-radius:20px; border:1px solid rgba(34,211,238,0.24); background:linear-gradient(180deg,rgba(15,23,42,0.94),rgba(24,31,42,0.9)); box-shadow:0 0 24px rgba(34,211,238,0.08); padding:1.1rem;">';
+    echo '<div class="d-flex flex-column flex-lg-row align-items-lg-end justify-content-between gap-3">';
+    echo '<div style="max-width:720px;">';
+    echo '<h3 class="h5 mb-2" style="color:#22d3ee;">Número de WhatsApp para vender funciones</h3>';
+    echo '<p class="mb-0" style="color:#c9f9ff;">Este número será usado por el botón <strong>Quiero esta función</strong> que verán los usuarios admin. Si lo dejas vacío, el módulo usará el WhatsApp general configurado en Redes Sociales.</p>';
+    echo '</div>';
+    echo '<form method="POST" class="d-flex flex-column flex-md-row align-items-stretch gap-2 w-100" style="max-width:520px;">';
+    echo '<input type="hidden" name="guardar_funciones_extra_whatsapp" value="1">';
+    echo '<input type="text" name="funciones_extra_whatsapp_numero" value="' . htmlspecialchars($whatsappNumber, ENT_QUOTES, 'UTF-8') . '" placeholder="Ej. 584141234567" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7; min-height:46px;">';
+    echo '<button type="submit" class="btn btn-info" style="min-width:180px; min-height:46px; background:linear-gradient(90deg,#00fff7 0%,#22d3ee 100%); color:#0f172a; border:none; font-weight:800;">Guardar número</button>';
+    echo '</form>';
+    echo '</div>';
+    echo '</div>';
+    return (string) ob_get_clean();
+}
+
 function admin_fetch_extra_features(): array {
     admin_extra_features_ensure_schema();
 
@@ -293,25 +354,26 @@ function admin_fetch_extra_features(): array {
     return $features;
 }
 
-function admin_update_extra_feature(int $featureId, int $commission, string $value): bool {
+function admin_update_extra_feature(int $featureId, int $basePrice, int $commission, string $value): bool {
     admin_extra_features_ensure_schema();
 
     $mysqli = store_config_db();
-    $stmt = $mysqli->prepare('UPDATE configuracion_general SET valor = ?, comision_venta = ? WHERE id = ? AND COALESCE(mostrar_a_cliente, 0) = 1');
+    $stmt = $mysqli->prepare('UPDATE configuracion_general SET valor = ?, precio = ?, comision_venta = ? WHERE id = ? AND COALESCE(mostrar_a_cliente, 0) = 1');
     if (!$stmt) {
         return false;
     }
 
     $normalizedValue = admin_extra_feature_is_active($value) ? '1' : '0';
+    $normalizedBasePrice = max(0, $basePrice);
     $normalizedCommission = max(0, $commission);
-    $stmt->bind_param('sii', $normalizedValue, $normalizedCommission, $featureId);
+    $stmt->bind_param('siii', $normalizedValue, $normalizedBasePrice, $normalizedCommission, $featureId);
     $executed = $stmt->execute();
     $stmt->close();
 
     return $executed;
 }
 
-function admin_render_extra_features_table(array $features, bool $isRootViewer): string {
+function admin_render_extra_features_table(array $features, bool $isRootViewer, string $whatsappNumber = ''): string {
     ob_start();
 
     if (count($features) === 0) {
@@ -319,71 +381,224 @@ function admin_render_extra_features_table(array $features, bool $isRootViewer):
         return (string) ob_get_clean();
     }
 
-    echo '<div class="table-responsive" style="background:#10141a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:1rem;">';
-    echo '<table class="table align-middle mb-0" style="background:#181f2a; color:#e9fdff; border-radius:12px;">';
-    echo '<thead style="background:#181f2a; color:#00fff7; border-bottom:2px solid #00fff7;">';
-    echo '<tr>';
-    if ($isRootViewer) {
-        echo '<th style="background:#181f2a; color:#00fff7;">Clave</th>';
+    echo '<style>';
+    echo '.extra-feature-filters{display:flex;flex-wrap:wrap;gap:0.75rem;margin:0 0 1rem;}';
+    echo '.extra-feature-filter-btn{display:inline-flex;align-items:center;justify-content:center;gap:0.55rem;min-height:46px;padding:0.8rem 1rem;border-radius:999px;border:1px solid rgba(34,211,238,0.24);background:rgba(15,23,42,0.72);color:#c9f9ff;font-weight:800;letter-spacing:0.02em;cursor:pointer;transition:transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;}';
+    echo '.extra-feature-filter-btn:hover{transform:translateY(-1px);border-color:rgba(34,211,238,0.52);box-shadow:0 0 18px rgba(34,211,238,0.12);}';
+    echo '.extra-feature-filter-btn.is-active{background:linear-gradient(90deg, rgba(34,211,238,0.22), rgba(45,212,191,0.18));border-color:rgba(34,211,238,0.62);color:#ffffff;box-shadow:0 0 18px rgba(34,211,238,0.16);}';
+    echo '.extra-feature-filter-btn svg{width:18px;height:18px;fill:currentColor;flex:0 0 18px;}';
+    echo '.extra-features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;}';
+    echo '.extra-feature-card{height:100%;border-radius:24px;border:1px solid rgba(34,211,238,0.22);background:linear-gradient(180deg,rgba(8,15,25,0.98),rgba(17,24,39,0.94));box-shadow:0 0 26px rgba(34,211,238,0.08), inset 0 0 0 1px rgba(34,211,238,0.04);display:flex;flex-direction:column;overflow:hidden;position:relative;}';
+    echo '.extra-feature-card::before{content:"";position:absolute;inset:0 auto auto 0;width:100%;height:140px;background:radial-gradient(circle at top left, rgba(34,211,238,0.18), transparent 58%), linear-gradient(135deg, rgba(34,211,238,0.12), rgba(15,23,42,0));pointer-events:none;}';
+    echo '.extra-feature-card.is-hidden{display:none;}';
+    echo '.extra-feature-header{position:relative;padding:1.15rem 1.2rem 0.85rem;border-bottom:1px solid rgba(34,211,238,0.12);background:linear-gradient(180deg, rgba(15,23,42,0.78), rgba(15,23,42,0.38));}';
+    echo '.extra-feature-body{position:relative;padding:1rem 1.2rem 1.1rem;display:flex;flex-direction:column;gap:1rem;flex:1 1 auto;}';
+    echo '.extra-feature-footer{position:relative;margin-top:auto;padding:1rem 1.2rem 1.2rem;border-top:1px solid rgba(34,211,238,0.1);background:linear-gradient(180deg, rgba(15,23,42,0.18), rgba(2,6,23,0.42));display:flex;flex-direction:column;gap:0.75rem;}';
+    echo '.extra-feature-top{display:flex;align-items:flex-start;justify-content:space-between;gap:0.85rem;flex-wrap:wrap;}';
+    echo '.extra-feature-key{display:inline-flex;align-items:center;gap:0.35rem;border-radius:999px;border:1px solid rgba(34,211,238,0.35);background:rgba(34,211,238,0.08);padding:0.3rem 0.7rem;color:#67e8f9;font-size:0.75rem;font-weight:700;letter-spacing:0.04em;word-break:break-word;}';
+    echo '.extra-feature-title{margin:0;color:#f8fafc;font-size:1.22rem;font-weight:800;line-height:1.2;}';
+    echo '.extra-feature-hook{margin:0.35rem 0 0;color:#7dd3fc;font-size:0.84rem;font-weight:700;letter-spacing:0.03em;text-transform:uppercase;}';
+    echo '.extra-feature-description{margin:0;color:#c9f9ff;font-size:0.98rem;line-height:1.58;}';
+    echo '.extra-feature-price-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:0.75rem;}';
+    echo '.extra-feature-price-box{border-radius:16px;border:1px solid rgba(34,211,238,0.16);background:linear-gradient(180deg, rgba(8,15,25,0.9), rgba(15,23,42,0.7));padding:0.8rem 0.9rem;box-shadow:inset 0 0 0 1px rgba(34,211,238,0.03);}';
+    echo '.extra-feature-price-label{display:block;color:#7dd3fc;font-size:0.75rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:0.35rem;}';
+    echo '.extra-feature-price-value{display:block;color:#fde68a;font-size:1.08rem;font-weight:800;}';
+    echo '.extra-feature-status{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:0.3rem 0.7rem;font-size:0.78rem;font-weight:700;}';
+    echo '.extra-feature-status svg{width:17px;height:17px;fill:currentColor;flex:0 0 17px;}';
+    echo '.extra-feature-status--owned{gap:0.45rem;padding:0.42rem 0.82rem;background:linear-gradient(90deg, rgba(16,185,129,0.24), rgba(5,150,105,0.24));color:#a7f3d0;border:1px solid rgba(16,185,129,0.48);box-shadow:0 0 18px rgba(16,185,129,0.16);}';
+    echo '.extra-feature-status--available{gap:0.45rem;padding:0.42rem 0.82rem;background:linear-gradient(90deg, rgba(251,191,36,0.18), rgba(249,115,22,0.18));color:#fde68a;border:1px solid rgba(251,191,36,0.42);box-shadow:0 0 18px rgba(251,191,36,0.12);}';
+    echo '.extra-feature-form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:0.85rem;}';
+    echo '.extra-feature-field{display:flex;flex-direction:column;gap:0.4rem;}';
+    echo '.extra-feature-field label{color:#67e8f9;font-size:0.82rem;font-weight:700;letter-spacing:0.04em;}';
+    echo '.extra-feature-action{margin-top:auto;display:flex;flex-direction:column;gap:0.7rem;}';
+    echo '.extra-feature-submit{min-height:44px;border:none;border-radius:14px;background:linear-gradient(90deg,#00fff7 0%,#22d3ee 100%);color:#0f172a;font-weight:800;box-shadow:0 0 18px rgba(0,255,247,0.28);}';
+    echo '.extra-feature-submit:hover{filter:brightness(1.04);}';
+    echo '.extra-feature-whatsapp{display:inline-flex;align-items:center;justify-content:center;gap:0.65rem;min-height:46px;padding:0.85rem 1rem;border-radius:14px;background:linear-gradient(90deg,#25d366 0%,#1fb154 100%);color:#ffffff;font-weight:800;text-decoration:none;box-shadow:0 0 18px rgba(37,211,102,0.22);}';
+    echo '.extra-feature-whatsapp:hover{filter:brightness(1.04);color:#ffffff;}';
+    echo '.extra-feature-whatsapp.is-disabled{background:linear-gradient(90deg,#334155 0%,#475569 100%);color:#e2e8f0;box-shadow:none;pointer-events:none;}';
+    echo '.extra-feature-whatsapp svg{width:18px;height:18px;flex:0 0 18px;fill:currentColor;}';
+    echo '.extra-feature-note{margin:0;color:#93c5fd;font-size:0.88rem;line-height:1.5;}';
+    echo '.extra-feature-footer-copy{margin:0;color:#cbd5e1;font-size:0.88rem;line-height:1.55;}';
+    echo '.extra-feature-footer-copy.is-hot{color:#bbf7d0;}';
+    echo '@media (max-width: 767px){.extra-feature-card{padding:1rem;}.extra-feature-title{font-size:1.08rem;}}';
+    echo '</style>';
+    if (!$isRootViewer) {
+        echo '<div class="extra-feature-filters" data-extra-feature-filters="1">';
+        echo '<button type="button" class="extra-feature-filter-btn is-active" data-extra-filter="all">';
+        echo '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5a2 2 0 0 1 2-2h3.5a2 2 0 0 1 1.73 1H19a2 2 0 0 1 2 2v2H3V5zm0 5h18v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-9zm6 3v2h6v-2H9z"/></svg>';
+        echo '<span>Todas las funciones</span>';
+        echo '</button>';
+        echo '<button type="button" class="extra-feature-filter-btn" data-extra-filter="owned">';
+        echo '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.17 4.83 12 3.41 13.41 9 19l12-12-1.41-1.41z"/></svg>';
+        echo '<span>Compradas</span>';
+        echo '</button>';
+        echo '<button type="button" class="extra-feature-filter-btn" data-extra-filter="available">';
+        echo '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-1.99.9-1.99 2S15.9 22 17 22s2-.9 2-2-.9-2-2-2zM7.17 14h9.95c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1 1 0 0 0 21.58 5H6.21l-.94-2H2v2h2l3.6 7.59-1.35 2.44A2 2 0 0 0 8 18h12v-2H8l1.17-2z"/></svg>';
+        echo '<span>Disponibles para la compra</span>';
+        echo '</button>';
+        echo '</div>';
     }
-    echo '<th style="background:#181f2a; color:#00fff7;">Función</th>';
-    echo '<th style="background:#181f2a; color:#00fff7; min-width:240px;">Descripción</th>';
-    if ($isRootViewer) {
-        echo '<th style="background:#181f2a; color:#00fff7;">Tu ganancia</th>';
-        echo '<th style="background:#181f2a; color:#00fff7;">Comisión vendedor</th>';
-    }
-    echo '<th style="background:#181f2a; color:#00fff7;">Precio mostrado</th>';
-    echo '<th style="background:#181f2a; color:#00fff7;">Estado</th>';
-    if ($isRootViewer) {
-        echo '<th style="background:#181f2a; color:#00fff7; min-width:220px;">Acciones</th>';
-    }
-    echo '</tr>';
-    echo '</thead>';
-    echo '<tbody>';
+    echo '<div class="extra-features-grid">';
 
     foreach ($features as $feature) {
         $featureId = (int) ($feature['id'] ?? 0);
         $formId = 'extra-feature-form-' . $featureId;
-        $featureName = admin_display_value($feature['funcion_venta'] ?? '', (string) ($feature['clave'] ?? 'Función extra'));
+        $featureKey = trim((string) ($feature['clave'] ?? ''));
+        $configuredFeatureName = trim((string) ($feature['funcion_venta'] ?? ''));
+        if ($configuredFeatureName === '' || $configuredFeatureName === $featureKey) {
+            $featureName = admin_humanize_extra_feature_label($featureKey);
+        } else {
+            $featureName = $configuredFeatureName;
+        }
         $featureDescription = admin_display_value($feature['descripcion_venta'] ?? '', (string) ($feature['descripcion'] ?? 'Sin descripción disponible'));
         $statusText = !empty($feature['activa']) ? 'Activa' : 'Desactivada';
         $statusStyle = !empty($feature['activa'])
             ? 'background:rgba(52,211,153,0.14); color:#86efac; border:1px solid rgba(52,211,153,0.45);'
             : 'background:rgba(248,113,113,0.14); color:#fca5a5; border:1px solid rgba(248,113,113,0.45);';
+        $basePrice = (int) ($feature['precio'] ?? 0);
+        $commission = (int) ($feature['comision_venta'] ?? 0);
+        $totalPrice = (int) ($feature['precio_total'] ?? 0);
+        $whatsappLink = admin_build_extra_feature_whatsapp_link($whatsappNumber, $featureName);
+        $featureOwned = !empty($feature['activa']);
+        $showCustomerCta = !$isRootViewer && !$featureOwned && $whatsappLink !== '';
 
-        echo '<tr style="background:#181f2a; color:#fff;">';
+        echo '<section class="extra-feature-card' . (!$isRootViewer ? ' extra-feature-card--admin' : '') . '"' . (!$isRootViewer ? ' data-extra-feature-state="' . ($featureOwned ? 'owned' : 'available') . '"' : '') . '>';
+        echo '<div class="extra-feature-header">';
+        echo '<div class="extra-feature-top">';
+        echo '<div style="flex:1 1 220px; min-width:0;">';
         if ($isRootViewer) {
-            echo '<td style="background:#181f2a; color:#67e8f9; font-family:monospace;">' . htmlspecialchars((string) ($feature['clave'] ?? '')) . '</td>';
+            echo '<span class="extra-feature-key">' . htmlspecialchars($featureKey) . '</span>';
         }
-        echo '<td style="background:#181f2a; color:#fff; font-weight:700;">' . htmlspecialchars($featureName) . '</td>';
-        echo '<td style="background:#181f2a; color:#c9f9ff;">' . htmlspecialchars($featureDescription) . '</td>';
-        if ($isRootViewer) {
-            echo '<td style="background:#181f2a; color:#67e8f9;">USD ' . htmlspecialchars(admin_format_money($feature['precio'] ?? 0)) . '</td>';
-            echo '<td style="background:#181f2a;">';
-            echo '<input type="number" min="0" step="1" name="comision_venta" value="' . htmlspecialchars((string) ($feature['comision_venta'] ?? 0)) . '" form="' . htmlspecialchars($formId) . '" class="form-control form-control-sm" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">';
-            echo '</td>';
+        echo '<h3 class="extra-feature-title mt-3">' . htmlspecialchars($featureName) . '</h3>';
+        if (!$isRootViewer) {
+            echo '<p class="extra-feature-hook">Mejora premium para tu tienda</p>';
         }
-        echo '<td style="background:#181f2a; color:#fde68a; font-weight:700;">USD ' . htmlspecialchars(admin_format_money($feature['precio_total'] ?? 0)) . '</td>';
-        echo '<td style="background:#181f2a;"><span class="badge rounded-pill" style="' . $statusStyle . '">' . htmlspecialchars($statusText) . '</span></td>';
+        echo '</div>';
         if ($isRootViewer) {
-            echo '<td style="background:#181f2a;">';
-            echo '<form id="' . htmlspecialchars($formId) . '" method="POST" class="d-flex flex-column gap-2">';
+            echo '<span class="extra-feature-status" style="' . $statusStyle . '">' . htmlspecialchars($statusText) . '</span>';
+        } elseif ($featureOwned) {
+            echo '<span class="extra-feature-status extra-feature-status--owned">';
+            echo '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm-1.1 14.3-3.2-3.2 1.4-1.4 1.8 1.8 4.8-4.8 1.4 1.4z"/></svg>';
+            echo '<span>Ya activa</span>';
+            echo '</span>';
+        } else {
+            echo '<span class="extra-feature-status extra-feature-status--available">';
+            echo '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-1.99.9-1.99 2S15.9 22 17 22s2-.9 2-2-.9-2-2-2zM7.17 14h9.95c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1 1 0 0 0 21.58 5H6.21l-.94-2H2v2h2l3.6 7.59-1.35 2.44A2 2 0 0 0 8 18h12v-2H8l1.17-2z"/></svg>';
+            echo '<span>Disponible para comprar</span>';
+            echo '</span>';
+        }
+        echo '</div>';
+        echo '</div>';
+        echo '<div class="extra-feature-body">';
+        echo '<p class="extra-feature-description">' . htmlspecialchars($featureDescription) . '</p>';
+        echo '<div class="extra-feature-price-grid">';
+        if ($isRootViewer) {
+            echo '<div class="extra-feature-price-box">';
+            echo '<span class="extra-feature-price-label">Tu ganancia</span>';
+            echo '<span class="extra-feature-price-value" data-extra-price-base-display="1">USD ' . htmlspecialchars(admin_format_money($basePrice)) . '</span>';
+            echo '</div>';
+            echo '<div class="extra-feature-price-box">';
+            echo '<span class="extra-feature-price-label">Comisión vendedor</span>';
+            echo '<span class="extra-feature-price-value" style="color:#67e8f9;" data-extra-price-commission-display="1">USD ' . htmlspecialchars(admin_format_money($commission)) . '</span>';
+            echo '</div>';
+        }
+        echo '<div class="extra-feature-price-box">';
+        echo '<span class="extra-feature-price-label">' . ($isRootViewer ? 'Precio mostrado' : 'Precio') . '</span>';
+        echo '<span class="extra-feature-price-value" data-extra-price-total="1">USD ' . htmlspecialchars(admin_format_money($totalPrice)) . '</span>';
+        echo '</div>';
+        echo '</div>';
+        echo '</div>';
+        if ($isRootViewer) {
+            echo '<div class="extra-feature-footer">';
+            echo '<div class="extra-feature-action">';
+            echo '<form id="' . htmlspecialchars($formId) . '" method="POST" class="d-flex flex-column gap-3 mt-1" data-extra-feature-form="1">';
             echo '<input type="hidden" name="guardar_funcion_extra" value="1">';
             echo '<input type="hidden" name="feature_id" value="' . $featureId . '">';
-            echo '<label class="form-check d-flex align-items-center gap-2 mb-2" style="color:#c9f9ff;">';
+            echo '<div class="extra-feature-form-grid">';
+            echo '<div class="extra-feature-field">';
+            echo '<label for="extra-precio-' . $featureId . '">Tu ganancia en USD</label>';
+            echo '<input id="extra-precio-' . $featureId . '" type="number" min="0" step="1" name="precio" value="' . htmlspecialchars((string) $basePrice) . '" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;" data-extra-price-base="1">';
+            echo '</div>';
+            echo '<div class="extra-feature-field">';
+            echo '<label for="extra-comision-' . $featureId . '">Comisión vendedor USD</label>';
+            echo '<input id="extra-comision-' . $featureId . '" type="number" min="0" step="1" name="comision_venta" value="' . htmlspecialchars((string) $commission) . '" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;" data-extra-price-commission="1">';
+            echo '</div>';
+            echo '</div>';
+            echo '<label class="form-check d-flex align-items-center gap-2" style="color:#c9f9ff;">';
             echo '<input class="form-check-input" type="checkbox" name="activar_funcion" value="1" ' . (!empty($feature['activa']) ? 'checked' : '') . '>';
             echo '<span>Activar módulo</span>';
             echo '</label>';
-            echo '<button type="submit" class="btn btn-info btn-sm" style="background:#00fff7; color:#111827; border:none; box-shadow:0 0 10px #00fff7;">Guardar</button>';
+            echo '<button type="submit" class="extra-feature-submit">Guardar cambios</button>';
             echo '</form>';
-            echo '</td>';
+            echo '</div>';
+            echo '</div>';
+        } else {
+            echo '<div class="extra-feature-footer">';
+            echo '<div class="extra-feature-action">';
+            if ($showCustomerCta) {
+                echo '<p class="extra-feature-footer-copy is-hot">Actívala hoy y empieza a aprovechar esta función premium en tu tienda.</p>';
+                echo '<a href="' . htmlspecialchars($whatsappLink, ENT_QUOTES, 'UTF-8') . '" target="_blank" rel="noopener noreferrer" class="extra-feature-whatsapp">';
+                echo '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M19.11 17.21c-.27-.13-1.58-.78-1.82-.87-.24-.09-.41-.13-.58.14-.17.27-.67.87-.82 1.05-.15.18-.3.2-.56.07-.27-.13-1.12-.41-2.13-1.31-.79-.7-1.32-1.56-1.47-1.83-.15-.27-.02-.41.11-.54.12-.12.27-.3.41-.45.13-.15.18-.26.27-.44.09-.18.05-.34-.02-.47-.07-.13-.58-1.39-.8-1.91-.21-.5-.43-.43-.58-.44h-.5c-.18 0-.47.07-.72.34s-.94.92-.94 2.24.96 2.59 1.09 2.77c.13.18 1.88 2.86 4.55 4.01.64.28 1.14.45 1.53.58.64.2 1.22.17 1.67.1.51-.08 1.58-.65 1.8-1.28.22-.63.22-1.18.15-1.28-.07-.1-.24-.16-.5-.29zm-3.17 10.79h-.01a13.6 13.6 0 0 1-6.92-1.89L4 27.41l1.33-4.85A13.57 13.57 0 0 1 2.4 13.6C2.4 6.56 8.14.83 15.19.83c3.41 0 6.62 1.33 9.03 3.74a12.7 12.7 0 0 1 3.74 9.03c0 7.04-5.73 12.78-12.78 12.78zm10.87-23.65A15.22 15.22 0 0 0 15.19 0C6.81 0 0 6.81 0 15.18c0 2.68.7 5.3 2.02 7.61L0 32l9.47-1.97a15.13 15.13 0 0 0 5.72 1.14h.01C23.57 31.17 32 22.74 32 15.18c0-4.05-1.58-7.85-4.39-10.83z"/></svg>';
+                echo '<span>Quiero esta función</span>';
+                echo '</a>';
+            } elseif ($featureOwned) {
+                echo '<p class="extra-feature-footer-copy is-hot">Ya tienes Activa esta función.</p>';
+            } elseif ($whatsappLink === '') {
+                echo '<p class="extra-feature-footer-copy">Esta función está disponible para la compra. Configura primero el número de atención para habilitar el contacto rápido por WhatsApp.</p>';
+            } else {
+                echo '<p class="extra-feature-footer-copy">Esta función está disponible para la compra. Escríbenos y la activamos para tu tienda.</p>';
+            }
+            echo '</div>';
+            echo '</div>';
         }
-        echo '</tr>';
+        echo '</section>';
     }
 
-    echo '</tbody>';
-    echo '</table>';
     echo '</div>';
+    if ($isRootViewer) {
+        echo '<script>';
+        echo '(function(){';
+        echo 'document.querySelectorAll("[data-extra-feature-form=\"1\"]").forEach(function(form){';
+        echo 'var baseInput=form.querySelector("[data-extra-price-base=\"1\"]");';
+        echo 'var commissionInput=form.querySelector("[data-extra-price-commission=\"1\"]");';
+        echo 'var card=form.closest(".extra-feature-card");';
+        echo 'if(!baseInput||!commissionInput||!card){return;}';
+        echo 'var baseDisplay=card.querySelector("[data-extra-price-base-display=\"1\"]");';
+        echo 'var commissionDisplay=card.querySelector("[data-extra-price-commission-display=\"1\"]");';
+        echo 'var totalDisplay=card.querySelector("[data-extra-price-total=\"1\"]");';
+        echo 'var render=function(){';
+        echo 'var base=Math.max(0,parseFloat(baseInput.value)||0);';
+        echo 'var commission=Math.max(0,parseFloat(commissionInput.value)||0);';
+        echo 'if(baseDisplay){baseDisplay.textContent="USD "+base.toFixed(2);}';
+        echo 'if(commissionDisplay){commissionDisplay.textContent="USD "+commission.toFixed(2);}';
+        echo 'if(totalDisplay){totalDisplay.textContent="USD "+(base+commission).toFixed(2);}';
+        echo '};';
+        echo 'baseInput.addEventListener("input",render);';
+        echo 'commissionInput.addEventListener("input",render);';
+        echo 'render();';
+        echo '});';
+        echo '})();';
+        echo '</script>';
+    } else {
+        echo '<script>';
+        echo '(function(){';
+        echo 'var filterButtons=document.querySelectorAll("[data-extra-filter]");';
+        echo 'var cards=document.querySelectorAll("[data-extra-feature-state]");';
+        echo 'if(!filterButtons.length||!cards.length){return;}';
+        echo 'filterButtons.forEach(function(button){';
+        echo 'button.addEventListener("click",function(){';
+        echo 'var filter=button.getAttribute("data-extra-filter")||"all";';
+        echo 'filterButtons.forEach(function(item){item.classList.toggle("is-active", item===button);});';
+        echo 'cards.forEach(function(card){';
+        echo 'var state=card.getAttribute("data-extra-feature-state")||"available";';
+        echo 'var shouldShow=filter==="all" || (filter==="owned" && state==="owned") || (filter==="available" && state==="available");';
+        echo 'card.classList.toggle("is-hidden", !shouldShow);';
+        echo '});';
+        echo '});';
+        echo '});';
+        echo '})();';
+        echo '</script>';
+    }
 
     return (string) ob_get_clean();
 }
@@ -999,6 +1214,22 @@ switch ($seccion) {
     case 'comprar-funciones-extra':
         admin_extra_features_ensure_schema();
 
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['guardar_funciones_extra_whatsapp'])) {
+            if (!admin_is_root_role($adminUserRole)) {
+                admin_set_flash('error', 'Solo el usuario root puede configurar el numero de WhatsApp de venta.');
+                admin_redirect('comprar-funciones-extra');
+            }
+
+            $whatsappNumber = admin_normalize_whatsapp_number($_POST['funciones_extra_whatsapp_numero'] ?? '');
+            if (store_config_upsert(admin_extra_features_whatsapp_config_key(), $whatsappNumber, 'Numero usado para vender funciones extra por WhatsApp')) {
+                admin_set_flash('success', 'Numero de WhatsApp guardado correctamente.');
+            } else {
+                admin_set_flash('error', 'No se pudo guardar el numero de WhatsApp.');
+            }
+
+            admin_redirect('comprar-funciones-extra');
+        }
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['guardar_funcion_extra'])) {
             if (!admin_is_root_role($adminUserRole)) {
                 admin_set_flash('error', 'Solo el usuario root puede activar módulos o cambiar la comisión de venta.');
@@ -1006,12 +1237,13 @@ switch ($seccion) {
             }
 
             $featureId = intval($_POST['feature_id'] ?? 0);
+            $basePrice = max(0, intval($_POST['precio'] ?? 0));
             $commission = max(0, intval($_POST['comision_venta'] ?? 0));
             $value = isset($_POST['activar_funcion']) ? '1' : '0';
 
             if ($featureId <= 0) {
                 admin_set_flash('error', 'La función seleccionada no es válida.');
-            } elseif (admin_update_extra_feature($featureId, $commission, $value)) {
+            } elseif (admin_update_extra_feature($featureId, $basePrice, $commission, $value)) {
                 admin_set_flash('success', 'Función extra actualizada correctamente.');
             } else {
                 admin_set_flash('error', 'No se pudo actualizar la función extra.');
@@ -2035,13 +2267,17 @@ require_once __DIR__ . '/includes/header.php';
             case 'comprar-funciones-extra':
                 $isRootViewer = admin_is_root_role($adminUserRole);
                 $extraFeatures = admin_fetch_extra_features();
+                $extraFeaturesWhatsappNumber = admin_extra_features_whatsapp_number();
                 echo '<h2 class="display-6 fw-bold text-info mb-4">Comprar Funciones Extra</h2>';
                 echo '<div class="config-section-note mb-4">';
                 echo $isRootViewer
                     ? 'Aquí controlas qué funciones extra están activas para este tenant y cuánto se suma de comisión al precio mostrado.'
                     : 'Aquí se muestran las funciones extra disponibles para este tenant. El precio visible ya incluye la comisión configurada para la venta.';
                 echo '</div>';
-                echo admin_render_extra_features_table($extraFeatures, $isRootViewer);
+                if ($isRootViewer) {
+                    echo admin_render_extra_features_whatsapp_settings($extraFeaturesWhatsappNumber);
+                }
+                echo admin_render_extra_features_table($extraFeatures, $isRootViewer, $extraFeaturesWhatsappNumber);
                 break;
             case 'juegos':
                 echo '<h2 class="text-2xl font-semibold mb-8 text-cyan-300">Gestión de Juegos</h2>';
