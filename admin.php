@@ -1284,6 +1284,7 @@ switch ($seccion) {
         ensure_influencer_payment_status_column_pdo($pdo);
 
         $isInfluencerViewer = $adminUserRole === 'influencer';
+        $influencerFiltersEnabled = store_config_get('filtros_influencer', '0') === '1';
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['actualizar_estado_pago_influencer'])) {
             if ($isInfluencerViewer) {
@@ -1292,10 +1293,10 @@ switch ($seccion) {
             }
             $pedidoId = intval($_POST['pedido_id'] ?? 0);
             $nuevoEstadoPago = trim((string) ($_POST['estado_pago_influencer'] ?? 'pendiente')) === 'pagado' ? 'pagado' : 'pendiente';
-            $redirectFilter = admin_normalize_influencer_payment_filter($_POST['filtro_estado_pago'] ?? 'pendiente');
-            $redirectDateFrom = admin_normalize_date_filter($_POST['fecha_desde'] ?? null);
-            $redirectDateTo = admin_normalize_date_filter($_POST['fecha_hasta'] ?? null);
-            $redirectInfluencerUserId = admin_normalize_influencer_user_filter($_POST['filtro_influencer_usuario'] ?? '', admin_fetch_influencer_users($pdo));
+            $redirectFilter = $influencerFiltersEnabled ? admin_normalize_influencer_payment_filter($_POST['filtro_estado_pago'] ?? 'pendiente') : 'todos';
+            $redirectDateFrom = $influencerFiltersEnabled ? admin_normalize_date_filter($_POST['fecha_desde'] ?? null) : null;
+            $redirectDateTo = $influencerFiltersEnabled ? admin_normalize_date_filter($_POST['fecha_hasta'] ?? null) : null;
+            $redirectInfluencerUserId = $influencerFiltersEnabled ? admin_normalize_influencer_user_filter($_POST['filtro_influencer_usuario'] ?? '', admin_fetch_influencer_users($pdo)) : '';
             if ($pedidoId > 0) {
                 $stmt = $pdo->prepare('UPDATE pedidos SET estado_pago_influencer = ? WHERE id = ?');
                 $stmt->execute([$nuevoEstadoPago, $pedidoId]);
@@ -1303,15 +1304,18 @@ switch ($seccion) {
             } else {
                 admin_set_flash('error', 'Pedido inválido para actualizar la comisión.');
             }
-            $redirectQuery = ['tab' => 'influencers', 'filtro_estado_pago' => $redirectFilter];
-            if ($redirectDateFrom !== null) {
-                $redirectQuery['fecha_desde'] = $redirectDateFrom;
-            }
-            if ($redirectDateTo !== null) {
-                $redirectQuery['fecha_hasta'] = $redirectDateTo;
-            }
-            if ($redirectInfluencerUserId !== '') {
-                $redirectQuery['filtro_influencer_usuario'] = $redirectInfluencerUserId;
+            $redirectQuery = ['tab' => 'influencers'];
+            if ($influencerFiltersEnabled) {
+                $redirectQuery['filtro_estado_pago'] = $redirectFilter;
+                if ($redirectDateFrom !== null) {
+                    $redirectQuery['fecha_desde'] = $redirectDateFrom;
+                }
+                if ($redirectDateTo !== null) {
+                    $redirectQuery['fecha_hasta'] = $redirectDateTo;
+                }
+                if ($redirectInfluencerUserId !== '') {
+                    $redirectQuery['filtro_influencer_usuario'] = $redirectInfluencerUserId;
+                }
             }
             admin_redirect('cupones', $redirectQuery);
         }
@@ -2447,12 +2451,12 @@ require_once __DIR__ . '/includes/header.php';
                 if ($isInfluencerViewer) {
                     $couponAdminTab = 'influencers';
                 }
-                $influencerPaymentFilter = admin_normalize_influencer_payment_filter($_GET['filtro_estado_pago'] ?? 'pendiente');
-                $influencerDateFrom = admin_normalize_date_filter($_GET['fecha_desde'] ?? null);
-                $influencerDateTo = admin_normalize_date_filter($_GET['fecha_hasta'] ?? null);
                 $cupones = $pdo->query('SELECT * FROM cupones ORDER BY id DESC')->fetchAll(PDO::FETCH_ASSOC);
                 $influencerUsers = admin_fetch_influencer_users($pdo);
-                $selectedInfluencerFilterId = $isInfluencerViewer ? '' : admin_normalize_influencer_user_filter($_GET['filtro_influencer_usuario'] ?? '', $influencerUsers);
+                $influencerPaymentFilter = $influencerFiltersEnabled ? admin_normalize_influencer_payment_filter($_GET['filtro_estado_pago'] ?? 'pendiente') : 'todos';
+                $influencerDateFrom = $influencerFiltersEnabled ? admin_normalize_date_filter($_GET['fecha_desde'] ?? null) : null;
+                $influencerDateTo = $influencerFiltersEnabled ? admin_normalize_date_filter($_GET['fecha_hasta'] ?? null) : null;
+                $selectedInfluencerFilterId = ($isInfluencerViewer || !$influencerFiltersEnabled) ? '' : admin_normalize_influencer_user_filter($_GET['filtro_influencer_usuario'] ?? '', $influencerUsers);
                 $selectedInfluencerFilterUser = null;
                 if ($selectedInfluencerFilterId !== '') {
                     foreach ($influencerUsers as $influencerUser) {
@@ -2810,6 +2814,7 @@ require_once __DIR__ . '/includes/header.php';
                                 <p class="mb-0" style="color:#b2f6ff;"><?= $isInfluencerViewer ? 'Consulta tus ventas confirmadas y el estado de pago de tus comisiones.' : 'Ventas confirmadas con cupones asociados a influencers.' ?></p>
                             </div>
                         </div>
+                        <?php if ($influencerFiltersEnabled): ?>
                         <form method="GET" action="" class="row g-3 align-items-end mb-4">
                             <input type="hidden" name="seccion" value="cupones">
                             <input type="hidden" name="tab" value="influencers">
@@ -2880,6 +2885,7 @@ require_once __DIR__ . '/includes/header.php';
                                 </div>
                             <?php endforeach; ?>
                         </div>
+                        <?php endif; ?>
                         <?php if (empty($influencerSales)): ?>
                             <p class="mb-0" style="color:#b2f6ff;">Aún no hay ventas registradas para cupones de influencers.</p>
                         <?php else: ?>

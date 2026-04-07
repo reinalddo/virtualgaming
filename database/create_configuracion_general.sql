@@ -25,6 +25,7 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('nombre_tienda_subtitulo', 'Tienda de monedas digitales', 'Texto complementario usado en el título del inicio y en la instalación de la app'),
 ('logo_tienda', '', 'Ruta del logo visible en el encabezado'),
 ('fondo_animado', '0', 'Activa o desactiva globalmente la sección de fondo multimedia fijo para el sitio público.'),
+('filtros_influencer', '0', 'Activa o desactiva los filtros avanzados y tarjetas resumen del módulo Cupones de Influencers.'),
 ('google_analytics_activo', '0', 'Activa o desactiva la inserción del script de Google Analytics o Google Tag en el footer público'),
 ('google_analytics_script', '', 'Código script completo de Google Analytics o Google Tag que se inserta en el footer público'),
 ('notificaciones_recargas', '0', 'Activa o desactiva por tenant las notificaciones de recargas en la tienda'),
