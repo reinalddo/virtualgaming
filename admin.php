@@ -422,7 +422,22 @@ function admin_render_extra_features_table(array $features, bool $isRootViewer, 
     echo '.extra-feature-footer-copy.is-hot{color:#bbf7d0;}';
     echo '@media (max-width: 767px){.extra-feature-card{padding:1rem;}.extra-feature-title{font-size:1.08rem;}}';
     echo '</style>';
-    if (!$isRootViewer) {
+    if ($isRootViewer) {
+        echo '<div class="extra-feature-filters" data-extra-feature-filters="1">';
+        echo '<button type="button" class="extra-feature-filter-btn is-active" data-extra-filter="all">';
+        echo '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5a2 2 0 0 1 2-2h3.5a2 2 0 0 1 1.73 1H19a2 2 0 0 1 2 2v2H3V5zm0 5h18v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-9zm6 3v2h6v-2H9z"/></svg>';
+        echo '<span>Todas las funciones</span>';
+        echo '</button>';
+        echo '<button type="button" class="extra-feature-filter-btn" data-extra-filter="active">';
+        echo '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.17 4.83 12 3.41 13.41 9 19l12-12-1.41-1.41z"/></svg>';
+        echo '<span>Activas</span>';
+        echo '</button>';
+        echo '<button type="button" class="extra-feature-filter-btn" data-extra-filter="inactive">';
+        echo '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm5 11H7v-2h10z"/></svg>';
+        echo '<span>Desactivadas</span>';
+        echo '</button>';
+        echo '</div>';
+    } else {
         echo '<div class="extra-feature-filters" data-extra-feature-filters="1">';
         echo '<button type="button" class="extra-feature-filter-btn is-active" data-extra-filter="all">';
         echo '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5a2 2 0 0 1 2-2h3.5a2 2 0 0 1 1.73 1H19a2 2 0 0 1 2 2v2H3V5zm0 5h18v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-9zm6 3v2h6v-2H9z"/></svg>';
@@ -462,7 +477,11 @@ function admin_render_extra_features_table(array $features, bool $isRootViewer, 
         $featureOwned = !empty($feature['activa']);
         $showCustomerCta = !$isRootViewer && !$featureOwned && $whatsappLink !== '';
 
-        echo '<section class="extra-feature-card' . (!$isRootViewer ? ' extra-feature-card--admin' : '') . '"' . (!$isRootViewer ? ' data-extra-feature-state="' . ($featureOwned ? 'owned' : 'available') . '"' : '') . '>';
+        $featureState = $isRootViewer
+            ? ($featureOwned ? 'active' : 'inactive')
+            : ($featureOwned ? 'owned' : 'available');
+
+        echo '<section class="extra-feature-card' . (!$isRootViewer ? ' extra-feature-card--admin' : '') . '" data-extra-feature-state="' . $featureState . '">';
         echo '<div class="extra-feature-header">';
         echo '<div class="extra-feature-top">';
         echo '<div style="flex:1 1 220px; min-width:0;">';
@@ -555,9 +574,31 @@ function admin_render_extra_features_table(array $features, bool $isRootViewer, 
     }
 
     echo '</div>';
+    echo '<script>';
+    echo '(function(){';
+    echo 'var filterButtons=document.querySelectorAll("[data-extra-filter]");';
+    echo 'var cards=document.querySelectorAll("[data-extra-feature-state]");';
+    echo 'var matchesFilter=function(filter,state){';
+    echo 'if(filter==="all"){return true;}';
+    echo 'if(filter==="owned"){return state==="owned";}';
+    echo 'if(filter==="available"){return state==="available";}';
+    echo 'if(filter==="active"){return state==="active";}';
+    echo 'if(filter==="inactive"){return state==="inactive";}';
+    echo 'return true;';
+    echo '};';
+    echo 'if(filterButtons.length&&cards.length){';
+    echo 'filterButtons.forEach(function(button){';
+    echo 'button.addEventListener("click",function(){';
+    echo 'var filter=button.getAttribute("data-extra-filter")||"all";';
+    echo 'filterButtons.forEach(function(item){item.classList.toggle("is-active", item===button);});';
+    echo 'cards.forEach(function(card){';
+    echo 'var state=card.getAttribute("data-extra-feature-state")||"available";';
+    echo 'card.classList.toggle("is-hidden", !matchesFilter(filter,state));';
+    echo '});';
+    echo '});';
+    echo '});';
+    echo '}';
     if ($isRootViewer) {
-        echo '<script>';
-        echo '(function(){';
         echo 'document.querySelectorAll("[data-extra-feature-form=\"1\"]").forEach(function(form){';
         echo 'var baseInput=form.querySelector("[data-extra-price-base=\"1\"]");';
         echo 'var commissionInput=form.querySelector("[data-extra-price-commission=\"1\"]");';
@@ -577,28 +618,9 @@ function admin_render_extra_features_table(array $features, bool $isRootViewer, 
         echo 'commissionInput.addEventListener("input",render);';
         echo 'render();';
         echo '});';
-        echo '})();';
-        echo '</script>';
-    } else {
-        echo '<script>';
-        echo '(function(){';
-        echo 'var filterButtons=document.querySelectorAll("[data-extra-filter]");';
-        echo 'var cards=document.querySelectorAll("[data-extra-feature-state]");';
-        echo 'if(!filterButtons.length||!cards.length){return;}';
-        echo 'filterButtons.forEach(function(button){';
-        echo 'button.addEventListener("click",function(){';
-        echo 'var filter=button.getAttribute("data-extra-filter")||"all";';
-        echo 'filterButtons.forEach(function(item){item.classList.toggle("is-active", item===button);});';
-        echo 'cards.forEach(function(card){';
-        echo 'var state=card.getAttribute("data-extra-feature-state")||"available";';
-        echo 'var shouldShow=filter==="all" || (filter==="owned" && state==="owned") || (filter==="available" && state==="available");';
-        echo 'card.classList.toggle("is-hidden", !shouldShow);';
-        echo '});';
-        echo '});';
-        echo '});';
-        echo '})();';
-        echo '</script>';
     }
+    echo '})();';
+    echo '</script>';
 
     return (string) ob_get_clean();
 }
