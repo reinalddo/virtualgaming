@@ -756,6 +756,18 @@ function sanitize_str(?string $value, int $max = 255): ?string {
     return substr($clean, 0, $max);
 }
 
+function should_store_last_purchase_identifier(): bool {
+    static $enabled = null;
+
+    if ($enabled !== null) {
+        return $enabled;
+    }
+
+    $enabled = trim((string) store_config_get('guardar_ultimo_id', '0')) === '1';
+
+    return $enabled;
+}
+
 function update_user_last_purchase_details(mysqli $mysqli, int $userId, ?string $userIdentifier = null, ?string $phone = null): void {
     if ($userId <= 0) {
         return;
@@ -3535,7 +3547,12 @@ if ($action === 'create') {
     }
     $order_id = $mysqli->insert_id;
     $stmt->close();
-    update_user_last_purchase_details($mysqli, (int) ($cliente_usuario_id ?? 0), $user_identifier, null);
+    update_user_last_purchase_details(
+        $mysqli,
+        (int) ($cliente_usuario_id ?? 0),
+        should_store_last_purchase_identifier() ? $user_identifier : null,
+        null
+    );
     sync_coupon_usage_counts_safe($mysqli);
     $storedOrder = fetch_order_by_id($mysqli, $order_id);
     if ($storedOrder === null) {
@@ -4011,7 +4028,12 @@ if ($action === 'submit_payment') {
         json_error('No se pudieron guardar los datos del pago.', 500);
     }
     $stmt->close();
-    update_user_last_purchase_details($mysqli, (int) ($order['cliente_usuario_id'] ?? 0), (string) ($order['user_identifier'] ?? ''), $phone);
+    update_user_last_purchase_details(
+        $mysqli,
+        (int) ($order['cliente_usuario_id'] ?? 0),
+        should_store_last_purchase_identifier() ? (string) ($order['user_identifier'] ?? '') : null,
+        $phone
+    );
 
     $updatedOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
     $adminEmail = resolve_admin_email($mysqli);

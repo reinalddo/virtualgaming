@@ -12,6 +12,7 @@ require_once __DIR__ . "/includes/win_points.php";
 currency_ensure_schema();
 package_features_ensure_schema($mysqli);
 $paymentSupportWhatsappBase = store_config_whatsapp_link(store_config_get('whatsapp', ''));
+$rememberLastPurchaseIdentifierEnabled = trim((string) store_config_get('guardar_ultimo_id', '0')) === '1';
 
 function fetch_user_legacy_purchase_defaults(mysqli $mysqli, int $userId): array {
   $defaults = [
@@ -160,12 +161,16 @@ if (!$game) {
 
 if ($loggedUserId > 0) {
   $legacyPurchaseDefaults = fetch_user_legacy_purchase_defaults($mysqli, $loggedUserId);
-  $loggedUserLastPurchaseIdentifier = $legacyPurchaseDefaults['user_identifier'];
+  if ($rememberLastPurchaseIdentifierEnabled) {
+    $loggedUserLastPurchaseIdentifier = $legacyPurchaseDefaults['user_identifier'];
+  }
   $loggedUserLastPurchasePhone = $legacyPurchaseDefaults['phone'];
 
   $gamePurchaseDefaults = fetch_user_game_purchase_defaults($mysqli, $loggedUserId, (int) ($game['id'] ?? 0));
   if (!empty($gamePurchaseDefaults['has_history'])) {
-    $loggedUserLastPurchaseIdentifier = $gamePurchaseDefaults['user_identifier'];
+    if ($rememberLastPurchaseIdentifierEnabled) {
+      $loggedUserLastPurchaseIdentifier = $gamePurchaseDefaults['user_identifier'];
+    }
     $loggedUserLastPurchasePhone = $gamePurchaseDefaults['phone'];
   }
 }
@@ -1614,6 +1619,7 @@ include __DIR__ . "/includes/header.php";
 <script>
   // Todas las variables y lógica JS en un solo bloque
   const appBasePath = <?= json_encode($scriptDir, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+  const rememberLastPurchaseIdentifierEnabled = <?= $rememberLastPurchaseIdentifierEnabled ? 'true' : 'false' ?>;
   const defaultOrderEmail = <?= json_encode($loggedUserEmail, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   let defaultOrderUserIdentifier = <?= json_encode($loggedUserLastPurchaseIdentifier, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   let defaultPaymentPhone = <?= json_encode($loggedUserLastPurchasePhone, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
@@ -3976,7 +3982,7 @@ include __DIR__ . "/includes/header.php";
                     }
                   }
                   if (data && data.ok) {
-                    if (userId) {
+                    if (rememberLastPurchaseIdentifierEnabled && userId) {
                       defaultOrderUserIdentifier = userId;
                     }
                     if (data.win_points && Number.isFinite(Number(data.win_points.balance))) {
