@@ -180,6 +180,30 @@ function admin_package_collect_bulk_feature_ids_from_existing(array $featureIds,
     return $actions;
 }
 
+function admin_package_collect_bulk_feature_ids_from_catalog(array $catalogFeatureIds, array $selectedFeatureIds, array $modes): array {
+    $actions = ['replace' => [], 'add' => []];
+    $selectedLookup = [];
+    foreach ($selectedFeatureIds as $featureId) {
+        $normalizedId = (int) $featureId;
+        if ($normalizedId > 0) {
+            $selectedLookup[$normalizedId] = true;
+        }
+    }
+
+    foreach ($catalogFeatureIds as $index => $featureId) {
+        $normalizedFeatureId = (int) $featureId;
+        $normalizedMode = admin_package_normalize_apply_mode((string) ($modes[$index] ?? ''));
+        if ($normalizedFeatureId <= 0 || $normalizedMode === '' || !isset($selectedLookup[$normalizedFeatureId])) {
+            continue;
+        }
+        if (!in_array($normalizedFeatureId, $actions[$normalizedMode], true)) {
+            $actions[$normalizedMode][] = $normalizedFeatureId;
+        }
+    }
+
+    return $actions;
+}
+
 function admin_package_collect_bulk_feature_ids_from_new(mysqli $mysqli, array $names, array $icons, array $modes): array {
     $actions = ['replace' => [], 'add' => []];
     foreach ($modes as $index => $mode) {
@@ -219,6 +243,15 @@ function admin_package_apply_bulk_feature_actions(mysqli $mysqli, int $gameId, i
     $addIds = array_values(array_filter(array_map('intval', (array) ($actions['add'] ?? [])), static fn ($id) => $id > 0));
     if (empty($replaceIds) && empty($addIds)) {
         return;
+    }
+    if (!empty($replaceIds) && $currentPackageId > 0) {
+        $currentFeatureIds = $replaceIds;
+        foreach ($addIds as $featureId) {
+            if (!in_array($featureId, $currentFeatureIds, true)) {
+                $currentFeatureIds[] = $featureId;
+            }
+        }
+        package_assign_feature_ids_to_package($mysqli, $currentPackageId, $currentFeatureIds);
     }
     if (!empty($replaceIds)) {
         package_apply_feature_ids_to_game_packages($mysqli, $gameId, $replaceIds, true, $currentPackageId);
@@ -280,13 +313,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['package_feature_catal
     $featureId = (int) ($_POST['package_feature_id'] ?? 0);
     $featureName = (string) ($_POST['package_feature_name'] ?? '');
     $featureIcon = (string) ($_POST['package_feature_icon'] ?? 'sparkles');
+    $catalogApplyMode = admin_package_normalize_apply_mode((string) ($_POST['package_feature_apply_mode'] ?? ''));
+    $catalogAppliedFeatureId = 0;
 
     if ($catalogAction === 'create') {
-        package_feature_catalog_find_or_create($mysqli, $featureName, $featureIcon);
+        $catalogAppliedFeatureId = package_feature_catalog_find_or_create($mysqli, $featureName, $featureIcon);
     } elseif ($catalogAction === 'update' && $featureId > 0) {
         package_feature_catalog_update($mysqli, $featureId, $featureName, $featureIcon);
+        $catalogAppliedFeatureId = $featureId;
     } elseif ($catalogAction === 'delete' && $featureId > 0) {
         package_feature_catalog_delete($mysqli, $featureId);
+    }
+
+    if ($catalogAppliedFeatureId > 0 && $catalogApplyMode !== '') {
+        package_apply_feature_ids_to_game_packages($mysqli, $juego_id, [$catalogAppliedFeatureId], $catalogApplyMode === 'replace');
     }
 
     header('Location: ' . $adminPackageBaseUrl . '/' . $juego_id);
@@ -406,6 +446,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_paquete_id'])) {
         $editNewFeatures
     );
     $editBulkActions = admin_package_merge_bulk_actions(
+        admin_package_collect_bulk_feature_ids_from_catalog(
+            $_POST['edit_catalog_feature_id'] ?? [],
+            $_POST['edit_package_feature_ids'] ?? [],
+            $_POST['edit_catalog_feature_apply_mode'] ?? []
+        ),
         admin_package_collect_bulk_feature_ids_from_existing($editAssignedFeatureIds, $_POST['edit_assigned_feature_apply_mode'] ?? []),
         admin_package_collect_bulk_feature_ids_from_new($mysqli, $editNewFeatureNames, $editNewFeatureIcons, $_POST['edit_new_feature_apply_mode'] ?? [])
     );
@@ -442,7 +487,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['cla
         $_POST['package_feature_ids'] ?? [],
         $newFeatures
     );
-    $createBulkActions = admin_package_collect_bulk_feature_ids_from_new($mysqli, $newFeatureNames, $newFeatureIcons, $_POST['new_feature_apply_mode'] ?? []);
+    $createBulkActions = admin_package_merge_bulk_actions(
+        admin_package_collect_bulk_feature_ids_from_catalog(
+            $_POST['package_catalog_feature_id'] ?? [],
+            $_POST['package_feature_ids'] ?? [],
+            $_POST['package_feature_apply_mode'] ?? []
+        ),
+        admin_package_collect_bulk_feature_ids_from_new($mysqli, $newFeatureNames, $newFeatureIcons, $_POST['new_feature_apply_mode'] ?? [])
+    );
     admin_package_apply_bulk_feature_actions($mysqli, $juego_id, $newPackageId, $createBulkActions);
     header('Location: ' . $adminPackageBaseUrl . '/' . $juego_id);
     exit;
@@ -524,17 +576,22 @@ include '../includes/header.php';
                 <div class="d-flex flex-wrap gap-2 mb-3">
                     <?php if (!empty($packageFeatureCatalog)): ?>
                         <?php foreach ($packageFeatureCatalog as $feature): ?>
-                            <label class="badge rounded-pill d-inline-flex align-items-center gap-2 px-3 py-2" style="cursor:pointer;background:rgba(15,23,42,0.92);border:1px solid rgba(34,211,238,0.28);color:#d8fbff;">
-                                <input type="checkbox" name="package_feature_ids[]" value="<?= (int) ($feature['id'] ?? 0) ?>" class="form-check-input mt-0 me-1" style="float:none;">
-                                <?= package_feature_render_icon((string) ($feature['icon'] ?? 'sparkles'), 'package-feature-badge-icon') ?>
-                                <span><?= htmlspecialchars((string) ($feature['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
-                            </label>
+                            <div class="d-inline-flex flex-wrap align-items-center gap-2" data-package-feature-apply-scope>
+                                <input type="hidden" name="package_catalog_feature_id[]" value="<?= (int) ($feature['id'] ?? 0) ?>">
+                                <input type="hidden" name="package_feature_apply_mode[]" value="" data-package-feature-apply-input>
+                                <label class="badge rounded-pill d-inline-flex align-items-center gap-2 px-3 py-2" style="cursor:pointer;background:rgba(15,23,42,0.92);border:1px solid rgba(34,211,238,0.28);color:#d8fbff;">
+                                    <input type="checkbox" name="package_feature_ids[]" value="<?= (int) ($feature['id'] ?? 0) ?>" class="form-check-input mt-0 me-1" style="float:none;" data-package-feature-select-checkbox>
+                                    <?= package_feature_render_icon((string) ($feature['icon'] ?? 'sparkles'), 'package-feature-badge-icon') ?>
+                                    <span><?= htmlspecialchars((string) ($feature['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                                </label>
+                                <button type="button" class="btn btn-outline-warning btn-sm" data-package-feature-apply-button onclick="window.openPackageFeatureApplyModal(this)">Aplicar a todos</button>
+                            </div>
                         <?php endforeach; ?>
                     <?php else: ?>
                         <span class="small" style="color:#8be9fd;">Aun no hay caracteristicas guardadas en el catalogo.</span>
                     <?php endif; ?>
                 </div>
-                <div class="small mb-3" style="color:#8be9fd;">Cada caracteristica nueva puede marcarse con Aplicar a todos para copiarla al resto de paquetes de este juego al guardar.</div>
+                <div class="small mb-3" style="color:#8be9fd;">Cada caracteristica seleccionada o nueva puede marcarse con Aplicar a todos para copiarla al resto de paquetes de este juego al guardar.</div>
                 <div id="package-new-features" class="d-grid gap-2"></div>
             </div>
         </div>
@@ -571,7 +628,12 @@ include '../includes/header.php';
                 <label class="form-label text-neon">Nombre</label>
                 <input type="text" name="package_feature_name" class="form-control" required placeholder="Ej: Entrega inmediata" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2" data-package-feature-apply-scope>
+                <input type="hidden" name="package_feature_apply_mode" value="" data-package-feature-apply-input>
+                <label class="form-label text-neon">Aplicacion</label>
+                <button type="button" class="btn btn-outline-warning w-100" data-package-feature-apply-button onclick="window.openPackageFeatureApplyModal(this)">Aplicar a todos</button>
+            </div>
+            <div class="col-md-2">
                 <button type="submit" class="btn neon-btn-info w-100">Guardar en catalogo</button>
             </div>
         </form>
@@ -746,13 +808,13 @@ include '../includes/header.php';
 </main>
 
 <div id="package-feature-apply-modal" class="position-fixed top-0 start-0 w-100 h-100 d-none align-items-center justify-content-center" style="background:rgba(2,6,23,0.82);z-index:1080;padding:1rem;">
-    <div class="bg-dark rounded-4 p-4 w-100" style="max-width:520px;border:1px solid rgba(34,211,238,0.22);box-shadow:0 0 24px rgba(34,211,238,0.18);">
+    <div class="bg-dark rounded-4 p-4 w-100" data-package-feature-apply-dialog style="max-width:520px;border:1px solid rgba(34,211,238,0.22);box-shadow:0 0 24px rgba(34,211,238,0.18);">
         <h3 class="h5 text-neon mb-2">Aplicar a todos</h3>
         <p class="small mb-4" style="color:#8be9fd;">Elige cómo deseas propagar esta caracteristica al resto de paquetes del juego actual.</p>
         <div class="d-grid gap-2">
-            <button type="button" id="package-feature-apply-replace" class="btn btn-outline-danger text-start" onclick="window.selectPackageFeatureApplyMode('replace')">Eliminar caracteristicas de los demas paquetes del juego</button>
-            <button type="button" id="package-feature-apply-add" class="btn btn-outline-info text-start" onclick="window.selectPackageFeatureApplyMode('add')">Agregar esta caracteristica a los demas paquetes</button>
-            <button type="button" id="package-feature-apply-cancel" class="btn btn-secondary text-start" onclick="window.closePackageFeatureApplyModal()">Cancelar</button>
+            <button type="button" id="package-feature-apply-replace" class="btn btn-outline-danger text-start" style="touch-action:manipulation;">Eliminar caracteristicas de los demas paquetes del juego</button>
+            <button type="button" id="package-feature-apply-add" class="btn btn-outline-info text-start" style="touch-action:manipulation;">Agregar esta caracteristica a los demas paquetes</button>
+            <button type="button" id="package-feature-apply-cancel" class="btn btn-secondary text-start" style="touch-action:manipulation;">Cancelar</button>
         </div>
     </div>
 </div>
@@ -843,22 +905,27 @@ if (isset($_GET['editar'])) {
             <div class="d-flex flex-wrap gap-2 mb-3">
                 <?php if (!empty($packageFeatureCatalog)): ?>
                     <?php foreach ($packageFeatureCatalog as $feature): ?>
-                        <label class="badge rounded-pill d-inline-flex align-items-center gap-2 px-3 py-2" style="cursor:pointer;background:rgba(15,23,42,0.92);border:1px solid rgba(34,211,238,0.28);color:#d8fbff;">
-                            <input type="checkbox" name="edit_package_feature_ids[]" value="<?= (int) ($feature['id'] ?? 0) ?>" class="form-check-input mt-0 me-1" style="float:none;" <?= in_array((int) ($feature['id'] ?? 0), $paqEditFeatureIds, true) ? 'checked' : '' ?>>
-                            <?= package_feature_render_icon((string) ($feature['icon'] ?? 'sparkles'), 'package-feature-badge-icon') ?>
-                            <span><?= htmlspecialchars((string) ($feature['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
-                        </label>
+                        <div class="d-inline-flex flex-wrap align-items-center gap-2" data-package-feature-apply-scope>
+                            <input type="hidden" name="edit_catalog_feature_id[]" value="<?= (int) ($feature['id'] ?? 0) ?>">
+                            <input type="hidden" name="edit_catalog_feature_apply_mode[]" value="" data-package-feature-apply-input>
+                            <label class="badge rounded-pill d-inline-flex align-items-center gap-2 px-3 py-2" style="cursor:pointer;background:rgba(15,23,42,0.92);border:1px solid rgba(34,211,238,0.28);color:#d8fbff;">
+                                <input type="checkbox" name="edit_package_feature_ids[]" value="<?= (int) ($feature['id'] ?? 0) ?>" class="form-check-input mt-0 me-1" style="float:none;" <?= in_array((int) ($feature['id'] ?? 0), $paqEditFeatureIds, true) ? 'checked' : '' ?> data-package-feature-select-checkbox>
+                                <?= package_feature_render_icon((string) ($feature['icon'] ?? 'sparkles'), 'package-feature-badge-icon') ?>
+                                <span><?= htmlspecialchars((string) ($feature['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                            </label>
+                            <button type="button" class="btn btn-outline-warning btn-sm" data-package-feature-apply-button onclick="window.openPackageFeatureApplyModal(this)">Aplicar a todos</button>
+                        </div>
                     <?php endforeach; ?>
                 <?php else: ?>
                     <span class="small" style="color:#8be9fd;">Aun no hay caracteristicas guardadas en el catalogo.</span>
                 <?php endif; ?>
             </div>
-            <div class="small mb-3" style="color:#8be9fd;">Usa Aplicar a todos en una caracteristica editada o nueva para copiarla al resto de paquetes de este juego cuando guardes.</div>
+            <div class="small mb-3" style="color:#8be9fd;">Usa Aplicar a todos en una caracteristica seleccionada, editada o nueva para copiarla al resto de paquetes de este juego cuando guardes.</div>
             <?php if (!empty($paqEditFeatures)): ?>
                 <div class="d-grid gap-2 mb-3">
                     <div class="small fw-semibold" style="color:#8be9fd;">Editar caracteristicas asignadas</div>
                     <?php foreach ($paqEditFeatures as $feature): ?>
-                        <div class="row g-2 align-items-center rounded-4 p-2" style="background:#0f172a;border:1px solid rgba(34,211,238,0.12);">
+                        <div class="row g-2 align-items-center rounded-4 p-2" data-package-feature-apply-scope style="background:#0f172a;border:1px solid rgba(34,211,238,0.12);">
                             <input type="hidden" name="edit_assigned_feature_id[]" value="<?= (int) ($feature['id'] ?? 0) ?>">
                             <input type="hidden" name="edit_assigned_feature_apply_mode[]" value="" data-package-feature-apply-input>
                             <div class="col-md-4">
@@ -1095,6 +1162,44 @@ if (typeof window.previewEditPaqueteImg !== 'function') {
     };
 }
 
+if (!window.adminPackageFeatureIconMap) {
+    window.adminPackageFeatureIconMap = <?= json_encode(package_feature_icon_svg_map(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+}
+
+if (typeof window.updatePackageFeatureIconPreview !== 'function') {
+    window.updatePackageFeatureIconPreview = function(select) {
+        if (!select) {
+            return;
+        }
+
+        const editor = select.closest('[data-package-feature-editor]');
+        const preview = editor ? editor.querySelector('[data-package-feature-icon-preview]') : null;
+        if (!preview) {
+            return;
+        }
+
+        const iconKey = String(select.value || 'sparkles').trim();
+        preview.innerHTML = window.adminPackageFeatureIconMap[iconKey] || window.adminPackageFeatureIconMap.sparkles || '';
+    };
+}
+
+if (typeof window.bindPackageFeatureIconPreview !== 'function') {
+    window.bindPackageFeatureIconPreview = function(root = document) {
+        root.querySelectorAll('[data-package-feature-icon-select]').forEach((select) => {
+            if (select.dataset.iconPreviewBound === '1') {
+                window.updatePackageFeatureIconPreview(select);
+                return;
+            }
+
+            select.dataset.iconPreviewBound = '1';
+            select.addEventListener('change', function() {
+                window.updatePackageFeatureIconPreview(this);
+            });
+            window.updatePackageFeatureIconPreview(select);
+        });
+    };
+}
+
 if (typeof window.removePackageFeatureRow !== 'function') {
     window.removePackageFeatureRow = function(button) {
         const row = button ? button.closest('.package-feature-inline-row') : null;
@@ -1114,7 +1219,7 @@ if (typeof window.addPackageFeatureRow !== 'function') {
         const row = document.createElement('div');
         row.className = 'package-feature-inline-row d-grid gap-2';
         row.innerHTML = `
-            <div class="row g-2 align-items-center rounded-4 p-2" style="background:#0f172a;border:1px solid rgba(34,211,238,0.12);">
+            <div class="row g-2 align-items-center rounded-4 p-2" data-package-feature-apply-scope style="background:#0f172a;border:1px solid rgba(34,211,238,0.12);">
                 <input type="hidden" name="${applyModeField}" value="" data-package-feature-apply-input>
                 <div class="col-md-4">
                     <label class="form-label text-neon small mb-1">Icono</label>
@@ -1137,21 +1242,29 @@ if (typeof window.addPackageFeatureRow !== 'function') {
                 </div>
             </div>`;
         container.appendChild(row);
-        bindPackageFeatureIconPreview(row);
+        window.bindPackageFeatureIconPreview(row);
         if (typeof window.bindPackageFeatureApplyButtons === 'function') {
             window.bindPackageFeatureApplyButtons(row);
         }
     };
 }
 
+if (typeof window.getPackageFeatureApplyScope !== 'function') {
+    window.getPackageFeatureApplyScope = function(element) {
+        return element ? element.closest('[data-package-feature-apply-scope]') : null;
+    };
+}
+
 if (typeof window.openPackageFeatureApplyModal !== 'function') {
     window.openPackageFeatureApplyModal = function(button) {
         const modal = document.getElementById('package-feature-apply-modal');
-        const input = button && button.closest('.row') ? button.closest('.row').querySelector('[data-package-feature-apply-input]') : null;
-        if (!modal || !input) {
+        const scope = window.getPackageFeatureApplyScope(button);
+        const input = scope ? scope.querySelector('[data-package-feature-apply-input]') : null;
+        if (!modal || !scope || !input) {
             return;
         }
         window.__packageFeatureApplyTarget = input;
+        window.__packageFeatureApplyScope = scope;
         modal.classList.remove('d-none');
         modal.classList.add('d-flex');
     };
@@ -1166,6 +1279,7 @@ if (typeof window.closePackageFeatureApplyModal !== 'function') {
         modal.classList.add('d-none');
         modal.classList.remove('d-flex');
         window.__packageFeatureApplyTarget = null;
+        window.__packageFeatureApplyScope = null;
     };
 }
 
@@ -1174,7 +1288,12 @@ if (typeof window.selectPackageFeatureApplyMode !== 'function') {
         const normalizedMode = mode === 'replace' ? 'replace' : (mode === 'add' ? 'add' : '');
         if (normalizedMode !== '' && window.__packageFeatureApplyTarget) {
             window.__packageFeatureApplyTarget.value = normalizedMode;
-            const button = window.__packageFeatureApplyTarget.closest('.row') ? window.__packageFeatureApplyTarget.closest('.row').querySelector('[data-package-feature-apply-button]') : null;
+            const scope = window.__packageFeatureApplyScope || window.getPackageFeatureApplyScope(window.__packageFeatureApplyTarget);
+            const checkbox = scope ? scope.querySelector('[data-package-feature-select-checkbox]') : null;
+            if (checkbox && !checkbox.checked) {
+                checkbox.checked = true;
+            }
+            const button = scope ? scope.querySelector('[data-package-feature-apply-button]') : null;
             window.syncPackageFeatureApplyButton(button);
         }
         window.closePackageFeatureApplyModal();
@@ -1186,7 +1305,8 @@ if (typeof window.syncPackageFeatureApplyButton !== 'function') {
         if (!button) {
             return;
         }
-        const input = button.closest('.row') ? button.closest('.row').querySelector('[data-package-feature-apply-input]') : null;
+        const scope = window.getPackageFeatureApplyScope(button);
+        const input = scope ? scope.querySelector('[data-package-feature-apply-input]') : null;
         const mode = input ? String(input.value || '').trim() : '';
         button.classList.remove('btn-outline-warning', 'btn-outline-info', 'btn-outline-danger');
         if (mode === 'replace') {
@@ -1204,6 +1324,32 @@ if (typeof window.syncPackageFeatureApplyButton !== 'function') {
     };
 }
 
+if (typeof window.bindPackageFeatureActionButton !== 'function') {
+    window.bindPackageFeatureActionButton = function(button, handler) {
+        if (!button || button.dataset.boundAction === '1') {
+            return;
+        }
+
+        let lastTouchTime = 0;
+        const trigger = function(event) {
+            if (event.type === 'click' && Date.now() - lastTouchTime < 500) {
+                event.preventDefault();
+                return;
+            }
+            if (event.type === 'touchend') {
+                lastTouchTime = Date.now();
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            handler();
+        };
+
+        button.dataset.boundAction = '1';
+        button.addEventListener('click', trigger);
+        button.addEventListener('touchend', trigger, { passive: false });
+    };
+}
+
 if (typeof window.bindPackageFeatureApplyButtons !== 'function') {
     window.bindPackageFeatureApplyButtons = function(root = document) {
         root.querySelectorAll('[data-package-feature-apply-button]').forEach((button) => {
@@ -1212,33 +1358,36 @@ if (typeof window.bindPackageFeatureApplyButtons !== 'function') {
     };
 }
 
-bindPackageFeatureIconPreview();
+window.bindPackageFeatureIconPreview();
 window.bindPackageFeatureApplyButtons();
 
 const packageFeatureApplyReplaceButton = document.getElementById('package-feature-apply-replace');
 const packageFeatureApplyAddButton = document.getElementById('package-feature-apply-add');
 const packageFeatureApplyCancelButton = document.getElementById('package-feature-apply-cancel');
 const packageFeatureApplyModal = document.getElementById('package-feature-apply-modal');
+const packageFeatureApplyDialog = document.querySelector('[data-package-feature-apply-dialog]');
 
-if (packageFeatureApplyReplaceButton && !packageFeatureApplyReplaceButton.dataset.boundAction) {
-    packageFeatureApplyReplaceButton.dataset.boundAction = '1';
-    packageFeatureApplyReplaceButton.addEventListener('click', function() {
-        window.selectPackageFeatureApplyMode('replace');
-    });
-}
+window.bindPackageFeatureActionButton(packageFeatureApplyReplaceButton, function() {
+    window.selectPackageFeatureApplyMode('replace');
+});
 
-if (packageFeatureApplyAddButton && !packageFeatureApplyAddButton.dataset.boundAction) {
-    packageFeatureApplyAddButton.dataset.boundAction = '1';
-    packageFeatureApplyAddButton.addEventListener('click', function() {
-        window.selectPackageFeatureApplyMode('add');
-    });
-}
+window.bindPackageFeatureActionButton(packageFeatureApplyAddButton, function() {
+    window.selectPackageFeatureApplyMode('add');
+});
 
-if (packageFeatureApplyCancelButton && !packageFeatureApplyCancelButton.dataset.boundAction) {
-    packageFeatureApplyCancelButton.dataset.boundAction = '1';
-    packageFeatureApplyCancelButton.addEventListener('click', function() {
-        window.closePackageFeatureApplyModal();
+window.bindPackageFeatureActionButton(packageFeatureApplyCancelButton, function() {
+    window.closePackageFeatureApplyModal();
+});
+
+if (packageFeatureApplyDialog && !packageFeatureApplyDialog.dataset.boundDismiss) {
+    packageFeatureApplyDialog.dataset.boundDismiss = '1';
+    packageFeatureApplyDialog.addEventListener('click', function(event) {
+        event.stopPropagation();
     });
+    packageFeatureApplyDialog.addEventListener('touchend', function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }, { passive: false });
 }
 
 if (packageFeatureApplyModal && !packageFeatureApplyModal.dataset.boundDismiss) {
