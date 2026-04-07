@@ -104,6 +104,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             admin_win_points_set_flash('success', 'Configuracion global de Win Points actualizada.');
+          } elseif (isset($_POST['save_win_points_notification_position'])) {
+            $notificationPosition = win_points_normalize_notification_position($_POST['win_points_notification_position'] ?? 'bottom-left');
+            store_config_upsert('win_points_notification_position', $notificationPosition);
+            admin_win_points_set_flash('success', 'Posicion de notificacion de Win Points actualizada.');
         } elseif (isset($_POST['save_win_points_rule'])) {
             $packageId = (int) ($_POST['rule_package_id'] ?? 0);
           $rewardPoints = max(0, (int) ($_POST['rule_reward_points'] ?? 0));
@@ -146,6 +150,8 @@ $winPointsConfig = win_points_config();
 $winPointsBadgeBackgroundColor = (string) ($winPointsConfig['badge_background_color'] ?? '#3E2D07');
 $winPointsBadgeTextColor = (string) ($winPointsConfig['badge_text_color'] ?? '#FCD34D');
 $winPointsExpirationDays = (int) ($winPointsConfig['expiration_days'] ?? 180);
+$winPointsNotificationPosition = (string) ($winPointsConfig['notification_position'] ?? 'bottom-left');
+$winPointsNotificationPositions = win_points_notification_position_options();
 $winPointsBadgeBorderColor = win_points_hex_to_rgba($winPointsBadgeTextColor, 0.28);
 $winPointsBadgeInsetColor = win_points_hex_to_rgba($winPointsBadgeTextColor, 0.08);
 $packageOptions = win_points_fetch_admin_package_options($mysqli);
@@ -309,6 +315,184 @@ include __DIR__ . '/includes/header.php';
     object-fit: cover;
     flex: 0 0 auto;
   }
+  .win-points-setup-stack {
+    display: grid;
+    gap: 1rem;
+    align-content: start;
+  }
+  .win-points-position-actions {
+    display: grid;
+    gap: 0.75rem;
+  }
+  .win-points-position-save-wrap {
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+  }
+  .win-points-position-save {
+    width: min(100%, 220px);
+    min-height: 52px;
+    border-radius: 14px;
+  }
+  .win-points-simulate-btn {
+    width: 100%;
+    min-height: 58px;
+    border: 1px solid rgba(var(--theme-border-rgb), 0.7);
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(var(--theme-button-primary-rgb), 0.98), rgba(var(--theme-button-secondary-rgb), 0.92));
+    color: var(--theme-button-text-strong);
+    box-shadow: 0 16px 32px rgba(var(--theme-button-primary-rgb), 0.24), 0 0 0 1px rgba(var(--theme-primary-rgb), 0.22);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+  }
+  .win-points-simulate-btn:hover,
+  .win-points-simulate-btn:focus {
+    color: var(--theme-button-text-strong);
+    filter: brightness(1.04);
+    transform: translateY(-1px);
+    box-shadow: 0 20px 38px rgba(var(--theme-button-primary-rgb), 0.3), 0 0 0 1px rgba(var(--theme-highlight-rgb), 0.3);
+  }
+  .win-points-simulate-help {
+    margin: 0;
+    color: var(--theme-text-muted);
+    font-size: 0.88rem;
+    line-height: 1.45;
+  }
+  .win-points-live-notification {
+    position: fixed;
+    width: min(360px, calc(100vw - 1.5rem));
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.8rem 0.95rem;
+    border-radius: 18px;
+    border: 1px solid rgba(var(--theme-live-notification-border-rgb), 0.72);
+    background: linear-gradient(135deg, rgba(var(--theme-live-notification-bg-rgb), 0.98), rgba(var(--theme-live-notification-border-rgb), 0.16));
+    box-shadow: 0 18px 45px rgba(2, 6, 23, 0.42), 0 0 18px rgba(var(--theme-live-notification-border-rgb), 0.16);
+    backdrop-filter: blur(14px);
+    opacity: 0;
+    transition: opacity 0.28s ease, transform 0.28s ease;
+    z-index: 1200;
+    pointer-events: none;
+  }
+  .win-points-live-notification.is-visible {
+    opacity: 1;
+  }
+  .win-points-live-notification[data-position="bottom-left"] {
+    left: 24px;
+    bottom: 24px;
+    transform: translate3d(0, 18px, 0);
+  }
+  .win-points-live-notification[data-position="bottom-center"] {
+    left: 50%;
+    bottom: 24px;
+    transform: translate3d(-50%, 18px, 0);
+  }
+  .win-points-live-notification[data-position="bottom-right"] {
+    right: 24px;
+    bottom: 24px;
+    transform: translate3d(0, 18px, 0);
+  }
+  .win-points-live-notification[data-position="top-left"] {
+    left: 24px;
+    top: 24px;
+    transform: translate3d(0, -18px, 0);
+  }
+  .win-points-live-notification[data-position="top-center"] {
+    left: 50%;
+    top: 24px;
+    transform: translate3d(-50%, -18px, 0);
+  }
+  .win-points-live-notification[data-position="top-right"] {
+    right: 24px;
+    top: 24px;
+    transform: translate3d(0, -18px, 0);
+  }
+  .win-points-live-notification[data-position="middle-right"] {
+    right: 24px;
+    top: 50%;
+    transform: translate3d(18px, -50%, 0);
+  }
+  .win-points-live-notification[data-position="middle-left"] {
+    left: 24px;
+    top: 50%;
+    transform: translate3d(-18px, -50%, 0);
+  }
+  .win-points-live-notification.is-visible[data-position="bottom-left"],
+  .win-points-live-notification.is-visible[data-position="bottom-right"],
+  .win-points-live-notification.is-visible[data-position="top-left"],
+  .win-points-live-notification.is-visible[data-position="top-right"] {
+    transform: translate3d(0, 0, 0);
+  }
+  .win-points-live-notification.is-visible[data-position="bottom-center"],
+  .win-points-live-notification.is-visible[data-position="top-center"] {
+    transform: translate3d(-50%, 0, 0);
+  }
+  .win-points-live-notification.is-visible[data-position="middle-left"] {
+    transform: translate3d(0, -50%, 0);
+  }
+  .win-points-live-notification.is-visible[data-position="middle-right"] {
+    transform: translate3d(0, -50%, 0);
+  }
+  .win-points-live-notification__pulse {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: var(--theme-live-notification-accent);
+    box-shadow: 0 0 0 0 rgba(var(--theme-live-notification-accent-rgb), 0.56);
+    animation: win-points-live-pulse 1.9s ease-out infinite;
+  }
+  .win-points-live-notification__logo-wrap {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(var(--theme-live-notification-border-rgb), 0.34);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .win-points-live-notification__logo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .win-points-live-notification__logo-fallback {
+    color: var(--theme-live-notification-text);
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    font-size: 0.82rem;
+  }
+  .win-points-live-notification__body {
+    min-width: 0;
+  }
+  .win-points-live-notification__title {
+    color: var(--theme-live-notification-text);
+    font-size: 0.9rem;
+    font-weight: 800;
+    line-height: 1.2;
+    margin-bottom: 0.12rem;
+    letter-spacing: 0.01em;
+  }
+  .win-points-live-notification__detail {
+    color: var(--theme-live-notification-muted);
+    font-size: 0.78rem;
+    line-height: 1.35;
+  }
+  @keyframes win-points-live-pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgba(var(--theme-live-notification-accent-rgb), 0.56);
+    }
+    70% {
+      box-shadow: 0 0 0 12px rgba(var(--theme-live-notification-accent-rgb), 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(var(--theme-live-notification-accent-rgb), 0);
+    }
+  }
   .win-points-table td,
   .win-points-table th {
     vertical-align: middle;
@@ -455,6 +639,48 @@ include __DIR__ . '/includes/header.php';
       display: grid;
       gap: 0.75rem;
     }
+    .win-points-position-save {
+      width: 100%;
+    }
+    .win-points-live-notification {
+      width: auto;
+      max-width: none;
+    }
+    .win-points-live-notification[data-position="bottom-left"],
+    .win-points-live-notification[data-position="bottom-center"],
+    .win-points-live-notification[data-position="bottom-right"] {
+      left: 0.5rem;
+      right: 0.5rem;
+      bottom: calc(0.75rem + env(safe-area-inset-bottom));
+      width: auto;
+      transform: translate3d(0, 18px, 0);
+    }
+    .win-points-live-notification.is-visible[data-position="bottom-left"],
+    .win-points-live-notification.is-visible[data-position="bottom-center"],
+    .win-points-live-notification.is-visible[data-position="bottom-right"] {
+      transform: translate3d(0, 0, 0);
+    }
+    .win-points-live-notification[data-position="top-left"],
+    .win-points-live-notification[data-position="top-center"],
+    .win-points-live-notification[data-position="top-right"] {
+      left: 0.5rem;
+      right: 0.5rem;
+      top: calc(0.75rem + env(safe-area-inset-top));
+      width: auto;
+      transform: translate3d(0, -18px, 0);
+    }
+    .win-points-live-notification.is-visible[data-position="top-left"],
+    .win-points-live-notification.is-visible[data-position="top-center"],
+    .win-points-live-notification.is-visible[data-position="top-right"] {
+      transform: translate3d(0, 0, 0);
+    }
+    .win-points-live-notification[data-position="middle-left"],
+    .win-points-live-notification[data-position="middle-right"] {
+      left: 0.5rem;
+      right: 0.5rem;
+      top: 50%;
+      width: auto;
+    }
     .win-points-mobile-field {
       display: grid;
       gap: 0.3rem;
@@ -595,7 +821,8 @@ include __DIR__ . '/includes/header.php';
       </div>
 
       <div class="col-xl-7">
-        <div class="win-points-panel h-100">
+        <div class="win-points-setup-stack">
+        <div class="win-points-panel">
           <div class="mb-4">
             <h2 class="h4 text-info fw-bold mb-1">Crear o actualizar regla de canje</h2>
             <p class="text-secondary mb-0">Selecciona el paquete, define cuanto premio entrega por compra y cuantos <?= htmlspecialchars($winPointsConfig['name'], ENT_QUOTES, 'UTF-8') ?> cuesta canjearlo.</p>
@@ -640,6 +867,35 @@ include __DIR__ . '/includes/header.php';
               <button type="submit" class="btn btn-success fw-bold py-3">Guardar regla</button>
             </div>
           </form>
+        </div>
+        <div class="win-points-panel">
+          <div class="mb-4">
+            <h2 class="h4 text-info fw-bold mb-1">Configurar posición</h2>
+            <p class="text-secondary mb-0">Define dónde aparecerá la notificación flotante de <?= htmlspecialchars($winPointsConfig['name'], ENT_QUOTES, 'UTF-8') ?> en la página pública. Por defecto se muestra abajo a la izquierda.</p>
+          </div>
+
+          <form method="POST" class="row g-3">
+            <input type="hidden" name="save_win_points_notification_position" value="1">
+            <div class="col-lg-8">
+              <label class="form-label text-info">Posición de la notificación</label>
+              <select name="win_points_notification_position" class="form-select bg-dark text-info border-info" data-win-points-notification-position-select>
+                <?php foreach ($winPointsNotificationPositions as $positionValue => $positionLabel): ?>
+                  <option value="<?= htmlspecialchars($positionValue, ENT_QUOTES, 'UTF-8') ?>" <?= $winPointsNotificationPosition === $positionValue ? 'selected' : '' ?>><?= htmlspecialchars($positionLabel, ENT_QUOTES, 'UTF-8') ?></option>
+                <?php endforeach; ?>
+              </select>
+              <div class="form-text mt-2">La simulación usa la misma posición y el mismo estilo visual configurado en Personalizar colores → Notificaciones de recargas.</div>
+            </div>
+            <div class="col-lg-4 win-points-position-save-wrap">
+              <button type="submit" class="btn btn-info fw-bold px-4 py-2 win-points-position-save">Guardar posición</button>
+            </div>
+            <div class="col-12">
+              <div class="win-points-position-actions">
+                <button type="button" class="btn fw-bold win-points-simulate-btn" data-win-points-simulate-notification>Simular Notificación</button>
+                <p class="win-points-simulate-help">Este botón muestra al instante una vista previa exacta de cómo aparecerá la notificación de Win Points en la página pública con la posición seleccionada y los colores definidos en Notificaciones de recargas.</p>
+              </div>
+            </div>
+          </form>
+        </div>
         </div>
       </div>
       </div>
@@ -1141,10 +1397,13 @@ include __DIR__ . '/includes/header.php';
     const badgePreview = document.querySelector('[data-win-points-badge-preview]');
     const badgeLabel = document.querySelector('[data-win-points-badge-label]');
     const programNameInput = document.querySelector('[name="win_points_name"]');
+    const notificationPositionSelect = document.querySelector('[data-win-points-notification-position-select]');
+    const simulateNotificationButton = document.querySelector('[data-win-points-simulate-notification]');
     const packageSelect = document.querySelector('[data-rule-package-select]');
     const rewardInput = document.querySelector('[data-rule-reward-input]');
     const adjustmentUserSearch = document.querySelector('[data-win-points-user-search]');
     const adjustmentUserSelect = document.querySelector('[data-win-points-user-select]');
+    let winPointsSimulationTimer = null;
 
     function activateTab(targetTab) {
       if (!targetTab) {
@@ -1225,6 +1484,72 @@ include __DIR__ . '/includes/header.php';
       if (badgeLabel) {
         badgeLabel.textContent = '+3 ' + (programName || 'Win Points');
       }
+    }
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function buildWinPointsNotificationElement(config) {
+      const notification = document.createElement('div');
+      notification.className = 'win-points-live-notification';
+      notification.dataset.position = config.position;
+
+      const iconMarkup = config.iconSrc
+        ? '<div class="win-points-live-notification__logo-wrap"><img src="' + escapeHtml(config.iconSrc) + '" alt="' + escapeHtml(config.programName) + '" class="win-points-live-notification__logo"></div>'
+        : '<div class="win-points-live-notification__logo-wrap"><span class="win-points-live-notification__logo-fallback">WP</span></div>';
+
+      notification.innerHTML = ''
+        + '<div class="win-points-live-notification__pulse" aria-hidden="true"></div>'
+        + iconMarkup
+        + '<div class="win-points-live-notification__body">'
+        + '<div class="win-points-live-notification__title">+' + config.points + ' ' + escapeHtml(config.programName) + '</div>'
+        + '<div class="win-points-live-notification__detail">Vista previa exacta de la notificación que verá el cliente al recibir premios por recarga.</div>'
+        + '</div>';
+
+      return notification;
+    }
+
+    function getCurrentWinPointsNotificationConfig() {
+      const currentIcon = iconStage ? iconStage.querySelector('[data-win-points-icon-img]') : null;
+      return {
+        programName: (programNameInput && programNameInput.value.trim()) || 'Win Points',
+        iconSrc: currentIcon ? (currentIcon.getAttribute('src') || '') : '',
+        position: notificationPositionSelect ? (notificationPositionSelect.value || 'bottom-left') : 'bottom-left',
+        points: 3
+      };
+    }
+
+    function showWinPointsNotificationSimulation() {
+      const existing = document.querySelector('.win-points-live-notification[data-admin-simulation="1"]');
+      if (existing) {
+        existing.remove();
+      }
+
+      if (winPointsSimulationTimer) {
+        window.clearTimeout(winPointsSimulationTimer);
+        winPointsSimulationTimer = null;
+      }
+
+      const notification = buildWinPointsNotificationElement(getCurrentWinPointsNotificationConfig());
+      notification.dataset.adminSimulation = '1';
+      document.body.appendChild(notification);
+
+      window.requestAnimationFrame(function () {
+        notification.classList.add('is-visible');
+      });
+
+      winPointsSimulationTimer = window.setTimeout(function () {
+        notification.classList.remove('is-visible');
+        window.setTimeout(function () {
+          notification.remove();
+        }, 320);
+      }, 5000);
     }
 
     function syncSelectedPackageReward() {
@@ -1481,6 +1806,12 @@ include __DIR__ . '/includes/header.php';
 
     if (programNameInput) {
       programNameInput.addEventListener('input', syncBadgePreview);
+    }
+
+    if (simulateNotificationButton) {
+      simulateNotificationButton.addEventListener('click', function () {
+        showWinPointsNotificationSimulation();
+      });
     }
 
     if (tabs.length && tabPanels.length) {

@@ -112,6 +112,36 @@ if (!function_exists('win_points_badge_text_color')) {
     }
 }
 
+if (!function_exists('win_points_notification_position_options')) {
+    function win_points_notification_position_options(): array {
+        return [
+            'bottom-left' => 'Abajo a la izquierda',
+            'bottom-center' => 'Abajo al centro',
+            'bottom-right' => 'Abajo a la derecha',
+            'top-left' => 'Arriba a la izquierda',
+            'top-center' => 'Arriba al centro',
+            'top-right' => 'Arriba a la derecha',
+            'middle-right' => 'Centro derecha',
+            'middle-left' => 'Centro izquierda',
+        ];
+    }
+}
+
+if (!function_exists('win_points_normalize_notification_position')) {
+    function win_points_normalize_notification_position($value): string {
+        $position = trim((string) $value);
+        $options = win_points_notification_position_options();
+
+        return array_key_exists($position, $options) ? $position : 'bottom-left';
+    }
+}
+
+if (!function_exists('win_points_notification_position')) {
+    function win_points_notification_position(): string {
+        return win_points_normalize_notification_position(store_config_get('win_points_notification_position', 'bottom-left'));
+    }
+}
+
 if (!function_exists('win_points_hex_to_rgba')) {
     function win_points_hex_to_rgba(string $hexColor, float $alpha): string {
         $normalized = win_points_normalize_hex_color($hexColor, '#000000');
@@ -133,6 +163,7 @@ if (!function_exists('win_points_config')) {
             'icon_url' => win_points_icon_url(),
             'badge_background_color' => win_points_badge_background_color(),
             'badge_text_color' => win_points_badge_text_color(),
+            'notification_position' => win_points_notification_position(),
             'expiration_days' => win_points_expiration_days(),
             'default_award' => win_points_default_award(),
             'guest_message' => win_points_guest_message(),

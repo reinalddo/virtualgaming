@@ -191,6 +191,7 @@ $winPointsProgramName = (string) ($winPointsConfig['name'] ?? 'Win Points');
 $winPointsIconUrl = (string) ($winPointsConfig['icon_url'] ?? '');
 $winPointsBadgeBackgroundColor = (string) ($winPointsConfig['badge_background_color'] ?? '#3E2D07');
 $winPointsBadgeTextColor = (string) ($winPointsConfig['badge_text_color'] ?? '#FCD34D');
+$winPointsNotificationPosition = (string) ($winPointsConfig['notification_position'] ?? 'bottom-left');
 $winPointsBadgeBorderColor = win_points_hex_to_rgba($winPointsBadgeTextColor, 0.25);
 $winPointsBadgeInsetColor = win_points_hex_to_rgba($winPointsBadgeTextColor, 0.08);
 $winPointsGuestMessage = (string) ($winPointsConfig['guest_message'] ?? '');
@@ -1409,6 +1410,164 @@ include __DIR__ . "/includes/header.php";
     flex: 0 0 auto;
   }
 
+  .win-points-live-notification {
+    position: fixed;
+    width: min(360px, calc(100vw - 1.5rem));
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.8rem 0.95rem;
+    border-radius: 18px;
+    border: 1px solid rgba(var(--theme-live-notification-border-rgb), 0.72);
+    background: linear-gradient(135deg, rgba(var(--theme-live-notification-bg-rgb), 0.98), rgba(var(--theme-live-notification-border-rgb), 0.16));
+    box-shadow: 0 18px 45px rgba(2, 6, 23, 0.42), 0 0 18px rgba(var(--theme-live-notification-border-rgb), 0.16);
+    backdrop-filter: blur(14px);
+    opacity: 0;
+    transition: opacity 0.28s ease, transform 0.28s ease;
+    z-index: 9999;
+    pointer-events: none;
+  }
+
+  .win-points-live-notification.is-visible {
+    opacity: 1;
+  }
+
+  .win-points-live-notification[data-position="bottom-left"] {
+    left: 24px;
+    bottom: 24px;
+    transform: translate3d(0, 18px, 0);
+  }
+
+  .win-points-live-notification[data-position="bottom-center"] {
+    left: 50%;
+    bottom: 24px;
+    transform: translate3d(-50%, 18px, 0);
+  }
+
+  .win-points-live-notification[data-position="bottom-right"] {
+    right: 24px;
+    bottom: 24px;
+    transform: translate3d(0, 18px, 0);
+  }
+
+  .win-points-live-notification[data-position="top-left"] {
+    left: 24px;
+    top: 24px;
+    transform: translate3d(0, -18px, 0);
+  }
+
+  .win-points-live-notification[data-position="top-center"] {
+    left: 50%;
+    top: 24px;
+    transform: translate3d(-50%, -18px, 0);
+  }
+
+  .win-points-live-notification[data-position="top-right"] {
+    right: 24px;
+    top: 24px;
+    transform: translate3d(0, -18px, 0);
+  }
+
+  .win-points-live-notification[data-position="middle-right"] {
+    right: 24px;
+    top: 50%;
+    transform: translate3d(18px, -50%, 0);
+  }
+
+  .win-points-live-notification[data-position="middle-left"] {
+    left: 24px;
+    top: 50%;
+    transform: translate3d(-18px, -50%, 0);
+  }
+
+  .win-points-live-notification.is-visible[data-position="bottom-left"],
+  .win-points-live-notification.is-visible[data-position="bottom-right"],
+  .win-points-live-notification.is-visible[data-position="top-left"],
+  .win-points-live-notification.is-visible[data-position="top-right"] {
+    transform: translate3d(0, 0, 0);
+  }
+
+  .win-points-live-notification.is-visible[data-position="bottom-center"],
+  .win-points-live-notification.is-visible[data-position="top-center"] {
+    transform: translate3d(-50%, 0, 0);
+  }
+
+  .win-points-live-notification.is-visible[data-position="middle-right"] {
+    transform: translate3d(0, -50%, 0);
+  }
+
+  .win-points-live-notification.is-visible[data-position="middle-left"] {
+    transform: translate3d(0, -50%, 0);
+  }
+
+  .win-points-live-notification__pulse {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: var(--theme-live-notification-accent);
+    box-shadow: 0 0 0 0 rgba(var(--theme-live-notification-accent-rgb), 0.56);
+    animation: win-points-live-pulse 1.9s ease-out infinite;
+  }
+
+  .win-points-live-notification__logo-wrap {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(var(--theme-live-notification-border-rgb), 0.34);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .win-points-live-notification__logo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .win-points-live-notification__logo-fallback {
+    color: var(--theme-live-notification-text);
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    font-size: 0.82rem;
+  }
+
+  .win-points-live-notification__body {
+    min-width: 0;
+  }
+
+  .win-points-live-notification__title {
+    color: var(--theme-live-notification-text);
+    font-size: 0.9rem;
+    font-weight: 800;
+    line-height: 1.2;
+    margin-bottom: 0.12rem;
+    letter-spacing: 0.01em;
+  }
+
+  .win-points-live-notification__detail {
+    color: var(--theme-live-notification-muted);
+    font-size: 0.78rem;
+    line-height: 1.35;
+  }
+
+  @keyframes win-points-live-pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgba(var(--theme-live-notification-accent-rgb), 0.56);
+    }
+    70% {
+      box-shadow: 0 0 0 12px rgba(var(--theme-live-notification-accent-rgb), 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(var(--theme-live-notification-accent-rgb), 0);
+    }
+  }
+
   @media (max-width: 575.98px) {
     .app-overlay-modal {
       align-items: flex-start;
@@ -1453,6 +1612,46 @@ include __DIR__ . "/includes/header.php";
 
     .payment-win-points-balance {
       white-space: normal;
+    }
+
+    .win-points-live-notification[data-position="bottom-left"],
+    .win-points-live-notification[data-position="bottom-center"],
+    .win-points-live-notification[data-position="bottom-right"] {
+      left: 0.5rem;
+      right: 0.5rem;
+      bottom: calc(0.75rem + env(safe-area-inset-bottom));
+      width: auto;
+      transform: translate3d(0, 18px, 0);
+    }
+
+    .win-points-live-notification.is-visible[data-position="bottom-left"],
+    .win-points-live-notification.is-visible[data-position="bottom-center"],
+    .win-points-live-notification.is-visible[data-position="bottom-right"] {
+      transform: translate3d(0, 0, 0);
+    }
+
+    .win-points-live-notification[data-position="top-left"],
+    .win-points-live-notification[data-position="top-center"],
+    .win-points-live-notification[data-position="top-right"] {
+      left: 0.5rem;
+      right: 0.5rem;
+      top: calc(0.75rem + env(safe-area-inset-top));
+      width: auto;
+      transform: translate3d(0, -18px, 0);
+    }
+
+    .win-points-live-notification.is-visible[data-position="top-left"],
+    .win-points-live-notification.is-visible[data-position="top-center"],
+    .win-points-live-notification.is-visible[data-position="top-right"] {
+      transform: translate3d(0, 0, 0);
+    }
+
+    .win-points-live-notification[data-position="middle-left"],
+    .win-points-live-notification[data-position="middle-right"] {
+      left: 0.5rem;
+      right: 0.5rem;
+      top: 50%;
+      width: auto;
     }
   }
 
@@ -1630,6 +1829,7 @@ include __DIR__ . "/includes/header.php";
     'loggedIn' => $loggedUserId > 0,
     'name' => $winPointsProgramName,
     'iconUrl' => $winPointsIconUrl,
+    'notificationPosition' => $winPointsNotificationPosition,
     'guestMessage' => $winPointsGuestMessage,
     'balance' => (int) ($winPointsUserSummary['balance'] ?? 0),
   ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
@@ -1897,6 +2097,84 @@ include __DIR__ . "/includes/header.php";
     }
     if (userRewardsExpirationValue) {
       userRewardsExpirationValue.textContent = formatWinPointsExpirationText(summary, true);
+    }
+  }
+
+  function buildWinPointsFloatingNotification(payload) {
+    const notification = document.createElement('div');
+    notification.className = 'win-points-live-notification';
+    notification.dataset.position = String(winPointsState.notificationPosition || 'bottom-left');
+
+    const iconMarkup = winPointsState.iconUrl
+      ? '<div class="win-points-live-notification__logo-wrap"><img src="' + escapePaymentHtml(winPointsState.iconUrl) + '" alt="' + escapePaymentHtml(winPointsState.name || 'Win Points') + '" class="win-points-live-notification__logo"></div>'
+      : '<div class="win-points-live-notification__logo-wrap"><span class="win-points-live-notification__logo-fallback">WP</span></div>';
+
+    notification.innerHTML = ''
+      + '<div class="win-points-live-notification__pulse" aria-hidden="true"></div>'
+      + iconMarkup
+      + '<div class="win-points-live-notification__body">'
+      + '<div class="win-points-live-notification__title">' + escapePaymentHtml(payload.title || '') + '</div>'
+      + '<div class="win-points-live-notification__detail">' + escapePaymentHtml(payload.detail || '') + '</div>'
+      + '</div>';
+
+    return notification;
+  }
+
+  function showWinPointsNotification(payload) {
+    if (!winPointsState.enabled || !payload || !payload.title) {
+      return;
+    }
+
+    const existing = document.querySelector('.win-points-live-notification[data-win-points-runtime="1"]');
+    if (existing) {
+      existing.remove();
+    }
+
+    const notification = buildWinPointsFloatingNotification(payload);
+    notification.dataset.winPointsRuntime = '1';
+    document.body.appendChild(notification);
+
+    window.requestAnimationFrame(function () {
+      notification.classList.add('is-visible');
+    });
+
+    window.setTimeout(function () {
+      notification.classList.remove('is-visible');
+      window.setTimeout(function () {
+        notification.remove();
+      }, 320);
+    }, 5000);
+  }
+
+  function syncWinPointsSummaryFromResponse(summary, options = {}) {
+    if (!summary || !Number.isFinite(Number(summary.balance))) {
+      return;
+    }
+
+    const previousBalance = Number(winPointsState.balance || 0);
+    const nextBalance = Number(summary.balance || 0);
+    const spentPoints = Math.max(0, Number(summary.spent || 0));
+    const earnedPoints = Math.max(0, nextBalance - previousBalance);
+
+    applyWinPointsUserSummary(summary);
+
+    if (options && options.silent) {
+      return;
+    }
+
+    if (spentPoints > 0) {
+      showWinPointsNotification({
+        title: '-' + spentPoints + ' ' + (winPointsState.name || 'Win Points'),
+        detail: 'Se descontaron de tu saldo para completar el canje del paquete seleccionado.'
+      });
+      return;
+    }
+
+    if (earnedPoints > 0) {
+      showWinPointsNotification({
+        title: '+' + earnedPoints + ' ' + (winPointsState.name || 'Win Points'),
+        detail: 'Tu saldo fue actualizado correctamente con el premio de esta compra.'
+      });
     }
   }
 
@@ -3665,7 +3943,7 @@ include __DIR__ . "/includes/header.php";
                     }
 
                     if (data && data.win_points && Number.isFinite(Number(data.win_points.balance))) {
-                      applyWinPointsUserSummary(data.win_points);
+                      syncWinPointsSummaryFromResponse(data.win_points);
                       renderWinPointsPaymentState(activePaymentOrder.pack || activePack, selectedMethod);
                     }
                     if (paymentMode === 'money' && phone) {
@@ -3986,7 +4264,7 @@ include __DIR__ . "/includes/header.php";
                       defaultOrderUserIdentifier = userId;
                     }
                     if (data.win_points && Number.isFinite(Number(data.win_points.balance))) {
-                      applyWinPointsUserSummary(data.win_points);
+                      syncWinPointsSummaryFromResponse(data.win_points, { silent: true });
                     }
                     const opened = openPaymentModal(data.order_id, data.expires_at, data.remaining_seconds, pack, userId, selectedPrice.textContent, email);
                     if (opened) {
