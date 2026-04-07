@@ -438,6 +438,7 @@ function store_config_descriptions(): array {
         'meta_titulo' => 'Título SEO usado en la etiqueta title y en etiquetas Open Graph/Twitter',
         'meta_descripcion' => 'Descripción SEO usada en la etiqueta meta description para Google y redes sociales',
         'logo_tienda' => 'Ruta del logo visible en el encabezado',
+        'fondo_animado' => 'Activa o desactiva globalmente la sección de fondo multimedia fijo para el sitio público.',
         'fondo_publico_modo' => 'Define si el sitio público usa el fondo normal del tema o un fondo multimedia fijo.',
         'fondo_publico_media' => 'Ruta del archivo multimedia fijo usado como fondo del sitio público.',
         'fondo_publico_overlay_color' => 'Color de la capa superpuesta colocada sobre el fondo multimedia del sitio público.',
@@ -507,6 +508,7 @@ function store_config_defaults(): array {
         'meta_titulo' => 'TVirtualGaming | Tienda de monedas digitales',
         'meta_descripcion' => 'Compra monedas y recargas digitales en TVirtualGaming. Recibe ofertas, promociones y novedades directamente en tu WhatsApp.',
         'logo_tienda' => '',
+        'fondo_animado' => '0',
         'fondo_publico_modo' => 'normal',
         'fondo_publico_media' => '',
         'fondo_publico_overlay_color' => '#081018',
@@ -587,6 +589,11 @@ function store_config_normalize_public_background_mode(string $value): string {
     return trim(strtolower($value)) === 'media' ? 'media' : 'normal';
 }
 
+function store_config_public_background_enabled(bool $refresh = false): bool {
+    $config = store_config_all($refresh);
+    return trim((string) ($config['fondo_animado'] ?? '0')) === '1';
+}
+
 function store_config_normalize_percentage($value, int $default = 0): int {
     if ($value === null || $value === '') {
         return max(0, min(100, $default));
@@ -616,13 +623,23 @@ function store_config_public_background_media_type_from_path(string $path): stri
 
 function store_config_public_background_settings(bool $refresh = false): array {
     $config = store_config_all($refresh);
+    $isEnabled = store_config_public_background_enabled($refresh);
     $mode = store_config_normalize_public_background_mode((string) ($config['fondo_publico_modo'] ?? 'normal'));
     $assetPath = trim((string) ($config['fondo_publico_media'] ?? ''));
     $mediaType = store_config_public_background_media_type_from_path($assetPath);
     $soundEnabled = ((string) ($config['fondo_publico_audio_activo'] ?? '0')) === '1';
     $volume = store_config_normalize_percentage($config['fondo_publico_volumen'] ?? '35', 35);
 
+    if (!$isEnabled) {
+        $mode = 'normal';
+        $assetPath = '';
+        $mediaType = '';
+        $soundEnabled = false;
+        $volume = 0;
+    }
+
     return [
+        'enabled' => $isEnabled,
         'mode' => $mode,
         'asset_path' => $assetPath,
         'has_media' => $assetPath !== '' && $mediaType !== '',

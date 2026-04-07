@@ -136,6 +136,7 @@ if ($publicBackgroundMediaUrl !== '' && store_config_is_managed_public_backgroun
   }
 }
 $renderPublicMediaBackground = !$isAdminInterface
+  && !empty($publicBackgroundSettings['enabled'])
   && ($publicBackgroundSettings['mode'] ?? 'normal') === 'media'
   && !empty($publicBackgroundSettings['has_media'])
   && $publicBackgroundMediaUrl !== ''

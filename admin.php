@@ -1536,11 +1536,12 @@ switch ($seccion) {
                 $nombreTiendaSubtitulo = trim((string) ($_POST['nombre_tienda_subtitulo'] ?? ''));
                 $metaTitulo = trim((string) ($_POST['meta_titulo'] ?? ''));
                 $metaDescripcion = trim((string) ($_POST['meta_descripcion'] ?? ''));
-                $fondoPublicoModo = store_config_normalize_public_background_mode((string) ($_POST['fondo_publico_modo'] ?? 'normal'));
-                $fondoPublicoOverlayColor = store_config_normalize_hex_color((string) ($_POST['fondo_publico_overlay_color'] ?? '#081018'), '#081018');
-                $fondoPublicoOverlayOpacity = (string) store_config_normalize_percentage($_POST['fondo_publico_overlay_opacity'] ?? '52', 52);
-                $fondoPublicoAudioActivo = isset($_POST['fondo_publico_audio_activo']) ? '1' : '0';
-                $fondoPublicoVolumen = (string) store_config_normalize_percentage($_POST['fondo_publico_volumen'] ?? '35', 35);
+                $fondoAnimadoEnabled = store_config_public_background_enabled();
+                $fondoPublicoModo = store_config_get('fondo_publico_modo', 'normal');
+                $fondoPublicoOverlayColor = store_config_get('fondo_publico_overlay_color', '#081018');
+                $fondoPublicoOverlayOpacity = store_config_get('fondo_publico_overlay_opacity', '52');
+                $fondoPublicoAudioActivo = store_config_get('fondo_publico_audio_activo', '0');
+                $fondoPublicoVolumen = store_config_get('fondo_publico_volumen', '35');
                 $instruccionesInfluencer = isset($_POST['instrucciones_influencer']) ? '1' : '0';
                 $googleAnalyticsActivo = isset($_POST['google_analytics_activo']) ? '1' : '0';
                 $googleAnalyticsScript = trim((string) ($_POST['google_analytics_script'] ?? ''));
@@ -1549,7 +1550,15 @@ switch ($seccion) {
                 $currentBackgroundMedia = store_config_get('fondo_publico_media', '');
                 $nextBackgroundMedia = $currentBackgroundMedia;
                 $hasUpload = isset($_FILES['logo_tienda']) && (($_FILES['logo_tienda']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
-                $hasBackgroundUpload = isset($_FILES['fondo_publico_media']) && (($_FILES['fondo_publico_media']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
+                $hasBackgroundUpload = $fondoAnimadoEnabled && isset($_FILES['fondo_publico_media']) && (($_FILES['fondo_publico_media']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
+
+                if ($fondoAnimadoEnabled) {
+                    $fondoPublicoModo = store_config_normalize_public_background_mode((string) ($_POST['fondo_publico_modo'] ?? 'normal'));
+                    $fondoPublicoOverlayColor = store_config_normalize_hex_color((string) ($_POST['fondo_publico_overlay_color'] ?? '#081018'), '#081018');
+                    $fondoPublicoOverlayOpacity = (string) store_config_normalize_percentage($_POST['fondo_publico_overlay_opacity'] ?? '52', 52);
+                    $fondoPublicoAudioActivo = isset($_POST['fondo_publico_audio_activo']) ? '1' : '0';
+                    $fondoPublicoVolumen = (string) store_config_normalize_percentage($_POST['fondo_publico_volumen'] ?? '35', 35);
+                }
 
                 if ($nombrePrefijo === '' || $nombreTienda === '' || $nombreTiendaSubtitulo === '' || $metaTitulo === '' || $metaDescripcion === '') {
                     admin_set_flash('error', 'Completa el nombre prefijo, el nombre de la tienda, el subtítulo del navegador y los datos SEO.');
@@ -1567,11 +1576,11 @@ switch ($seccion) {
                     if (!empty($upload['path'])) {
                         $nextBackgroundMedia = $upload['path'];
                     }
-                } elseif (isset($_POST['eliminar_fondo_publico_media'])) {
+                } elseif ($fondoAnimadoEnabled && isset($_POST['eliminar_fondo_publico_media'])) {
                     $nextBackgroundMedia = '';
                 }
 
-                if ($fondoPublicoModo === 'media' && $nextBackgroundMedia === '') {
+                if ($fondoAnimadoEnabled && $fondoPublicoModo === 'media' && $nextBackgroundMedia === '') {
                     admin_set_flash('error', 'Debes subir una imagen, GIF o video para usar el fondo multimedia.');
                     define('ADMIN_CONFIG_POST_HANDLED', true);
                     admin_redirect('configuracion', ['tab' => 'cabecera']);
@@ -1596,11 +1605,13 @@ switch ($seccion) {
                 store_config_upsert('nombre_tienda_subtitulo', $nombreTiendaSubtitulo);
                 store_config_upsert('meta_titulo', $metaTitulo);
                 store_config_upsert('meta_descripcion', $metaDescripcion);
-                store_config_upsert('fondo_publico_modo', $fondoPublicoModo);
-                store_config_upsert('fondo_publico_overlay_color', $fondoPublicoOverlayColor);
-                store_config_upsert('fondo_publico_overlay_opacity', $fondoPublicoOverlayOpacity);
-                store_config_upsert('fondo_publico_audio_activo', $fondoPublicoAudioActivo);
-                store_config_upsert('fondo_publico_volumen', $fondoPublicoVolumen);
+                if ($fondoAnimadoEnabled) {
+                    store_config_upsert('fondo_publico_modo', $fondoPublicoModo);
+                    store_config_upsert('fondo_publico_overlay_color', $fondoPublicoOverlayColor);
+                    store_config_upsert('fondo_publico_overlay_opacity', $fondoPublicoOverlayOpacity);
+                    store_config_upsert('fondo_publico_audio_activo', $fondoPublicoAudioActivo);
+                    store_config_upsert('fondo_publico_volumen', $fondoPublicoVolumen);
+                }
                 store_config_upsert('instrucciones_influencer', $instruccionesInfluencer);
                 store_config_upsert('google_analytics_activo', $googleAnalyticsActivo);
                 store_config_upsert('google_analytics_script', $googleAnalyticsScript);
@@ -1609,16 +1620,18 @@ switch ($seccion) {
                 } else {
                     store_config_upsert('logo_tienda', $nextLogo);
                 }
-                if ($nextBackgroundMedia === '') {
-                    store_config_delete('fondo_publico_media');
-                } else {
-                    store_config_upsert('fondo_publico_media', $nextBackgroundMedia);
+                if ($fondoAnimadoEnabled) {
+                    if ($nextBackgroundMedia === '') {
+                        store_config_delete('fondo_publico_media');
+                    } else {
+                        store_config_upsert('fondo_publico_media', $nextBackgroundMedia);
+                    }
                 }
 
                 if ($currentLogo !== '' && $currentLogo !== $nextLogo) {
                     store_config_delete_logo_file($currentLogo);
                 }
-                if ($currentBackgroundMedia !== '' && $currentBackgroundMedia !== $nextBackgroundMedia) {
+                if ($fondoAnimadoEnabled && $currentBackgroundMedia !== '' && $currentBackgroundMedia !== $nextBackgroundMedia) {
                     store_config_delete_public_background_media_file($currentBackgroundMedia);
                 }
 

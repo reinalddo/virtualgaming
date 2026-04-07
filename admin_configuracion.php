@@ -28,6 +28,7 @@ home_gallery_ensure_table();
 payment_methods_ensure_table();
 $logoTienda = trim((string) ($cfg['logo_tienda'] ?? ''));
 $publicBackgroundSettings = store_config_public_background_settings();
+$publicAnimatedBackgroundEnabled = !empty($publicBackgroundSettings['enabled']);
 $publicBackgroundMode = $publicBackgroundSettings['mode'];
 $publicBackgroundMedia = trim((string) ($publicBackgroundSettings['asset_path'] ?? ''));
 $publicBackgroundHasMedia = !empty($publicBackgroundSettings['has_media']);
@@ -635,44 +636,6 @@ $googleCallbackUrl = google_oauth_callback_url();
                     <input class="form-check-input" type="checkbox" value="1" id="eliminarLogoTienda" name="eliminar_logo_tienda">
                     <label class="form-check-label" for="eliminarLogoTienda">Eliminar logo actual</label>
                   </div>
-                  <hr class="my-4 border-info-subtle">
-                  <div class="mb-3">
-                    <label class="form-label">Modo de fondo del sitio público</label>
-                    <select name="fondo_publico_modo" class="form-select">
-                      <option value="normal" <?= $publicBackgroundMode === 'normal' ? 'selected' : '' ?>>Normal</option>
-                      <option value="media" <?= $publicBackgroundMode === 'media' ? 'selected' : '' ?>>Multimedia fija</option>
-                    </select>
-                    <div class="form-text mt-2">En modo Normal la tienda mantiene exactamente el fondo actual. En Multimedia fija se mostrará una imagen, GIF o video en toda la página pública, fijo durante el scroll.</div>
-                  </div>
-                  <div class="mb-3">
-                    <label class="form-label">Archivo de fondo multimedia</label>
-                    <input type="file" name="fondo_publico_media" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/ogg" class="form-control">
-                    <div class="form-text mt-2">Formatos permitidos: MP4, WEBM, OGG, JPG, PNG, WEBP o GIF. Tamaño máximo: 25 MB.</div>
-                  </div>
-                  <div class="form-check mt-3">
-                    <input class="form-check-input" type="checkbox" value="1" id="eliminarFondoPublicoMedia" name="eliminar_fondo_publico_media">
-                    <label class="form-check-label" for="eliminarFondoPublicoMedia">Eliminar fondo multimedia actual</label>
-                  </div>
-                  <div class="row g-3 mt-1">
-                    <div class="col-md-6">
-                      <label class="form-label">Color de overlay</label>
-                      <input type="color" name="fondo_publico_overlay_color" value="<?= htmlspecialchars($publicBackgroundSettings['overlay_color'] ?? '#081018', ENT_QUOTES, 'UTF-8') ?>" class="form-control form-control-color">
-                      <div class="form-text mt-2">Capa colocada sobre el fondo para conservar legibilidad sin tapar del todo el archivo.</div>
-                    </div>
-                    <div class="col-md-6">
-                      <label class="form-label">Opacidad del overlay (%)</label>
-                      <input type="number" name="fondo_publico_overlay_opacity" min="0" max="100" step="1" value="<?= (int) ($publicBackgroundSettings['overlay_opacity'] ?? 52) ?>" class="form-control">
-                    </div>
-                  </div>
-                  <div class="form-check form-switch mt-4 mb-3">
-                    <input class="form-check-input" type="checkbox" role="switch" id="fondoPublicoAudioActivo" name="fondo_publico_audio_activo" value="1" <?= !empty($publicBackgroundSettings['sound_enabled']) ? 'checked' : '' ?>>
-                    <label class="form-check-label" for="fondoPublicoAudioActivo">Intentar reproducir audio cuando el fondo sea un video</label>
-                  </div>
-                  <div class="mb-3">
-                    <label class="form-label">Volumen del video (%)</label>
-                    <input type="number" name="fondo_publico_volumen" min="0" max="100" step="1" value="<?= (int) ($publicBackgroundSettings['volume'] ?? 35) ?>" class="form-control">
-                    <div class="form-text mt-2">Los navegadores pueden bloquear el autoplay con sonido hasta que el usuario interactúe con la página. El sistema hará el intento automáticamente.</div>
-                  </div>
                 </div>
                 <div class="col-md-4">
                   <label class="form-label d-block">Vista previa del logo</label>
@@ -683,21 +646,67 @@ $googleCallbackUrl = google_oauth_callback_url();
                       <span class="header-logo-empty">Sin logo</span>
                     <?php endif; ?>
                   </div>
-                  <label class="form-label d-block mt-4">Vista previa del fondo público</label>
-                  <div class="gallery-image-preview">
-                    <?php if ($publicBackgroundHasMedia && $publicBackgroundMediaType === 'video'): ?>
-                      <video src="<?= htmlspecialchars($publicBackgroundMedia, ENT_QUOTES, 'UTF-8') ?>" muted loop autoplay playsinline></video>
-                    <?php elseif ($publicBackgroundHasMedia): ?>
-                      <img src="<?= htmlspecialchars($publicBackgroundMedia, ENT_QUOTES, 'UTF-8') ?>" alt="Fondo multimedia público">
-                    <?php else: ?>
-                      <span class="gallery-image-empty">Sin fondo multimedia</span>
-                    <?php endif; ?>
-                  </div>
-                  <div class="form-text mt-3">
-                    <?= $publicBackgroundMode === 'media' ? 'El fondo multimedia solo se mostrará en páginas públicas; el panel admin seguirá usando el fondo normal.' : 'Actualmente la tienda pública seguirá usando el fondo normal del tema.' ?>
-                  </div>
                 </div>
               </div>
+              <?php if ($publicAnimatedBackgroundEnabled): ?>
+                <hr class="my-4 border-info-subtle">
+                <div class="row g-4 align-items-start">
+                  <div class="col-md-8">
+                    <div class="mb-3">
+                      <label class="form-label">Modo de fondo del sitio público</label>
+                      <select name="fondo_publico_modo" class="form-select">
+                        <option value="normal" <?= $publicBackgroundMode === 'normal' ? 'selected' : '' ?>>Normal</option>
+                        <option value="media" <?= $publicBackgroundMode === 'media' ? 'selected' : '' ?>>Multimedia fija</option>
+                      </select>
+                      <div class="form-text mt-2">En modo Normal la tienda mantiene exactamente el fondo actual. En Multimedia fija se mostrará una imagen, GIF o video en toda la página pública, fijo durante el scroll.</div>
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label">Archivo de fondo multimedia</label>
+                      <input type="file" name="fondo_publico_media" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/ogg" class="form-control">
+                      <div class="form-text mt-2">Formatos permitidos: MP4, WEBM, OGG, JPG, PNG, WEBP o GIF. Tamaño máximo: 25 MB.</div>
+                    </div>
+                    <div class="form-check mt-3">
+                      <input class="form-check-input" type="checkbox" value="1" id="eliminarFondoPublicoMedia" name="eliminar_fondo_publico_media">
+                      <label class="form-check-label" for="eliminarFondoPublicoMedia">Eliminar fondo multimedia actual</label>
+                    </div>
+                    <div class="row g-3 mt-1">
+                      <div class="col-md-6">
+                        <label class="form-label">Color de overlay</label>
+                        <input type="color" name="fondo_publico_overlay_color" value="<?= htmlspecialchars($publicBackgroundSettings['overlay_color'] ?? '#081018', ENT_QUOTES, 'UTF-8') ?>" class="form-control form-control-color">
+                        <div class="form-text mt-2">Capa colocada sobre el fondo para conservar legibilidad sin tapar del todo el archivo.</div>
+                      </div>
+                      <div class="col-md-6">
+                        <label class="form-label">Opacidad del overlay (%)</label>
+                        <input type="number" name="fondo_publico_overlay_opacity" min="0" max="100" step="1" value="<?= (int) ($publicBackgroundSettings['overlay_opacity'] ?? 52) ?>" class="form-control">
+                      </div>
+                    </div>
+                    <div class="form-check form-switch mt-4 mb-3">
+                      <input class="form-check-input" type="checkbox" role="switch" id="fondoPublicoAudioActivo" name="fondo_publico_audio_activo" value="1" <?= !empty($publicBackgroundSettings['sound_enabled']) ? 'checked' : '' ?>>
+                      <label class="form-check-label" for="fondoPublicoAudioActivo">Intentar reproducir audio cuando el fondo sea un video</label>
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label">Volumen del video (%)</label>
+                      <input type="number" name="fondo_publico_volumen" min="0" max="100" step="1" value="<?= (int) ($publicBackgroundSettings['volume'] ?? 35) ?>" class="form-control">
+                      <div class="form-text mt-2">Los navegadores pueden bloquear el autoplay con sonido hasta que el usuario interactúe con la página. El sistema hará el intento automáticamente.</div>
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label d-block">Vista previa del fondo público</label>
+                    <div class="gallery-image-preview">
+                      <?php if ($publicBackgroundHasMedia && $publicBackgroundMediaType === 'video'): ?>
+                        <video src="<?= htmlspecialchars($publicBackgroundMedia, ENT_QUOTES, 'UTF-8') ?>" muted loop autoplay playsinline></video>
+                      <?php elseif ($publicBackgroundHasMedia): ?>
+                        <img src="<?= htmlspecialchars($publicBackgroundMedia, ENT_QUOTES, 'UTF-8') ?>" alt="Fondo multimedia público">
+                      <?php else: ?>
+                        <span class="gallery-image-empty">Sin fondo multimedia</span>
+                      <?php endif; ?>
+                    </div>
+                    <div class="form-text mt-3">
+                      <?= $publicBackgroundMode === 'media' ? 'El fondo multimedia solo se mostrará en páginas públicas; el panel admin seguirá usando el fondo normal.' : 'Actualmente la tienda pública seguirá usando el fondo normal del tema.' ?>
+                    </div>
+                  </div>
+                </div>
+              <?php endif; ?>
               <button type="submit" class="neon-btn w-100 py-3 mt-4">Guardar datos de cabecera</button>
             </form>
           <?php elseif ($activeTab === 'notificaciones-recargas'): ?>
