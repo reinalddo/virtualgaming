@@ -23,12 +23,13 @@ if (!$enabled) {
 }
 
 if ($cursor === null) {
+    $currentCursor = recharge_notifications_current_cursor($mysqli, $tenantSlug);
     echo json_encode([
         'ok' => true,
         'enabled' => true,
-        'cursor' => recharge_notifications_current_cursor($mysqli, $tenantSlug),
+        'cursor' => $currentCursor,
         'logo_path' => $logoPath,
-        'notifications' => [],
+        'notifications' => recharge_notifications_fetch_recent($mysqli, $tenantSlug, 3),
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }

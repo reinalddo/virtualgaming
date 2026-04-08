@@ -215,3 +215,58 @@ if (!function_exists('recharge_notifications_fetch_since')) {
         return $notifications;
     }
 }
+
+if (!function_exists('recharge_notifications_fetch_recent')) {
+    function recharge_notifications_fetch_recent(mysqli $mysqli, string $tenantSlug = '', int $limit = 3): array {
+        recharge_notifications_ensure_table($mysqli);
+
+        $limit = max(1, min($limit, 10));
+
+        if ($tenantSlug !== '') {
+            $stmt = $mysqli->prepare(
+                'SELECT recent.notification_id, recent.id, recent.email, recent.juego_nombre, recent.paquete_nombre, recent.paquete_cantidad, recent.tenant_slug
+                 FROM (
+                    SELECT rn.id AS notification_id, p.id, p.email, p.juego_nombre, p.paquete_nombre, p.paquete_cantidad, p.tenant_slug
+                    FROM recarga_notificaciones rn
+                    INNER JOIN pedidos p ON p.id = rn.pedido_id
+                    WHERE rn.tenant_slug = ?
+                    ORDER BY rn.id DESC
+                    LIMIT ?
+                 ) recent
+                 ORDER BY recent.notification_id ASC'
+            );
+            if (!$stmt) {
+                return [];
+            }
+
+            $stmt->bind_param('si', $tenantSlug, $limit);
+        } else {
+            $stmt = $mysqli->prepare(
+                'SELECT recent.notification_id, recent.id, recent.email, recent.juego_nombre, recent.paquete_nombre, recent.paquete_cantidad, recent.tenant_slug
+                 FROM (
+                    SELECT rn.id AS notification_id, p.id, p.email, p.juego_nombre, p.paquete_nombre, p.paquete_cantidad, p.tenant_slug
+                    FROM recarga_notificaciones rn
+                    INNER JOIN pedidos p ON p.id = rn.pedido_id
+                    ORDER BY rn.id DESC
+                    LIMIT ?
+                 ) recent
+                 ORDER BY recent.notification_id ASC'
+            );
+            if (!$stmt) {
+                return [];
+            }
+
+            $stmt->bind_param('i', $limit);
+        }
+
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $notifications = [];
+        while ($result instanceof mysqli_result && ($row = $result->fetch_assoc())) {
+            $notifications[] = recharge_notifications_build_payload($row, (int) ($row['notification_id'] ?? 0));
+        }
+        $stmt->close();
+
+        return $notifications;
+    }
+}

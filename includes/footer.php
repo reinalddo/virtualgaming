@@ -734,7 +734,7 @@ $rechargeNotificationsScript = <<<'SCRIPT'
         if (typeof data.cursor === "number") {
           cursor = data.cursor;
         }
-        if (!initial && Array.isArray(data.notifications) && data.notifications.length > 0) {
+        if (Array.isArray(data.notifications) && data.notifications.length > 0) {
           enqueue(data.notifications);
         }
       } catch (error) {
