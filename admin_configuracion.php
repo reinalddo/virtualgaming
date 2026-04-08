@@ -704,43 +704,98 @@ $googleCallbackUrl = google_oauth_callback_url();
       width: 100%;
     }
     .win-points-live-notification {
-      width: auto;
-      max-width: none;
+      width: min(312px, calc(100vw - 72px));
+      max-width: calc(100vw - 24px);
+      gap: 0.62rem;
+      padding: 0.64rem 0.75rem;
+      border-radius: 16px;
     }
     .win-points-live-notification[data-position="bottom-left"],
-    .win-points-live-notification[data-position="bottom-center"],
-    .win-points-live-notification[data-position="bottom-right"] {
-      left: 0.5rem;
-      right: 0.5rem;
+    .win-points-live-notification[data-position="top-left"],
+    .win-points-live-notification[data-position="middle-left"] {
+      left: 12px;
+      right: auto;
+    }
+    .win-points-live-notification[data-position="bottom-right"],
+    .win-points-live-notification[data-position="top-right"],
+    .win-points-live-notification[data-position="middle-right"] {
+      left: auto;
+      right: 12px;
+    }
+    .win-points-live-notification[data-position="bottom-center"] {
+      left: 50%;
+      right: auto;
       bottom: calc(0.75rem + env(safe-area-inset-bottom));
-      width: auto;
+      transform: translate3d(-50%, 18px, 0);
+    }
+    .win-points-live-notification[data-position="bottom-left"],
+    .win-points-live-notification[data-position="bottom-right"] {
+      bottom: calc(0.75rem + env(safe-area-inset-bottom));
       transform: translate3d(0, 18px, 0);
     }
     .win-points-live-notification.is-visible[data-position="bottom-left"],
-    .win-points-live-notification.is-visible[data-position="bottom-center"],
     .win-points-live-notification.is-visible[data-position="bottom-right"] {
       transform: translate3d(0, 0, 0);
     }
-    .win-points-live-notification[data-position="top-left"],
-    .win-points-live-notification[data-position="top-center"],
-    .win-points-live-notification[data-position="top-right"] {
-      left: 0.5rem;
-      right: 0.5rem;
+    .win-points-live-notification.is-visible[data-position="bottom-center"] {
+      transform: translate3d(-50%, 0, 0);
+    }
+    .win-points-live-notification[data-position="top-center"] {
+      left: 50%;
+      right: auto;
       top: calc(0.75rem + env(safe-area-inset-top));
-      width: auto;
+      transform: translate3d(-50%, -18px, 0);
+    }
+    .win-points-live-notification[data-position="top-left"],
+    .win-points-live-notification[data-position="top-right"] {
+      top: calc(0.75rem + env(safe-area-inset-top));
       transform: translate3d(0, -18px, 0);
     }
     .win-points-live-notification.is-visible[data-position="top-left"],
-    .win-points-live-notification.is-visible[data-position="top-center"],
     .win-points-live-notification.is-visible[data-position="top-right"] {
       transform: translate3d(0, 0, 0);
     }
+    .win-points-live-notification.is-visible[data-position="top-center"] {
+      transform: translate3d(-50%, 0, 0);
+    }
     .win-points-live-notification[data-position="middle-left"],
     .win-points-live-notification[data-position="middle-right"] {
-      left: 0.5rem;
-      right: 0.5rem;
       top: 50%;
-      width: auto;
+    }
+    .win-points-live-notification[data-position="middle-left"] {
+      transform: translate3d(-18px, -50%, 0);
+    }
+    .win-points-live-notification[data-position="middle-right"] {
+      transform: translate3d(18px, -50%, 0);
+    }
+    .win-points-live-notification.is-visible[data-position="middle-left"],
+    .win-points-live-notification.is-visible[data-position="middle-right"] {
+      transform: translate3d(0, -50%, 0);
+    }
+    .win-points-live-notification__pulse {
+      width: 8px;
+      height: 8px;
+    }
+    .win-points-live-notification__logo-wrap {
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
+    }
+    .win-points-live-notification__logo-fallback {
+      font-size: 0.72rem;
+    }
+    .win-points-live-notification__title {
+      font-size: 0.82rem;
+      margin-bottom: 0.06rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .win-points-live-notification__detail {
+      font-size: 0.72rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
   }
 </style>
@@ -1038,10 +1093,18 @@ $googleCallbackUrl = google_oauth_callback_url();
                   <label class="form-label">Whatsapp</label>
                   <input type="tel" name="whatsapp" value="<?= htmlspecialchars($cfg['whatsapp'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="+584121234567" pattern="^\+?[1-9]\d{9,14}$" inputmode="tel">
                   <div class="form-text">Ingresa solo el número en formato internacional, con código de país y sin enlaces. Ejemplo: +584121234567.</div>
+                  <div class="form-check form-switch mt-3">
+                    <input class="form-check-input" type="checkbox" role="switch" id="whatsappFlotanteActivo" name="whatsapp_flotante_activo" value="1" <?= ($cfg['whatsapp_flotante_activo'] ?? '1') !== '0' ? 'checked' : '' ?>>
+                    <label class="form-check-label" for="whatsappFlotanteActivo">Mostrar botón flotante de WhatsApp en la página pública</label>
+                  </div>
                 </div>
                 <div class="col-md-6">
                   <label class="form-label">Whatsapp Channel</label>
                   <input type="url" name="whatsapp_channel" value="<?= htmlspecialchars($cfg['whatsapp_channel'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="https://whatsapp.com/channel/...">
+                  <div class="form-check form-switch mt-3">
+                    <input class="form-check-input" type="checkbox" role="switch" id="whatsappChannelFlotanteActivo" name="whatsapp_channel_flotante_activo" value="1" <?= ($cfg['whatsapp_channel_flotante_activo'] ?? '1') !== '0' ? 'checked' : '' ?>>
+                    <label class="form-check-label" for="whatsappChannelFlotanteActivo">Mostrar botón flotante del canal en la página pública</label>
+                  </div>
                 </div>
                 <div class="col-12">
                   <label class="form-label">Mensaje del botón de Whatsapp</label>

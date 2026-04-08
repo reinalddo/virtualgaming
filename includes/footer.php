@@ -14,15 +14,17 @@ $facebookUrl = store_config_normalize_social_url(store_config_get('facebook', ''
 $instagramUrl = store_config_normalize_social_url(store_config_get('instagram', ''));
 $whatsappValue = store_config_get('whatsapp', '');
 $whatsappMessage = store_config_get('mensaje_whatsapp', '');
+$whatsappFloatingEnabled = store_config_get('whatsapp_flotante_activo', '1') !== '0';
 $whatsappUrl = store_config_whatsapp_link_with_message($whatsappValue, $whatsappMessage);
 $whatsappChannelUrl = store_config_normalize_social_url(store_config_get('whatsapp_channel', ''));
+$whatsappChannelFloatingEnabled = store_config_get('whatsapp_channel_flotante_activo', '1') !== '0';
 $googleAnalyticsEnabled = store_config_get('google_analytics_activo', '0') === '1';
 $googleAnalyticsScript = trim(store_config_get('google_analytics_script', ''));
 
 $hasFacebook = store_config_is_valid_social_url($facebookUrl);
 $hasInstagram = store_config_is_valid_social_url($instagramUrl);
-$hasWhatsapp = $whatsappUrl !== '';
-$hasWhatsappChannel = store_config_is_valid_social_url($whatsappChannelUrl);
+$hasWhatsapp = $whatsappFloatingEnabled && $whatsappUrl !== '';
+$hasWhatsappChannel = $whatsappChannelFloatingEnabled && store_config_is_valid_social_url($whatsappChannelUrl);
 
 $menuScript = <<<'SCRIPT'
 <script>
@@ -897,14 +899,38 @@ $rechargeNotificationsScript = str_replace('__LIVE_RECHARGE_ENABLED__', $recharg
     @media (max-width: 575.98px) {
       .live-recharge-stack {
         left: 12px;
-        right: 12px;
+        right: auto;
         bottom: 12px;
-        max-width: none;
+        gap: 0.55rem;
+        max-width: min(312px, calc(100vw - 72px));
       }
       .live-recharge-toast {
         grid-template-columns: auto auto 1fr;
-        padding: 0.75rem 0.85rem;
-        gap: 0.75rem;
+        padding: 0.64rem 0.75rem;
+        gap: 0.62rem;
+        border-radius: 16px;
+      }
+      .live-recharge-toast__pulse {
+        width: 8px;
+        height: 8px;
+      }
+      .live-recharge-toast__logo-wrap {
+        width: 36px;
+        height: 36px;
+        border-radius: 12px;
+      }
+      .live-recharge-toast__title {
+        font-size: 0.82rem;
+        margin-bottom: 0.06rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .live-recharge-toast__detail {
+        font-size: 0.72rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
     }
   </style>

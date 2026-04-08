@@ -1712,7 +1712,9 @@ switch ($seccion) {
                 $instagram = store_config_normalize_social_url((string) ($_POST['instagram'] ?? ''));
                 $whatsapp = store_config_normalize_whatsapp((string) ($_POST['whatsapp'] ?? ''));
                 $whatsappMessage = store_config_normalize_whatsapp_message((string) ($_POST['mensaje_whatsapp'] ?? ''));
+                $whatsappFloatingEnabled = isset($_POST['whatsapp_flotante_activo']) ? '1' : '0';
                 $whatsappChannel = store_config_normalize_social_url((string) ($_POST['whatsapp_channel'] ?? ''));
+                $whatsappChannelFloatingEnabled = isset($_POST['whatsapp_channel_flotante_activo']) ? '1' : '0';
                 $googleClientId = trim((string) ($_POST['google_client_id'] ?? ''));
                 $googleClientSecret = trim((string) ($_POST['google_client_secret'] ?? ''));
 
@@ -1744,7 +1746,9 @@ switch ($seccion) {
                 store_config_upsert('instagram', $instagram);
                 store_config_upsert('whatsapp', $whatsapp);
                 store_config_upsert('mensaje_whatsapp', $whatsappMessage);
+                store_config_upsert('whatsapp_flotante_activo', $whatsappFloatingEnabled);
                 store_config_upsert('whatsapp_channel', $whatsappChannel);
+                store_config_upsert('whatsapp_channel_flotante_activo', $whatsappChannelFloatingEnabled);
                 store_config_upsert('google_client_id', $googleClientId);
                 store_config_upsert('google_client_secret', $googleClientSecret);
                 admin_set_flash('success', 'Redes sociales actualizadas.');
