@@ -3,6 +3,7 @@ require_once __DIR__ . '/includes/tenant.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/slugify.php';
 require_once __DIR__ . '/includes/store_config.php';
+require_once __DIR__ . '/includes/win_points.php';
 tenant_start_session();
 
 function admin_allowed_roles(): array {
@@ -1665,6 +1666,14 @@ switch ($seccion) {
             }
 
             if ($activeTab === 'notificaciones-recargas') {
+                if (isset($_POST['save_win_points_notification_position'])) {
+                    $notificationPosition = win_points_normalize_notification_position($_POST['win_points_notification_position'] ?? 'bottom-left');
+                    store_config_upsert('win_points_notification_position', $notificationPosition);
+                    admin_set_flash('success', 'Posición de notificación de Win Points actualizada.');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'notificaciones-recargas']);
+                }
+
                 $currentLogo = store_config_get('recarga_notificaciones_logo', '');
                 $nextLogo = $currentLogo;
                 $hasUpload = isset($_FILES['recarga_notificaciones_logo'])

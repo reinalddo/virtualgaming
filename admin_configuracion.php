@@ -8,6 +8,7 @@ require_once __DIR__ . '/includes/store_config.php';
 require_once __DIR__ . '/includes/home_gallery.php';
 require_once __DIR__ . '/includes/payment_methods.php';
 require_once __DIR__ . '/includes/google_oauth.php';
+require_once __DIR__ . '/includes/win_points.php';
 
 $cfg = store_config_all();
 $activeTab = defined('ADMIN_CONFIG_ACTIVE_TAB') ? ADMIN_CONFIG_ACTIVE_TAB : ($_GET['tab'] ?? 'correo');
@@ -35,6 +36,11 @@ $publicBackgroundHasMedia = !empty($publicBackgroundSettings['has_media']);
 $publicBackgroundMediaType = trim((string) ($publicBackgroundSettings['media_type'] ?? ''));
 $rechargeNotificationsLogo = trim((string) ($cfg['recarga_notificaciones_logo'] ?? ''));
 $rechargeNotificationsEffectiveLogo = $rechargeNotificationsLogo !== '' ? $rechargeNotificationsLogo : $logoTienda;
+$winPointsNotificationPosition = win_points_notification_position();
+$winPointsNotificationPositions = win_points_notification_position_options();
+$winPointsNotificationPreviewName = win_points_program_name();
+$winPointsNotificationPreviewIcon = win_points_icon_url();
+$winPointsEnabled = win_points_enabled();
 $galleryItems = home_gallery_all();
 $paymentCurrencies = payment_methods_currency_options();
 $galleryEditId = isset($_GET['editar_galeria']) ? intval($_GET['editar_galeria']) : 0;
@@ -292,6 +298,201 @@ $googleCallbackUrl = google_oauth_callback_url();
     letter-spacing: 0.14em;
     text-transform: uppercase;
   }
+  .config-live-notification-card {
+    margin-top: 1.5rem;
+    border-radius: 20px;
+    border: 1px solid rgba(var(--theme-primary-rgb), 0.24);
+    background: linear-gradient(180deg, rgba(var(--theme-bg-alt-rgb), 0.84), rgba(var(--theme-surface-rgb), 0.72));
+    box-shadow: 0 0 26px rgba(var(--theme-primary-rgb), 0.08);
+    padding: 1.25rem;
+  }
+  .config-live-notification-header {
+    display: grid;
+    gap: 0.35rem;
+    margin-bottom: 1rem;
+  }
+  .config-live-notification-title {
+    margin: 0;
+    color: var(--theme-highlight);
+    font-family: 'Oxanium', 'Montserrat', 'Arial', sans-serif;
+    font-size: 1.15rem;
+    font-weight: 700;
+  }
+  .config-live-notification-copy {
+    margin: 0;
+    color: rgba(var(--theme-text-muted-rgb), 0.94);
+  }
+  .config-live-notification-actions {
+    display: grid;
+    gap: 0.75rem;
+  }
+  .config-live-notification-save-wrap {
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+  }
+  .config-live-notification-save {
+    width: min(100%, 220px);
+    min-height: 52px;
+    border-radius: 14px;
+  }
+  .config-live-notification-simulate {
+    width: 100%;
+    min-height: 58px;
+    border: 1px solid rgba(var(--theme-border-rgb), 0.7);
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(var(--theme-button-primary-rgb), 0.98), rgba(var(--theme-button-secondary-rgb), 0.92));
+    color: var(--theme-button-text-strong) !important;
+    box-shadow: 0 16px 32px rgba(var(--theme-button-primary-rgb), 0.24), 0 0 0 1px rgba(var(--theme-primary-rgb), 0.22);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+  }
+  .config-live-notification-simulate:hover,
+  .config-live-notification-simulate:focus {
+    color: var(--theme-button-text-strong) !important;
+    filter: brightness(1.04);
+    transform: translateY(-1px);
+    box-shadow: 0 20px 38px rgba(var(--theme-button-primary-rgb), 0.3), 0 0 0 1px rgba(var(--theme-highlight-rgb), 0.3);
+  }
+  .config-live-notification-help {
+    margin: 0;
+    color: var(--theme-text-muted);
+    font-size: 0.88rem;
+    line-height: 1.45;
+  }
+  .win-points-live-notification {
+    position: fixed;
+    width: min(360px, calc(100vw - 1.5rem));
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.8rem 0.95rem;
+    border-radius: 18px;
+    border: 1px solid rgba(var(--theme-live-notification-border-rgb), 0.72);
+    background: linear-gradient(135deg, rgba(var(--theme-live-notification-bg-rgb), 0.98), rgba(var(--theme-live-notification-border-rgb), 0.16));
+    box-shadow: 0 18px 45px rgba(2, 6, 23, 0.42), 0 0 18px rgba(var(--theme-live-notification-border-rgb), 0.16);
+    backdrop-filter: blur(14px);
+    opacity: 0;
+    transition: opacity 0.28s ease, transform 0.28s ease;
+    z-index: 1200;
+    pointer-events: none;
+  }
+  .win-points-live-notification.is-visible {
+    opacity: 1;
+  }
+  .win-points-live-notification[data-position="bottom-left"] {
+    left: 24px;
+    bottom: 24px;
+    transform: translate3d(0, 18px, 0);
+  }
+  .win-points-live-notification[data-position="bottom-center"] {
+    left: 50%;
+    bottom: 24px;
+    transform: translate3d(-50%, 18px, 0);
+  }
+  .win-points-live-notification[data-position="bottom-right"] {
+    right: 24px;
+    bottom: 24px;
+    transform: translate3d(0, 18px, 0);
+  }
+  .win-points-live-notification[data-position="top-left"] {
+    left: 24px;
+    top: 24px;
+    transform: translate3d(0, -18px, 0);
+  }
+  .win-points-live-notification[data-position="top-center"] {
+    left: 50%;
+    top: 24px;
+    transform: translate3d(-50%, -18px, 0);
+  }
+  .win-points-live-notification[data-position="top-right"] {
+    right: 24px;
+    top: 24px;
+    transform: translate3d(0, -18px, 0);
+  }
+  .win-points-live-notification[data-position="middle-right"] {
+    right: 24px;
+    top: 50%;
+    transform: translate3d(18px, -50%, 0);
+  }
+  .win-points-live-notification[data-position="middle-left"] {
+    left: 24px;
+    top: 50%;
+    transform: translate3d(-18px, -50%, 0);
+  }
+  .win-points-live-notification.is-visible[data-position="bottom-left"],
+  .win-points-live-notification.is-visible[data-position="bottom-right"],
+  .win-points-live-notification.is-visible[data-position="top-left"],
+  .win-points-live-notification.is-visible[data-position="top-right"] {
+    transform: translate3d(0, 0, 0);
+  }
+  .win-points-live-notification.is-visible[data-position="bottom-center"],
+  .win-points-live-notification.is-visible[data-position="top-center"] {
+    transform: translate3d(-50%, 0, 0);
+  }
+  .win-points-live-notification.is-visible[data-position="middle-left"],
+  .win-points-live-notification.is-visible[data-position="middle-right"] {
+    transform: translate3d(0, -50%, 0);
+  }
+  .win-points-live-notification__pulse {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: var(--theme-live-notification-accent);
+    box-shadow: 0 0 0 0 rgba(var(--theme-live-notification-accent-rgb), 0.56);
+    animation: win-points-live-pulse 1.9s ease-out infinite;
+  }
+  .win-points-live-notification__logo-wrap {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(var(--theme-live-notification-border-rgb), 0.34);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .win-points-live-notification__logo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .win-points-live-notification__logo-fallback {
+    color: var(--theme-live-notification-text);
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    font-size: 0.82rem;
+  }
+  .win-points-live-notification__body {
+    min-width: 0;
+  }
+  .win-points-live-notification__title {
+    color: var(--theme-live-notification-text);
+    font-size: 0.9rem;
+    font-weight: 800;
+    line-height: 1.2;
+    margin-bottom: 0.12rem;
+    letter-spacing: 0.01em;
+  }
+  .win-points-live-notification__detail {
+    color: var(--theme-live-notification-muted);
+    font-size: 0.78rem;
+    line-height: 1.35;
+  }
+  @keyframes win-points-live-pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgba(var(--theme-live-notification-accent-rgb), 0.56);
+    }
+    70% {
+      box-shadow: 0 0 0 12px rgba(var(--theme-live-notification-accent-rgb), 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(var(--theme-live-notification-accent-rgb), 0);
+    }
+  }
   .gallery-table-wrap {
     border: 1px solid rgba(34, 211, 238, 0.2);
     border-radius: 18px;
@@ -498,6 +699,48 @@ $googleCallbackUrl = google_oauth_callback_url();
   @media (max-width: 575.98px) {
     .neon-tabs-item {
       min-width: 100%;
+    }
+    .config-live-notification-save {
+      width: 100%;
+    }
+    .win-points-live-notification {
+      width: auto;
+      max-width: none;
+    }
+    .win-points-live-notification[data-position="bottom-left"],
+    .win-points-live-notification[data-position="bottom-center"],
+    .win-points-live-notification[data-position="bottom-right"] {
+      left: 0.5rem;
+      right: 0.5rem;
+      bottom: calc(0.75rem + env(safe-area-inset-bottom));
+      width: auto;
+      transform: translate3d(0, 18px, 0);
+    }
+    .win-points-live-notification.is-visible[data-position="bottom-left"],
+    .win-points-live-notification.is-visible[data-position="bottom-center"],
+    .win-points-live-notification.is-visible[data-position="bottom-right"] {
+      transform: translate3d(0, 0, 0);
+    }
+    .win-points-live-notification[data-position="top-left"],
+    .win-points-live-notification[data-position="top-center"],
+    .win-points-live-notification[data-position="top-right"] {
+      left: 0.5rem;
+      right: 0.5rem;
+      top: calc(0.75rem + env(safe-area-inset-top));
+      width: auto;
+      transform: translate3d(0, -18px, 0);
+    }
+    .win-points-live-notification.is-visible[data-position="top-left"],
+    .win-points-live-notification.is-visible[data-position="top-center"],
+    .win-points-live-notification.is-visible[data-position="top-right"] {
+      transform: translate3d(0, 0, 0);
+    }
+    .win-points-live-notification[data-position="middle-left"],
+    .win-points-live-notification[data-position="middle-right"] {
+      left: 0.5rem;
+      right: 0.5rem;
+      top: 50%;
+      width: auto;
     }
   }
 </style>
@@ -745,6 +988,39 @@ $googleCallbackUrl = google_oauth_callback_url();
               </div>
               <button type="submit" class="neon-btn w-100 py-3 mt-4">Guardar notificaciones de recargas</button>
             </form>
+
+            <div class="config-live-notification-card">
+              <div class="config-live-notification-header">
+                <h3 class="config-live-notification-title">Posición de notificación de Win Points</h3>
+                <p class="config-live-notification-copy">Configura dónde aparecerá la notificación flotante de Win Points en la página pública usando el mismo estilo visual definido en este módulo.</p>
+                <?php if (!$winPointsEnabled): ?>
+                  <p class="config-live-notification-copy">Win Points está desactivado actualmente. Puedes dejar esta posición configurada desde ahora para cuando el módulo esté activo.</p>
+                <?php endif; ?>
+              </div>
+
+              <form method="post" class="row g-3" data-win-points-notification-config>
+                <input type="hidden" name="config_section" value="notificaciones-recargas">
+                <input type="hidden" name="save_win_points_notification_position" value="1">
+                <div class="col-lg-8">
+                  <label class="form-label">Posición de la notificación</label>
+                  <select name="win_points_notification_position" class="form-select" data-win-points-notification-position-select>
+                    <?php foreach ($winPointsNotificationPositions as $positionValue => $positionLabel): ?>
+                      <option value="<?= htmlspecialchars($positionValue, ENT_QUOTES, 'UTF-8') ?>" <?= $winPointsNotificationPosition === $positionValue ? 'selected' : '' ?>><?= htmlspecialchars($positionLabel, ENT_QUOTES, 'UTF-8') ?></option>
+                    <?php endforeach; ?>
+                  </select>
+                  <div class="form-text mt-2">La simulación usa la posición seleccionada y el estilo visual configurado en Personalizar Colores → Notificaciones de recargas.</div>
+                </div>
+                <div class="col-lg-4 config-live-notification-save-wrap">
+                  <button type="submit" class="btn neon-btn px-4 py-2 config-live-notification-save">Guardar posición</button>
+                </div>
+                <div class="col-12">
+                  <div class="config-live-notification-actions">
+                    <button type="button" class="btn fw-bold config-live-notification-simulate" data-win-points-simulate-notification>Simular Notificación</button>
+                    <p class="config-live-notification-help">Este botón muestra al instante una vista previa exacta de cómo aparecerá la notificación de Win Points en la página pública con la posición seleccionada y los colores definidos en Notificaciones de recargas.</p>
+                  </div>
+                </div>
+              </form>
+            </div>
           <?php elseif ($activeTab === 'sociales'): ?>
             <form method="post">
               <input type="hidden" name="config_section" value="sociales">
@@ -1395,6 +1671,77 @@ $googleCallbackUrl = google_oauth_callback_url();
   </div>
 </div>
 <script>
+  (() => {
+    const notificationPositionSelect = document.querySelector('[data-win-points-notification-position-select]');
+    const simulateNotificationButton = document.querySelector('[data-win-points-simulate-notification]');
+    if (!notificationPositionSelect || !simulateNotificationButton) {
+      return;
+    }
+
+    const previewConfig = {
+      programName: <?= json_encode($winPointsNotificationPreviewName, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+      iconSrc: <?= json_encode($winPointsNotificationPreviewIcon, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+      points: 3,
+    };
+    let simulationTimer = null;
+
+    const escapeHtml = (value) => String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
+    const buildNotificationElement = () => {
+      const notification = document.createElement('div');
+      notification.className = 'win-points-live-notification';
+      notification.dataset.position = notificationPositionSelect.value || 'bottom-left';
+
+      const iconMarkup = previewConfig.iconSrc
+        ? '<div class="win-points-live-notification__logo-wrap"><img src="' + escapeHtml(previewConfig.iconSrc) + '" alt="' + escapeHtml(previewConfig.programName) + '" class="win-points-live-notification__logo"></div>'
+        : '<div class="win-points-live-notification__logo-wrap"><span class="win-points-live-notification__logo-fallback">WP</span></div>';
+
+      notification.innerHTML = ''
+        + '<div class="win-points-live-notification__pulse" aria-hidden="true"></div>'
+        + iconMarkup
+        + '<div class="win-points-live-notification__body">'
+        + '<div class="win-points-live-notification__title">+' + previewConfig.points + ' ' + escapeHtml(previewConfig.programName || 'Win Points') + '</div>'
+        + '<div class="win-points-live-notification__detail">Vista previa exacta de la notificación que verá el cliente al recibir premios por recarga.</div>'
+        + '</div>';
+
+      return notification;
+    };
+
+    const showSimulation = () => {
+      const existing = document.querySelector('.win-points-live-notification[data-admin-simulation="1"]');
+      if (existing) {
+        existing.remove();
+      }
+
+      if (simulationTimer) {
+        window.clearTimeout(simulationTimer);
+        simulationTimer = null;
+      }
+
+      const notification = buildNotificationElement();
+      notification.dataset.adminSimulation = '1';
+      document.body.appendChild(notification);
+
+      window.requestAnimationFrame(() => {
+        notification.classList.add('is-visible');
+      });
+
+      simulationTimer = window.setTimeout(() => {
+        notification.classList.remove('is-visible');
+        window.setTimeout(() => {
+          notification.remove();
+        }, 320);
+      }, 5000);
+    };
+
+    simulateNotificationButton.addEventListener('click', showSimulation);
+  })();
+
   (() => {
     const fileInput = document.getElementById('gallery-image-input');
     const previewContainer = document.getElementById('gallery-image-preview');

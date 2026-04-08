@@ -104,10 +104,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             admin_win_points_set_flash('success', 'Configuracion global de Win Points actualizada.');
-          } elseif (isset($_POST['save_win_points_notification_position'])) {
-            $notificationPosition = win_points_normalize_notification_position($_POST['win_points_notification_position'] ?? 'bottom-left');
-            store_config_upsert('win_points_notification_position', $notificationPosition);
-            admin_win_points_set_flash('success', 'Posicion de notificacion de Win Points actualizada.');
         } elseif (isset($_POST['save_win_points_rule'])) {
             $packageId = (int) ($_POST['rule_package_id'] ?? 0);
           $rewardPoints = max(0, (int) ($_POST['rule_reward_points'] ?? 0));
@@ -150,8 +146,6 @@ $winPointsConfig = win_points_config();
 $winPointsBadgeBackgroundColor = (string) ($winPointsConfig['badge_background_color'] ?? '#3E2D07');
 $winPointsBadgeTextColor = (string) ($winPointsConfig['badge_text_color'] ?? '#FCD34D');
 $winPointsExpirationDays = (int) ($winPointsConfig['expiration_days'] ?? 180);
-$winPointsNotificationPosition = (string) ($winPointsConfig['notification_position'] ?? 'bottom-left');
-$winPointsNotificationPositions = win_points_notification_position_options();
 $winPointsBadgeBorderColor = win_points_hex_to_rgba($winPointsBadgeTextColor, 0.28);
 $winPointsBadgeInsetColor = win_points_hex_to_rgba($winPointsBadgeTextColor, 0.08);
 $packageOptions = win_points_fetch_admin_package_options($mysqli);
@@ -868,34 +862,6 @@ include __DIR__ . '/includes/header.php';
             </div>
           </form>
         </div>
-        <div class="win-points-panel">
-          <div class="mb-4">
-            <h2 class="h4 text-info fw-bold mb-1">Configurar posición</h2>
-            <p class="text-secondary mb-0">Define dónde aparecerá la notificación flotante de <?= htmlspecialchars($winPointsConfig['name'], ENT_QUOTES, 'UTF-8') ?> en la página pública. Por defecto se muestra abajo a la izquierda.</p>
-          </div>
-
-          <form method="POST" class="row g-3">
-            <input type="hidden" name="save_win_points_notification_position" value="1">
-            <div class="col-lg-8">
-              <label class="form-label text-info">Posición de la notificación</label>
-              <select name="win_points_notification_position" class="form-select bg-dark text-info border-info" data-win-points-notification-position-select>
-                <?php foreach ($winPointsNotificationPositions as $positionValue => $positionLabel): ?>
-                  <option value="<?= htmlspecialchars($positionValue, ENT_QUOTES, 'UTF-8') ?>" <?= $winPointsNotificationPosition === $positionValue ? 'selected' : '' ?>><?= htmlspecialchars($positionLabel, ENT_QUOTES, 'UTF-8') ?></option>
-                <?php endforeach; ?>
-              </select>
-              <div class="form-text mt-2">La simulación usa la misma posición y el mismo estilo visual configurado en Personalizar colores → Notificaciones de recargas.</div>
-            </div>
-            <div class="col-lg-4 win-points-position-save-wrap">
-              <button type="submit" class="btn btn-info fw-bold px-4 py-2 win-points-position-save">Guardar posición</button>
-            </div>
-            <div class="col-12">
-              <div class="win-points-position-actions">
-                <button type="button" class="btn fw-bold win-points-simulate-btn" data-win-points-simulate-notification>Simular Notificación</button>
-                <p class="win-points-simulate-help">Este botón muestra al instante una vista previa exacta de cómo aparecerá la notificación de Win Points en la página pública con la posición seleccionada y los colores definidos en Notificaciones de recargas.</p>
-              </div>
-            </div>
-          </form>
-        </div>
         </div>
       </div>
       </div>
@@ -1397,13 +1363,10 @@ include __DIR__ . '/includes/header.php';
     const badgePreview = document.querySelector('[data-win-points-badge-preview]');
     const badgeLabel = document.querySelector('[data-win-points-badge-label]');
     const programNameInput = document.querySelector('[name="win_points_name"]');
-    const notificationPositionSelect = document.querySelector('[data-win-points-notification-position-select]');
-    const simulateNotificationButton = document.querySelector('[data-win-points-simulate-notification]');
     const packageSelect = document.querySelector('[data-rule-package-select]');
     const rewardInput = document.querySelector('[data-rule-reward-input]');
     const adjustmentUserSearch = document.querySelector('[data-win-points-user-search]');
     const adjustmentUserSelect = document.querySelector('[data-win-points-user-select]');
-    let winPointsSimulationTimer = null;
 
     function activateTab(targetTab) {
       if (!targetTab) {
@@ -1484,72 +1447,6 @@ include __DIR__ . '/includes/header.php';
       if (badgeLabel) {
         badgeLabel.textContent = '+3 ' + (programName || 'Win Points');
       }
-    }
-
-    function escapeHtml(value) {
-      return String(value || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    }
-
-    function buildWinPointsNotificationElement(config) {
-      const notification = document.createElement('div');
-      notification.className = 'win-points-live-notification';
-      notification.dataset.position = config.position;
-
-      const iconMarkup = config.iconSrc
-        ? '<div class="win-points-live-notification__logo-wrap"><img src="' + escapeHtml(config.iconSrc) + '" alt="' + escapeHtml(config.programName) + '" class="win-points-live-notification__logo"></div>'
-        : '<div class="win-points-live-notification__logo-wrap"><span class="win-points-live-notification__logo-fallback">WP</span></div>';
-
-      notification.innerHTML = ''
-        + '<div class="win-points-live-notification__pulse" aria-hidden="true"></div>'
-        + iconMarkup
-        + '<div class="win-points-live-notification__body">'
-        + '<div class="win-points-live-notification__title">+' + config.points + ' ' + escapeHtml(config.programName) + '</div>'
-        + '<div class="win-points-live-notification__detail">Vista previa exacta de la notificación que verá el cliente al recibir premios por recarga.</div>'
-        + '</div>';
-
-      return notification;
-    }
-
-    function getCurrentWinPointsNotificationConfig() {
-      const currentIcon = iconStage ? iconStage.querySelector('[data-win-points-icon-img]') : null;
-      return {
-        programName: (programNameInput && programNameInput.value.trim()) || 'Win Points',
-        iconSrc: currentIcon ? (currentIcon.getAttribute('src') || '') : '',
-        position: notificationPositionSelect ? (notificationPositionSelect.value || 'bottom-left') : 'bottom-left',
-        points: 3
-      };
-    }
-
-    function showWinPointsNotificationSimulation() {
-      const existing = document.querySelector('.win-points-live-notification[data-admin-simulation="1"]');
-      if (existing) {
-        existing.remove();
-      }
-
-      if (winPointsSimulationTimer) {
-        window.clearTimeout(winPointsSimulationTimer);
-        winPointsSimulationTimer = null;
-      }
-
-      const notification = buildWinPointsNotificationElement(getCurrentWinPointsNotificationConfig());
-      notification.dataset.adminSimulation = '1';
-      document.body.appendChild(notification);
-
-      window.requestAnimationFrame(function () {
-        notification.classList.add('is-visible');
-      });
-
-      winPointsSimulationTimer = window.setTimeout(function () {
-        notification.classList.remove('is-visible');
-        window.setTimeout(function () {
-          notification.remove();
-        }, 320);
-      }, 5000);
     }
 
     function syncSelectedPackageReward() {
@@ -1806,12 +1703,6 @@ include __DIR__ . '/includes/header.php';
 
     if (programNameInput) {
       programNameInput.addEventListener('input', syncBadgePreview);
-    }
-
-    if (simulateNotificationButton) {
-      simulateNotificationButton.addEventListener('click', function () {
-        showWinPointsNotificationSimulation();
-      });
     }
 
     if (tabs.length && tabPanels.length) {
