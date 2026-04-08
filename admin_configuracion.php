@@ -39,7 +39,7 @@ $rechargeNotificationsEffectiveLogo = $rechargeNotificationsLogo !== '' ? $recha
 $winPointsNotificationPosition = win_points_notification_position();
 $winPointsNotificationPositions = win_points_notification_position_options();
 $winPointsNotificationPreviewName = win_points_program_name();
-$winPointsNotificationPreviewIcon = win_points_icon_url();
+$winPointsNotificationPreviewIcon = $rechargeNotificationsEffectiveLogo;
 $winPointsEnabled = win_points_enabled();
 $galleryItems = home_gallery_all();
 $paymentCurrencies = payment_methods_currency_options();

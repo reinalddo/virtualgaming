@@ -189,6 +189,10 @@ $winPointsConfig = win_points_config();
 $winPointsEnabled = !empty($winPointsConfig['enabled']);
 $winPointsProgramName = (string) ($winPointsConfig['name'] ?? 'Win Points');
 $winPointsIconUrl = (string) ($winPointsConfig['icon_url'] ?? '');
+$winPointsNotificationLogoUrl = trim((string) store_config_get('recarga_notificaciones_logo', ''));
+if ($winPointsNotificationLogoUrl === '') {
+  $winPointsNotificationLogoUrl = trim((string) store_config_get('logo_tienda', ''));
+}
 $winPointsBadgeBackgroundColor = (string) ($winPointsConfig['badge_background_color'] ?? '#3E2D07');
 $winPointsBadgeTextColor = (string) ($winPointsConfig['badge_text_color'] ?? '#FCD34D');
 $winPointsNotificationPosition = (string) ($winPointsConfig['notification_position'] ?? 'bottom-left');
@@ -1829,6 +1833,7 @@ include __DIR__ . "/includes/header.php";
     'loggedIn' => $loggedUserId > 0,
     'name' => $winPointsProgramName,
     'iconUrl' => $winPointsIconUrl,
+    'notificationLogoUrl' => $winPointsNotificationLogoUrl,
     'notificationPosition' => $winPointsNotificationPosition,
     'guestMessage' => $winPointsGuestMessage,
     'balance' => (int) ($winPointsUserSummary['balance'] ?? 0),
@@ -2105,8 +2110,9 @@ include __DIR__ . "/includes/header.php";
     notification.className = 'win-points-live-notification';
     notification.dataset.position = String(winPointsState.notificationPosition || 'bottom-left');
 
-    const iconMarkup = winPointsState.iconUrl
-      ? '<div class="win-points-live-notification__logo-wrap"><img src="' + escapePaymentHtml(winPointsState.iconUrl) + '" alt="' + escapePaymentHtml(winPointsState.name || 'Win Points') + '" class="win-points-live-notification__logo"></div>'
+    const notificationLogo = String(winPointsState.notificationLogoUrl || winPointsState.iconUrl || '');
+    const iconMarkup = notificationLogo
+      ? '<div class="win-points-live-notification__logo-wrap"><img src="' + escapePaymentHtml(notificationLogo) + '" alt="' + escapePaymentHtml(winPointsState.name || 'Win Points') + '" class="win-points-live-notification__logo"></div>'
       : '<div class="win-points-live-notification__logo-wrap"><span class="win-points-live-notification__logo-fallback">WP</span></div>';
 
     notification.innerHTML = ''
