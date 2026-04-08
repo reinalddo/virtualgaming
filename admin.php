@@ -1669,7 +1669,7 @@ switch ($seccion) {
                 if (isset($_POST['save_win_points_notification_position'])) {
                     $notificationPosition = win_points_normalize_notification_position($_POST['win_points_notification_position'] ?? 'bottom-left');
                     store_config_upsert('win_points_notification_position', $notificationPosition);
-                    admin_set_flash('success', 'Posición de notificación de Win Points actualizada.');
+                    admin_set_flash('success', 'Posición de notificaciones flotantes actualizada.');
                     define('ADMIN_CONFIG_POST_HANDLED', true);
                     admin_redirect('configuracion', ['tab' => 'notificaciones-recargas']);
                 }

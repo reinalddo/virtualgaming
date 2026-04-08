@@ -9,6 +9,20 @@ $rechargeNotificationsApiUrl = app_path('/api/recharge_notifications.php');
 $rechargeNotificationsApiUrlJs = json_encode($rechargeNotificationsApiUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 $rechargeNotificationsEnabled = recharge_notifications_is_enabled() && recharge_notifications_is_public_context();
 $rechargeNotificationsEnabledJs = $rechargeNotificationsEnabled ? 'true' : 'false';
+$rechargeNotificationPosition = trim((string) store_config_get('win_points_notification_position', 'bottom-left'));
+$allowedRechargeNotificationPositions = [
+  'bottom-left',
+  'bottom-center',
+  'bottom-right',
+  'top-left',
+  'top-center',
+  'top-right',
+  'middle-left',
+  'middle-right',
+];
+if (!in_array($rechargeNotificationPosition, $allowedRechargeNotificationPositions, true)) {
+  $rechargeNotificationPosition = 'bottom-left';
+}
 
 $facebookUrl = store_config_normalize_social_url(store_config_get('facebook', ''));
 $instagramUrl = store_config_normalize_social_url(store_config_get('instagram', ''));
@@ -806,18 +820,65 @@ $rechargeNotificationsScript = str_replace('__LIVE_RECHARGE_ENABLED__', $recharg
       <?php endif; ?>
     </div>
   <?php endif; ?>
-  <div id="live-recharge-notifications" class="live-recharge-stack" aria-live="polite" aria-atomic="false"></div>
+  <div id="live-recharge-notifications" class="live-recharge-stack" data-position="<?php echo htmlspecialchars($rechargeNotificationPosition, ENT_QUOTES, 'UTF-8'); ?>" aria-live="polite" aria-atomic="false"></div>
   <style>
     .live-recharge-stack {
       position: fixed;
-      left: 16px;
-      bottom: 16px;
       z-index: 1040;
       display: flex;
       flex-direction: column;
       gap: 0.75rem;
       pointer-events: none;
-      max-width: min(360px, calc(100vw - 32px));
+      width: min(360px, calc(100vw - 32px));
+      max-width: calc(100vw - 32px);
+      --live-recharge-enter-x: -18px;
+      --live-recharge-enter-y: 0px;
+    }
+    .live-recharge-stack[data-position="bottom-left"] {
+      left: 16px;
+      bottom: 16px;
+    }
+    .live-recharge-stack[data-position="bottom-center"] {
+      left: 50%;
+      bottom: 16px;
+      transform: translateX(-50%);
+      --live-recharge-enter-x: 0px;
+      --live-recharge-enter-y: 18px;
+    }
+    .live-recharge-stack[data-position="bottom-right"] {
+      right: 16px;
+      bottom: 16px;
+      --live-recharge-enter-x: 18px;
+      --live-recharge-enter-y: 0px;
+    }
+    .live-recharge-stack[data-position="top-left"] {
+      left: 16px;
+      top: 16px;
+    }
+    .live-recharge-stack[data-position="top-center"] {
+      left: 50%;
+      top: 16px;
+      transform: translateX(-50%);
+      --live-recharge-enter-x: 0px;
+      --live-recharge-enter-y: -18px;
+    }
+    .live-recharge-stack[data-position="top-right"] {
+      right: 16px;
+      top: 16px;
+      --live-recharge-enter-x: 18px;
+      --live-recharge-enter-y: 0px;
+    }
+    .live-recharge-stack[data-position="middle-left"] {
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+    .live-recharge-stack[data-position="middle-right"] {
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      --live-recharge-enter-x: 18px;
+      --live-recharge-enter-y: 0px;
     }
     .live-recharge-toast {
       display: grid;
@@ -830,18 +891,18 @@ $rechargeNotificationsScript = str_replace('__LIVE_RECHARGE_ENABLED__', $recharg
       background: linear-gradient(135deg, rgba(var(--theme-live-notification-bg-rgb), 0.98), rgba(var(--theme-live-notification-border-rgb), 0.16));
       box-shadow: 0 18px 45px rgba(2, 6, 23, 0.42), 0 0 18px rgba(var(--theme-live-notification-border-rgb), 0.16);
       backdrop-filter: blur(14px);
-      transform: translateX(-18px);
+      transform: translate3d(var(--live-recharge-enter-x), var(--live-recharge-enter-y), 0);
       opacity: 0;
       transition: opacity 0.28s ease, transform 0.28s ease;
       pointer-events: none;
     }
     .live-recharge-toast.is-visible {
       opacity: 1;
-      transform: translateX(0);
+      transform: translate3d(0, 0, 0);
     }
     .live-recharge-toast.is-leaving {
       opacity: 0;
-      transform: translateX(-18px);
+      transform: translate3d(var(--live-recharge-enter-x), var(--live-recharge-enter-y), 0);
     }
     .live-recharge-toast__pulse {
       width: 10px;
@@ -898,11 +959,41 @@ $rechargeNotificationsScript = str_replace('__LIVE_RECHARGE_ENABLED__', $recharg
     }
     @media (max-width: 575.98px) {
       .live-recharge-stack {
-        left: 12px;
-        right: auto;
-        bottom: 12px;
         gap: 0.55rem;
-        max-width: min(312px, calc(100vw - 72px));
+        width: min(312px, calc(100vw - 72px));
+        max-width: calc(100vw - 24px);
+      }
+      .live-recharge-stack[data-position="bottom-left"] {
+        left: 12px;
+        bottom: 12px;
+      }
+      .live-recharge-stack[data-position="bottom-center"] {
+        left: 50%;
+        bottom: 12px;
+      }
+      .live-recharge-stack[data-position="bottom-right"] {
+        right: 12px;
+        bottom: 12px;
+      }
+      .live-recharge-stack[data-position="top-left"] {
+        left: 12px;
+        top: 12px;
+      }
+      .live-recharge-stack[data-position="top-center"] {
+        left: 50%;
+        top: 12px;
+      }
+      .live-recharge-stack[data-position="top-right"] {
+        right: 12px;
+        top: 12px;
+      }
+      .live-recharge-stack[data-position="middle-left"] {
+        left: 12px;
+        top: 50%;
+      }
+      .live-recharge-stack[data-position="middle-right"] {
+        right: 12px;
+        top: 50%;
       }
       .live-recharge-toast {
         grid-template-columns: auto auto 1fr;

@@ -1046,10 +1046,10 @@ $googleCallbackUrl = google_oauth_callback_url();
 
             <div class="config-live-notification-card">
               <div class="config-live-notification-header">
-                <h3 class="config-live-notification-title">Posición de notificación de Win Points</h3>
-                <p class="config-live-notification-copy">Configura dónde aparecerá la notificación flotante de Win Points en la página pública usando el mismo estilo visual definido en este módulo.</p>
+                <h3 class="config-live-notification-title">Posición de notificaciones flotantes</h3>
+                <p class="config-live-notification-copy">Configura dónde aparecerán las notificaciones flotantes públicas de recargas y Win Points usando el mismo estilo visual definido en este módulo.</p>
                 <?php if (!$winPointsEnabled): ?>
-                  <p class="config-live-notification-copy">Win Points está desactivado actualmente. Puedes dejar esta posición configurada desde ahora para cuando el módulo esté activo.</p>
+                  <p class="config-live-notification-copy">Win Points está desactivado actualmente. Esta posición seguirá aplicándose a las notificaciones de recargas y quedará lista para Win Points cuando el módulo esté activo.</p>
                 <?php endif; ?>
               </div>
 
@@ -1071,7 +1071,7 @@ $googleCallbackUrl = google_oauth_callback_url();
                 <div class="col-12">
                   <div class="config-live-notification-actions">
                     <button type="button" class="btn fw-bold config-live-notification-simulate" data-win-points-simulate-notification>Simular Notificación</button>
-                    <p class="config-live-notification-help">Este botón muestra al instante una vista previa exacta de cómo aparecerá la notificación de Win Points en la página pública con la posición seleccionada y los colores definidos en Notificaciones de recargas.</p>
+                    <p class="config-live-notification-help">Este botón muestra una vista previa inmediata de la posición elegida. Esa misma posición también se aplica a las notificaciones públicas de recargas.</p>
                   </div>
                 </div>
               </form>
