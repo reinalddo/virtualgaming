@@ -669,10 +669,50 @@ $rechargeNotificationsScript = <<<'SCRIPT'
     }
 
     const queue = [];
-    const seen = new Set();
+    const queued = new Set();
+    const storageKey = `vg-live-recharge-seen:${endpoint}`;
+    const storageLimit = 60;
     let cursor = null;
     let active = false;
     let logoPath = "";
+
+    const loadSeenIds = () => {
+      try {
+        const raw = window.sessionStorage.getItem(storageKey);
+        if (!raw) {
+          return [];
+        }
+
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) {
+          return [];
+        }
+
+        return parsed
+          .map((value) => Number(value))
+          .filter((value, index, values) => Number.isInteger(value) && value > 0 && values.indexOf(value) === index)
+          .slice(-storageLimit);
+      } catch (error) {
+        return [];
+      }
+    };
+
+    const seen = new Set(loadSeenIds());
+
+    const persistSeenIds = () => {
+      try {
+        window.sessionStorage.setItem(storageKey, JSON.stringify(Array.from(seen).slice(-storageLimit)));
+      } catch (error) {
+      }
+    };
+
+    const markSeen = (id) => {
+      if (!Number.isInteger(id) || id <= 0 || seen.has(id)) {
+        return;
+      }
+      seen.add(id);
+      persistSeenIds();
+    };
 
     const escapeHtml = (value) => String(value ?? "")
       .replace(/&/g, "&amp;")
@@ -689,6 +729,12 @@ $rechargeNotificationsScript = <<<'SCRIPT'
       const item = queue.shift();
       if (!item) {
         return;
+      }
+
+      const itemId = Number(item && item.id ? item.id : 0);
+      if (itemId > 0) {
+        queued.delete(itemId);
+        markSeen(itemId);
       }
 
       active = true;
@@ -721,10 +767,10 @@ $rechargeNotificationsScript = <<<'SCRIPT'
     const enqueue = (items) => {
       items.forEach((item) => {
         const id = Number(item && item.id ? item.id : 0);
-        if (!id || seen.has(id)) {
+        if (!id || seen.has(id) || queued.has(id)) {
           return;
         }
-        seen.add(id);
+        queued.add(id);
         queue.push(item);
       });
       showNext();
