@@ -17,6 +17,7 @@ require_once __DIR__ . '/../includes/recargas_api.php';
 require_once __DIR__ . '/../includes/recharge_availability.php';
 require_once __DIR__ . '/../includes/recharge_notifications.php';
 require_once __DIR__ . '/../includes/win_points.php';
+require_once __DIR__ . '/../includes/payment_difference.php';
 
 if (!function_exists('create_app_mysqli_connection')) {
     function create_app_mysqli_connection(): mysqli {
@@ -75,6 +76,10 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         paquete_api INT DEFAULT NULL,
         moneda VARCHAR(20) DEFAULT NULL,
         precio DECIMAL(12,2) NOT NULL DEFAULT 0,
+        precio_original DECIMAL(12,2) DEFAULT NULL,
+        diferencia_pago_credito_aplicado DECIMAL(12,2) NOT NULL DEFAULT 0,
+        diferencia_pago_credito_origen_pedido_id INT DEFAULT NULL,
+        diferencia_pago_credito_activado TINYINT(1) NOT NULL DEFAULT 0,
         user_identifier VARCHAR(150) DEFAULT NULL,
         player_fields_json LONGTEXT DEFAULT NULL,
         email VARCHAR(180) DEFAULT NULL,
@@ -93,6 +98,7 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         recargas_api_historial_json LONGTEXT DEFAULT NULL,
         estado ENUM('pendiente','pagado','enviado','cancelado') NOT NULL DEFAULT 'pendiente',
         creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        pago_expira_en DATETIME DEFAULT NULL,
         actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_estado (estado),
         INDEX idx_email (email),
@@ -112,6 +118,10 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         'paquete_api' => "ALTER TABLE pedidos ADD COLUMN paquete_api INT NULL AFTER monto_ff",
         'moneda' => "ALTER TABLE pedidos ADD COLUMN moneda VARCHAR(20) NULL AFTER paquete_cantidad",
         'precio' => "ALTER TABLE pedidos ADD COLUMN precio DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER moneda",
+        'precio_original' => "ALTER TABLE pedidos ADD COLUMN precio_original DECIMAL(12,2) NULL AFTER precio",
+        'diferencia_pago_credito_aplicado' => "ALTER TABLE pedidos ADD COLUMN diferencia_pago_credito_aplicado DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER precio_original",
+        'diferencia_pago_credito_origen_pedido_id' => "ALTER TABLE pedidos ADD COLUMN diferencia_pago_credito_origen_pedido_id INT NULL AFTER diferencia_pago_credito_aplicado",
+        'diferencia_pago_credito_activado' => "ALTER TABLE pedidos ADD COLUMN diferencia_pago_credito_activado TINYINT(1) NOT NULL DEFAULT 0 AFTER diferencia_pago_credito_origen_pedido_id",
         'user_identifier' => "ALTER TABLE pedidos ADD COLUMN user_identifier VARCHAR(150) NULL AFTER precio",
         'player_fields_json' => "ALTER TABLE pedidos ADD COLUMN player_fields_json LONGTEXT NULL AFTER user_identifier",
         'email' => "ALTER TABLE pedidos ADD COLUMN email VARCHAR(180) NULL AFTER user_identifier",
@@ -132,6 +142,7 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         'estado_pago_influencer' => "ALTER TABLE pedidos ADD COLUMN estado_pago_influencer ENUM('pendiente','pagado') NOT NULL DEFAULT 'pendiente' AFTER cupon",
         'estado' => "ALTER TABLE pedidos ADD COLUMN estado ENUM('pendiente','pagado','enviado','cancelado') NOT NULL DEFAULT 'pendiente' AFTER cupon",
         'creado_en' => "ALTER TABLE pedidos ADD COLUMN creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER estado",
+        'pago_expira_en' => "ALTER TABLE pedidos ADD COLUMN pago_expira_en DATETIME NULL AFTER creado_en",
         'actualizado_en' => "ALTER TABLE pedidos ADD COLUMN actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER creado_en"
     ];
     $colResult = $mysqli->query("SHOW COLUMNS FROM pedidos");
@@ -1115,6 +1126,14 @@ function order_expiration_seconds(): int {
 }
 
 function order_expiration_timestamp(array $order): int {
+    $expiresAtOverride = trim((string) ($order['pago_expira_en'] ?? ''));
+    if ($expiresAtOverride !== '') {
+        $overrideTimestamp = strtotime($expiresAtOverride);
+        if ($overrideTimestamp !== false && $overrideTimestamp > 0) {
+            return $overrideTimestamp;
+        }
+    }
+
     $createdAt = isset($order['creado_en_ts']) ? (int) $order['creado_en_ts'] : 0;
     if ($createdAt <= 0) {
         $createdAt = strtotime((string) ($order['creado_en'] ?? ''));
@@ -2370,6 +2389,24 @@ function find_matching_bank_movement(mysqli $mysqli, array $movements, string $r
     return null;
 }
 
+function find_bank_movement_by_reference(mysqli $mysqli, array $movements, string $reportedReference, int $requiredDigits, int $orderId): ?array {
+    foreach ($movements as $movement) {
+        $reference = (string) ($movement['referencia'] ?? '');
+        if ($reference === '') {
+            continue;
+        }
+        if (!movement_reference_matches($reference, $reportedReference, $requiredDigits)) {
+            continue;
+        }
+        if (!movement_is_available_for_order($mysqli, $reference, $orderId)) {
+            continue;
+        }
+        return $movement;
+    }
+
+    return null;
+}
+
 function find_matching_bank_movement_with_retry(
     mysqli $mysqli,
     array $bankConfig,
@@ -2396,6 +2433,54 @@ function find_matching_bank_movement_with_retry(
             $latestMovements,
             $reportedReference,
             $orderAmount,
+            $requiredDigits,
+            $orderId
+        );
+
+        if ($match !== null) {
+            return [
+                'match' => $match,
+                'movements' => $latestMovements,
+                'attempts' => $attempt,
+            ];
+        }
+
+        if ($attempt < $attempts && $delaySeconds > 0) {
+            sleep($delaySeconds);
+        }
+    }
+
+    return [
+        'match' => null,
+        'movements' => $latestMovements,
+        'attempts' => $attempts,
+    ];
+}
+
+function find_bank_movement_by_reference_with_retry(
+    mysqli $mysqli,
+    array $bankConfig,
+    string $reportedReference,
+    int $requiredDigits,
+    int $orderId,
+    int $attempts = 2,
+    int $delaySeconds = 8,
+    ?array $initialMovements = null
+): array {
+    $attempts = max(1, $attempts);
+    $delaySeconds = max(0, $delaySeconds);
+    $latestMovements = is_array($initialMovements) ? $initialMovements : [];
+    $match = null;
+
+    for ($attempt = 1; $attempt <= $attempts; $attempt++) {
+        if ($attempt > 1 || empty($latestMovements)) {
+            $latestMovements = fetch_and_sync_bank_movements($mysqli, $bankConfig);
+        }
+
+        $match = find_bank_movement_by_reference(
+            $mysqli,
+            $latestMovements,
+            $reportedReference,
             $requiredDigits,
             $orderId
         );
@@ -2464,6 +2549,68 @@ function link_movement_to_order(mysqli $mysqli, string $reference, int $orderId)
     $stmt->bind_param('isi', $orderId, $reference, $orderId);
     $stmt->execute();
     $stmt->close();
+}
+
+function sum_linked_movement_amount_for_order(mysqli $mysqli, int $orderId): float {
+    $mysqli = ensure_mysqli_connection($mysqli);
+
+    $stmt = $mysqli->prepare('SELECT COALESCE(SUM(monto), 0) AS total FROM movimientos WHERE pedido_id = ?');
+    if (!$stmt) {
+        return 0.0;
+    }
+
+    $stmt->bind_param('i', $orderId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result ? $result->fetch_assoc() : null;
+    $stmt->close();
+
+    return payment_difference_normalize_amount($row['total'] ?? 0);
+}
+
+function update_order_payment_deadline(mysqli $mysqli, int $orderId, int $seconds = 1800): void {
+    if ($orderId <= 0) {
+        return;
+    }
+
+    $deadline = date('Y-m-d H:i:s', time() + max(60, $seconds));
+    $stmt = $mysqli->prepare('UPDATE pedidos SET pago_expira_en = ? WHERE id = ? LIMIT 1');
+    if (!$stmt) {
+        return;
+    }
+
+    $stmt->bind_param('si', $deadline, $orderId);
+    $stmt->execute();
+    $stmt->close();
+}
+
+function payment_difference_response_payload(array $order, float $overpaymentAmount): ?array {
+    $overpaymentAmount = payment_difference_normalize_amount($overpaymentAmount);
+    if (!payment_difference_feature_enabled() || $overpaymentAmount <= 0) {
+        return null;
+    }
+
+    $creditApplied = payment_difference_normalize_amount($order['diferencia_pago_credito_aplicado'] ?? 0);
+    $canActivateCredit = $creditApplied <= 0 && (int) ($order['diferencia_pago_credito_activado'] ?? 0) === 0;
+
+    return [
+        'status' => 'overpaid',
+        'overpayment_amount' => $overpaymentAmount,
+        'currency' => strtoupper(trim((string) ($order['moneda'] ?? 'VES'))) !== '' ? strtoupper(trim((string) ($order['moneda'] ?? 'VES'))) : 'VES',
+        'source_order_id' => (int) ($order['id'] ?? 0),
+        'can_activate_credit' => $canActivateCredit,
+        'credit_already_used' => !$canActivateCredit,
+    ];
+}
+
+function append_payment_difference_response(array $payload, array $order, float $overpaymentAmount): array {
+    $differencePayload = payment_difference_response_payload($order, $overpaymentAmount);
+    if ($differencePayload === null) {
+        return $payload;
+    }
+
+    $payload['payment_difference'] = $differencePayload;
+    return $payload;
 }
 
 function cancel_expired_order(mysqli $mysqli, array $order): array {
@@ -3537,16 +3684,35 @@ if ($action === 'create') {
         $cupon = null;
     }
 
-    $stmt = $mysqli->prepare("INSERT INTO pedidos (tenant_slug, juego_id, paquete_id, juego_nombre, paquete_nombre, paquete_cantidad, monto_ff, paquete_api, moneda, precio, user_identifier, player_fields_json, email, cliente_usuario_id, cupon, cantidad, win_points_awarded, win_points_payment_mode, estado) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'money', 'pendiente')");
+    $priceBeforeDifferenceCredit = payment_difference_normalize_amount($price);
+    $paymentDifferenceCredit = payment_difference_get_credit();
+    $paymentDifferenceCreditApplied = 0.0;
+    $paymentDifferenceCreditSourceOrderId = 0;
+    if ($paymentDifferenceCredit !== null && strtoupper(trim((string) ($paymentDifferenceCredit['currency'] ?? ''))) === strtoupper(trim((string) $currency))) {
+        $availableCredit = payment_difference_normalize_amount($paymentDifferenceCredit['available_amount'] ?? 0);
+        if ($availableCredit >= $priceBeforeDifferenceCredit) {
+            json_error('Selecciona un paquete cuyo monto sea mayor al saldo a favor disponible para completar la recarga.');
+        }
+
+        $paymentDifferenceCreditApplied = min($availableCredit, $priceBeforeDifferenceCredit);
+        $paymentDifferenceCreditSourceOrderId = (int) ($paymentDifferenceCredit['source_order_id'] ?? 0);
+        $price = payment_difference_normalize_amount($priceBeforeDifferenceCredit - $paymentDifferenceCreditApplied);
+    }
+
+    $stmt = $mysqli->prepare("INSERT INTO pedidos (tenant_slug, juego_id, paquete_id, juego_nombre, paquete_nombre, paquete_cantidad, monto_ff, paquete_api, moneda, precio, precio_original, diferencia_pago_credito_aplicado, diferencia_pago_credito_origen_pedido_id, user_identifier, player_fields_json, email, cliente_usuario_id, cupon, cantidad, win_points_awarded, win_points_payment_mode, estado) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'pendiente')");
     if (!$stmt) {
         json_error('No se pudo preparar el pedido');
     }
-    $stmt->bind_param('siissssisdsssisii', $tenant_slug, $game_id, $package_id, $game_name, $pack_name, $pack_amount_text, $monto_ff, $paquete_api, $currency, $price, $user_identifier, $player_fields_json, $email, $cliente_usuario_id, $cupon, $pack_amount_num, $winPointsAward);
+    $winPointsPaymentMode = 'money';
+    $stmt->bind_param('siissssisdddisssisiis', $tenant_slug, $game_id, $package_id, $game_name, $pack_name, $pack_amount_text, $monto_ff, $paquete_api, $currency, $price, $priceBeforeDifferenceCredit, $paymentDifferenceCreditApplied, $paymentDifferenceCreditSourceOrderId, $user_identifier, $player_fields_json, $email, $cliente_usuario_id, $cupon, $pack_amount_num, $winPointsAward, $winPointsPaymentMode);
     if (!$stmt->execute()) {
         json_error('No se pudo guardar el pedido');
     }
     $order_id = $mysqli->insert_id;
     $stmt->close();
+    if ($paymentDifferenceCreditApplied > 0) {
+        payment_difference_consume_credit();
+    }
     update_user_last_purchase_details(
         $mysqli,
         (int) ($cliente_usuario_id ?? 0),
@@ -3605,6 +3771,14 @@ if ($action === 'create') {
         'created_at' => date(DATE_ATOM, isset($storedOrder['creado_en_ts']) ? (int) $storedOrder['creado_en_ts'] : time()),
         'expires_at' => order_expiration_iso($storedOrder),
         'remaining_seconds' => max(0, order_expiration_timestamp($storedOrder) - time()),
+        'payment_difference' => $paymentDifferenceCreditApplied > 0 ? [
+            'status' => 'credit_applied',
+            'source_order_id' => $paymentDifferenceCreditSourceOrderId,
+            'applied_amount' => payment_difference_normalize_amount($paymentDifferenceCreditApplied),
+            'original_total' => payment_difference_normalize_amount($priceBeforeDifferenceCredit),
+            'remaining_amount' => payment_difference_normalize_amount($price),
+            'currency' => strtoupper(trim((string) $currency)) !== '' ? strtoupper(trim((string) $currency)) : 'VES',
+        ] : null,
         'win_points' => win_points_response_payload($mysqli, $winPointsEligible && $cliente_usuario_id !== null ? (int) $cliente_usuario_id : null, [
             'enabled' => win_points_enabled(),
             'eligible' => $winPointsAllowedForOrder,
@@ -4042,6 +4216,8 @@ if ($action === 'submit_payment') {
     $usesCatalogApi = game_uses_catalog_api($mysqli, (int) ($updatedOrder['juego_id'] ?? 0));
     $bankFlowRequested = $orderSupportsBankApi || $methodSupportsBankApi;
     $usesBankValidation = $orderSupportsBankApi && $methodSupportsBankApi && $currencyMatchesOrder;
+    $paymentDifferenceEnabled = payment_difference_feature_enabled() && $usesBankValidation;
+    $overpaymentAmount = 0.0;
 
     $bankConfig = [
         'ff_bank_api_base_url' => store_config_get('ff_bank_api_base_url', 'https://pagonorte.net'),
@@ -4069,28 +4245,47 @@ if ($action === 'submit_payment') {
     }
 
     if ($usesBankValidation) {
-        $matchingMovement = find_matching_bank_movement(
-            $mysqli,
-            $bankMovements,
-            $referenceNumber,
-            (float) ($updatedOrder['precio'] ?? 0),
-            $referenceDigitsLimit,
-            $orderId
-        );
+        $matchingMovement = $paymentDifferenceEnabled
+            ? find_bank_movement_by_reference(
+                $mysqli,
+                $bankMovements,
+                $referenceNumber,
+                $referenceDigitsLimit,
+                $orderId
+            )
+            : find_matching_bank_movement(
+                $mysqli,
+                $bankMovements,
+                $referenceNumber,
+                (float) ($updatedOrder['precio'] ?? 0),
+                $referenceDigitsLimit,
+                $orderId
+            );
 
         if ($matchingMovement === null) {
             try {
-                $retryResult = find_matching_bank_movement_with_retry(
-                    $mysqli,
-                    $bankConfig,
-                    $referenceNumber,
-                    (float) ($updatedOrder['precio'] ?? 0),
-                    $referenceDigitsLimit,
-                    $orderId,
-                    3,
-                    5,
-                    $bankMovements
-                );
+                $retryResult = $paymentDifferenceEnabled
+                    ? find_bank_movement_by_reference_with_retry(
+                        $mysqli,
+                        $bankConfig,
+                        $referenceNumber,
+                        $referenceDigitsLimit,
+                        $orderId,
+                        3,
+                        5,
+                        $bankMovements
+                    )
+                    : find_matching_bank_movement_with_retry(
+                        $mysqli,
+                        $bankConfig,
+                        $referenceNumber,
+                        (float) ($updatedOrder['precio'] ?? 0),
+                        $referenceDigitsLimit,
+                        $orderId,
+                        3,
+                        5,
+                        $bankMovements
+                    );
                 $matchingMovement = $retryResult['match'];
                 $bankMovements = $retryResult['movements'];
                 error_log('TVG bank validation attempts for order #' . $orderId . ': ' . (int) ($retryResult['attempts'] ?? 1));
@@ -4103,6 +4298,36 @@ if ($action === 'submit_payment') {
             $mysqli = ensure_mysqli_connection($mysqli);
             $verifiedReference = (string) ($matchingMovement['referencia'] ?? $referenceNumber);
             link_movement_to_order($mysqli, $verifiedReference, $orderId);
+
+            if ($paymentDifferenceEnabled) {
+                $totalPaidAmount = sum_linked_movement_amount_for_order($mysqli, $orderId);
+                $expectedAmount = payment_difference_normalize_amount($updatedOrder['precio'] ?? 0);
+                $overpaymentAmount = payment_difference_normalize_amount($totalPaidAmount - $expectedAmount);
+
+                if ($totalPaidAmount + 0.0001 < $expectedAmount) {
+                    update_order_payment_deadline($mysqli, $orderId, 1800);
+                    $pendingDifferenceOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+                    json_response([
+                        'ok' => true,
+                        'message' => 'El monto transferido fue menor al esperado. Tu recarga sigue pendiente hasta completar el saldo faltante.',
+                        'order_id' => $orderId,
+                        'estado' => 'pendiente',
+                        'verified' => false,
+                        'bank_checked' => true,
+                        'failure_type' => 'amount_shortfall',
+                        'reasons' => ['El monto acumulado recibido todavía es menor al total esperado del pedido.'],
+                        'remaining_seconds' => max(0, order_expiration_timestamp($pendingDifferenceOrder) - time()),
+                        'payment_difference' => [
+                            'status' => 'underpaid',
+                            'expected_total' => $expectedAmount,
+                            'paid_total' => $totalPaidAmount,
+                            'remaining_amount' => payment_difference_normalize_amount($expectedAmount - $totalPaidAmount),
+                            'currency' => strtoupper(trim((string) ($updatedOrder['moneda'] ?? 'VES'))) !== '' ? strtoupper(trim((string) ($updatedOrder['moneda'] ?? 'VES'))) : 'VES',
+                            'can_complete_same_order' => true,
+                        ],
+                    ]);
+                }
+            }
 
             if (!$usesCatalogApi) {
                 $paidStatus = 'pagado';
@@ -4119,13 +4344,13 @@ if ($action === 'submit_payment') {
 
                 $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
                 recharge_notifications_emit_for_order($mysqli, $paidOrder);
-                json_response([
+                json_response(append_payment_difference_response([
                     'ok' => true,
                     'message' => 'Pago verificado automáticamente. Tu pedido quedó en estado verificado.',
                     'order_id' => $orderId,
                     'estado' => 'pagado',
                     'verified' => true,
-                ], 200, static function () use ($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone): void {
+                ], $paidOrder, $overpaymentAmount), 200, static function () use ($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone): void {
                     register_influencer_coupon_sale($mysqli, $paidOrder);
                     notify_bank_payment_verified_paid($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone);
                 });
@@ -4185,7 +4410,7 @@ if ($action === 'submit_payment') {
                 $verifiedOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
                 win_points_handle_order_status_change($mysqli, $orderId, 'enviado');
                 recharge_notifications_emit_for_order($mysqli, $verifiedOrder);
-                json_response([
+                json_response(append_payment_difference_response([
                     'ok' => true,
                     'message' => 'Pago verificado y recarga procesada correctamente.',
                     'order_id' => $orderId,
@@ -4195,7 +4420,7 @@ if ($action === 'submit_payment') {
                     'provider_reference' => $providerReference,
                     'provider_message' => $providerMessage,
                     'provider_code' => $providerCode,
-                ], 200, static function () use ($mysqli, $verifiedOrder, $paymentMethodName, $verifiedReference, $phone, $providerReference, $providerMessage): void {
+                ], $verifiedOrder, $overpaymentAmount), 200, static function () use ($mysqli, $verifiedOrder, $paymentMethodName, $verifiedReference, $phone, $providerReference, $providerMessage): void {
                     ensure_provider_webhook_registration();
                     register_influencer_coupon_sale($mysqli, $verifiedOrder);
                     notify_free_fire_recharge_success($mysqli, $verifiedOrder, $paymentMethodName, $verifiedReference, $phone, $providerReference, $providerMessage);
@@ -4223,7 +4448,7 @@ if ($action === 'submit_payment') {
 
                 $paidOrder = $shortageResult['order'];
                 recharge_notifications_emit_for_order($mysqli, $paidOrder);
-                json_response([
+                json_response(append_payment_difference_response([
                     'ok' => true,
                     'message' => 'Por los momentos no hay suficientes recargas disponibles. Tu pedido quedó verificado y enviaremos la recarga en unos momentos.',
                     'order_id' => $orderId,
@@ -4235,7 +4460,7 @@ if ($action === 'submit_payment') {
                     'provider_reference' => $providerReference,
                     'provider_message' => $providerMessage,
                     'provider_code' => $providerCode,
-                ], 200, static function () use ($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerMessage, $shortageResult): void {
+                ], $paidOrder, $overpaymentAmount), 200, static function () use ($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerMessage, $shortageResult): void {
                     register_influencer_coupon_sale($mysqli, $paidOrder);
                     notify_provider_inventory_shortage($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerMessage, $shortageResult['lock'] ?? []);
                 });
@@ -4274,7 +4499,7 @@ if ($action === 'submit_payment') {
 
                 $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
                 recharge_notifications_emit_for_order($mysqli, $paidOrder);
-                json_response([
+                json_response(append_payment_difference_response([
                     'ok' => true,
                     'message' => 'El pago fue verificado. La compra quedo en seguimiento automatico mientras confirmamos la respuesta del proveedor.',
                     'order_id' => $orderId,
@@ -4284,7 +4509,7 @@ if ($action === 'submit_payment') {
                     'reasons' => [$providerMessage],
                     'provider_reference' => $providerReference,
                     'provider_message' => $providerMessage,
-                ], 200, static function () use ($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerReference, $providerMessage, $orderId): void {
+                ], $paidOrder, $overpaymentAmount), 200, static function () use ($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerReference, $providerMessage, $orderId): void {
                     ensure_provider_webhook_registration();
                     register_influencer_coupon_sale($mysqli, $paidOrder);
                     notify_catalog_purchase_pending($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerReference, $providerMessage);
@@ -4331,7 +4556,7 @@ if ($action === 'submit_payment') {
                     $resolvedStatus = trim((string) ($autoSyncResult['local_status'] ?? ''));
 
                     if ($resolvedStatus === 'enviado') {
-                        json_response([
+                        json_response(append_payment_difference_response([
                             'ok' => true,
                             'message' => 'Pago verificado y recarga procesada correctamente.',
                             'order_id' => $orderId,
@@ -4341,7 +4566,7 @@ if ($action === 'submit_payment') {
                             'provider_reference' => $providerReference,
                             'provider_message' => $providerMessage,
                             'provider_code' => $providerCode,
-                        ]);
+                        ], $paidOrder, $overpaymentAmount));
                     }
 
                     if ($resolvedStatus === 'cancelado') {
@@ -4359,7 +4584,7 @@ if ($action === 'submit_payment') {
                     }
                 }
 
-                json_response([
+                json_response(append_payment_difference_response([
                     'ok' => true,
                     'message' => 'El pago fue verificado y la compra fue aceptada por la API. Quedó en proceso para seguimiento.',
                     'order_id' => $orderId,
@@ -4370,7 +4595,7 @@ if ($action === 'submit_payment') {
                     'provider_reference' => $providerReference,
                     'provider_message' => $providerMessage,
                     'provider_code' => $providerCode,
-                ], 200, static function () use ($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerReference, $providerMessage): void {
+                ], $paidOrder, $overpaymentAmount), 200, static function () use ($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerReference, $providerMessage): void {
                     ensure_provider_webhook_registration();
                     register_influencer_coupon_sale($mysqli, $paidOrder);
                     notify_catalog_purchase_pending($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerReference, $providerMessage);
@@ -4404,7 +4629,7 @@ if ($action === 'submit_payment') {
 
             $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
             recharge_notifications_emit_for_order($mysqli, $paidOrder);
-            json_response([
+            json_response(append_payment_difference_response([
                 'ok' => true,
                 'message' => 'El pago fue verificado, pero la recarga no pudo completarse automáticamente. Nuestro equipo revisará tu pedido.',
                 'order_id' => $orderId,
@@ -4414,7 +4639,7 @@ if ($action === 'submit_payment') {
                 'reasons' => [$providerMessage],
                 'provider_reference' => $providerReference,
                 'provider_message' => $providerMessage,
-            ], 200, static function () use ($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerMessage): void {
+            ], $paidOrder, $overpaymentAmount), 200, static function () use ($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerMessage): void {
                 register_influencer_coupon_sale($mysqli, $paidOrder);
                 notify_free_fire_recharge_failure($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerMessage);
             });
@@ -4533,6 +4758,65 @@ if ($action === 'expire_order') {
     ]);
 }
 
+if ($action === 'activate_payment_difference_credit') {
+    if (!payment_difference_feature_enabled()) {
+        json_error('El flujo de diferencia de pago no está activo.', 409);
+    }
+
+    $orderId = intval($_POST['order_id'] ?? 0);
+    if ($orderId <= 0) {
+        json_error('Pedido inválido.');
+    }
+
+    $order = fetch_order_by_id($mysqli, $orderId);
+    if (!$order) {
+        json_error('Pedido no encontrado.', 404);
+    }
+
+    if (payment_difference_normalize_amount($order['diferencia_pago_credito_aplicado'] ?? 0) > 0 || (int) ($order['diferencia_pago_credito_activado'] ?? 0) === 1) {
+        json_error('Este pedido ya usó su oportunidad de completar otra recarga con saldo a favor.', 409);
+    }
+
+    $totalPaid = sum_linked_movement_amount_for_order($mysqli, $orderId);
+    $expectedAmount = payment_difference_normalize_amount($order['precio'] ?? 0);
+    $overpaymentAmount = payment_difference_normalize_amount($totalPaid - $expectedAmount);
+    if ($overpaymentAmount <= 0) {
+        json_error('Este pedido no tiene saldo a favor disponible para completar otra recarga.', 409);
+    }
+
+    $stmt = $mysqli->prepare('UPDATE pedidos SET diferencia_pago_credito_activado = 1 WHERE id = ? LIMIT 1');
+    if (!$stmt) {
+        json_error('No se pudo activar el saldo a favor.', 500);
+    }
+
+    $stmt->bind_param('i', $orderId);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        json_error('No se pudo guardar el saldo a favor.', 500);
+    }
+    $stmt->close();
+
+    $credit = payment_difference_activate_credit(
+        $orderId,
+        $overpaymentAmount,
+        (string) ($order['moneda'] ?? 'VES'),
+        1800,
+        'Tienes un saldo a favor de una sola oportunidad para completar otra recarga.'
+    );
+
+    json_response([
+        'ok' => true,
+        'message' => 'Tu saldo a favor quedó activo durante 30 minutos para completar otra recarga.',
+        'payment_difference' => [
+            'status' => 'credit_activated',
+            'source_order_id' => $orderId,
+            'available_amount' => payment_difference_normalize_amount($credit['available_amount'] ?? 0),
+            'currency' => strtoupper(trim((string) ($credit['currency'] ?? ($order['moneda'] ?? 'VES')))) !== '' ? strtoupper(trim((string) ($credit['currency'] ?? ($order['moneda'] ?? 'VES')))) : 'VES',
+            'remaining_seconds' => max(0, (int) ($credit['remaining_seconds'] ?? 0)),
+        ],
+    ]);
+}
+
 if ($action === 'cancel_order') {
     $orderId = intval($_POST['order_id'] ?? 0);
     if ($orderId <= 0) {
@@ -4606,6 +4890,7 @@ if ($action === 'order_status') {
         'provider_reference' => (string) ($order['ff_api_referencia'] ?? ''),
         'provider_message' => (string) ($order['ff_api_mensaje'] ?? ''),
         'provider_code' => (string) ($order['recargas_api_codigo_entregado'] ?? ''),
+        'remaining_seconds' => max(0, order_expiration_timestamp($order) - time()),
     ]);
 }
 

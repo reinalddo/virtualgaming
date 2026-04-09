@@ -8,6 +8,7 @@ require_once __DIR__ . "/includes/recargas_api.php";
 require_once __DIR__ . "/includes/slugify.php";
 require_once __DIR__ . "/includes/player_verification.php";
 require_once __DIR__ . "/includes/package_features.php";
+require_once __DIR__ . "/includes/payment_difference.php";
 require_once __DIR__ . "/includes/win_points.php";
 currency_ensure_schema();
 package_features_ensure_schema($mysqli);
@@ -115,6 +116,8 @@ $loggedUserId = 0;
 $loggedUserEmail = '';
 $loggedUserLastPurchaseIdentifier = '';
 $loggedUserLastPurchasePhone = '';
+$paymentDifferenceEnabled = false;
+$activePaymentDifferenceCredit = null;
 tenant_start_session();
 if (!empty($_SESSION['auth_user']['id'])) {
   $loggedUserId = (int) $_SESSION['auth_user']['id'];
@@ -122,6 +125,8 @@ if (!empty($_SESSION['auth_user']['id'])) {
 if (!empty($_SESSION['auth_user']['email'])) {
   $loggedUserEmail = (string) $_SESSION['auth_user']['email'];
 }
+$paymentDifferenceEnabled = payment_difference_feature_enabled();
+$activePaymentDifferenceCredit = $paymentDifferenceEnabled ? payment_difference_get_credit() : null;
 payment_methods_ensure_table();
 $paymentMethodsByCurrency = payment_methods_active_by_currency();
 $game = null;
@@ -445,7 +450,9 @@ include __DIR__ . "/includes/header.php";
           <div class="card-body">
             <p class="small text-secondary mb-1">Total</p>
             <p id="selected-price" class="fw-bold text-info fs-5"><?= ($moneda_actual['clave'] ?? 'Bs.') . ' ' . currency_format_amount(0, $moneda_actual) ?></p>
+            <p id="selected-price-detail" class="small text-secondary mb-0 d-none"></p>
             <p id="selected-win-points-total" class="small fw-semibold text-warning mb-0 d-none"></p>
+            <div id="payment-difference-banner" class="d-none payment-difference-banner mt-3"></div>
           </div>
         </div>
       </div>
@@ -875,6 +882,47 @@ include __DIR__ . "/includes/header.php";
   .payment-summary-total strong {
     color: #22d3ee;
     font-size: 1.2rem;
+  }
+
+  .payment-difference-banner {
+    padding: 0.95rem 1rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(45, 212, 191, 0.32);
+    background: linear-gradient(135deg, rgba(8, 47, 73, 0.38), rgba(15, 23, 42, 0.92));
+    box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.05);
+  }
+
+  .payment-difference-banner[data-variant="warning"] {
+    border-color: rgba(251, 191, 36, 0.34);
+    background: linear-gradient(135deg, rgba(120, 53, 15, 0.34), rgba(15, 23, 42, 0.94));
+  }
+
+  .payment-difference-banner-title {
+    color: #f8fafc;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .payment-difference-banner-copy {
+    color: #cbd5e1;
+    line-height: 1.5;
+    font-size: 0.92rem;
+  }
+
+  .payment-difference-breakdown {
+    margin-top: 0.6rem;
+    display: grid;
+    gap: 0.25rem;
+    color: #e2e8f0;
+    font-size: 0.85rem;
+  }
+
+  .payment-difference-breakdown strong {
+    color: #f8fafc;
+  }
+
+  .payment-difference-actions {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   }
 
   .payment-method-details {
@@ -1918,11 +1966,15 @@ include __DIR__ . "/includes/header.php";
   const packCards2 = Array.from(document.querySelectorAll('.pack-card'));
   const selectedPack = document.getElementById("selected-pack");
   const selectedPrice = document.getElementById("selected-price");
+  const selectedPriceDetail = document.getElementById('selected-price-detail');
   const selectedWinPointsTotal = document.getElementById('selected-win-points-total');
+  const paymentDifferenceBanner = document.getElementById('payment-difference-banner');
   const orderForm = document.getElementById("order-form");
   const buyButton = document.getElementById("buy-button");
   const defaultBuyButtonLabel = 'Comprar Ahora';
+  const paymentDifferenceBlockedBuyButtonLabel = 'Selecciona un paquete mayor al saldo a favor';
   const defaultPaymentSubmitButtonLabel = 'Pagado / Recargar';
+  const completeRechargeButtonLabel = 'Completar Recarga';
   const verifyUserBuyButtonLabel = 'Debe Verificar El usuario para poder comprar';
   const playerPrimaryField = document.getElementById('player-primary-field');
   const playerPrimaryLabel = document.getElementById('player-primary-label');
@@ -1941,10 +1993,12 @@ include __DIR__ . "/includes/header.php";
     title: <?php echo json_encode($paymentSendingOrderTitle, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>,
     message: <?php echo json_encode($paymentSendingOrderMessage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>
   };
+  const paymentDifferenceFeatureEnabled = <?= $paymentDifferenceEnabled ? 'true' : 'false' ?>;
   const paymentSuccessContent = {
     title: <?php echo json_encode($paymentSuccessTitle, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>,
     extraMessage: <?php echo json_encode($paymentSuccessExtraMessage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>
   };
+  let paymentDifferenceCreditState = <?= json_encode($activePaymentDifferenceCredit, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const paymentStatusModal = document.getElementById('payment-status-modal');
   const paymentStatusModalTitle = document.getElementById('payment-status-modal-title');
   const paymentStatusModalMessage = document.getElementById('payment-status-modal-message');
@@ -2008,6 +2062,7 @@ include __DIR__ . "/includes/header.php";
   let couponValue = '';
   let activePaymentOrder = null;
   let paymentTimerInterval = null;
+  let paymentDifferenceTicker = null;
   const defaultPrimaryField = {
     name: 'id_juego',
     label: 'ID de usuario',
@@ -2015,6 +2070,379 @@ include __DIR__ . "/includes/header.php";
     inputMode: 'text',
     maxLength: 150
   };
+
+  function getCurrencyShowDecimals(currencyCode, fallback = monedaActualMostrarDecimales) {
+    const target = String(currencyCode || '').trim().toUpperCase();
+    if (target === '') {
+      return fallback;
+    }
+
+    const currencyEntry = Object.values(monedas).find((item) => String(item && item.clave ? item.clave : '').trim().toUpperCase() === target);
+    return currencyEntry ? Boolean(currencyEntry.mostrar_decimales) : fallback;
+  }
+
+  function formatPaymentDifferenceMoney(currencyCode, amount, showDecimals = null) {
+    const useDecimals = showDecimals === null ? getCurrencyShowDecimals(currencyCode) : Boolean(showDecimals);
+    return `${String(currencyCode || '').trim().toUpperCase() || monedaActualClave} ${formatCurrencyAmount(amount, useDecimals)}`;
+  }
+
+  function formatPaymentDifferenceDuration(totalSeconds) {
+    const normalizedSeconds = Math.max(0, Math.floor(Number(totalSeconds || 0)));
+    const minutes = Math.floor(normalizedSeconds / 60);
+    const seconds = normalizedSeconds % 60;
+    if (minutes <= 0) {
+      return `${seconds}s`;
+    }
+    if (seconds === 0) {
+      return `${minutes} min`;
+    }
+    return `${minutes} min ${String(seconds).padStart(2, '0')}s`;
+  }
+
+  function normalizePaymentDifferenceCredit(rawCredit) {
+    if (!paymentDifferenceFeatureEnabled || !rawCredit || typeof rawCredit !== 'object') {
+      return null;
+    }
+
+    const availableAmount = normalizeCurrencyAmount(rawCredit.available_amount ?? rawCredit.overpayment_amount ?? 0, true);
+    const currency = String(rawCredit.currency || '').trim().toUpperCase();
+    const sourceOrderId = Number(rawCredit.source_order_id || 0);
+    const remainingSeconds = Math.max(0, Math.floor(Number(rawCredit.remaining_seconds || 0)));
+
+    if (!Number.isFinite(availableAmount) || availableAmount <= 0 || currency === '') {
+      return null;
+    }
+
+    return {
+      availableAmount,
+      currency,
+      sourceOrderId,
+      remainingSeconds,
+      status: String(rawCredit.status || '').trim().toLowerCase(),
+      message: String(rawCredit.message || '').trim(),
+    };
+  }
+
+  function getPaymentDifferenceBreakdown(pack, baseAmount = selectedTotalValue) {
+    const currency = String((pack && pack.moneda) || monedaActualClave || '').trim().toUpperCase();
+    const showDecimals = pack ? Boolean(pack.showDecimals) : getCurrencyShowDecimals(currency);
+    const subtotalAmount = normalizeCurrencyAmount(baseAmount, showDecimals);
+    const credit = paymentDifferenceCreditState
+      && paymentDifferenceCreditState.currency === currency
+      && Number(paymentDifferenceCreditState.remainingSeconds || 0) > 0
+      ? paymentDifferenceCreditState
+      : null;
+    const appliedAmount = credit ? normalizeCurrencyAmount(Math.min(Number(credit.availableAmount || 0), subtotalAmount), showDecimals) : 0;
+
+    return {
+      currency,
+      showDecimals,
+      subtotalAmount,
+      appliedAmount,
+      finalAmount: normalizeCurrencyAmount(Math.max(subtotalAmount - appliedAmount, 0), showDecimals),
+      hasCredit: Boolean(credit),
+      availableAmount: credit ? normalizeCurrencyAmount(credit.availableAmount, showDecimals) : 0,
+      remainingSeconds: credit ? Number(credit.remainingSeconds || 0) : 0,
+      sourceOrderId: credit ? Number(credit.sourceOrderId || 0) : 0,
+      blocksSelection: Boolean(credit && subtotalAmount > 0 && Number(credit.availableAmount || 0) + 0.0001 >= subtotalAmount),
+      message: credit ? String(credit.message || '').trim() : '',
+    };
+  }
+
+  function updateSelectedPriceDisplay(pack) {
+    if (!pack) {
+      selectedPrice.textContent = `${monedaActualClave} ${formatCurrencyAmount(0, monedaActualMostrarDecimales)}`;
+      if (selectedPriceDetail) {
+        selectedPriceDetail.textContent = '';
+        selectedPriceDetail.classList.add('d-none');
+      }
+      refreshPaymentDifferenceBanner(null);
+      return;
+    }
+
+    const breakdown = getPaymentDifferenceBreakdown(pack, selectedTotalValue);
+    selectedPrice.textContent = formatPaymentDifferenceMoney(pack.moneda || monedaActualClave, breakdown.finalAmount, breakdown.showDecimals);
+
+    if (selectedPriceDetail) {
+      if (breakdown.appliedAmount > 0) {
+        selectedPriceDetail.textContent = `Original ${formatPaymentDifferenceMoney(pack.moneda || monedaActualClave, breakdown.subtotalAmount, breakdown.showDecimals)} | Saldo aplicado ${formatPaymentDifferenceMoney(pack.moneda || monedaActualClave, breakdown.appliedAmount, breakdown.showDecimals)}`;
+        selectedPriceDetail.classList.remove('d-none');
+      } else {
+        selectedPriceDetail.textContent = '';
+        selectedPriceDetail.classList.add('d-none');
+      }
+    }
+
+    refreshPaymentDifferenceBanner(pack);
+  }
+
+  function refreshPaymentDifferenceBanner(pack = activePack) {
+    if (!paymentDifferenceBanner) {
+      return;
+    }
+
+    const activeCredit = normalizePaymentDifferenceCredit(paymentDifferenceCreditState);
+    if (!paymentDifferenceFeatureEnabled || !activeCredit) {
+      paymentDifferenceBanner.className = 'd-none payment-difference-banner mt-3';
+      paymentDifferenceBanner.innerHTML = '';
+      return;
+    }
+
+    const breakdown = getPaymentDifferenceBreakdown(pack, selectedTotalValue);
+    const title = breakdown.blocksSelection
+      ? 'Selecciona un paquete mayor al saldo a favor'
+      : 'Saldo a favor disponible para una sola recarga';
+    let summary = activeCredit.message || 'Puedes usar este monto restante una sola vez antes de que expire.';
+    if (pack && breakdown.hasCredit && !breakdown.blocksSelection) {
+      summary = `Se aplicarán ${formatPaymentDifferenceMoney(breakdown.currency, breakdown.appliedAmount, breakdown.showDecimals)} a este paquete. Solo pagarás ${formatPaymentDifferenceMoney(breakdown.currency, breakdown.finalAmount, breakdown.showDecimals)}.`;
+    } else if (pack && breakdown.blocksSelection) {
+      summary = `Tu saldo a favor actual es ${formatPaymentDifferenceMoney(breakdown.currency, breakdown.availableAmount, breakdown.showDecimals)}. Debes elegir un paquete cuyo total original sea mayor a ese monto.`;
+    }
+
+    const details = [
+      `<div><strong>Disponible:</strong> ${escapePaymentHtml(formatPaymentDifferenceMoney(activeCredit.currency, activeCredit.availableAmount, getCurrencyShowDecimals(activeCredit.currency)))}</div>`,
+      `<div><strong>Vence en:</strong> ${escapePaymentHtml(formatPaymentDifferenceDuration(activeCredit.remainingSeconds))}</div>`,
+      `<div><strong>Pedido origen:</strong> #${escapePaymentHtml(String(activeCredit.sourceOrderId || '-'))}</div>`
+    ];
+
+    paymentDifferenceBanner.className = 'payment-difference-banner mt-3';
+    paymentDifferenceBanner.dataset.variant = breakdown.blocksSelection ? 'warning' : 'active';
+    paymentDifferenceBanner.innerHTML = `
+      <div class="payment-difference-banner-title">${escapePaymentHtml(title)}</div>
+      <div class="payment-difference-banner-copy">${escapePaymentHtml(summary)}</div>
+      <div class="payment-difference-breakdown">${details.join('')}</div>
+    `;
+  }
+
+  function startPaymentDifferenceTicker() {
+    if (paymentDifferenceTicker) {
+      clearInterval(paymentDifferenceTicker);
+      paymentDifferenceTicker = null;
+    }
+
+    if (!normalizePaymentDifferenceCredit(paymentDifferenceCreditState)) {
+      return;
+    }
+
+    paymentDifferenceTicker = window.setInterval(() => {
+      const normalizedCredit = normalizePaymentDifferenceCredit(paymentDifferenceCreditState);
+      if (!normalizedCredit) {
+        clearInterval(paymentDifferenceTicker);
+        paymentDifferenceTicker = null;
+        paymentDifferenceCreditState = null;
+        refreshPaymentDifferenceBanner(activePack);
+        updateButtonState();
+        return;
+      }
+
+      normalizedCredit.remainingSeconds = Math.max(0, normalizedCredit.remainingSeconds - 1);
+      paymentDifferenceCreditState = normalizedCredit.remainingSeconds > 0 ? normalizedCredit : null;
+      refreshPaymentDifferenceBanner(activePack);
+      if (activePack) {
+        updateSelectedPriceDisplay(activePack);
+      }
+      updateButtonState();
+    }, 1000);
+  }
+
+  function setPaymentDifferenceCreditState(nextCredit) {
+    paymentDifferenceCreditState = normalizePaymentDifferenceCredit(nextCredit);
+    startPaymentDifferenceTicker();
+    refreshPaymentDifferenceBanner(activePack);
+    if (activePack) {
+      updateSelectedPriceDisplay(activePack);
+    }
+    updateButtonState();
+  }
+
+  function syncActivePaymentOrderDeadline(remainingSeconds) {
+    if (!activePaymentOrder) {
+      return;
+    }
+
+    const safeRemainingSeconds = Math.max(0, Math.floor(Number(remainingSeconds || 0)));
+    if (safeRemainingSeconds <= 0) {
+      return;
+    }
+
+    activePaymentOrder.expiresAtMs = Date.now() + (safeRemainingSeconds * 1000);
+    updatePaymentTimer();
+  }
+
+  function renderPaymentActionButtons(actions) {
+    const applyActions = (container) => {
+      if (!container) {
+        return;
+      }
+
+      container.innerHTML = '';
+      if (!Array.isArray(actions) || actions.length === 0) {
+        container.className = 'd-none payment-support-actions mb-4';
+        return;
+      }
+
+      container.className = 'payment-support-actions payment-difference-actions mb-4';
+      actions.forEach((action) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `btn ${action.className || 'btn-info'} fw-bold`;
+        button.textContent = action.label;
+        button.addEventListener('click', action.onClick);
+        container.appendChild(button);
+      });
+    };
+
+    applyActions(paymentModalActions);
+    applyActions(paymentStatusModalActions);
+  }
+
+  function prepareSameOrderCompletion(message) {
+    if (paymentStatusModal) {
+      setOverlayVisible(paymentStatusModal, false);
+    }
+    setPaymentFormDisabled(false);
+    setCancelOrderButtonMode('cancel');
+    if (paymentSubmitButton) {
+      paymentSubmitButton.textContent = completeRechargeButtonLabel;
+    }
+    if (paymentReferenceInput) {
+      paymentReferenceInput.value = '';
+      paymentReferenceInput.focus();
+    }
+    setPaymentAlert(message || 'Realiza el pago restante y luego registra la nueva referencia para completar esta recarga.', 'warning');
+    scrollPaymentSubmitIntoView();
+  }
+
+  async function activatePaymentDifferenceCreditForCurrentOrder() {
+    if (!activePaymentOrder || !activePaymentOrder.orderId) {
+      showToast('No hay un pedido válido para activar el saldo a favor.', 'error');
+      return;
+    }
+
+    setOverlayVisible(loadingModal, true);
+    setLoadingModalContent('Activando saldo a favor...', 'Estamos preparando tu saldo a favor para completar otra recarga.', 'processing');
+
+    try {
+      const response = await fetch(buildAppUrl('/api/pedidos.php'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `action=activate_payment_difference_credit&order_id=${encodeURIComponent(activePaymentOrder.orderId)}`
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error((data && data.message) ? data.message : 'No se pudo activar el saldo a favor.');
+      }
+
+      setPaymentDifferenceCreditState(data && data.payment_difference ? data.payment_difference : null);
+      setOverlayVisible(loadingModal, false);
+      if (paymentStatusModal) {
+        setOverlayVisible(paymentStatusModal, false);
+      }
+      closePaymentModal(true);
+      resetCheckoutState();
+      showToast((data && data.message) ? data.message : 'Saldo a favor activado.', 'success');
+      scrollToOrderForm();
+    } catch (error) {
+      setOverlayVisible(loadingModal, false);
+      const errorMessage = String((error && error.message) || 'No se pudo activar el saldo a favor.');
+      setPaymentAlert(errorMessage, 'danger');
+      showPaymentStatusModal('No se pudo activar el saldo a favor', errorMessage, 'danger');
+    }
+  }
+
+  function renderUnderpaidPaymentDifference(data) {
+    const difference = data && data.payment_difference ? data.payment_difference : null;
+    if (!difference || String(difference.status || '').toLowerCase() !== 'underpaid') {
+      return false;
+    }
+
+    const currency = String(difference.currency || (activePaymentOrder ? activePaymentOrder.currency : monedaActualClave)).trim().toUpperCase() || monedaActualClave;
+    const showDecimals = activePaymentOrder && activePaymentOrder.pack ? Boolean(activePaymentOrder.pack.showDecimals) : getCurrencyShowDecimals(currency);
+    const expectedTotal = normalizeCurrencyAmount(difference.expected_total || 0, showDecimals);
+    const paidTotal = normalizeCurrencyAmount(difference.paid_total || 0, showDecimals);
+    const remainingAmount = normalizeCurrencyAmount(difference.remaining_amount || 0, showDecimals);
+    const summary = `Recibimos ${formatPaymentDifferenceMoney(currency, paidTotal, showDecimals)} de ${formatPaymentDifferenceMoney(currency, expectedTotal, showDecimals)}. Falta ${formatPaymentDifferenceMoney(currency, remainingAmount, showDecimals)} para completar esta misma recarga.`;
+
+    syncActivePaymentOrderDeadline(data.remaining_seconds || difference.remaining_seconds || 0);
+    renderSupportCard(paymentModalReasons, 'Pago recibido parcialmente', summary, [
+      'Realiza otro pago por el monto restante para este mismo pedido.',
+      'Ingresa la nueva referencia cuando el banco la refleje.',
+      'No necesitas crear otra orden para completar esta recarga.'
+    ], []);
+    renderSupportCard(paymentStatusModalReasons, 'Pago recibido parcialmente', summary, [
+      'Realiza otro pago por el monto restante para este mismo pedido.',
+      'Ingresa la nueva referencia cuando el banco la refleje.',
+      'No necesitas crear otra orden para completar esta recarga.'
+    ], []);
+    renderPaymentActionButtons([
+      {
+        label: completeRechargeButtonLabel,
+        className: 'btn-info',
+        onClick: () => prepareSameOrderCompletion('Realiza el pago restante y registra la nueva referencia para completar esta recarga.')
+      }
+    ]);
+    if (paymentSubmitButton) {
+      paymentSubmitButton.textContent = completeRechargeButtonLabel;
+    }
+    setPaymentAlert(data.message || 'Tu pago fue recibido parcialmente. Completa el monto restante para procesar la recarga.', 'warning');
+    setPaymentFormDisabled(false);
+    showPaymentStatusModal('Pago pendiente por completar', data.message || summary, 'info');
+    return true;
+  }
+
+  function renderOverpaidPaymentDifference(data) {
+    const difference = data && data.payment_difference ? data.payment_difference : null;
+    if (!difference || String(difference.status || '').toLowerCase() !== 'overpaid') {
+      return false;
+    }
+
+    const currency = String(difference.currency || (activePaymentOrder ? activePaymentOrder.currency : monedaActualClave)).trim().toUpperCase() || monedaActualClave;
+    const showDecimals = activePaymentOrder && activePaymentOrder.pack ? Boolean(activePaymentOrder.pack.showDecimals) : getCurrencyShowDecimals(currency);
+    const overpaymentAmount = normalizeCurrencyAmount(difference.overpayment_amount || 0, showDecimals);
+    if (overpaymentAmount <= 0) {
+      return false;
+    }
+
+    const summary = `Tu pedido principal ya fue atendido y quedó un saldo a favor de ${formatPaymentDifferenceMoney(currency, overpaymentAmount, showDecimals)}.`;
+    const steps = difference.can_activate_credit
+      ? [
+          'Si eliges Seguir con la Recarga, cerramos esta operación sin activar el saldo a favor.',
+          'Si eliges Completar Recarga, activaremos el saldo restante durante 30 minutos para usarlo en otro paquete.'
+        ]
+      : ['Este pedido ya consumió su oportunidad de completar otra recarga con saldo a favor.'];
+
+    if (!extractProviderCodes(data).length) {
+      renderSupportCard(paymentModalReasons, 'Se detectó un monto mayor al esperado', summary, steps, []);
+    }
+    renderSupportCard(paymentStatusModalReasons, 'Se detectó un monto mayor al esperado', summary, steps, []);
+
+    const actions = [
+      {
+        label: 'Seguir con la Recarga',
+        className: 'btn-outline-light',
+        onClick: () => {
+          if (paymentStatusModal) {
+            setOverlayVisible(paymentStatusModal, false);
+          }
+          closePaymentModal(true);
+          resetCheckoutState();
+        }
+      }
+    ];
+
+    if (difference.can_activate_credit) {
+      actions.unshift({
+        label: completeRechargeButtonLabel,
+        className: 'btn-success',
+        onClick: () => {
+          activatePaymentDifferenceCreditForCurrentOrder();
+        }
+      });
+    }
+
+    renderPaymentActionButtons(actions);
+    return true;
+  }
 
   function restoreStoredPurchaseDefaults(force = false) {
     if (playerPrimaryInput) {
@@ -3321,6 +3749,9 @@ include __DIR__ . "/includes/header.php";
       paymentStatusModalActions.className = 'd-none payment-support-actions mb-4';
       paymentStatusModalActions.innerHTML = '';
     }
+    if (paymentSubmitButton) {
+      paymentSubmitButton.textContent = defaultPaymentSubmitButtonLabel;
+    }
   }
 
   if (paymentStatusModalAccept) {
@@ -3689,6 +4120,7 @@ include __DIR__ . "/includes/header.php";
     packCards2.forEach((item) => item.classList.remove('neon-selected'));
     renderPlayerFields(null);
     updateResumenCompra(null);
+    refreshPaymentDifferenceBanner(null);
     updateButtonState();
   }
 
@@ -3781,6 +4213,9 @@ include __DIR__ . "/includes/header.php";
     setPaymentFormDisabled(false);
     setPaymentAlert('', 'info');
     clearPaymentSupportUi();
+    if (paymentSubmitButton) {
+      paymentSubmitButton.textContent = defaultPaymentSubmitButtonLabel;
+    }
     renderWinPointsPaymentState(pack, currentMethod);
     setCancelOrderButtonMode('cancel');
     setOverlayVisible(paymentModal, true);
@@ -3821,15 +4256,20 @@ include __DIR__ . "/includes/header.php";
       selectedPack.textContent = activePack.name;
     }
     const needsPlayerVerification = requiresVerifiedPlayerForCheckout();
-    buyButton.disabled = !activePack || !requiredFilled || needsPlayerVerification;
-    buyButton.textContent = needsPlayerVerification ? verifyUserBuyButtonLabel : defaultBuyButtonLabel;
+    const paymentDifferenceBlocked = activePack ? getPaymentDifferenceBreakdown(activePack, selectedTotalValue).blocksSelection : false;
+    buyButton.disabled = !activePack || !requiredFilled || needsPlayerVerification || paymentDifferenceBlocked;
+    if (paymentDifferenceBlocked) {
+      buyButton.textContent = paymentDifferenceBlockedBuyButtonLabel;
+    } else {
+      buyButton.textContent = needsPlayerVerification ? verifyUserBuyButtonLabel : defaultBuyButtonLabel;
+    }
     syncPlayerVerificationUi();
   }
   function updateResumenCompra(pack) {
     if (pack) {
       selectedPack.textContent = pack.name;
       selectedTotalValue = normalizeCurrencyAmount(pack.priceValue, pack.showDecimals);
-      selectedPrice.textContent = `${pack.moneda} ${formatCurrencyAmount(selectedTotalValue, pack.showDecimals)}`;
+      updateSelectedPriceDisplay(pack);
       if (selectedWinPointsTotal) {
         const requiredPoints = Number(pack.redeemRequiredPoints || 0);
         const hasWinPointsRedemption = Boolean(pack.redeemActive) && requiredPoints > 0;
@@ -3841,7 +4281,7 @@ include __DIR__ . "/includes/header.php";
     } else {
       selectedTotalValue = 0;
       selectedPack.textContent = 'Ninguno';
-      selectedPrice.textContent = `${monedaActualClave} ${formatCurrencyAmount(0, monedaActualMostrarDecimales)}`;
+      updateSelectedPriceDisplay(null);
       if (selectedWinPointsTotal) {
         selectedWinPointsTotal.textContent = '';
         selectedWinPointsTotal.classList.add('d-none');
@@ -4039,6 +4479,7 @@ include __DIR__ . "/includes/header.php";
                         : 'La recarga fue procesada correctamente.');
                       setPaymentAlert(successMessage, 'success');
                       renderDeliveredCodes(data);
+                      renderOverpaidPaymentDifference(data);
                       setPaymentFormDisabled(true);
                       clearPaymentTimer();
                       setCancelOrderButtonMode('close');
@@ -4074,6 +4515,7 @@ include __DIR__ . "/includes/header.php";
                       } else {
                         clearPaymentSupportUi();
                       }
+                      renderOverpaidPaymentDifference(data);
                       setPaymentFormDisabled(true);
                       clearPaymentTimer();
                       setCancelOrderButtonMode('close');
@@ -4090,6 +4532,9 @@ include __DIR__ . "/includes/header.php";
                     }
 
                     if (nextState === 'pendiente' && data && data.bank_checked) {
+                      if (renderUnderpaidPaymentDifference(data)) {
+                        return;
+                      }
                       const pendingMessage = data.message || 'No pudimos validar el pago automáticamente.';
                       setPaymentAlert(pendingMessage, 'danger');
                       renderPaymentFailureDetails(data, reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
@@ -4179,11 +4624,12 @@ include __DIR__ . "/includes/header.php";
                   console.log('Respuesta backend:', data);
                   if (data.success) {
                     selectedTotalValue = normalizeCurrencyAmount(data.nuevo_total, pack.showDecimals);
-                    selectedPrice.textContent = `${pack.moneda} ${formatCurrencyAmount(selectedTotalValue, pack.showDecimals)}`;
+                    updateSelectedPriceDisplay(pack);
                     showToast(data.message + ` Descuento: ${formatCurrencyAmount(data.descuento, pack.showDecimals)}`,'success');
                     couponInput.disabled = true;
                     applyCouponButton.disabled = true;
                     couponApplied = true;
+                    updateButtonState();
                   } else {
                     showToast(data.message, 'error');
                   }
@@ -4209,6 +4655,7 @@ include __DIR__ . "/includes/header.php";
                 handlePlayerVerificationFieldChange();
                 updateButtonState();
               });
+              setPaymentDifferenceCreditState(paymentDifferenceCreditState);
               orderForm.addEventListener('submit', function(event) {
                 event.preventDefault();
                 const btn = buyButton;
@@ -4346,7 +4793,13 @@ include __DIR__ . "/includes/header.php";
                     if (data.win_points && Number.isFinite(Number(data.win_points.balance))) {
                       syncWinPointsSummaryFromResponse(data.win_points, { silent: true });
                     }
-                    const opened = openPaymentModal(data.order_id, data.expires_at, data.remaining_seconds, pack, userId, selectedPrice.textContent, email);
+                    if (data && data.payment_difference && String(data.payment_difference.status || '').toLowerCase() === 'credit_applied') {
+                      setPaymentDifferenceCreditState(null);
+                    }
+                    const createdOrderTotalText = data && data.payment_difference && String(data.payment_difference.status || '').toLowerCase() === 'credit_applied'
+                      ? formatPaymentDifferenceMoney(pack.moneda || monedaActualClave, Number(data.payment_difference.remaining_amount || 0), pack.showDecimals)
+                      : selectedPrice.textContent;
+                    const opened = openPaymentModal(data.order_id, data.expires_at, data.remaining_seconds, pack, userId, createdOrderTotalText, email);
                     if (opened) {
                       showToast('Pedido registrado. Completa ahora los datos del pago.', 'success');
                     }
