@@ -512,7 +512,7 @@ include __DIR__ . "/includes/header.php";
   <?php if (!empty($gameEntryWindowPayload['enabled'])): ?>
   <div id="game-entry-window-modal" class="app-overlay-modal game-entry-window-modal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-      <div class="game-entry-window-modal-content" style="--entry-window-background: <?= htmlspecialchars((string) ($gameEntryWindowPayload['modal_background'] ?? '#18101e'), ENT_QUOTES, 'UTF-8') ?>; --entry-window-title-color: <?= htmlspecialchars((string) ($gameEntryWindowPayload['title_color'] ?? '#f8b53d'), ENT_QUOTES, 'UTF-8') ?>; --entry-window-check-color: <?= htmlspecialchars((string) ($gameEntryWindowPayload['check_text_color'] ?? '#e2e8f0'), ENT_QUOTES, 'UTF-8') ?>; --entry-window-check-background: <?= htmlspecialchars((string) ($gameEntryWindowPayload['check_background_color'] ?? '#1e293b'), ENT_QUOTES, 'UTF-8') ?>; --entry-window-button-color: <?= htmlspecialchars((string) ($gameEntryWindowPayload['button_text_color'] ?? '#0b0f18'), ENT_QUOTES, 'UTF-8') ?>; --entry-window-button-background: <?= htmlspecialchars((string) ($gameEntryWindowPayload['button_background_color'] ?? '#c99712'), ENT_QUOTES, 'UTF-8') ?>; --entry-window-button-disabled-color: <?= htmlspecialchars((string) ($gameEntryWindowPayload['button_disabled_text_color'] ?? '#0b0f18'), ENT_QUOTES, 'UTF-8') ?>; --entry-window-button-disabled-background: <?= htmlspecialchars((string) ($gameEntryWindowPayload['button_disabled_background_color'] ?? '#c99712'), ENT_QUOTES, 'UTF-8') ?>;">
+      <div class="game-entry-window-modal-content" style="--entry-window-background: <?= htmlspecialchars((string) ($gameEntryWindowPayload['modal_background'] ?? '#18101e'), ENT_QUOTES, 'UTF-8') ?>; --entry-window-border-color: <?= htmlspecialchars((string) ($gameEntryWindowPayload['modal_border_color'] ?? '#fb923c'), ENT_QUOTES, 'UTF-8') ?>; --entry-window-title-color: <?= htmlspecialchars((string) ($gameEntryWindowPayload['title_color'] ?? '#f8b53d'), ENT_QUOTES, 'UTF-8') ?>; --entry-window-check-color: <?= htmlspecialchars((string) ($gameEntryWindowPayload['check_text_color'] ?? '#e2e8f0'), ENT_QUOTES, 'UTF-8') ?>; --entry-window-check-background: <?= htmlspecialchars((string) ($gameEntryWindowPayload['check_background_color'] ?? '#1e293b'), ENT_QUOTES, 'UTF-8') ?>; --entry-window-button-color: <?= htmlspecialchars((string) ($gameEntryWindowPayload['button_text_color'] ?? '#0b0f18'), ENT_QUOTES, 'UTF-8') ?>; --entry-window-button-background: <?= htmlspecialchars((string) ($gameEntryWindowPayload['button_background_color'] ?? '#c99712'), ENT_QUOTES, 'UTF-8') ?>; --entry-window-button-disabled-color: <?= htmlspecialchars((string) ($gameEntryWindowPayload['button_disabled_text_color'] ?? '#0b0f18'), ENT_QUOTES, 'UTF-8') ?>; --entry-window-button-disabled-background: <?= htmlspecialchars((string) ($gameEntryWindowPayload['button_disabled_background_color'] ?? '#c99712'), ENT_QUOTES, 'UTF-8') ?>;">
         <div class="game-entry-window-modal-header">
           <div class="game-entry-window-modal-media">
             <?php if (!empty($gameEntryWindowPayload['icon'])): ?>
@@ -708,22 +708,22 @@ include __DIR__ . "/includes/header.php";
 
   .game-entry-window-modal-content {
     border-radius: 1.75rem;
-    padding: 1.35rem;
+    padding: 1rem;
     pointer-events: auto;
     background: radial-gradient(circle at top, rgba(251, 191, 36, 0.16), transparent 34%), linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)), var(--entry-window-background, #18101e);
-    border: 1px solid rgba(251, 191, 36, 0.26);
+    border: 1px solid var(--entry-window-border-color, #fb923c);
     box-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
   }
 
   .game-entry-window-modal-header {
     text-align: center;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
   }
 
   .game-entry-window-modal-media {
-    width: 84px;
-    height: 84px;
-    margin: 0 auto 0.9rem;
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 0.6rem;
     border-radius: 999px;
     border: 1px solid rgba(255,255,255,0.12);
     background: linear-gradient(135deg, rgba(250, 204, 21, 0.18), rgba(34, 211, 238, 0.18));
@@ -750,16 +750,18 @@ include __DIR__ . "/includes/header.php";
   .game-entry-window-modal-heading {
     margin: 0;
     color: var(--entry-window-title-color, #fbbf24);
-    font-size: clamp(1.5rem, 4vw, 2rem);
+    font-size: clamp(1.2rem, 3vw, 1.58rem);
     font-weight: 800;
     letter-spacing: 0.03em;
+    line-height: 1.04;
   }
 
   .game-entry-window-modal-copy {
-    margin: 0.5rem auto 0;
-    max-width: 30rem;
+    margin: 0.35rem auto 0;
+    max-width: 25rem;
     color: rgba(226, 232, 240, 0.84);
-    font-size: 0.96rem;
+    font-size: 0.86rem;
+    line-height: 1.45;
   }
 
   .game-entry-window-modal-cards {
@@ -816,16 +818,21 @@ include __DIR__ . "/includes/header.php";
     background: #020617;
   }
 
+  .game-entry-window-card-embed-tiktok {
+    min-height: 520px;
+    aspect-ratio: auto;
+  }
+
   .game-entry-window-confirmation {
     display: flex;
-    gap: 0.75rem;
+    gap: 0.6rem;
     align-items: center;
     position: relative;
     z-index: 3;
     pointer-events: auto;
-    padding: 0.95rem 1rem;
-    margin-bottom: 1rem;
-    border-radius: 1rem;
+    padding: 0.72rem 0.82rem;
+    margin-bottom: 0.8rem;
+    border-radius: 0.82rem;
     background: var(--entry-window-check-background, #1e293b);
     border: 1px solid rgba(255,255,255,0.08);
     color: var(--entry-window-check-color, #e2e8f0);
@@ -835,7 +842,7 @@ include __DIR__ . "/includes/header.php";
   .game-entry-window-confirmation-toggle {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.6rem;
     width: 100%;
     margin: 0;
     color: inherit;
@@ -845,14 +852,16 @@ include __DIR__ . "/includes/header.php";
   .game-entry-window-confirmation-text {
     flex: 1 1 auto;
     margin: 0;
+    font-size: 0.8rem;
+    line-height: 1.38;
   }
 
   .game-entry-window-confirmation-input {
     appearance: none;
     -webkit-appearance: none;
     pointer-events: auto;
-    width: 2.6rem;
-    height: 1.35rem;
+    width: 2.2rem;
+    height: 1.15rem;
     margin: 0;
     flex: 0 0 auto;
     cursor: pointer;
@@ -870,8 +879,8 @@ include __DIR__ . "/includes/header.php";
     position: absolute;
     top: 50%;
     left: 2px;
-    width: 1rem;
-    height: 1rem;
+    width: 0.82rem;
+    height: 0.82rem;
     border-radius: 999px;
     background: #f8fafc;
     transform: translateY(-50%);
@@ -888,7 +897,7 @@ include __DIR__ . "/includes/header.php";
   }
 
   .game-entry-window-confirmation .game-entry-window-confirmation-input:checked::after {
-    transform: translate(1.2rem, -50%);
+    transform: translate(1rem, -50%);
   }
 
   .game-entry-window-confirmation.is-checked {
@@ -902,7 +911,34 @@ include __DIR__ . "/includes/header.php";
     background: var(--entry-window-button-disabled-background, #c99712);
     border-color: transparent;
     color: var(--entry-window-button-disabled-color, #0b0f18);
+    min-height: 2.8rem;
+    font-size: 0.88rem;
     transition: background 0.2s ease, color 0.2s ease, opacity 0.2s ease;
+  }
+
+  @media (max-width: 575.98px) {
+    .game-entry-window-modal-content {
+      padding: 0.9rem;
+      border-radius: 1.5rem;
+    }
+
+    .game-entry-window-modal-media {
+      width: 56px;
+      height: 56px;
+      margin-bottom: 0.5rem;
+    }
+
+    .game-entry-window-modal-copy {
+      font-size: 0.8rem;
+    }
+
+    .game-entry-window-confirmation {
+      padding: 0.66rem 0.72rem;
+    }
+
+    .game-entry-window-card-embed-tiktok {
+      min-height: 460px;
+    }
   }
 
   #game-entry-window-continue:disabled {

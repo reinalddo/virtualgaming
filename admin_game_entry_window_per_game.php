@@ -155,6 +155,7 @@ $windowCopy = trim((string) ($config['copy'] ?? $defaults['copy']));
 $checkText = trim((string) ($config['check_text'] ?? $defaults['check_text']));
 $buttonText = trim((string) ($config['button_text'] ?? $defaults['button_text']));
 $modalBackground = store_config_normalize_hex_color((string) ($config['modal_background'] ?? $defaults['modal_background']), $defaults['modal_background']);
+$modalBorderColor = store_config_normalize_hex_color((string) ($config['modal_border_color'] ?? $defaults['modal_border_color']), $defaults['modal_border_color']);
 $titleColor = store_config_normalize_hex_color((string) ($config['title_color'] ?? $defaults['title_color']), $defaults['title_color']);
 $checkTextColor = store_config_normalize_hex_color((string) ($config['check_text_color'] ?? $defaults['check_text_color']), $defaults['check_text_color']);
 $checkBackgroundColor = store_config_normalize_hex_color((string) ($config['check_background_color'] ?? $defaults['check_background_color']), $defaults['check_background_color']);
@@ -301,21 +302,21 @@ $adminGamesUrl = app_path('/admin/juegos');
   .game-entry-window-modal-preview {
     width: min(100%, 340px);
     margin: 0 auto;
-    border-radius: 24px;
-    border: 1px solid rgba(251, 146, 60, 0.34);
+    border-radius: 22px;
+    border: 1px solid var(--window-modal-border, #fb923c);
     background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)), var(--window-modal-background, #18101e);
     overflow: hidden;
     box-shadow: 0 18px 48px rgba(0, 0, 0, 0.4);
   }
   .game-entry-window-modal-preview-header {
-    padding: 1.2rem 1rem 0.85rem;
+    padding: 0.9rem 0.9rem 0.65rem;
     text-align: center;
     border-bottom: 1px solid rgba(255,255,255,0.06);
   }
   .game-entry-window-modal-icon {
-    width: 68px;
-    height: 68px;
-    margin: 0 auto 0.85rem;
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 0.65rem;
     border-radius: 999px;
     background: rgba(34, 211, 238, 0.18);
     display: flex;
@@ -334,20 +335,21 @@ $adminGamesUrl = app_path('/admin/juegos');
   .game-entry-window-modal-title {
     color: var(--window-title-color, #f8b53d);
     font-family: 'Oxanium', 'Montserrat', sans-serif;
-    font-size: 1.7rem;
-    line-height: 1.05;
+    font-size: 1.34rem;
+    line-height: 1.02;
     font-weight: 700;
     margin: 0;
   }
   .game-entry-window-modal-copy {
-    margin: 0.7rem 0 0;
+    margin: 0.45rem 0 0;
     color: #dbe6f3;
-    font-size: 0.94rem;
+    font-size: 0.82rem;
+    line-height: 1.45;
   }
   .game-entry-window-modal-body {
-    padding: 1rem;
+    padding: 0.85rem;
     display: grid;
-    gap: 1rem;
+    gap: 0.8rem;
   }
   .game-entry-window-modal-preview-cards {
     display: grid;
@@ -390,9 +392,13 @@ $adminGamesUrl = app_path('/admin/juegos');
     aspect-ratio: 16 / 9;
     min-height: 220px;
   }
+  .game-entry-window-card-embed-tiktok {
+    min-height: 420px;
+    aspect-ratio: auto;
+  }
   .game-entry-window-modal-check {
-    padding: 0.9rem;
-    border-radius: 0.9rem;
+    padding: 0.7rem 0.8rem;
+    border-radius: 0.8rem;
     background: var(--window-check-background, #1e293b);
     border: 1px solid rgba(255,255,255,0.06);
     color: var(--window-check-color, #e2e8f0);
@@ -400,15 +406,19 @@ $adminGamesUrl = app_path('/admin/juegos');
   .game-entry-window-modal-check-toggle {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.6rem;
     width: 100%;
     margin: 0;
     color: inherit;
     cursor: pointer;
   }
+  .game-entry-window-modal-check-toggle span {
+    font-size: 0.78rem;
+    line-height: 1.35;
+  }
   .game-entry-window-modal-check-switch {
-    width: 2.6rem;
-    height: 1.35rem;
+    width: 2.2rem;
+    height: 1.15rem;
     margin: 0;
     flex: 0 0 auto;
     float: none;
@@ -424,10 +434,11 @@ $adminGamesUrl = app_path('/admin/juegos');
     width: 100%;
     border: 0;
     border-radius: 0.95rem;
-    min-height: 3.4rem;
+    min-height: 2.85rem;
     background: var(--window-button-disabled-background, #c99712);
     color: var(--window-button-disabled-color, #0b0f18);
     font-weight: 700;
+    font-size: 0.88rem;
     opacity: 0.72;
     transition: background 0.2s ease, color 0.2s ease, opacity 0.2s ease;
   }
@@ -486,6 +497,10 @@ $adminGamesUrl = app_path('/admin/juegos');
                 <input type="color" name="ventana_inicio_juego_modal_background" value="<?= htmlspecialchars($modalBackground, ENT_QUOTES, 'UTF-8') ?>" class="form-control form-control-color w-100" style="height:3rem;" data-window-modal-background-input>
               </div>
               <div class="col-md-4">
+                <label class="form-label">Borde del modal</label>
+                <input type="color" name="ventana_inicio_juego_modal_border_color" value="<?= htmlspecialchars($modalBorderColor, ENT_QUOTES, 'UTF-8') ?>" class="form-control form-control-color w-100" style="height:3rem;" data-window-modal-border-input>
+              </div>
+              <div class="col-md-4">
                 <label class="form-label">Color del título</label>
                 <input type="color" name="ventana_inicio_juego_title_color" value="<?= htmlspecialchars($titleColor, ENT_QUOTES, 'UTF-8') ?>" class="form-control form-control-color w-100" style="height:3rem;" data-window-title-color-input>
               </div>
@@ -533,7 +548,7 @@ $adminGamesUrl = app_path('/admin/juegos');
           <div class="col-xl-5">
             <div class="game-entry-window-preview-shell">
               <div class="game-entry-window-kicker">Vista previa de <?= htmlspecialchars($gameName, ENT_QUOTES, 'UTF-8') ?></div>
-              <div class="game-entry-window-modal-preview" data-window-modal-preview style="--window-modal-background: <?= htmlspecialchars($modalBackground, ENT_QUOTES, 'UTF-8') ?>; --window-title-color: <?= htmlspecialchars($titleColor, ENT_QUOTES, 'UTF-8') ?>; --window-check-color: <?= htmlspecialchars($checkTextColor, ENT_QUOTES, 'UTF-8') ?>; --window-check-background: <?= htmlspecialchars($checkBackgroundColor, ENT_QUOTES, 'UTF-8') ?>; --window-button-color: <?= htmlspecialchars($buttonTextColor, ENT_QUOTES, 'UTF-8') ?>; --window-button-background: <?= htmlspecialchars($buttonBackgroundColor, ENT_QUOTES, 'UTF-8') ?>; --window-button-disabled-color: <?= htmlspecialchars($buttonDisabledTextColor, ENT_QUOTES, 'UTF-8') ?>; --window-button-disabled-background: <?= htmlspecialchars($buttonDisabledBackgroundColor, ENT_QUOTES, 'UTF-8') ?>;">
+              <div class="game-entry-window-modal-preview" data-window-modal-preview style="--window-modal-background: <?= htmlspecialchars($modalBackground, ENT_QUOTES, 'UTF-8') ?>; --window-modal-border: <?= htmlspecialchars($modalBorderColor, ENT_QUOTES, 'UTF-8') ?>; --window-title-color: <?= htmlspecialchars($titleColor, ENT_QUOTES, 'UTF-8') ?>; --window-check-color: <?= htmlspecialchars($checkTextColor, ENT_QUOTES, 'UTF-8') ?>; --window-check-background: <?= htmlspecialchars($checkBackgroundColor, ENT_QUOTES, 'UTF-8') ?>; --window-button-color: <?= htmlspecialchars($buttonTextColor, ENT_QUOTES, 'UTF-8') ?>; --window-button-background: <?= htmlspecialchars($buttonBackgroundColor, ENT_QUOTES, 'UTF-8') ?>; --window-button-disabled-color: <?= htmlspecialchars($buttonDisabledTextColor, ENT_QUOTES, 'UTF-8') ?>; --window-button-disabled-background: <?= htmlspecialchars($buttonDisabledBackgroundColor, ENT_QUOTES, 'UTF-8') ?>;">
                 <div class="game-entry-window-modal-preview-header">
                   <div class="game-entry-window-modal-icon" data-window-icon-preview>
                     <img src="<?= htmlspecialchars($windowIcon, ENT_QUOTES, 'UTF-8') ?>" alt="Icono de la ventana">
@@ -600,6 +615,7 @@ $adminGamesUrl = app_path('/admin/juegos');
     const buttonPreview = document.querySelector('[data-window-button-preview]');
     const modalPreview = document.querySelector('[data-window-modal-preview]');
     const modalBackgroundInput = document.querySelector('[data-window-modal-background-input]');
+    const modalBorderInput = document.querySelector('[data-window-modal-border-input]');
     const titleColorInput = document.querySelector('[data-window-title-color-input]');
     const checkTextColorInput = document.querySelector('[data-window-check-text-color-input]');
     const checkBackgroundInput = document.querySelector('[data-window-check-background-input]');
@@ -672,6 +688,7 @@ $adminGamesUrl = app_path('/admin/juegos');
       }
 
       modalPreview.style.setProperty('--window-modal-background', modalBackgroundInput && modalBackgroundInput.value ? modalBackgroundInput.value : '#18101e');
+      modalPreview.style.setProperty('--window-modal-border', modalBorderInput && modalBorderInput.value ? modalBorderInput.value : '#fb923c');
       modalPreview.style.setProperty('--window-title-color', titleColorInput && titleColorInput.value ? titleColorInput.value : '#f8b53d');
       modalPreview.style.setProperty('--window-check-color', checkTextColorInput && checkTextColorInput.value ? checkTextColorInput.value : '#e2e8f0');
       modalPreview.style.setProperty('--window-check-background', checkBackgroundInput && checkBackgroundInput.value ? checkBackgroundInput.value : '#1e293b');
@@ -749,7 +766,7 @@ $adminGamesUrl = app_path('/admin/juegos');
 
     function extractTikTokId(url) {
       const value = String(url || '').trim();
-      const match = value.match(/\/video\/(\d+)/);
+      const match = value.match(/\/(?:video|embed\/v2|player\/v1)\/(\d+)/);
       return match ? match[1] : null;
     }
 
@@ -767,7 +784,7 @@ $adminGamesUrl = app_path('/admin/juegos');
 
         const tiktokId = extractTikTokId(normalizedEmbed);
         if (tiktokId) {
-          return '<div class="game-entry-window-card-media"><iframe class="game-entry-window-card-embed" src="https://www.tiktok.com/embed/v2/' + escapeHtml(tiktokId) + '" title="Video informativo" loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>';
+          return '<div class="game-entry-window-card-media"><iframe class="game-entry-window-card-embed game-entry-window-card-embed-tiktok" src="https://www.tiktok.com/player/v1/' + escapeHtml(tiktokId) + '" title="Video informativo" loading="lazy" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>';
         }
       }
 
@@ -1224,7 +1241,7 @@ $adminGamesUrl = app_path('/admin/juegos');
       });
     }
 
-    [modalBackgroundInput, titleColorInput, checkTextColorInput, checkBackgroundInput, buttonTextColorInput, buttonBackgroundInput, buttonDisabledTextColorInput, buttonDisabledBackgroundInput].forEach(function (input) {
+    [modalBackgroundInput, modalBorderInput, titleColorInput, checkTextColorInput, checkBackgroundInput, buttonTextColorInput, buttonBackgroundInput, buttonDisabledTextColorInput, buttonDisabledBackgroundInput].forEach(function (input) {
       if (!input) {
         return;
       }

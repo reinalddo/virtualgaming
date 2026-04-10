@@ -17,6 +17,7 @@ if (!function_exists('game_entry_window_defaults')) {
             'check_text' => 'He leido y entiendo las condiciones del servicio',
             'button_text' => 'Aceptar y continuar',
             'modal_background' => '#18101e',
+            'modal_border_color' => '#fb923c',
             'title_color' => '#f8b53d',
             'check_text_color' => '#e2e8f0',
             'check_background_color' => '#1e293b',
@@ -145,6 +146,7 @@ if (!function_exists('game_entry_window_legacy_seed_config')) {
             'check_text' => trim((string) store_config_get('ventana_inicio_juego_check_texto', $defaults['check_text'])) ?: $defaults['check_text'],
             'button_text' => trim((string) store_config_get('ventana_inicio_juego_boton_texto', $defaults['button_text'])) ?: $defaults['button_text'],
             'modal_background' => store_config_normalize_hex_color((string) store_config_get('ventana_inicio_juego_modal_background', $defaults['modal_background']), $defaults['modal_background']),
+            'modal_border_color' => store_config_normalize_hex_color((string) store_config_get('ventana_inicio_juego_modal_border_color', $defaults['modal_border_color']), $defaults['modal_border_color']),
             'title_color' => store_config_normalize_hex_color((string) store_config_get('ventana_inicio_juego_title_color', $defaults['title_color']), $defaults['title_color']),
             'check_text_color' => store_config_normalize_hex_color((string) store_config_get('ventana_inicio_juego_check_text_color', $defaults['check_text_color']), $defaults['check_text_color']),
             'check_background_color' => store_config_normalize_hex_color((string) store_config_get('ventana_inicio_juego_check_background_color', $defaults['check_background_color']), $defaults['check_background_color']),
@@ -170,6 +172,7 @@ if (!function_exists('game_entry_window_ensure_config_table')) {
                 check_texto TEXT NOT NULL,
                 boton_texto VARCHAR(255) NOT NULL,
                 modal_background VARCHAR(7) NOT NULL DEFAULT '#18101e',
+                modal_border_color VARCHAR(7) NOT NULL DEFAULT '#fb923c',
                 title_color VARCHAR(7) NOT NULL DEFAULT '#f8b53d',
                 check_text_color VARCHAR(7) NOT NULL DEFAULT '#e2e8f0',
                 check_background_color VARCHAR(7) NOT NULL DEFAULT '#1e293b',
@@ -200,7 +203,8 @@ if (!function_exists('game_entry_window_ensure_config_table')) {
             'check_texto' => "ALTER TABLE {$table} ADD COLUMN check_texto TEXT NOT NULL AFTER descripcion",
             'boton_texto' => "ALTER TABLE {$table} ADD COLUMN boton_texto VARCHAR(255) NOT NULL AFTER check_texto",
             'modal_background' => "ALTER TABLE {$table} ADD COLUMN modal_background VARCHAR(7) NOT NULL DEFAULT '#18101e' AFTER boton_texto",
-            'title_color' => "ALTER TABLE {$table} ADD COLUMN title_color VARCHAR(7) NOT NULL DEFAULT '#f8b53d' AFTER modal_background",
+            'modal_border_color' => "ALTER TABLE {$table} ADD COLUMN modal_border_color VARCHAR(7) NOT NULL DEFAULT '#fb923c' AFTER modal_background",
+            'title_color' => "ALTER TABLE {$table} ADD COLUMN title_color VARCHAR(7) NOT NULL DEFAULT '#f8b53d' AFTER modal_border_color",
             'check_text_color' => "ALTER TABLE {$table} ADD COLUMN check_text_color VARCHAR(7) NOT NULL DEFAULT '#e2e8f0' AFTER title_color",
             'check_background_color' => "ALTER TABLE {$table} ADD COLUMN check_background_color VARCHAR(7) NOT NULL DEFAULT '#1e293b' AFTER check_text_color",
             'button_text_color' => "ALTER TABLE {$table} ADD COLUMN button_text_color VARCHAR(7) NOT NULL DEFAULT '#0b0f18' AFTER check_background_color",
@@ -446,9 +450,9 @@ if (!function_exists('game_entry_window_seed_config_for_game')) {
         $stmt = $mysqli->prepare(
             "INSERT INTO {$table} (
                 juego_id, activa, titulo, icono, descripcion, check_texto, boton_texto,
-                modal_background, title_color, check_text_color, check_background_color,
+                modal_background, modal_border_color, title_color, check_text_color, check_background_color,
                 button_text_color, button_background_color, button_disabled_text_color, button_disabled_background_color
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
         if (!$stmt) {
             return;
@@ -456,7 +460,7 @@ if (!function_exists('game_entry_window_seed_config_for_game')) {
 
         $enabled = (int) $seed['enabled'];
         $stmt->bind_param(
-            'iisssssssssssss',
+            'iissssssssssssss',
             $gameId,
             $enabled,
             $seed['title'],
@@ -465,6 +469,7 @@ if (!function_exists('game_entry_window_seed_config_for_game')) {
             $seed['check_text'],
             $seed['button_text'],
             $seed['modal_background'],
+            $seed['modal_border_color'],
             $seed['title_color'],
             $seed['check_text_color'],
             $seed['check_background_color'],
@@ -561,6 +566,7 @@ if (!function_exists('game_entry_window_fetch_config')) {
             'check_text' => trim((string) ($row['check_texto'] ?? '')) ?: $defaults['check_text'],
             'button_text' => trim((string) ($row['boton_texto'] ?? '')) ?: $defaults['button_text'],
             'modal_background' => store_config_normalize_hex_color((string) ($row['modal_background'] ?? $defaults['modal_background']), $defaults['modal_background']),
+            'modal_border_color' => store_config_normalize_hex_color((string) ($row['modal_border_color'] ?? $defaults['modal_border_color']), $defaults['modal_border_color']),
             'title_color' => store_config_normalize_hex_color((string) ($row['title_color'] ?? $defaults['title_color']), $defaults['title_color']),
             'check_text_color' => store_config_normalize_hex_color((string) ($row['check_text_color'] ?? $defaults['check_text_color']), $defaults['check_text_color']),
             'check_background_color' => store_config_normalize_hex_color((string) ($row['check_background_color'] ?? $defaults['check_background_color']), $defaults['check_background_color']),
@@ -656,7 +662,7 @@ if (!function_exists('game_entry_window_extract_youtube_id')) {
 
 if (!function_exists('game_entry_window_extract_tiktok_id')) {
     function game_entry_window_extract_tiktok_id(string $url): ?string {
-        if (preg_match('~/video/(\d+)~', $url, $matches) === 1) {
+        if (preg_match('~/(?:video|embed/v2|player/v1)/(\d+)~', $url, $matches) === 1) {
             return $matches[1];
         }
 
@@ -681,7 +687,7 @@ if (!function_exists('game_entry_window_render_media_html')) {
 
             $tiktokId = game_entry_window_extract_tiktok_id($embedUrl);
             if ($tiktokId !== null) {
-                return '<div class="game-entry-window-card-media"><iframe class="game-entry-window-card-embed" src="https://www.tiktok.com/embed/v2/' . htmlspecialchars($tiktokId, ENT_QUOTES, 'UTF-8') . '" title="Video informativo" loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>';
+                return '<div class="game-entry-window-card-media"><iframe class="game-entry-window-card-embed game-entry-window-card-embed-tiktok" src="https://www.tiktok.com/player/v1/' . htmlspecialchars($tiktokId, ENT_QUOTES, 'UTF-8') . '" title="Video informativo" loading="lazy" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>';
             }
         }
 
@@ -723,6 +729,7 @@ if (!function_exists('game_entry_window_public_payload')) {
             'check_text' => $config['check_text'],
             'button_text' => $config['button_text'],
             'modal_background' => $config['modal_background'],
+            'modal_border_color' => $config['modal_border_color'],
             'title_color' => $config['title_color'],
             'check_text_color' => $config['check_text_color'],
             'check_background_color' => $config['check_background_color'],
@@ -757,6 +764,7 @@ if (!function_exists('game_entry_window_save_from_request')) {
         $checkText = trim((string) ($post['ventana_inicio_juego_check_texto'] ?? $currentConfig['check_text'] ?? $defaults['check_text']));
         $buttonText = trim((string) ($post['ventana_inicio_juego_boton_texto'] ?? $currentConfig['button_text'] ?? $defaults['button_text']));
         $modalBackground = store_config_normalize_hex_color((string) ($post['ventana_inicio_juego_modal_background'] ?? $currentConfig['modal_background'] ?? $defaults['modal_background']), $defaults['modal_background']);
+        $modalBorderColor = store_config_normalize_hex_color((string) ($post['ventana_inicio_juego_modal_border_color'] ?? $currentConfig['modal_border_color'] ?? $defaults['modal_border_color']), $defaults['modal_border_color']);
         $titleColor = store_config_normalize_hex_color((string) ($post['ventana_inicio_juego_title_color'] ?? $currentConfig['title_color'] ?? $defaults['title_color']), $defaults['title_color']);
         $checkTextColor = store_config_normalize_hex_color((string) ($post['ventana_inicio_juego_check_text_color'] ?? $currentConfig['check_text_color'] ?? $defaults['check_text_color']), $defaults['check_text_color']);
         $checkBackgroundColor = store_config_normalize_hex_color((string) ($post['ventana_inicio_juego_check_background_color'] ?? $currentConfig['check_background_color'] ?? $defaults['check_background_color']), $defaults['check_background_color']);
@@ -911,7 +919,7 @@ if (!function_exists('game_entry_window_save_from_request')) {
         $stmt = $mysqli->prepare(
             "UPDATE {$configTable}
              SET activa = ?, titulo = ?, icono = ?, descripcion = ?, check_texto = ?, boton_texto = ?,
-                 modal_background = ?, title_color = ?, check_text_color = ?, check_background_color = ?,
+                 modal_background = ?, modal_border_color = ?, title_color = ?, check_text_color = ?, check_background_color = ?,
                  button_text_color = ?, button_background_color = ?, button_disabled_text_color = ?, button_disabled_background_color = ?
              WHERE juego_id = ? LIMIT 1"
         );
@@ -927,7 +935,7 @@ if (!function_exists('game_entry_window_save_from_request')) {
         $safeCheckText = $checkText !== '' ? $checkText : $defaults['check_text'];
         $safeButtonText = $buttonText !== '' ? $buttonText : $defaults['button_text'];
         $stmt->bind_param(
-            'isssssssssssssi',
+            'issssssssssssssi',
             $enabled,
             $safeTitle,
             $currentIcon,
@@ -935,6 +943,7 @@ if (!function_exists('game_entry_window_save_from_request')) {
             $safeCheckText,
             $safeButtonText,
             $modalBackground,
+            $modalBorderColor,
             $titleColor,
             $checkTextColor,
             $checkBackgroundColor,
