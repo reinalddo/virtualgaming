@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/includes/game_entry_window.php';
+require_once __DIR__ . '/includes/game_entry_window_per_game.php';
 
 if (!function_exists('render_game_entry_window_html_editor')) {
     function render_game_entry_window_html_editor(string $name, string $value, string $templateName, int $rows = 6, string $placeholder = ''): void {
@@ -48,8 +48,12 @@ if (!function_exists('render_game_entry_window_card_editor')) {
         $color = store_config_normalize_hex_color((string) ($card['color'] ?? '#233A73'), '#233A73');
         $backgroundColor = store_config_normalize_hex_color((string) ($card['background_color'] ?? '#121a2f'), '#121a2f');
         $contentHtml = (string) ($card['content_html'] ?? '');
+    $mediaPath = trim((string) ($card['media_path'] ?? ''));
+    $mediaEmbedUrl = trim((string) ($card['media_embed_url'] ?? ''));
+    $hasMedia = $mediaPath !== '' || $mediaEmbedUrl !== '';
+        $previewMarkup = game_entry_window_render_card_markup($card);
         ?>
-        <div class="game-entry-card-editor" data-game-entry-card>
+        <div class="game-entry-card-editor" data-game-entry-card data-current-media-path="<?= htmlspecialchars($mediaPath, ENT_QUOTES, 'UTF-8') ?>" data-current-media-embed="<?= htmlspecialchars($mediaEmbedUrl, ENT_QUOTES, 'UTF-8') ?>">
           <input type="hidden" name="cards[<?= htmlspecialchars($token, ENT_QUOTES, 'UTF-8') ?>][id]" data-name-template="cards[__INDEX__][id]" value="<?= $cardId ?>">
           <div class="game-entry-card-header">
             <div>
@@ -80,6 +84,30 @@ if (!function_exists('render_game_entry_window_card_editor')) {
                   </div>
                 </div>
               </div>
+              <div class="row g-3">
+                <div class="col-12">
+                  <label class="form-label">Multimedia de la tarjeta</label>
+                  <input type="file" name="cards_media[<?= htmlspecialchars($token, ENT_QUOTES, 'UTF-8') ?>]" data-name-template="cards_media[__INDEX__]" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/ogg,video/quicktime" class="form-control" data-card-media-file-input>
+                  <div class="form-text">Sube una imagen o video compatible. Si cargas un archivo nuevo, reemplazará la multimedia actual de esta tarjeta.</div>
+                </div>
+                <div class="col-12">
+                  <label class="form-label">URL embed de YouTube o TikTok</label>
+                  <input type="url" name="cards[<?= htmlspecialchars($token, ENT_QUOTES, 'UTF-8') ?>][media_embed_url]" data-name-template="cards[__INDEX__][media_embed_url]" value="<?= htmlspecialchars($mediaEmbedUrl, ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="https://www.youtube.com/watch?v=... o https://www.tiktok.com/..." data-card-media-embed-input>
+                  <div class="form-text">Si completas esta URL, el embed tendrá prioridad y el helper limpiará el archivo anterior al guardar.</div>
+                </div>
+                <?php if ($hasMedia): ?>
+                  <div class="col-12">
+                    <div class="small text-info mb-2">Multimedia actual de la tarjeta</div>
+                    <div class="p-3 rounded border border-info-subtle bg-dark-subtle">
+                      <?= game_entry_window_render_media_html($mediaPath, $mediaEmbedUrl) ?>
+                    </div>
+                    <div class="form-check mt-3">
+                      <input class="form-check-input" type="checkbox" name="cards[<?= htmlspecialchars($token, ENT_QUOTES, 'UTF-8') ?>][media_remove]" data-name-template="cards[__INDEX__][media_remove]" value="1" id="cardMediaRemove<?= htmlspecialchars($token, ENT_QUOTES, 'UTF-8') ?>" data-card-media-remove-input>
+                      <label class="form-check-label" for="cardMediaRemove<?= htmlspecialchars($token, ENT_QUOTES, 'UTF-8') ?>">Eliminar la multimedia actual al guardar</label>
+                    </div>
+                  </div>
+                <?php endif; ?>
+              </div>
               <div>
                 <label class="form-label">Contenido HTML</label>
                 <?php render_game_entry_window_html_editor('cards[' . $token . '][content_html]', $contentHtml, 'cards[__INDEX__][content_html]', 7, 'Escribe aqui las reglas o avisos de esta tarjeta'); ?>
@@ -89,7 +117,7 @@ if (!function_exists('render_game_entry_window_card_editor')) {
               <label class="form-label">Vista previa</label>
               <div class="game-entry-card-preview-wrap">
                 <div class="game-entry-card-preview" data-card-preview style="--card-preview-color: <?= htmlspecialchars($color, ENT_QUOTES, 'UTF-8') ?>; --card-preview-background: <?= htmlspecialchars($backgroundColor, ENT_QUOTES, 'UTF-8') ?>;">
-                  <?= $contentHtml !== '' ? $contentHtml : '<p><strong>Vista previa</strong></p><p>Escribe contenido para ver cómo quedará la tarjeta.</p>' ?>
+                  <?= $previewMarkup !== '' ? $previewMarkup : '<p><strong>Vista previa</strong></p><p>Escribe contenido para ver cómo quedará la tarjeta.</p>' ?>
                 </div>
               </div>
             </div>
@@ -99,28 +127,44 @@ if (!function_exists('render_game_entry_window_card_editor')) {
     }
 }
 
+$mysqli = store_config_db();
+$gameId = game_entry_window_game_id($_POST['game_id'] ?? $_GET['game_id'] ?? 0);
+$game = game_entry_window_fetch_game($mysqli, $gameId);
+
+if ($gameId <= 0 || !$game) {
+    ?>
+    <div class="container py-4">
+      <div class="alert alert-danger">No se encontró el juego seleccionado para configurar su ventana inicial.</div>
+    </div>
+    <?php
+    return;
+}
+
 $defaults = game_entry_window_defaults();
-$cards = game_entry_window_fetch_cards(store_config_db(), false);
+$config = game_entry_window_fetch_config($mysqli, $gameId);
+$cards = game_entry_window_fetch_cards($mysqli, $gameId, false);
 if ($cards === []) {
     $cards = [game_entry_window_default_card_template()];
 }
-$storedWindowIcon = trim((string) store_config_get('ventana_inicio_juego_icono', ''));
-$windowIcon = game_entry_window_resolve_icon_path($storedWindowIcon);
+
 $defaultWindowIcon = game_entry_window_default_icon_path();
-$usingDefaultWindowIcon = $storedWindowIcon === '' || $storedWindowIcon === $defaultWindowIcon;
-$windowTitle = trim((string) store_config_get('ventana_inicio_juego_titulo', $defaults['title']));
-$windowCopy = trim((string) store_config_get('ventana_inicio_juego_descripcion', $defaults['copy']));
-$checkText = trim((string) store_config_get('ventana_inicio_juego_check_texto', $defaults['check_text']));
-$buttonText = trim((string) store_config_get('ventana_inicio_juego_boton_texto', $defaults['button_text']));
-$modalBackground = store_config_normalize_hex_color((string) store_config_get('ventana_inicio_juego_modal_background', $defaults['modal_background']), $defaults['modal_background']);
-$titleColor = store_config_normalize_hex_color((string) store_config_get('ventana_inicio_juego_title_color', $defaults['title_color']), $defaults['title_color']);
-$checkTextColor = store_config_normalize_hex_color((string) store_config_get('ventana_inicio_juego_check_text_color', $defaults['check_text_color']), $defaults['check_text_color']);
-$checkBackgroundColor = store_config_normalize_hex_color((string) store_config_get('ventana_inicio_juego_check_background_color', $defaults['check_background_color']), $defaults['check_background_color']);
-$buttonTextColor = store_config_normalize_hex_color((string) store_config_get('ventana_inicio_juego_button_text_color', $defaults['button_text_color']), $defaults['button_text_color']);
-$buttonBackgroundColor = store_config_normalize_hex_color((string) store_config_get('ventana_inicio_juego_button_background_color', $defaults['button_background_color']), $defaults['button_background_color']);
-$buttonDisabledTextColor = store_config_normalize_hex_color((string) store_config_get('ventana_inicio_juego_button_disabled_text_color', $defaults['button_disabled_text_color']), $defaults['button_disabled_text_color']);
-$buttonDisabledBackgroundColor = store_config_normalize_hex_color((string) store_config_get('ventana_inicio_juego_button_disabled_background_color', $defaults['button_disabled_background_color']), $defaults['button_disabled_background_color']);
-$windowEnabled = game_entry_window_enabled();
+$windowIcon = game_entry_window_resolve_icon_path((string) ($config['icon'] ?? ''));
+$usingDefaultWindowIcon = trim($windowIcon) === '' || $windowIcon === $defaultWindowIcon;
+$windowTitle = trim((string) ($config['title'] ?? $defaults['title']));
+$windowCopy = trim((string) ($config['copy'] ?? $defaults['copy']));
+$checkText = trim((string) ($config['check_text'] ?? $defaults['check_text']));
+$buttonText = trim((string) ($config['button_text'] ?? $defaults['button_text']));
+$modalBackground = store_config_normalize_hex_color((string) ($config['modal_background'] ?? $defaults['modal_background']), $defaults['modal_background']);
+$titleColor = store_config_normalize_hex_color((string) ($config['title_color'] ?? $defaults['title_color']), $defaults['title_color']);
+$checkTextColor = store_config_normalize_hex_color((string) ($config['check_text_color'] ?? $defaults['check_text_color']), $defaults['check_text_color']);
+$checkBackgroundColor = store_config_normalize_hex_color((string) ($config['check_background_color'] ?? $defaults['check_background_color']), $defaults['check_background_color']);
+$buttonTextColor = store_config_normalize_hex_color((string) ($config['button_text_color'] ?? $defaults['button_text_color']), $defaults['button_text_color']);
+$buttonBackgroundColor = store_config_normalize_hex_color((string) ($config['button_background_color'] ?? $defaults['button_background_color']), $defaults['button_background_color']);
+$buttonDisabledTextColor = store_config_normalize_hex_color((string) ($config['button_disabled_text_color'] ?? $defaults['button_disabled_text_color']), $defaults['button_disabled_text_color']);
+$buttonDisabledBackgroundColor = store_config_normalize_hex_color((string) ($config['button_disabled_background_color'] ?? $defaults['button_disabled_background_color']), $defaults['button_disabled_background_color']);
+$windowEnabled = !empty($config['enabled']);
+$gameName = trim((string) ($game['nombre'] ?? 'Juego')) ?: 'Juego';
+$adminGamesUrl = app_path('/admin/juegos');
 ?>
 <style>
   .influencer-html-editor {
@@ -295,6 +339,11 @@ $windowEnabled = game_entry_window_enabled();
     font-weight: 700;
     margin: 0;
   }
+  .game-entry-window-modal-copy {
+    margin: 0.7rem 0 0;
+    color: #dbe6f3;
+    font-size: 0.94rem;
+  }
   .game-entry-window-modal-body {
     padding: 1rem;
     display: grid;
@@ -318,6 +367,28 @@ $windowEnabled = game_entry_window_enabled();
   .game-entry-window-modal-card h2:last-child,
   .game-entry-window-modal-card h3:last-child {
     margin-bottom: 0;
+  }
+  .game-entry-window-card-media {
+    margin-bottom: 0.85rem;
+  }
+  .game-entry-window-card-image,
+  .game-entry-window-card-video,
+  .game-entry-window-card-embed {
+    display: block;
+    width: 100%;
+    border: 0;
+    border-radius: 0.9rem;
+    background: rgba(2, 6, 23, 0.55);
+    overflow: hidden;
+  }
+  .game-entry-window-card-image,
+  .game-entry-window-card-video {
+    max-height: 240px;
+    object-fit: cover;
+  }
+  .game-entry-window-card-embed {
+    aspect-ratio: 16 / 9;
+    min-height: 220px;
   }
   .game-entry-window-modal-check {
     padding: 0.9rem;
@@ -370,20 +441,26 @@ $windowEnabled = game_entry_window_enabled();
 <div class="container py-4">
   <div class="game-entry-window-shell">
     <div class="game-entry-window-hero">
-      <div class="game-entry-window-kicker">Ventana Inicial en Juegos</div>
-      <h2 class="display-6 fw-bold text-info mb-3">Configura la ventana global que aparece al abrir cualquier juego</h2>
-      <p class="text-light mb-0">Aquí defines el icono, el título y todas las tarjetas informativas de la ventana. El comportamiento final depende del valor de la clave <strong>ventana_inicio_juego</strong> en la configuración general del proyecto.</p>
+      <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+        <div>
+          <div class="game-entry-window-kicker">Ventana Inicial por Juego</div>
+          <h2 class="display-6 fw-bold text-info mb-2">Configura la ventana inicial de <?= htmlspecialchars($gameName, ENT_QUOTES, 'UTF-8') ?></h2>
+          <p class="text-light mb-0">Esta configuración aplica solo al juego seleccionado. En VirtualGaming, el funcionamiento final sigue dependiendo de la clave global <strong>ventana_inicio_juego</strong>.</p>
+        </div>
+        <a href="<?= htmlspecialchars($adminGamesUrl, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-outline-info">Volver a juegos</a>
+      </div>
     </div>
 
     <form method="POST" enctype="multipart/form-data" class="d-grid gap-4">
       <input type="hidden" name="game_entry_window_save" value="1">
+      <input type="hidden" name="game_id" value="<?= $gameId ?>">
 
       <div class="game-entry-window-hero">
         <div class="row g-4 align-items-start">
           <div class="col-xl-7 d-grid gap-3">
             <div class="form-check form-switch">
               <input class="form-check-input" type="checkbox" name="ventana_inicio_juego_activa" id="ventanaInicioJuegoActiva" value="1" <?= $windowEnabled ? 'checked' : '' ?>>
-              <label class="form-check-label fw-semibold" for="ventanaInicioJuegoActiva">Mostrar esta ventana cada vez que el usuario entre a un juego</label>
+              <label class="form-check-label fw-semibold" for="ventanaInicioJuegoActiva">Mostrar esta ventana cuando el usuario entre a <?= htmlspecialchars($gameName, ENT_QUOTES, 'UTF-8') ?></label>
             </div>
             <div>
               <label class="form-label">Título de la ventana</label>
@@ -455,7 +532,7 @@ $windowEnabled = game_entry_window_enabled();
           </div>
           <div class="col-xl-5">
             <div class="game-entry-window-preview-shell">
-              <div class="game-entry-window-kicker">Vista previa global</div>
+              <div class="game-entry-window-kicker">Vista previa de <?= htmlspecialchars($gameName, ENT_QUOTES, 'UTF-8') ?></div>
               <div class="game-entry-window-modal-preview" data-window-modal-preview style="--window-modal-background: <?= htmlspecialchars($modalBackground, ENT_QUOTES, 'UTF-8') ?>; --window-title-color: <?= htmlspecialchars($titleColor, ENT_QUOTES, 'UTF-8') ?>; --window-check-color: <?= htmlspecialchars($checkTextColor, ENT_QUOTES, 'UTF-8') ?>; --window-check-background: <?= htmlspecialchars($checkBackgroundColor, ENT_QUOTES, 'UTF-8') ?>; --window-button-color: <?= htmlspecialchars($buttonTextColor, ENT_QUOTES, 'UTF-8') ?>; --window-button-background: <?= htmlspecialchars($buttonBackgroundColor, ENT_QUOTES, 'UTF-8') ?>; --window-button-disabled-color: <?= htmlspecialchars($buttonDisabledTextColor, ENT_QUOTES, 'UTF-8') ?>; --window-button-disabled-background: <?= htmlspecialchars($buttonDisabledBackgroundColor, ENT_QUOTES, 'UTF-8') ?>;">
                 <div class="game-entry-window-modal-preview-header">
                   <div class="game-entry-window-modal-icon" data-window-icon-preview>
@@ -468,7 +545,7 @@ $windowEnabled = game_entry_window_enabled();
                   <div class="game-entry-window-modal-preview-cards" data-window-cards-preview>
                     <?php foreach ($cards as $card): ?>
                       <?php if (empty($card['activo'])) { continue; } ?>
-                      <div class="game-entry-window-modal-card" style="--preview-card-color: <?= htmlspecialchars((string) ($card['color'] ?? '#233A73'), ENT_QUOTES, 'UTF-8') ?>; --preview-card-background: <?= htmlspecialchars((string) ($card['background_color'] ?? '#121a2f'), ENT_QUOTES, 'UTF-8') ?>;"><?= (string) ($card['content_html'] ?? '') ?></div>
+                      <div class="game-entry-window-modal-card" style="--preview-card-color: <?= htmlspecialchars((string) ($card['color'] ?? '#233A73'), ENT_QUOTES, 'UTF-8') ?>; --preview-card-background: <?= htmlspecialchars((string) ($card['background_color'] ?? '#121a2f'), ENT_QUOTES, 'UTF-8') ?>;"><?= game_entry_window_render_card_markup(is_array($card) ? $card : []) ?></div>
                     <?php endforeach; ?>
                   </div>
                   <div class="game-entry-window-modal-check">
@@ -488,7 +565,7 @@ $windowEnabled = game_entry_window_enabled();
       <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
         <div>
           <div class="game-entry-window-kicker mb-1">Tarjetas informativas</div>
-          <p class="text-light mb-0">Agrega, ordena, activa o elimina todas las tarjetas que necesites. Cada fila muestra su editor y la vista previa al lado.</p>
+          <p class="text-light mb-0">Agrega, ordena, activa o elimina todas las tarjetas que necesites para este juego. Cada fila muestra su editor y la vista previa al lado.</p>
         </div>
         <button type="button" class="btn btn-outline-info" data-add-card>Agregar tarjeta</button>
       </div>
@@ -503,7 +580,7 @@ $windowEnabled = game_entry_window_enabled();
         <?php render_game_entry_window_card_editor('__INDEX__', game_entry_window_default_card_template()); ?>
       </template>
 
-      <button type="submit" class="neon-btn w-100 py-3">Guardar Ventana Inicial en Juegos</button>
+      <button type="submit" class="neon-btn w-100 py-3">Guardar Ventana Inicial de <?= htmlspecialchars($gameName, ENT_QUOTES, 'UTF-8') ?></button>
     </form>
   </div>
 </div>
@@ -629,6 +706,117 @@ $windowEnabled = game_entry_window_enabled();
       return 'rgba(' + red + ', ' + green + ', ' + blue + ', ' + alpha + ')';
     }
 
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function extractYouTubeId(url) {
+      const value = String(url || '').trim();
+      if (!value) {
+        return null;
+      }
+
+      try {
+        const parsed = new URL(value, window.location.origin);
+        const host = parsed.hostname.replace(/^www\./, '').toLowerCase();
+        const path = parsed.pathname.replace(/^\/+|\/+$/g, '');
+        if (host === 'youtu.be') {
+          return /^[A-Za-z0-9_-]{6,20}$/.test(path) ? path : null;
+        }
+
+        if (host.indexOf('youtube.com') !== -1) {
+          const candidate = (parsed.searchParams.get('v') || '').trim();
+          if (candidate !== '') {
+            return /^[A-Za-z0-9_-]{6,20}$/.test(candidate) ? candidate : null;
+          }
+
+          const match = path.match(/^(shorts|embed)\/([A-Za-z0-9_-]{6,20})$/);
+          if (match) {
+            return match[2];
+          }
+        }
+      } catch (error) {
+        return null;
+      }
+
+      return null;
+    }
+
+    function extractTikTokId(url) {
+      const value = String(url || '').trim();
+      const match = value.match(/\/video\/(\d+)/);
+      return match ? match[1] : null;
+    }
+
+    function isVideoPath(path) {
+      return /\.(mp4|webm|ogv|ogg|mov)(\?.*)?$/i.test(String(path || '').trim());
+    }
+
+    function renderSavedMediaMarkup(mediaPath, embedUrl) {
+      const normalizedEmbed = String(embedUrl || '').trim();
+      if (normalizedEmbed) {
+        const youtubeId = extractYouTubeId(normalizedEmbed);
+        if (youtubeId) {
+          return '<div class="game-entry-window-card-media"><iframe class="game-entry-window-card-embed" src="https://www.youtube.com/embed/' + escapeHtml(youtubeId) + '" title="Video informativo" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>';
+        }
+
+        const tiktokId = extractTikTokId(normalizedEmbed);
+        if (tiktokId) {
+          return '<div class="game-entry-window-card-media"><iframe class="game-entry-window-card-embed" src="https://www.tiktok.com/embed/v2/' + escapeHtml(tiktokId) + '" title="Video informativo" loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>';
+        }
+      }
+
+      const normalizedPath = String(mediaPath || '').trim();
+      if (!normalizedPath) {
+        return '';
+      }
+
+      if (isVideoPath(normalizedPath)) {
+        return '<div class="game-entry-window-card-media"><video class="game-entry-window-card-video" src="' + escapeHtml(normalizedPath) + '" controls playsinline preload="metadata"></video></div>';
+      }
+
+      return '<div class="game-entry-window-card-media"><img class="game-entry-window-card-image" src="' + escapeHtml(normalizedPath) + '" alt="Multimedia informativa"></div>';
+    }
+
+    function renderUploadMediaMarkup(fileUrl, mimeType) {
+      const normalizedUrl = String(fileUrl || '').trim();
+      if (!normalizedUrl) {
+        return '';
+      }
+
+      if (String(mimeType || '').toLowerCase().indexOf('video/') === 0) {
+        return '<div class="game-entry-window-card-media"><video class="game-entry-window-card-video" src="' + escapeHtml(normalizedUrl) + '" controls playsinline preload="metadata"></video></div>';
+      }
+
+      return '<div class="game-entry-window-card-media"><img class="game-entry-window-card-image" src="' + escapeHtml(normalizedUrl) + '" alt="Multimedia informativa"></div>';
+    }
+
+    function getCardMediaMarkup(card) {
+      const embedInput = card.querySelector('[data-card-media-embed-input]');
+      const removeInput = card.querySelector('[data-card-media-remove-input]');
+      const currentMediaPath = card.dataset.currentMediaPath || '';
+      const currentMediaEmbed = card.dataset.currentMediaEmbed || '';
+      const embedValue = embedInput ? embedInput.value.trim() : '';
+      if (embedValue !== '') {
+        return renderSavedMediaMarkup('', embedValue);
+      }
+
+      if (card.dataset.uploadPreviewUrl) {
+        return renderUploadMediaMarkup(card.dataset.uploadPreviewUrl, card.dataset.uploadPreviewMime || '');
+      }
+
+      if (removeInput && removeInput.checked) {
+        return '';
+      }
+
+      return renderSavedMediaMarkup(currentMediaPath, currentMediaEmbed);
+    }
+
     function setIconPreview(src) {
       if (!iconPreview) {
         return;
@@ -672,10 +860,11 @@ $windowEnabled = game_entry_window_enabled();
         const color = card.querySelector('[data-card-color-input]');
         const background = card.querySelector('[data-card-background-input]');
         const htmlField = card.querySelector('[data-editor-textarea]');
-        if (!active || !color || !background || !htmlField || !active.checked || htmlField.value.trim() === '') {
+        const mediaMarkup = getCardMediaMarkup(card);
+        if (!active || !color || !background || !htmlField || !active.checked || (htmlField.value.trim() === '' && mediaMarkup === '')) {
           return;
         }
-        fragments.push('<div class="game-entry-window-modal-card" style="--preview-card-color:' + (color.value || '#233A73') + '; --preview-card-background:' + (background.value || '#121a2f') + ';">' + htmlField.value + '</div>');
+        fragments.push('<div class="game-entry-window-modal-card" style="--preview-card-color:' + (color.value || '#233A73') + '; --preview-card-background:' + (background.value || '#121a2f') + ';">' + mediaMarkup + htmlField.value + '</div>');
       });
 
       cardsPreview.innerHTML = fragments.length
@@ -688,6 +877,7 @@ $windowEnabled = game_entry_window_enabled();
       const colorInput = card.querySelector('[data-card-color-input]');
       const backgroundInput = card.querySelector('[data-card-background-input]');
       const preview = card.querySelector('[data-card-preview]');
+      const mediaMarkup = getCardMediaMarkup(card);
       if (!htmlField || !colorInput || !backgroundInput || !preview) {
         return;
       }
@@ -695,8 +885,8 @@ $windowEnabled = game_entry_window_enabled();
       preview.style.setProperty('--card-preview-color', colorInput.value || '#233A73');
       preview.style.setProperty('--card-preview-background', backgroundInput.value || '#121a2f');
       preview.style.boxShadow = '0 16px 34px ' + hexToRgba(colorInput.value || '#233A73', 0.16) + ', inset 0 0 0 1px rgba(255,255,255,0.02)';
-      preview.innerHTML = htmlField.value.trim() !== ''
-        ? htmlField.value
+      preview.innerHTML = (mediaMarkup !== '' || htmlField.value.trim() !== '')
+        ? mediaMarkup + htmlField.value
         : '<p><strong>Vista previa</strong></p><p>Escribe contenido para ver cómo quedará la tarjeta.</p>';
       syncGlobalCardsPreview();
     }
@@ -901,6 +1091,9 @@ $windowEnabled = game_entry_window_enabled();
       const backgroundInput = card.querySelector('[data-card-background-input]');
       const activeInput = card.querySelector('[data-card-active-input]');
       const orderInput = card.querySelector('[data-card-order-input]');
+      const mediaFileInput = card.querySelector('[data-card-media-file-input]');
+      const mediaEmbedInput = card.querySelector('[data-card-media-embed-input]');
+      const mediaRemoveInput = card.querySelector('[data-card-media-remove-input]');
 
       if (removeButton) {
         removeButton.addEventListener('click', function () {
@@ -936,6 +1129,39 @@ $windowEnabled = game_entry_window_enabled();
       if (orderInput) {
         orderInput.addEventListener('input', function () {
           refreshCardOrderLabels();
+          syncGlobalCardsPreview();
+        });
+      }
+
+      if (mediaFileInput) {
+        mediaFileInput.addEventListener('change', function () {
+          const file = mediaFileInput.files && mediaFileInput.files[0] ? mediaFileInput.files[0] : null;
+          if (!file) {
+            delete card.dataset.uploadPreviewUrl;
+            delete card.dataset.uploadPreviewMime;
+            syncCardPreview(card);
+            return;
+          }
+
+          const reader = new FileReader();
+          reader.onload = function (event) {
+            card.dataset.uploadPreviewUrl = String(event.target && event.target.result ? event.target.result : '');
+            card.dataset.uploadPreviewMime = String(file.type || '');
+            syncCardPreview(card);
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      if (mediaEmbedInput) {
+        mediaEmbedInput.addEventListener('input', function () {
+          syncCardPreview(card);
+        });
+      }
+
+      if (mediaRemoveInput) {
+        mediaRemoveInput.addEventListener('change', function () {
+          syncCardPreview(card);
         });
       }
 

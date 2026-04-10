@@ -3,6 +3,7 @@
 require_once '../includes/db_connect.php';
 require_once '../includes/tenant.php';
 require_once '../includes/recargas_api.php';
+require_once '../includes/game_entry_window_per_game.php';
 require_once '../includes/slugify.php';
 
 function admin_games_is_ajax_request(): bool {
@@ -104,6 +105,8 @@ ensure_juegos_slug_column($mysqli);
 
 $adminGamesUrl = app_path('/admin/juegos');
 $adminPackagesBaseUrl = app_path('/admin/paquetes');
+$adminGameEntryWindowBaseUrl = app_path('/admin/ventana-inicial-juegos');
+$gameEntryWindowEnabled = game_entry_window_feature_available();
 $apiCategories = [];
 $apiCategoriesError = null;
 if (recargas_api_is_configured()) {
@@ -511,6 +514,9 @@ if ($resPaquetes instanceof mysqli_result) {
                         <td style="background:#181f2a;">
                             <a href="<?= htmlspecialchars($adminGamesUrl, ENT_QUOTES, 'UTF-8') ?>?editar=<?= $j['id'] ?>" style="color:#00fff7; text-decoration:underline; margin-right:1em;">Editar</a>
                             <a href="<?= htmlspecialchars($adminPackagesBaseUrl, ENT_QUOTES, 'UTF-8') ?>/<?= $j['id'] ?>" style="color:#00fff7; text-decoration:underline; margin-right:1em;">Paquetes</a>
+                                                        <?php if ($gameEntryWindowEnabled): ?>
+                                                            <a href="<?= htmlspecialchars($adminGameEntryWindowBaseUrl . '?game_id=' . (int) $j['id'], ENT_QUOTES, 'UTF-8') ?>" style="color:#facc15; text-decoration:underline; margin-right:1em;">Configurar Ventana Inicial</a>
+                                                        <?php endif; ?>
                             <a href="<?= htmlspecialchars($adminGamesUrl, ENT_QUOTES, 'UTF-8') ?>?eliminar=<?= $j['id'] ?>" style="color:#ff0059; text-decoration:underline;" onclick="return confirm('¿Eliminar este juego y todos sus paquetes/características?')">Eliminar</a>
                         </td>
                     </tr>
@@ -582,6 +588,9 @@ if ($resPaquetes instanceof mysqli_result) {
                     <div class="mt-3 d-flex gap-3 flex-wrap">
                         <a href="/admin/juegos?editar=<?= $j['id'] ?>" style="color:#22d3ee; text-decoration:underline; font-weight:bold;">Editar</a>
                         <a href="/admin/paquetes/<?= $j['id'] ?>" style="color:#22d3ee; text-decoration:underline; font-weight:bold;">Paquetes</a>
+                                                <?php if ($gameEntryWindowEnabled): ?>
+                                                    <a href="<?= htmlspecialchars($adminGameEntryWindowBaseUrl . '?game_id=' . (int) $j['id'], ENT_QUOTES, 'UTF-8') ?>" style="color:#facc15; text-decoration:underline; font-weight:bold;">Configurar Ventana Inicial</a>
+                                                <?php endif; ?>
                         <a href="/admin/juegos?eliminar=<?= $j['id'] ?>" style="color:#ff0059; text-decoration:underline; font-weight:bold;" onclick="return confirm('¿Eliminar este juego y todos sus paquetes/características?')">Eliminar</a>
                     </div>
                 </div>

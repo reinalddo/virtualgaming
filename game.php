@@ -9,7 +9,7 @@ require_once __DIR__ . "/includes/slugify.php";
 require_once __DIR__ . "/includes/player_verification.php";
 require_once __DIR__ . "/includes/package_features.php";
 require_once __DIR__ . "/includes/payment_difference.php";
-require_once __DIR__ . "/includes/game_entry_window.php";
+require_once __DIR__ . "/includes/game_entry_window_per_game.php";
 require_once __DIR__ . "/includes/win_points.php";
 currency_ensure_schema();
 package_features_ensure_schema($mysqli);
@@ -165,7 +165,7 @@ if (!$game) {
   die('Juego no encontrado.');
 }
 
-$gameEntryWindowPayload = game_entry_window_public_payload($mysqli);
+$gameEntryWindowPayload = game_entry_window_public_payload($mysqli, (int) ($game['id'] ?? 0));
 
 if ($loggedUserId > 0) {
   $legacyPurchaseDefaults = fetch_user_legacy_purchase_defaults($mysqli, $loggedUserId);
@@ -527,7 +527,7 @@ include __DIR__ . "/includes/header.php";
         <div class="game-entry-window-modal-cards">
           <?php foreach (($gameEntryWindowPayload['cards'] ?? []) as $entryCard): ?>
             <article class="game-entry-window-info-card" style="--entry-card-color: <?= htmlspecialchars((string) ($entryCard['color'] ?? '#233A73'), ENT_QUOTES, 'UTF-8') ?>; --entry-card-background: <?= htmlspecialchars((string) ($entryCard['background_color'] ?? '#121a2f'), ENT_QUOTES, 'UTF-8') ?>; --entry-card-glow: <?= htmlspecialchars(game_entry_window_hex_to_rgba((string) ($entryCard['color'] ?? '#233A73'), 0.18), ENT_QUOTES, 'UTF-8') ?>;">
-              <?= (string) ($entryCard['content_html'] ?? '') ?>
+              <?= game_entry_window_render_card_markup(is_array($entryCard) ? $entryCard : []) ?>
             </article>
           <?php endforeach; ?>
         </div>
@@ -787,6 +787,33 @@ include __DIR__ . "/includes/header.php";
   .game-entry-window-info-card h2:last-child,
   .game-entry-window-info-card h3:last-child {
     margin-bottom: 0;
+  }
+
+  .game-entry-window-card-media {
+    margin-bottom: 0.9rem;
+    border-radius: 0.9rem;
+    overflow: hidden;
+    background: rgba(2, 6, 23, 0.35);
+  }
+
+  .game-entry-window-card-image,
+  .game-entry-window-card-video,
+  .game-entry-window-card-embed {
+    width: 100%;
+    display: block;
+    border: 0;
+  }
+
+  .game-entry-window-card-image,
+  .game-entry-window-card-video {
+    max-height: 320px;
+    object-fit: cover;
+  }
+
+  .game-entry-window-card-embed {
+    min-height: 240px;
+    aspect-ratio: 16 / 9;
+    background: #020617;
   }
 
   .game-entry-window-confirmation {
