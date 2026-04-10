@@ -68,6 +68,7 @@ $themeDefinitions = store_theme_definitions();
 $themeBaseValues = store_theme_base_values();
 $themeValues = store_theme_values();
 $paymentHeaderMinimalEnabled = ($cfg['encabezado_pago'] ?? '0') === '1';
+$paymentDifferenceConfigEnabled = ($cfg['diferencia_pago'] ?? '0') === '1';
 $paymentWindowConfigEnabled = ($cfg['ventana_pago_config'] ?? '0') === '1';
 $paymentWindowSendingTitle = trim((string) ($cfg['ventana_pago_enviando_titulo'] ?? 'Enviando orden...'));
 if ($paymentWindowSendingTitle === '') {
@@ -130,10 +131,32 @@ $paymentWindowThemeGroups = [
     'theme_payment_status_button_text',
   ],
 ];
+$paymentDifferenceThemeGroups = [
+  'Diferencia de pagos' => [
+    'theme_payment_difference_underpaid_card_bg',
+    'theme_payment_difference_underpaid_text',
+    'theme_payment_difference_underpaid_button_bg',
+    'theme_payment_difference_underpaid_button_text',
+    'theme_payment_difference_underpaid_button_hover_bg',
+    'theme_payment_difference_underpaid_button_hover_text',
+    'theme_payment_difference_overpaid_card_bg',
+    'theme_payment_difference_overpaid_text',
+    'theme_payment_difference_overpaid_button_bg',
+    'theme_payment_difference_overpaid_button_text',
+    'theme_payment_difference_overpaid_button_hover_bg',
+    'theme_payment_difference_overpaid_button_hover_text',
+  ],
+];
 $paymentWindowThemeKeys = [];
 foreach ($paymentWindowThemeGroups as $groupKeys) {
   foreach ($groupKeys as $groupKey) {
     $paymentWindowThemeKeys[] = $groupKey;
+  }
+}
+$paymentDifferenceThemeKeys = [];
+foreach ($paymentDifferenceThemeGroups as $groupKeys) {
+  foreach ($groupKeys as $groupKey) {
+    $paymentDifferenceThemeKeys[] = $groupKey;
   }
 }
 $themeFieldGroups = [
@@ -152,6 +175,11 @@ if ($paymentHeaderMinimalEnabled) {
 if ($paymentWindowConfigEnabled) {
   foreach ($paymentWindowThemeGroups as $paymentWindowGroupTitle => $paymentWindowGroupKeys) {
     $themeFieldGroups[$paymentWindowGroupTitle] = $paymentWindowGroupKeys;
+  }
+}
+if ($paymentDifferenceConfigEnabled) {
+  foreach ($paymentDifferenceThemeGroups as $paymentDifferenceGroupTitle => $paymentDifferenceGroupKeys) {
+    $themeFieldGroups[$paymentDifferenceGroupTitle] = $paymentDifferenceGroupKeys;
   }
 }
 $themeFieldGroups['Textos y estados'] = ['theme_text', 'theme_text_muted', 'theme_price_text', 'theme_price_muted', 'theme_warning', 'theme_danger'];
@@ -1260,6 +1288,11 @@ $googleCallbackUrl = google_oauth_callback_url();
               <?php if (!$paymentWindowConfigEnabled): ?>
                 <?php foreach ($paymentWindowThemeKeys as $paymentWindowThemeKey): ?>
                   <input type="hidden" name="<?= htmlspecialchars($paymentWindowThemeKey, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars($themeValues[$paymentWindowThemeKey], ENT_QUOTES, 'UTF-8') ?>">
+                <?php endforeach; ?>
+              <?php endif; ?>
+              <?php if (!$paymentDifferenceConfigEnabled): ?>
+                <?php foreach ($paymentDifferenceThemeKeys as $paymentDifferenceThemeKey): ?>
+                  <input type="hidden" name="<?= htmlspecialchars($paymentDifferenceThemeKey, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars($themeValues[$paymentDifferenceThemeKey], ENT_QUOTES, 'UTF-8') ?>">
                 <?php endforeach; ?>
               <?php endif; ?>
               <div class="config-section-note mb-4">Los valores `theme_*` quedan como base fija. Aquí solo editas una copia activa de esa paleta. Si el cliente quiere volver al diseño original, puedes restaurar la copia editable desde los valores base.</div>

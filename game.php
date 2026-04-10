@@ -1421,6 +1421,78 @@ include __DIR__ . "/includes/header.php";
     color: var(--theme-payment-status-button-text, #081018) !important;
   }
 
+  .payment-modal-content.payment-modal-skin-enabled .payment-reasons-card[data-payment-difference-variant="underpaid"],
+  #payment-status-modal.payment-window-theme-enabled .payment-reasons-card[data-payment-difference-variant="underpaid"] {
+    background: linear-gradient(180deg, rgba(var(--theme-payment-difference-underpaid-card-bg-rgb, 120, 53, 15), 0.34), rgba(var(--theme-payment-main-card-bg-rgb, 8, 15, 24), 0.92));
+    border-color: rgba(var(--theme-payment-difference-underpaid-card-bg-rgb, 120, 53, 15), 0.78);
+    box-shadow: inset 0 0 0 1px rgba(var(--theme-payment-difference-underpaid-card-bg-rgb, 120, 53, 15), 0.12);
+  }
+
+  .payment-modal-content.payment-modal-skin-enabled .payment-reasons-card[data-payment-difference-variant="underpaid"] .payment-reasons-title,
+  .payment-modal-content.payment-modal-skin-enabled .payment-reasons-card[data-payment-difference-variant="underpaid"] .payment-reasons-summary,
+  .payment-modal-content.payment-modal-skin-enabled .payment-reasons-card[data-payment-difference-variant="underpaid"] .payment-reasons-steps,
+  .payment-modal-content.payment-modal-skin-enabled .payment-reasons-card[data-payment-difference-variant="underpaid"] .payment-reasons-caption,
+  .payment-modal-content.payment-modal-skin-enabled .payment-reasons-card[data-payment-difference-variant="underpaid"] ul,
+  #payment-status-modal.payment-window-theme-enabled .payment-reasons-card[data-payment-difference-variant="underpaid"] .payment-reasons-title,
+  #payment-status-modal.payment-window-theme-enabled .payment-reasons-card[data-payment-difference-variant="underpaid"] .payment-reasons-summary,
+  #payment-status-modal.payment-window-theme-enabled .payment-reasons-card[data-payment-difference-variant="underpaid"] .payment-reasons-steps,
+  #payment-status-modal.payment-window-theme-enabled .payment-reasons-card[data-payment-difference-variant="underpaid"] .payment-reasons-caption,
+  #payment-status-modal.payment-window-theme-enabled .payment-reasons-card[data-payment-difference-variant="underpaid"] ul {
+    color: var(--theme-payment-difference-underpaid-text, #FDE68A) !important;
+  }
+
+  .payment-modal-content.payment-modal-skin-enabled .payment-reasons-card[data-payment-difference-variant="overpaid"],
+  #payment-status-modal.payment-window-theme-enabled .payment-reasons-card[data-payment-difference-variant="overpaid"] {
+    background: linear-gradient(180deg, rgba(var(--theme-payment-difference-overpaid-card-bg-rgb, 6, 78, 59), 0.34), rgba(var(--theme-payment-main-card-bg-rgb, 8, 15, 24), 0.92));
+    border-color: rgba(var(--theme-payment-difference-overpaid-card-bg-rgb, 6, 78, 59), 0.78);
+    box-shadow: inset 0 0 0 1px rgba(var(--theme-payment-difference-overpaid-card-bg-rgb, 6, 78, 59), 0.12);
+  }
+
+  .payment-modal-content.payment-modal-skin-enabled .payment-reasons-card[data-payment-difference-variant="overpaid"] .payment-reasons-title,
+  .payment-modal-content.payment-modal-skin-enabled .payment-reasons-card[data-payment-difference-variant="overpaid"] .payment-reasons-summary,
+  .payment-modal-content.payment-modal-skin-enabled .payment-reasons-card[data-payment-difference-variant="overpaid"] .payment-reasons-steps,
+  .payment-modal-content.payment-modal-skin-enabled .payment-reasons-card[data-payment-difference-variant="overpaid"] .payment-reasons-caption,
+  .payment-modal-content.payment-modal-skin-enabled .payment-reasons-card[data-payment-difference-variant="overpaid"] ul,
+  #payment-status-modal.payment-window-theme-enabled .payment-reasons-card[data-payment-difference-variant="overpaid"] .payment-reasons-title,
+  #payment-status-modal.payment-window-theme-enabled .payment-reasons-card[data-payment-difference-variant="overpaid"] .payment-reasons-summary,
+  #payment-status-modal.payment-window-theme-enabled .payment-reasons-card[data-payment-difference-variant="overpaid"] .payment-reasons-steps,
+  #payment-status-modal.payment-window-theme-enabled .payment-reasons-card[data-payment-difference-variant="overpaid"] .payment-reasons-caption,
+  #payment-status-modal.payment-window-theme-enabled .payment-reasons-card[data-payment-difference-variant="overpaid"] ul {
+    color: var(--theme-payment-difference-overpaid-text, #D1FAE5) !important;
+  }
+
+  .payment-difference-action-btn {
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .payment-window-theme-enabled .payment-difference-actions[data-payment-difference-variant="underpaid"] .payment-difference-action-btn {
+    background: var(--theme-payment-difference-underpaid-button-bg, #F59E0B) !important;
+    border-color: rgba(var(--theme-payment-difference-underpaid-button-bg-rgb, 245, 158, 11), 0.88) !important;
+    color: var(--theme-payment-difference-underpaid-button-text, #111827) !important;
+    box-shadow: 0 0 18px rgba(var(--theme-payment-difference-underpaid-button-bg-rgb, 245, 158, 11), 0.22);
+  }
+
+  .payment-window-theme-enabled .payment-difference-actions[data-payment-difference-variant="underpaid"] .payment-difference-action-btn:hover,
+  .payment-window-theme-enabled .payment-difference-actions[data-payment-difference-variant="underpaid"] .payment-difference-action-btn:focus {
+    background: var(--theme-payment-difference-underpaid-button-hover-bg, #FBBF24) !important;
+    border-color: rgba(var(--theme-payment-difference-underpaid-button-hover-bg-rgb, 251, 191, 36), 0.92) !important;
+    color: var(--theme-payment-difference-underpaid-button-hover-text, #111827) !important;
+  }
+
+  .payment-window-theme-enabled .payment-difference-actions[data-payment-difference-variant="overpaid"] .payment-difference-action-btn {
+    background: var(--theme-payment-difference-overpaid-button-bg, #10B981) !important;
+    border-color: rgba(var(--theme-payment-difference-overpaid-button-bg-rgb, 16, 185, 129), 0.88) !important;
+    color: var(--theme-payment-difference-overpaid-button-text, #052E16) !important;
+    box-shadow: 0 0 18px rgba(var(--theme-payment-difference-overpaid-button-bg-rgb, 16, 185, 129), 0.22);
+  }
+
+  .payment-window-theme-enabled .payment-difference-actions[data-payment-difference-variant="overpaid"] .payment-difference-action-btn:hover,
+  .payment-window-theme-enabled .payment-difference-actions[data-payment-difference-variant="overpaid"] .payment-difference-action-btn:focus {
+    background: var(--theme-payment-difference-overpaid-button-hover-bg, #34D399) !important;
+    border-color: rgba(var(--theme-payment-difference-overpaid-button-hover-bg-rgb, 52, 211, 153), 0.92) !important;
+    color: var(--theme-payment-difference-overpaid-button-hover-text, #022C22) !important;
+  }
+
   .payment-confirm-overlay {
     z-index: 1115;
     background: rgba(5, 10, 20, 0.38);
@@ -2262,6 +2334,7 @@ include __DIR__ . "/includes/header.php";
   const paymentStatusModalReasons = document.getElementById('payment-status-modal-reasons');
   const paymentStatusModalActions = document.getElementById('payment-status-modal-actions');
   const paymentStatusModalAccept = document.getElementById('payment-status-modal-accept');
+  const defaultPaymentStatusAcceptLabel = paymentStatusModalAccept ? paymentStatusModalAccept.textContent : 'Aceptar';
   const modalCouponName = document.getElementById('modal-coupon-name');
   const modalYes = document.getElementById('modal-yes');
   const modalNo = document.getElementById('modal-no');
@@ -2530,7 +2603,25 @@ include __DIR__ . "/includes/header.php";
     updatePaymentTimer();
   }
 
-  function renderPaymentActionButtons(actions) {
+  function setPaymentStatusAcceptHidden(isHidden) {
+    if (!paymentStatusModalAccept) {
+      return;
+    }
+
+    paymentStatusModalAccept.classList.toggle('d-none', !!isHidden);
+    if (isHidden) {
+      paymentStatusModalAccept.setAttribute('aria-hidden', 'true');
+    } else {
+      paymentStatusModalAccept.removeAttribute('aria-hidden');
+    }
+  }
+
+  function renderPaymentActionButtons(actions, options = {}) {
+    const variant = options && (options.variant === 'underpaid' || options.variant === 'overpaid')
+      ? options.variant
+      : '';
+    const hideDefaultStatusAccept = !!(options && options.hideDefaultStatusAccept);
+
     const applyActions = (container) => {
       if (!container) {
         return;
@@ -2539,14 +2630,20 @@ include __DIR__ . "/includes/header.php";
       container.innerHTML = '';
       if (!Array.isArray(actions) || actions.length === 0) {
         container.className = 'd-none payment-support-actions mb-4';
+        container.removeAttribute('data-payment-difference-variant');
         return;
       }
 
       container.className = 'payment-support-actions payment-difference-actions mb-4';
+      if (variant !== '') {
+        container.setAttribute('data-payment-difference-variant', variant);
+      } else {
+        container.removeAttribute('data-payment-difference-variant');
+      }
       actions.forEach((action) => {
         const button = document.createElement('button');
         button.type = 'button';
-        button.className = `btn ${action.className || 'btn-info'} fw-bold`;
+        button.className = `btn ${action.className || 'btn-info'} fw-bold payment-difference-action-btn`;
         button.textContent = action.label;
         button.addEventListener('click', action.onClick);
         container.appendChild(button);
@@ -2555,6 +2652,7 @@ include __DIR__ . "/includes/header.php";
 
     applyActions(paymentModalActions);
     applyActions(paymentStatusModalActions);
+    setPaymentStatusAcceptHidden(hideDefaultStatusAccept);
   }
 
   function prepareSameOrderCompletion(message) {
@@ -2629,19 +2727,19 @@ include __DIR__ . "/includes/header.php";
       'Realiza otro pago por el monto restante para este mismo pedido.',
       'Ingresa la nueva referencia cuando el banco la refleje.',
       'No necesitas crear otra orden para completar esta recarga.'
-    ], []);
+    ], [], { variant: 'underpaid' });
     renderSupportCard(paymentStatusModalReasons, 'Pago recibido parcialmente', summary, [
       'Realiza otro pago por el monto restante para este mismo pedido.',
       'Ingresa la nueva referencia cuando el banco la refleje.',
       'No necesitas crear otra orden para completar esta recarga.'
-    ], []);
+    ], [], { variant: 'underpaid' });
     renderPaymentActionButtons([
       {
         label: completeRechargeButtonLabel,
         className: 'btn-info',
         onClick: () => prepareSameOrderCompletion('Realiza el pago restante y registra la nueva referencia para completar esta recarga.')
       }
-    ]);
+    ], { variant: 'underpaid', hideDefaultStatusAccept: true });
     if (paymentSubmitButton) {
       paymentSubmitButton.textContent = completeRechargeButtonLabel;
     }
@@ -2673,9 +2771,9 @@ include __DIR__ . "/includes/header.php";
       : ['Este pedido ya consumió su oportunidad de completar otra recarga con saldo a favor.'];
 
     if (!extractProviderCodes(data).length) {
-      renderSupportCard(paymentModalReasons, 'Se detectó un monto mayor al esperado', summary, steps, []);
+      renderSupportCard(paymentModalReasons, 'Se detectó un monto mayor al esperado', summary, steps, [], { variant: 'overpaid' });
     }
-    renderSupportCard(paymentStatusModalReasons, 'Se detectó un monto mayor al esperado', summary, steps, []);
+    renderSupportCard(paymentStatusModalReasons, 'Se detectó un monto mayor al esperado', summary, steps, [], { variant: 'overpaid' });
 
     const actions = [
       {
@@ -2701,7 +2799,7 @@ include __DIR__ . "/includes/header.php";
       });
     }
 
-    renderPaymentActionButtons(actions);
+    renderPaymentActionButtons(actions, { variant: 'overpaid', hideDefaultStatusAccept: true });
     return true;
   }
 
@@ -3887,7 +3985,7 @@ include __DIR__ . "/includes/header.php";
     }
     if (paymentStatusModalAccept) {
       paymentStatusModalAccept.disabled = false;
-      paymentStatusModalAccept.textContent = 'Aceptar';
+      paymentStatusModalAccept.textContent = defaultPaymentStatusAcceptLabel;
     }
   }
 
@@ -3896,7 +3994,7 @@ include __DIR__ . "/includes/header.php";
       return;
     }
     paymentStatusModalAccept.disabled = !!isWaiting;
-    paymentStatusModalAccept.textContent = isWaiting ? 'Esperando confirmación...' : 'Aceptar';
+    paymentStatusModalAccept.textContent = isWaiting ? 'Esperando confirmación...' : defaultPaymentStatusAcceptLabel;
   }
 
   async function pollOrderResolution(reference, totalText, attempt = 1) {
@@ -4073,19 +4171,24 @@ include __DIR__ . "/includes/header.php";
     if (paymentModalReasons) {
       paymentModalReasons.className = 'd-none payment-reasons-card mb-3';
       paymentModalReasons.innerHTML = '';
+      paymentModalReasons.removeAttribute('data-payment-difference-variant');
     }
     if (paymentModalActions) {
       paymentModalActions.className = 'd-none payment-support-actions mb-4';
       paymentModalActions.innerHTML = '';
+      paymentModalActions.removeAttribute('data-payment-difference-variant');
     }
     if (paymentStatusModalReasons) {
       paymentStatusModalReasons.className = 'd-none payment-reasons-card mb-3 text-start';
       paymentStatusModalReasons.innerHTML = '';
+      paymentStatusModalReasons.removeAttribute('data-payment-difference-variant');
     }
     if (paymentStatusModalActions) {
       paymentStatusModalActions.className = 'd-none payment-support-actions mb-4';
       paymentStatusModalActions.innerHTML = '';
+      paymentStatusModalActions.removeAttribute('data-payment-difference-variant');
     }
+    setPaymentStatusAcceptHidden(false);
     if (paymentSubmitButton) {
       paymentSubmitButton.textContent = defaultPaymentSubmitButtonLabel;
     }
@@ -4228,16 +4331,24 @@ include __DIR__ . "/includes/header.php";
     return true;
   }
 
-  function renderSupportCard(container, title, summary, steps, reasons) {
+  function renderSupportCard(container, title, summary, steps, reasons, options = {}) {
     if (!container) {
       return;
     }
 
+    const variant = options && (options.variant === 'underpaid' || options.variant === 'overpaid')
+      ? options.variant
+      : '';
     const safeSummary = String(summary || '').trim();
     const safeSteps = Array.isArray(steps) ? steps.filter((step) => String(step || '').trim() !== '') : [];
     const safeReasons = Array.isArray(reasons) ? reasons.filter((reason) => String(reason || '').trim() !== '') : [];
 
     container.className = `payment-reasons-card mb-3${container.id === 'payment-status-modal-reasons' ? ' text-start' : ''}`;
+    if (variant !== '') {
+      container.setAttribute('data-payment-difference-variant', variant);
+    } else {
+      container.removeAttribute('data-payment-difference-variant');
+    }
     container.innerHTML = `
       <div class="payment-reasons-title">${escapePaymentHtml(title)}</div>
       ${safeSummary !== '' ? `<div class="payment-reasons-summary">${escapePaymentHtml(safeSummary)}</div>` : ''}

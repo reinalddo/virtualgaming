@@ -314,6 +314,66 @@ function store_theme_definitions(): array {
             'default' => '#081018',
             'description' => 'Color del texto del botón principal del modal final de estado del pago',
         ],
+        'theme_payment_difference_underpaid_card_bg' => [
+            'label' => 'Diferencia faltante tarjeta',
+            'default' => '#78350F',
+            'description' => 'Color base de la tarjeta mostrada cuando falta saldo por completar en la diferencia de pagos',
+        ],
+        'theme_payment_difference_underpaid_text' => [
+            'label' => 'Diferencia faltante texto',
+            'default' => '#FDE68A',
+            'description' => 'Color del texto de la tarjeta cuando falta saldo por completar en la diferencia de pagos',
+        ],
+        'theme_payment_difference_underpaid_button_bg' => [
+            'label' => 'Diferencia faltante botón fondo',
+            'default' => '#F59E0B',
+            'description' => 'Color de fondo de los botones del caso donde falta saldo por completar',
+        ],
+        'theme_payment_difference_underpaid_button_text' => [
+            'label' => 'Diferencia faltante botón texto',
+            'default' => '#111827',
+            'description' => 'Color del texto de los botones del caso donde falta saldo por completar',
+        ],
+        'theme_payment_difference_underpaid_button_hover_bg' => [
+            'label' => 'Diferencia faltante hover fondo',
+            'default' => '#FBBF24',
+            'description' => 'Color de fondo hover de los botones del caso donde falta saldo por completar',
+        ],
+        'theme_payment_difference_underpaid_button_hover_text' => [
+            'label' => 'Diferencia faltante hover texto',
+            'default' => '#111827',
+            'description' => 'Color del texto hover de los botones del caso donde falta saldo por completar',
+        ],
+        'theme_payment_difference_overpaid_card_bg' => [
+            'label' => 'Diferencia excedente tarjeta',
+            'default' => '#064E3B',
+            'description' => 'Color base de la tarjeta mostrada cuando queda saldo a favor en la diferencia de pagos',
+        ],
+        'theme_payment_difference_overpaid_text' => [
+            'label' => 'Diferencia excedente texto',
+            'default' => '#D1FAE5',
+            'description' => 'Color del texto de la tarjeta cuando queda saldo a favor en la diferencia de pagos',
+        ],
+        'theme_payment_difference_overpaid_button_bg' => [
+            'label' => 'Diferencia excedente botón fondo',
+            'default' => '#10B981',
+            'description' => 'Color de fondo de los botones del caso donde queda saldo a favor',
+        ],
+        'theme_payment_difference_overpaid_button_text' => [
+            'label' => 'Diferencia excedente botón texto',
+            'default' => '#052E16',
+            'description' => 'Color del texto de los botones del caso donde queda saldo a favor',
+        ],
+        'theme_payment_difference_overpaid_button_hover_bg' => [
+            'label' => 'Diferencia excedente hover fondo',
+            'default' => '#34D399',
+            'description' => 'Color de fondo hover de los botones del caso donde queda saldo a favor',
+        ],
+        'theme_payment_difference_overpaid_button_hover_text' => [
+            'label' => 'Diferencia excedente hover texto',
+            'default' => '#022C22',
+            'description' => 'Color del texto hover de los botones del caso donde queda saldo a favor',
+        ],
         'theme_float_whatsapp_bg' => [
             'label' => 'Flotante WhatsApp',
             'default' => '#22C55E',
