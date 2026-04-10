@@ -1477,6 +1477,21 @@ switch ($seccion) {
         }
         break;
 
+    case 'ventana-inicial-juegos':
+        if (trim((string) store_config_get('ventana_inicio_juego', '0')) !== '1') {
+            admin_set_flash('error', 'La función Ventana Inicial en Juegos no está activa para este tenant.');
+            admin_redirect('comprar-funciones-extra');
+        }
+
+        require_once __DIR__ . '/includes/game_entry_window.php';
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['game_entry_window_save'])) {
+            $result = game_entry_window_save_from_request($_POST, $_FILES);
+            admin_set_flash($result['success'] ? 'success' : 'error', (string) ($result['message'] ?? 'No se pudo actualizar la ventana inicial en juegos.'));
+            admin_redirect('ventana-inicial-juegos');
+        }
+        break;
+
     case 'configuracion':
         require_once __DIR__ . '/includes/store_config.php';
         require_once __DIR__ . '/includes/home_gallery.php';
@@ -2147,6 +2162,7 @@ define('ADMIN_LAYOUT_EMBEDDED', true);
 $influencerInstructionsEnabled = store_config_get('instrucciones_influencer', '0') === '1';
 $adminInfluencerInstructionsPath = app_path('/admin/instrucciones-influencer');
 $adminExtraFeaturesPath = app_path('/admin/comprar-funciones-extra');
+$adminGameEntryWindowPath = app_path('/admin/ventana-inicial-juegos');
 
 // Header y menú igual al inicio
 require_once __DIR__ . '/includes/header.php';
@@ -2175,6 +2191,9 @@ require_once __DIR__ . '/includes/header.php';
                 <a href="<?= htmlspecialchars($adminExtraFeaturesPath, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>🧩</span>Comprar Funciones Extra</a>
                 <?php if ($influencerInstructionsEnabled): ?>
                 <a href="<?= htmlspecialchars($adminInfluencerInstructionsPath, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>🤝</span>Instrucciones Influencer</a>
+                <?php endif; ?>
+                <?php if (trim((string) store_config_get('ventana_inicio_juego', '0')) === '1'): ?>
+                <a href="<?= htmlspecialchars($adminGameEntryWindowPath, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>🪟</span>Ventana Inicial en Juegos</a>
                 <?php endif; ?>
                 <a href="/admin/configuracion" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>⚙️</span>Configuración</a>
                 <?php endif; ?>
@@ -3463,6 +3482,9 @@ require_once __DIR__ . '/includes/header.php';
                 break;
             case 'instrucciones-influencer':
                 require_once __DIR__ . '/admin_influencer_instructions.php';
+                break;
+            case 'ventana-inicial-juegos':
+                require_once __DIR__ . '/admin_game_entry_window.php';
                 break;
             case 'configuracion':
                 require_once __DIR__ . '/admin_configuracion.php';

@@ -9,6 +9,7 @@ require_once __DIR__ . "/includes/slugify.php";
 require_once __DIR__ . "/includes/player_verification.php";
 require_once __DIR__ . "/includes/package_features.php";
 require_once __DIR__ . "/includes/payment_difference.php";
+require_once __DIR__ . "/includes/game_entry_window.php";
 require_once __DIR__ . "/includes/win_points.php";
 currency_ensure_schema();
 package_features_ensure_schema($mysqli);
@@ -163,6 +164,8 @@ if (!$game && !$requestedGame) {
 if (!$game) {
   die('Juego no encontrado.');
 }
+
+$gameEntryWindowPayload = game_entry_window_public_payload($mysqli);
 
 if ($loggedUserId > 0) {
   $legacyPurchaseDefaults = fetch_user_legacy_purchase_defaults($mysqli, $loggedUserId);
@@ -506,6 +509,40 @@ include __DIR__ . "/includes/header.php";
   </form>
 
 
+  <?php if (!empty($gameEntryWindowPayload['enabled'])): ?>
+  <div id="game-entry-window-modal" class="app-overlay-modal game-entry-window-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="game-entry-window-modal-content" style="--entry-window-background: <?= htmlspecialchars((string) ($gameEntryWindowPayload['modal_background'] ?? '#18101e'), ENT_QUOTES, 'UTF-8') ?>; --entry-window-title-color: <?= htmlspecialchars((string) ($gameEntryWindowPayload['title_color'] ?? '#f8b53d'), ENT_QUOTES, 'UTF-8') ?>; --entry-window-check-color: <?= htmlspecialchars((string) ($gameEntryWindowPayload['check_text_color'] ?? '#e2e8f0'), ENT_QUOTES, 'UTF-8') ?>; --entry-window-check-background: <?= htmlspecialchars((string) ($gameEntryWindowPayload['check_background_color'] ?? '#1e293b'), ENT_QUOTES, 'UTF-8') ?>; --entry-window-button-color: <?= htmlspecialchars((string) ($gameEntryWindowPayload['button_text_color'] ?? '#0b0f18'), ENT_QUOTES, 'UTF-8') ?>; --entry-window-button-background: <?= htmlspecialchars((string) ($gameEntryWindowPayload['button_background_color'] ?? '#c99712'), ENT_QUOTES, 'UTF-8') ?>; --entry-window-button-disabled-color: <?= htmlspecialchars((string) ($gameEntryWindowPayload['button_disabled_text_color'] ?? '#0b0f18'), ENT_QUOTES, 'UTF-8') ?>; --entry-window-button-disabled-background: <?= htmlspecialchars((string) ($gameEntryWindowPayload['button_disabled_background_color'] ?? '#c99712'), ENT_QUOTES, 'UTF-8') ?>;">
+        <div class="game-entry-window-modal-header">
+          <div class="game-entry-window-modal-media">
+            <?php if (!empty($gameEntryWindowPayload['icon'])): ?>
+              <img src="<?= htmlspecialchars((string) $gameEntryWindowPayload['icon'], ENT_QUOTES, 'UTF-8') ?>" alt="Ventana inicial en juegos" class="game-entry-window-modal-image">
+            <?php else: ?>
+              <span class="game-entry-window-modal-media-fallback">VG</span>
+            <?php endif; ?>
+          </div>
+          <h3 class="game-entry-window-modal-heading"><?= htmlspecialchars((string) ($gameEntryWindowPayload['title'] ?? 'ANTES DE CONTINUAR'), ENT_QUOTES, 'UTF-8') ?></h3>
+          <p class="game-entry-window-modal-copy"><?= htmlspecialchars((string) ($gameEntryWindowPayload['copy_text'] ?? 'Lee la información antes de continuar con la recarga.'), ENT_QUOTES, 'UTF-8') ?></p>
+        </div>
+        <div class="game-entry-window-modal-cards">
+          <?php foreach (($gameEntryWindowPayload['cards'] ?? []) as $entryCard): ?>
+            <article class="game-entry-window-info-card" style="--entry-card-color: <?= htmlspecialchars((string) ($entryCard['color'] ?? '#233A73'), ENT_QUOTES, 'UTF-8') ?>; --entry-card-background: <?= htmlspecialchars((string) ($entryCard['background_color'] ?? '#121a2f'), ENT_QUOTES, 'UTF-8') ?>; --entry-card-glow: <?= htmlspecialchars(game_entry_window_hex_to_rgba((string) ($entryCard['color'] ?? '#233A73'), 0.18), ENT_QUOTES, 'UTF-8') ?>;">
+              <?= (string) ($entryCard['content_html'] ?? '') ?>
+            </article>
+          <?php endforeach; ?>
+        </div>
+        <div id="game-entry-window-confirmation" class="game-entry-window-confirmation">
+          <label class="game-entry-window-confirmation-toggle" for="game-entry-window-check">
+            <input type="checkbox" id="game-entry-window-check" class="game-entry-window-confirmation-input" onchange="window.toggleGameEntryWindowConfirmation && window.toggleGameEntryWindowConfirmation(this.checked);">
+            <span class="game-entry-window-confirmation-text"><?= htmlspecialchars((string) ($gameEntryWindowPayload['check_text'] ?? 'He leído y entiendo las condiciones del servicio'), ENT_QUOTES, 'UTF-8') ?></span>
+          </label>
+        </div>
+        <button type="button" id="game-entry-window-continue" class="btn btn-warning fw-bold text-uppercase py-3" onclick="return window.acceptGameEntryWindow ? window.acceptGameEntryWindow() : false;" disabled><?= htmlspecialchars((string) ($gameEntryWindowPayload['button_text'] ?? 'Aceptar y continuar'), ENT_QUOTES, 'UTF-8') ?></button>
+      </div>
+    </div>
+  </div>
+  <?php endif; ?>
+
   <!-- Modal Loading Bootstrap -->
   <div id="loading-modal" class="modal fade app-overlay-modal<?= $paymentWindowConfigEnabled ? ' payment-window-theme-enabled' : '' ?>" tabindex="-1" aria-hidden="true" data-payment-loading-state="processing">
     <div class="modal-dialog modal-dialog-centered">
@@ -659,6 +696,197 @@ include __DIR__ . "/includes/header.php";
 
   #payment-status-modal {
     z-index: 1110;
+  }
+
+  .game-entry-window-modal {
+    z-index: 1125;
+  }
+
+  .game-entry-window-modal .modal-dialog {
+    width: min(94vw, 42rem);
+  }
+
+  .game-entry-window-modal-content {
+    border-radius: 1.75rem;
+    padding: 1.35rem;
+    pointer-events: auto;
+    background: radial-gradient(circle at top, rgba(251, 191, 36, 0.16), transparent 34%), linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)), var(--entry-window-background, #18101e);
+    border: 1px solid rgba(251, 191, 36, 0.26);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
+  }
+
+  .game-entry-window-modal-header {
+    text-align: center;
+    margin-bottom: 1rem;
+  }
+
+  .game-entry-window-modal-media {
+    width: 84px;
+    height: 84px;
+    margin: 0 auto 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: linear-gradient(135deg, rgba(250, 204, 21, 0.18), rgba(34, 211, 238, 0.18));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    box-shadow: 0 0 0 8px rgba(255,255,255,0.04);
+  }
+
+  .game-entry-window-modal-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .game-entry-window-modal-media-fallback {
+    color: #fde68a;
+    font-size: 1.4rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+  }
+
+  .game-entry-window-modal-heading {
+    margin: 0;
+    color: var(--entry-window-title-color, #fbbf24);
+    font-size: clamp(1.5rem, 4vw, 2rem);
+    font-weight: 800;
+    letter-spacing: 0.03em;
+  }
+
+  .game-entry-window-modal-copy {
+    margin: 0.5rem auto 0;
+    max-width: 30rem;
+    color: rgba(226, 232, 240, 0.84);
+    font-size: 0.96rem;
+  }
+
+  .game-entry-window-modal-cards {
+    display: grid;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    max-height: min(48vh, 28rem);
+    overflow-y: auto;
+    padding-right: 0.25rem;
+  }
+
+  .game-entry-window-info-card {
+    padding: 1rem 1rem 1rem 1.1rem;
+    border-radius: 1.05rem;
+    background: var(--entry-card-background, #121a2f);
+    border: 1px solid var(--entry-card-color, #233A73);
+    box-shadow: 0 12px 28px var(--entry-card-glow, rgba(35, 58, 115, 0.18));
+    color: #e2e8f0;
+  }
+
+  .game-entry-window-info-card p:last-child,
+  .game-entry-window-info-card ul:last-child,
+  .game-entry-window-info-card ol:last-child,
+  .game-entry-window-info-card blockquote:last-child,
+  .game-entry-window-info-card h2:last-child,
+  .game-entry-window-info-card h3:last-child {
+    margin-bottom: 0;
+  }
+
+  .game-entry-window-confirmation {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    position: relative;
+    z-index: 3;
+    pointer-events: auto;
+    padding: 0.95rem 1rem;
+    margin-bottom: 1rem;
+    border-radius: 1rem;
+    background: var(--entry-window-check-background, #1e293b);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--entry-window-check-color, #e2e8f0);
+    cursor: pointer;
+  }
+
+  .game-entry-window-confirmation-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    margin: 0;
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .game-entry-window-confirmation-text {
+    flex: 1 1 auto;
+    margin: 0;
+  }
+
+  .game-entry-window-confirmation-input {
+    appearance: none;
+    -webkit-appearance: none;
+    pointer-events: auto;
+    width: 2.6rem;
+    height: 1.35rem;
+    margin: 0;
+    flex: 0 0 auto;
+    cursor: pointer;
+    background-color: rgba(7, 18, 28, 0.85);
+    border-color: rgba(255,255,255,0.24);
+    border: 1px solid rgba(255,255,255,0.24);
+    border-radius: 999px;
+    box-shadow: none;
+    position: relative;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+  }
+
+  .game-entry-window-confirmation-input::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 2px;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 999px;
+    background: #f8fafc;
+    transform: translateY(-50%);
+    transition: transform 0.2s ease;
+  }
+
+  .game-entry-window-confirmation .game-entry-window-confirmation-input:focus {
+    box-shadow: 0 0 0 0.2rem rgba(245, 158, 11, 0.18);
+  }
+
+  .game-entry-window-confirmation .game-entry-window-confirmation-input:checked {
+    background-color: var(--entry-window-button-background, #c99712);
+    border-color: var(--entry-window-button-background, #c99712);
+  }
+
+  .game-entry-window-confirmation .game-entry-window-confirmation-input:checked::after {
+    transform: translate(1.2rem, -50%);
+  }
+
+  .game-entry-window-confirmation.is-checked {
+    border-color: rgba(245, 158, 11, 0.55);
+    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.18);
+  }
+
+  #game-entry-window-continue {
+    position: relative;
+    z-index: 3;
+    background: var(--entry-window-button-disabled-background, #c99712);
+    border-color: transparent;
+    color: var(--entry-window-button-disabled-color, #0b0f18);
+    transition: background 0.2s ease, color 0.2s ease, opacity 0.2s ease;
+  }
+
+  #game-entry-window-continue:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  #game-entry-window-continue:not(:disabled) {
+    background: var(--entry-window-button-background, #c99712);
+    color: var(--entry-window-button-color, #0b0f18);
+    opacity: 1;
   }
 
   .app-overlay-modal .modal-dialog {
@@ -1994,6 +2222,7 @@ include __DIR__ . "/includes/header.php";
     message: <?php echo json_encode($paymentSendingOrderMessage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>
   };
   const paymentDifferenceFeatureEnabled = <?= $paymentDifferenceEnabled ? 'true' : 'false' ?>;
+  const gameEntryWindowEnabled = <?= !empty($gameEntryWindowPayload['enabled']) ? 'true' : 'false' ?>;
   const paymentSuccessContent = {
     title: <?php echo json_encode($paymentSuccessTitle, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>,
     extraMessage: <?php echo json_encode($paymentSuccessExtraMessage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>
@@ -2016,6 +2245,10 @@ include __DIR__ . "/includes/header.php";
   const paymentModalAlert = document.getElementById('payment-modal-alert');
   const paymentModalReasons = document.getElementById('payment-modal-reasons');
   const paymentModalActions = document.getElementById('payment-modal-actions');
+  const gameEntryWindowModal = document.getElementById('game-entry-window-modal');
+  const gameEntryWindowConfirmation = document.getElementById('game-entry-window-confirmation');
+  const gameEntryWindowCheckbox = document.getElementById('game-entry-window-check');
+  const gameEntryWindowContinueButton = document.getElementById('game-entry-window-continue');
 
   function buildAppUrl(path) {
     const normalizedPath = String(path || '').startsWith('/') ? String(path || '') : `/${String(path || '')}`;
@@ -2063,6 +2296,7 @@ include __DIR__ . "/includes/header.php";
   let activePaymentOrder = null;
   let paymentTimerInterval = null;
   let paymentDifferenceTicker = null;
+  let gameEntryWindowAccepted = !gameEntryWindowEnabled;
   const defaultPrimaryField = {
     name: 'id_juego',
     label: 'ID de usuario',
@@ -3451,6 +3685,82 @@ include __DIR__ . "/includes/header.php";
     }
   }
 
+  function syncGameEntryWindowState() {
+    if (!gameEntryWindowCheckbox || !gameEntryWindowContinueButton) {
+      return;
+    }
+
+    if (gameEntryWindowConfirmation) {
+      gameEntryWindowConfirmation.classList.toggle('is-checked', !!gameEntryWindowCheckbox.checked);
+    }
+    gameEntryWindowContinueButton.disabled = !gameEntryWindowCheckbox.checked;
+  }
+
+  function setGameEntryWindowChecked(checked) {
+    if (!gameEntryWindowCheckbox) {
+      return;
+    }
+
+    gameEntryWindowCheckbox.checked = !!checked;
+    syncGameEntryWindowState();
+  }
+
+  window.toggleGameEntryWindowConfirmation = function (forceChecked) {
+    if (!gameEntryWindowCheckbox) {
+      return;
+    }
+
+    if (typeof forceChecked === 'boolean') {
+      setGameEntryWindowChecked(forceChecked);
+      return;
+    }
+
+    setGameEntryWindowChecked(!gameEntryWindowCheckbox.checked);
+  };
+
+  function acceptGameEntryWindow() {
+    if (!gameEntryWindowCheckbox || !gameEntryWindowCheckbox.checked) {
+      syncGameEntryWindowState();
+      return false;
+    }
+
+    gameEntryWindowAccepted = true;
+    setOverlayVisible(gameEntryWindowModal, false);
+    if (gameEntryWindowContinueButton instanceof HTMLElement) {
+      gameEntryWindowContinueButton.blur();
+    }
+    updateButtonState();
+    return false;
+  }
+
+  window.acceptGameEntryWindow = acceptGameEntryWindow;
+
+  function openGameEntryWindowIfNeeded() {
+    if (!gameEntryWindowEnabled || !gameEntryWindowModal) {
+      gameEntryWindowAccepted = true;
+      updateButtonState();
+      return;
+    }
+
+    gameEntryWindowAccepted = false;
+    setGameEntryWindowChecked(false);
+    setOverlayVisible(gameEntryWindowModal, true);
+    updateButtonState();
+  }
+
+  if (gameEntryWindowCheckbox) {
+    gameEntryWindowCheckbox.addEventListener('change', function () {
+      syncGameEntryWindowState();
+    });
+  }
+
+  if (gameEntryWindowContinueButton) {
+    gameEntryWindowContinueButton.addEventListener('click', function (event) {
+      event.preventDefault();
+      acceptGameEntryWindow();
+    });
+  }
+
   function keepPaymentFieldVisible(target) {
     if (!(target instanceof HTMLElement) || !paymentModal || !paymentModal.classList.contains('is-visible')) {
       return;
@@ -4257,9 +4567,12 @@ include __DIR__ . "/includes/header.php";
     }
     const needsPlayerVerification = requiresVerifiedPlayerForCheckout();
     const paymentDifferenceBlocked = activePack ? getPaymentDifferenceBreakdown(activePack, selectedTotalValue).blocksSelection : false;
-    buyButton.disabled = !activePack || !requiredFilled || needsPlayerVerification || paymentDifferenceBlocked;
+    const blockedByGameEntryWindow = !gameEntryWindowAccepted;
+    buyButton.disabled = !activePack || !requiredFilled || needsPlayerVerification || paymentDifferenceBlocked || blockedByGameEntryWindow;
     if (paymentDifferenceBlocked) {
       buyButton.textContent = paymentDifferenceBlockedBuyButtonLabel;
+    } else if (blockedByGameEntryWindow) {
+      buyButton.textContent = defaultBuyButtonLabel;
     } else {
       buyButton.textContent = needsPlayerVerification ? verifyUserBuyButtonLabel : defaultBuyButtonLabel;
     }
@@ -4656,6 +4969,7 @@ include __DIR__ . "/includes/header.php";
                 updateButtonState();
               });
               setPaymentDifferenceCreditState(paymentDifferenceCreditState);
+              openGameEntryWindowIfNeeded();
               orderForm.addEventListener('submit', function(event) {
                 event.preventDefault();
                 const btn = buyButton;
