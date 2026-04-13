@@ -5245,6 +5245,7 @@ include __DIR__ . "/includes/header.php";
                         if (!opened) {
                           setPaymentAlert('No pudimos abrir automáticamente Binance Pay. Usa el botón "Abrir Binance Pay" para continuar.', 'warning');
                         }
+                      }
                     }
 
                     const nextState = String((data && data.estado) || '').toLowerCase();
