@@ -1427,7 +1427,7 @@ function persist_order_binance_pay_snapshot(mysqli $mysqli, int $orderId, array 
         $message = trim((string) ($order['binance_pay_message'] ?? ''));
     }
     $checkoutUrl = binance_pay_extract_checkout_url($payload);
-    if ($checkoutUrl === '') {
+    if ($checkoutUrl === '' || !binance_pay_is_coinpal_checkout_url($checkoutUrl)) {
         $checkoutUrl = trim((string) ($order['binance_pay_checkout_url'] ?? ''));
     }
     $paidAmount = binance_pay_extract_paid_amount($payload);
@@ -4457,7 +4457,7 @@ if ($action === 'submit_payment') {
 
         $existingCheckoutUrl = trim((string) ($order['binance_pay_checkout_url'] ?? ''));
         $existingStatus = binance_pay_normalize_status($order['binance_pay_status'] ?? '');
-        if ($existingCheckoutUrl !== '' && ($existingStatus === '' || binance_pay_is_pending_status($existingStatus))) {
+        if (binance_pay_is_coinpal_checkout_url($existingCheckoutUrl) && ($existingStatus === '' || binance_pay_is_pending_status($existingStatus))) {
             $existingOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
             json_response(array_merge([
                 'ok' => true,

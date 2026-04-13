@@ -392,6 +392,27 @@ function binance_pay_extract_checkout_url(array $payload): string {
     return trim((string) ($payload['nextStepContent'] ?? ''));
 }
 
+function binance_pay_is_coinpal_checkout_url(?string $url): bool {
+    $url = trim((string) $url);
+    if ($url === '') {
+        return false;
+    }
+
+    $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+    $path = strtolower((string) parse_url($url, PHP_URL_PATH));
+
+    if ($host === '' || $path === '') {
+        return false;
+    }
+
+    $isCoinpalHost = $host === 'pay.coinpal.io' || str_ends_with($host, '.coinpal.io');
+    if (!$isCoinpalHost) {
+        return false;
+    }
+
+    return str_contains($path, '/cashier/');
+}
+
 function binance_pay_extract_message(array $payload): string {
     $candidates = [
         $payload['respMessage'] ?? null,

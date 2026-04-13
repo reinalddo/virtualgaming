@@ -2729,6 +2729,78 @@ include __DIR__ . "/includes/header.php";
     return false;
   }
 
+  function isCoinpalCheckoutUrl(checkoutUrl) {
+    const targetUrl = String(checkoutUrl || '').trim();
+    if (!targetUrl) {
+      return false;
+    }
+
+    try {
+      const parsed = new URL(targetUrl, window.location.origin);
+      const host = String(parsed.hostname || '').toLowerCase();
+      const path = String(parsed.pathname || '').toLowerCase();
+      return (host === 'pay.coinpal.io' || host.endsWith('.coinpal.io')) && path.includes('/cashier/');
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function reopenBinanceCheckout(checkoutUrl, reference, totalText) {
+    const popup = openBinanceCheckoutPopup();
+
+    if (isCoinpalCheckoutUrl(checkoutUrl)) {
+      const opened = navigateBinanceCheckoutPopup(popup, checkoutUrl);
+      if (opened) {
+        return;
+      }
+    }
+
+    if (!activePaymentOrder || !activePaymentOrder.orderId) {
+      if (popup && !popup.closed) {
+        popup.close();
+      }
+      setPaymentAlert('No hay una orden activa para reabrir el checkout de Binance Pay.', 'danger');
+      return;
+    }
+
+    try {
+      const response = await fetch(buildAppUrl('/api/pedidos.php'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: [
+          'action=submit_payment',
+          `order_id=${encodeURIComponent(activePaymentOrder.orderId)}`,
+          'payment_mode=binance'
+        ].join('&')
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error((data && data.message) ? data.message : 'No se pudo reabrir el checkout de Binance Pay.');
+      }
+
+      const refreshedCheckoutUrl = String((data && data.checkout_url) || '').trim();
+      if (!isCoinpalCheckoutUrl(refreshedCheckoutUrl)) {
+        throw new Error('CoinPal no devolvió una URL válida del cashier para Binance Pay.');
+      }
+
+      if (data && Number.isFinite(Number(data.remaining_seconds || 0))) {
+        syncActivePaymentOrderDeadline(Number(data.remaining_seconds || 0));
+      }
+
+      renderBinancePaymentDetails(data, (data && data.provider_reference) ? data.provider_reference : reference, totalText || (paymentSummaryTotal ? paymentSummaryTotal.textContent : ''));
+
+      const opened = navigateBinanceCheckoutPopup(popup, refreshedCheckoutUrl);
+      if (!opened) {
+        throw new Error('No pudimos abrir automáticamente Binance Pay.');
+      }
+    } catch (error) {
+      if (popup && !popup.closed) {
+        popup.close();
+      }
+      setPaymentAlert((error && error.message) ? error.message : 'No se pudo reabrir el checkout de Binance Pay.', 'danger');
+    }
+  }
+
   function setPaymentStatusAcceptHidden(isHidden) {
     if (!paymentStatusModalAccept) {
       return;
@@ -4722,7 +4794,7 @@ include __DIR__ . "/includes/header.php";
         label: 'Abrir Binance Pay',
         className: 'btn-info',
         onClick: () => {
-          window.open(checkoutUrl, '_blank', 'noopener');
+          reopenBinanceCheckout(checkoutUrl, reference, totalText);
         },
       });
     }
