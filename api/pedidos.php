@@ -1459,6 +1459,19 @@ function persist_order_binance_pay_snapshot(mysqli $mysqli, int $orderId, array 
     return $ok;
 }
 
+function clear_order_binance_pay_tracking(mysqli $mysqli, int $orderId): bool {
+    $stmt = $mysqli->prepare("UPDATE pedidos SET binance_pay_request_id = NULL, binance_pay_order_no = NULL, binance_pay_reference = NULL, binance_pay_status = NULL, binance_pay_message = NULL, binance_pay_checkout_url = NULL, binance_pay_payload = NULL, binance_pay_paid_amount = NULL, binance_pay_paid_currency = NULL, binance_pay_ultimo_check = NULL, binance_pay_historial_json = NULL WHERE id = ? AND estado = 'pendiente' LIMIT 1");
+    if (!$stmt) {
+        return false;
+    }
+
+    $stmt->bind_param('i', $orderId);
+    $ok = $stmt->execute();
+    $stmt->close();
+
+    return $ok;
+}
+
 function build_binance_pay_notify_url(): ?string {
     $candidate = rtrim(app_base_url(), '/') . '/api/pedidos.php?action=binance_notify';
     if (!preg_match('#^https?://#i', $candidate)) {
@@ -4429,6 +4442,11 @@ if ($action === 'submit_payment') {
         json_error($expiration['message'] ?: 'La orden ya expiró.', 409);
     }
 
+    if ($paymentMode !== 'binance' && trim((string) ($order['binance_pay_reference'] ?? '')) !== '') {
+        clear_order_binance_pay_tracking($mysqli, $orderId);
+        $order = fetch_order_by_id($mysqli, $orderId) ?: $order;
+    }
+
     if ($paymentMode === 'binance') {
         if (!binance_pay_is_enabled()) {
             json_error('Binance Pay no está activo en esta tienda.', 409);
@@ -4464,6 +4482,8 @@ if ($action === 'submit_payment') {
             json_error('La orden no tiene un monto válido para Binance Pay.', 409);
         }
 
+        $binanceConfig = binance_pay_config();
+
         $checkoutInput = [
             'request_id' => binance_pay_generate_request_id(),
             'order_no' => binance_pay_make_order_no('VG'),
@@ -4475,6 +4495,12 @@ if ($action === 'submit_payment') {
             'payer_ip' => binance_pay_client_ip($_SERVER),
             'order_description' => trim((string) ($order['juego_nombre'] ?? 'Pedido')) . ' - ' . trim((string) ($order['paquete_nombre'] ?? ('#' . $orderId))),
             'remark' => 'pedido:' . $orderId,
+            'extra' => [
+                'selectedPaymentMethod' => 'binance',
+                'nextStep' => 'redirect',
+                'storeId' => trim((string) ($binanceConfig['store_id'] ?? '')),
+                'accessToken' => trim((string) ($binanceConfig['access_token'] ?? '')),
+            ],
         ];
 
         try {

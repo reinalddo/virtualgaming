@@ -2643,6 +2643,92 @@ include __DIR__ . "/includes/header.php";
     updatePaymentTimer();
   }
 
+  function filterBinanceReasons(data) {
+    return extractPaymentReasons(data).filter((reason) => {
+      const normalized = String(reason || '').trim().toLowerCase();
+      return normalized !== '' && !['success', 'created', 'pending'].includes(normalized);
+    });
+  }
+
+  function canSwitchFromBinanceToOtherPaymentMode() {
+    if (!activePaymentOrder) {
+      return false;
+    }
+
+    return !!activePaymentOrder.canUseMoney || !!activePaymentOrder.canUsePoints;
+  }
+
+  function switchFromBinanceToOtherPaymentMode() {
+    if (!activePaymentOrder) {
+      return;
+    }
+
+    clearPaymentStatusPolling();
+    setOverlayVisible(paymentStatusModal, false);
+    setPaymentFormDisabled(false);
+
+    const nextMode = activePaymentOrder.canUseMoney ? 'money' : (activePaymentOrder.canUsePoints ? 'points' : 'binance');
+    setActivePaymentMode(nextMode, activePaymentOrder.selectedMethodId, { expandSelected: true });
+    setCancelOrderButtonMode('cancel');
+    setPaymentAlert('Puedes completar esta misma orden con otro método de pago si Binance Pay no te funciona.', 'warning');
+    scrollPaymentSubmitIntoView();
+  }
+
+  function openBinanceCancellationFlow() {
+    clearPaymentStatusPolling();
+    setOverlayVisible(paymentStatusModal, false);
+    if (activePaymentOrder && paymentCancelConfirmModal) {
+      setOverlayVisible(paymentCancelConfirmModal, true);
+    }
+  }
+
+  function buildBinancePopupLoaderHtml() {
+    return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Abriendo Binance Pay...</title><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0;font-family:Arial,sans-serif;background:#081018;color:#e2e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}.card{max-width:480px;width:100%;background:#111827;border:1px solid #22d3ee;border-radius:18px;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.35)}h1{margin:0 0 12px;font-size:24px;color:#22d3ee}p{margin:0 0 12px;line-height:1.6}.spinner{width:44px;height:44px;border-radius:999px;border:4px solid rgba(34,211,238,.18);border-top-color:#22d3ee;animation:spin .9s linear infinite;margin:0 0 20px}@keyframes spin{to{transform:rotate(360deg)}}</style></head><body><div class="card"><div class="spinner"></div><h1>Abriendo Binance Pay...</h1><p>Estamos conectando tu orden con CoinPal para mostrar el checkout de Binance Pay.</p><p>Si el redireccionamiento tarda unos segundos, deja esta ventana abierta.</p></div></body></html>`;
+  }
+
+  function openBinanceCheckoutPopup() {
+    const popup = window.open('', '_blank');
+    if (!popup) {
+      return null;
+    }
+
+    try {
+      popup.opener = null;
+      popup.document.open();
+      popup.document.write(buildBinancePopupLoaderHtml());
+      popup.document.close();
+    } catch (_) {
+    }
+
+    return popup;
+  }
+
+  function navigateBinanceCheckoutPopup(popup, checkoutUrl) {
+    const targetUrl = String(checkoutUrl || '').trim();
+    if (!targetUrl) {
+      return false;
+    }
+
+    if (popup && !popup.closed) {
+      try {
+        popup.location.replace(targetUrl);
+        return true;
+      } catch (_) {
+      }
+    }
+
+    const reopened = window.open(targetUrl, '_blank', 'noopener');
+    if (reopened) {
+      try {
+        reopened.opener = null;
+      } catch (_) {
+      }
+      return true;
+    }
+
+    return false;
+  }
+
   function setPaymentStatusAcceptHidden(isHidden) {
     if (!paymentStatusModalAccept) {
       return;
@@ -4618,7 +4704,7 @@ include __DIR__ . "/includes/header.php";
     clearPaymentSupportUi();
 
     const checkoutUrl = String((data && data.checkout_url) || '').trim();
-    const reasons = extractPaymentReasons(data);
+    const reasons = filterBinanceReasons(data);
     const title = 'Completa el pago en Binance Pay';
     const summary = 'Abrimos un checkout externo de CoinPal para que completes el pago con Binance Pay mientras esta ventana sigue consultando la confirmación.';
     const steps = [
@@ -4641,6 +4727,24 @@ include __DIR__ . "/includes/header.php";
       });
     }
 
+    if (canSwitchFromBinanceToOtherPaymentMode()) {
+      actions.push({
+        label: 'Pagar con otro método',
+        className: 'btn-outline-light',
+        onClick: () => {
+          switchFromBinanceToOtherPaymentMode();
+        },
+      });
+    }
+
+    actions.push({
+      label: 'Cancelar operación',
+      className: 'btn-danger',
+      onClick: () => {
+        openBinanceCancellationFlow();
+      },
+    });
+
     const whatsappUrl = buildPaymentSupportWhatsappUrl(activePaymentOrder ? activePaymentOrder.orderId : '', reference, totalText);
     if (whatsappUrl) {
       actions.push({
@@ -4652,7 +4756,7 @@ include __DIR__ . "/includes/header.php";
       });
     }
 
-    renderPaymentActionButtons(actions);
+    renderPaymentActionButtons(actions, { hideDefaultStatusAccept: true });
     scrollPaymentModalToTop();
   }
 
@@ -5085,7 +5189,7 @@ include __DIR__ . "/includes/header.php";
                   setPaymentAlert('', 'info');
                   let checkoutWindow = null;
                   if (paymentMode === 'binance') {
-                    checkoutWindow = window.open('', '_blank', 'noopener');
+                    checkoutWindow = openBinanceCheckoutPopup();
                   }
                   setLoadingModalContent(
                     paymentMode === 'points'
@@ -5129,11 +5233,18 @@ include __DIR__ . "/includes/header.php";
 
                     if (paymentMode === 'binance' && checkoutWindow && !checkoutWindow.closed) {
                       const checkoutUrl = String((data && data.checkout_url) || '').trim();
-                      if (checkoutUrl !== '') {
-                        checkoutWindow.location.href = checkoutUrl;
-                      } else {
+                      if (checkoutUrl === '') {
                         checkoutWindow.close();
                       }
+                    }
+
+                    if (paymentMode === 'binance') {
+                      const checkoutUrl = String((data && data.checkout_url) || '').trim();
+                      if (checkoutUrl !== '') {
+                        const opened = navigateBinanceCheckoutPopup(checkoutWindow, checkoutUrl);
+                        if (!opened) {
+                          setPaymentAlert('No pudimos abrir automáticamente Binance Pay. Usa el botón "Abrir Binance Pay" para continuar.', 'warning');
+                        }
                     }
 
                     const nextState = String((data && data.estado) || '').toLowerCase();

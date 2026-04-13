@@ -1295,6 +1295,14 @@ $googleCallbackUrl = google_oauth_callback_url();
               <div class="gallery-table-wrap mb-2">
                 <h3 class="h5 fw-bold text-info mb-3">Credenciales CoinPal / Binance Pay</h3>
                 <div class="row g-3">
+                  <div class="col-12">
+                    <input type="hidden" name="api_binance_usuario" value="0">
+                    <div class="form-check form-switch">
+                      <input class="form-check-input" type="checkbox" role="switch" id="api-binance-usuario" name="api_binance_usuario" value="1" <?= ($cfg['api_binance_usuario'] ?? '1') === '1' ? 'checked' : '' ?>>
+                      <label class="form-check-label fw-semibold" for="api-binance-usuario">Habilitar Binance Pay para clientes</label>
+                    </div>
+                    <div class="form-text mt-2">Este interruptor activa o desactiva el proceso visible para clientes, checkout, polling, webhook y sincronización. El tab seguirá visible mientras <strong>api_binance</strong> esté activo para el tenant.</div>
+                  </div>
                   <div class="col-md-6">
                     <label class="form-label">Merchant No</label>
                     <input type="text" name="binance_pay_merchant_no" value="<?= htmlspecialchars($cfg['binance_pay_merchant_no'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="1000...">

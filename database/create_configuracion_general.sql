@@ -34,6 +34,7 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('notificaciones_recargas', '0', 'Activa o desactiva por tenant las notificaciones de recargas en la tienda'),
 ('verificacion_nombre_api', '0', 'Activa o desactiva por tenant la verificación de nombres de jugador mediante API'),
 ('api_binance', '0', 'Activa o desactiva la configuracion e integracion de Binance Pay via CoinPal para este tenant.'),
+('api_binance_usuario', '1', 'Activa o desactiva el uso visible de Binance Pay para clientes y procesos automaticos de la tienda cuando el tenant ya tiene disponible api_binance.'),
 ('recarga_notificaciones_activas', '1', 'Activa o desactiva las notificaciones flotantes de recargas en el sitio público'),
 ('recarga_notificaciones_logo', '', 'Ruta del logo usado en la notificación flotante de recargas'),
 ('facebook', '', 'URL de Facebook de la tienda'),

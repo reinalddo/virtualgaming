@@ -1846,6 +1846,7 @@ switch ($seccion) {
             }
 
             if ($activeTab === 'api-binance') {
+                $binanceUserEnabled = isset($_POST['api_binance_usuario']) && (string) $_POST['api_binance_usuario'] === '1' ? '1' : '0';
                 $merchantNo = trim((string) ($_POST['binance_pay_merchant_no'] ?? ''));
                 $secretKey = trim((string) ($_POST['binance_pay_secret_key'] ?? ''));
                 $storeId = trim((string) ($_POST['binance_pay_store_id'] ?? ''));
@@ -1870,6 +1871,7 @@ switch ($seccion) {
                     admin_redirect('configuracion', ['tab' => 'api-binance']);
                 }
 
+                store_config_upsert('api_binance_usuario', $binanceUserEnabled);
                 store_config_upsert('binance_pay_merchant_no', $merchantNo);
                 store_config_upsert('binance_pay_secret_key', $secretKey);
                 store_config_upsert('binance_pay_store_id', $storeId);

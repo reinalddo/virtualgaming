@@ -36,7 +36,8 @@ function binance_pay_config(): array {
     }
 
     return [
-        'enabled' => trim((string) store_config_get('api_binance', '0')) === '1',
+        'feature_enabled' => trim((string) store_config_get('api_binance', '0')) === '1',
+        'user_enabled' => trim((string) store_config_get('api_binance_usuario', '1')) === '1',
         'version' => binance_pay_version(),
         'base_url' => binance_pay_base_url(),
         'merchant_name' => $storeName,
@@ -50,7 +51,8 @@ function binance_pay_config(): array {
 
 function binance_pay_is_enabled(): bool {
     $config = binance_pay_config();
-    return $config['enabled'] === true;
+    return ($config['feature_enabled'] ?? false) === true
+        && ($config['user_enabled'] ?? false) === true;
 }
 
 function binance_pay_missing_configuration_fields(bool $includePortalFields = false): array {
