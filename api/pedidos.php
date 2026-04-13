@@ -13,6 +13,7 @@ require_once __DIR__ . '/../includes/currency.php';
 require_once __DIR__ . '/../includes/influencer_coupons.php';
 require_once __DIR__ . '/../includes/payment_methods.php';
 require_once __DIR__ . '/../includes/store_config.php';
+require_once __DIR__ . '/../includes/binance_pay.php';
 require_once __DIR__ . '/../includes/recargas_api.php';
 require_once __DIR__ . '/../includes/recharge_availability.php';
 require_once __DIR__ . '/../includes/recharge_notifications.php';
@@ -96,13 +97,27 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         recargas_api_reembolso DECIMAL(12,2) DEFAULT NULL,
         recargas_api_ultimo_check DATETIME DEFAULT NULL,
         recargas_api_historial_json LONGTEXT DEFAULT NULL,
+        binance_pay_request_id VARCHAR(120) DEFAULT NULL,
+        binance_pay_order_no VARCHAR(120) DEFAULT NULL,
+        binance_pay_reference VARCHAR(120) DEFAULT NULL,
+        binance_pay_status VARCHAR(40) DEFAULT NULL,
+        binance_pay_message VARCHAR(255) DEFAULT NULL,
+        binance_pay_checkout_url VARCHAR(255) DEFAULT NULL,
+        binance_pay_payload LONGTEXT DEFAULT NULL,
+        binance_pay_paid_amount DECIMAL(12,2) DEFAULT NULL,
+        binance_pay_paid_currency VARCHAR(20) DEFAULT NULL,
+        binance_pay_ultimo_check DATETIME DEFAULT NULL,
+        binance_pay_historial_json LONGTEXT DEFAULT NULL,
         estado ENUM('pendiente','pagado','enviado','cancelado') NOT NULL DEFAULT 'pendiente',
         creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         pago_expira_en DATETIME DEFAULT NULL,
         actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_estado (estado),
         INDEX idx_email (email),
-        INDEX idx_cliente_usuario_id (cliente_usuario_id)
+        INDEX idx_cliente_usuario_id (cliente_usuario_id),
+        INDEX idx_binance_pay_reference (binance_pay_reference),
+        INDEX idx_binance_pay_order_no (binance_pay_order_no),
+        INDEX idx_binance_pay_status (binance_pay_status)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
     $mysqli->query($create);
 
@@ -139,6 +154,17 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         'recargas_api_reembolso' => "ALTER TABLE pedidos ADD COLUMN recargas_api_reembolso DECIMAL(12,2) NULL AFTER recargas_api_codigo_entregado",
         'recargas_api_ultimo_check' => "ALTER TABLE pedidos ADD COLUMN recargas_api_ultimo_check DATETIME NULL AFTER recargas_api_reembolso",
         'recargas_api_historial_json' => "ALTER TABLE pedidos ADD COLUMN recargas_api_historial_json LONGTEXT NULL AFTER recargas_api_ultimo_check",
+        'binance_pay_request_id' => "ALTER TABLE pedidos ADD COLUMN binance_pay_request_id VARCHAR(120) NULL AFTER recargas_api_historial_json",
+        'binance_pay_order_no' => "ALTER TABLE pedidos ADD COLUMN binance_pay_order_no VARCHAR(120) NULL AFTER binance_pay_request_id",
+        'binance_pay_reference' => "ALTER TABLE pedidos ADD COLUMN binance_pay_reference VARCHAR(120) NULL AFTER binance_pay_order_no",
+        'binance_pay_status' => "ALTER TABLE pedidos ADD COLUMN binance_pay_status VARCHAR(40) NULL AFTER binance_pay_reference",
+        'binance_pay_message' => "ALTER TABLE pedidos ADD COLUMN binance_pay_message VARCHAR(255) NULL AFTER binance_pay_status",
+        'binance_pay_checkout_url' => "ALTER TABLE pedidos ADD COLUMN binance_pay_checkout_url VARCHAR(255) NULL AFTER binance_pay_message",
+        'binance_pay_payload' => "ALTER TABLE pedidos ADD COLUMN binance_pay_payload LONGTEXT NULL AFTER binance_pay_checkout_url",
+        'binance_pay_paid_amount' => "ALTER TABLE pedidos ADD COLUMN binance_pay_paid_amount DECIMAL(12,2) NULL AFTER binance_pay_payload",
+        'binance_pay_paid_currency' => "ALTER TABLE pedidos ADD COLUMN binance_pay_paid_currency VARCHAR(20) NULL AFTER binance_pay_paid_amount",
+        'binance_pay_ultimo_check' => "ALTER TABLE pedidos ADD COLUMN binance_pay_ultimo_check DATETIME NULL AFTER binance_pay_paid_currency",
+        'binance_pay_historial_json' => "ALTER TABLE pedidos ADD COLUMN binance_pay_historial_json LONGTEXT NULL AFTER binance_pay_ultimo_check",
         'estado_pago_influencer' => "ALTER TABLE pedidos ADD COLUMN estado_pago_influencer ENUM('pendiente','pagado') NOT NULL DEFAULT 'pendiente' AFTER cupon",
         'estado' => "ALTER TABLE pedidos ADD COLUMN estado ENUM('pendiente','pagado','enviado','cancelado') NOT NULL DEFAULT 'pendiente' AFTER cupon",
         'creado_en' => "ALTER TABLE pedidos ADD COLUMN creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER estado",
@@ -155,6 +181,21 @@ function ensure_pedidos_table(mysqli $mysqli): void {
     foreach ($neededCols as $col => $alterSql) {
         if (!isset($existing[$col])) {
             $mysqli->query($alterSql);
+        }
+    }
+
+    $indexes = [
+        'idx_estado' => 'ALTER TABLE pedidos ADD INDEX idx_estado (estado)',
+        'idx_email' => 'ALTER TABLE pedidos ADD INDEX idx_email (email)',
+        'idx_cliente_usuario_id' => 'ALTER TABLE pedidos ADD INDEX idx_cliente_usuario_id (cliente_usuario_id)',
+        'idx_binance_pay_reference' => 'ALTER TABLE pedidos ADD INDEX idx_binance_pay_reference (binance_pay_reference)',
+        'idx_binance_pay_order_no' => 'ALTER TABLE pedidos ADD INDEX idx_binance_pay_order_no (binance_pay_order_no)',
+        'idx_binance_pay_status' => 'ALTER TABLE pedidos ADD INDEX idx_binance_pay_status (binance_pay_status)',
+    ];
+    foreach ($indexes as $indexName => $sql) {
+        $indexResult = $mysqli->query("SHOW INDEX FROM pedidos WHERE Key_name = '" . $mysqli->real_escape_string($indexName) . "'");
+        if (!($indexResult instanceof mysqli_result) || $indexResult->num_rows === 0) {
+            $mysqli->query($sql);
         }
     }
 }
@@ -1202,6 +1243,56 @@ function find_local_order_by_provider_identifiers(mysqli $mysqli, ?string $provi
     return null;
 }
 
+function find_local_order_by_binance_identifiers(mysqli $mysqli, ?string $reference, ?string $orderNo = null, ?string $requestId = null): ?array {
+    $reference = trim((string) $reference);
+    $orderNo = trim((string) $orderNo);
+    $requestId = trim((string) $requestId);
+
+    if ($reference !== '') {
+        $stmt = $mysqli->prepare('SELECT pedidos.*, UNIX_TIMESTAMP(creado_en) AS creado_en_ts FROM pedidos WHERE binance_pay_reference = ? ORDER BY id DESC LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('s', $reference);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            $order = $res ? $res->fetch_assoc() : null;
+            $stmt->close();
+            if ($order) {
+                return $order;
+            }
+        }
+    }
+
+    if ($orderNo !== '') {
+        $stmt = $mysqli->prepare('SELECT pedidos.*, UNIX_TIMESTAMP(creado_en) AS creado_en_ts FROM pedidos WHERE binance_pay_order_no = ? ORDER BY id DESC LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('s', $orderNo);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            $order = $res ? $res->fetch_assoc() : null;
+            $stmt->close();
+            if ($order) {
+                return $order;
+            }
+        }
+    }
+
+    if ($requestId !== '') {
+        $stmt = $mysqli->prepare('SELECT pedidos.*, UNIX_TIMESTAMP(creado_en) AS creado_en_ts FROM pedidos WHERE binance_pay_request_id = ? ORDER BY id DESC LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('s', $requestId);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            $order = $res ? $res->fetch_assoc() : null;
+            $stmt->close();
+            if ($order) {
+                return $order;
+            }
+        }
+    }
+
+    return null;
+}
+
 function provider_history_from_json(?string $json): array {
     if (!is_string($json) || trim($json) === '') {
         return [];
@@ -1253,6 +1344,513 @@ function append_provider_history(?string $existingJson, array $entry, int $limit
     }
 
     return provider_history_to_json($history);
+}
+
+function binance_pay_append_history(?string $existingJson, string $source, array $payload, string $localStatus, int $limit = 10): string {
+    $entry = build_provider_history_entry(
+        $source,
+        binance_pay_normalize_status($payload['status'] ?? ''),
+        $localStatus,
+        binance_pay_extract_message($payload),
+        binance_pay_extract_reference($payload),
+        binance_pay_extract_order_no($payload)
+    );
+
+    return append_provider_history($existingJson, $entry, $limit);
+}
+
+function persist_order_binance_pay_checkout(mysqli $mysqli, int $orderId, array $requestPayload, array $responsePayload, string $expectedStatus = 'pendiente'): bool {
+    $order = fetch_order_by_id($mysqli, $orderId);
+    if (!$order) {
+        return false;
+    }
+
+    $requestId = binance_pay_extract_request_id($responsePayload);
+    if ($requestId === '') {
+        $requestId = trim((string) ($requestPayload['requestId'] ?? ''));
+    }
+    $orderNo = binance_pay_extract_order_no($responsePayload);
+    if ($orderNo === '') {
+        $orderNo = trim((string) ($requestPayload['orderNo'] ?? ''));
+    }
+
+    $historyJson = binance_pay_append_history(
+        $order['binance_pay_historial_json'] ?? null,
+        'checkout_create',
+        $responsePayload,
+        (string) ($order['estado'] ?? 'pendiente')
+    );
+    $payloadJson = binance_pay_payload_json([
+        'request' => $requestPayload,
+        'response' => $responsePayload,
+    ]);
+    $status = binance_pay_normalize_status($responsePayload['status'] ?? 'created');
+    $message = binance_pay_extract_message($responsePayload);
+    $checkoutUrl = binance_pay_extract_checkout_url($responsePayload);
+    $reference = binance_pay_extract_reference($responsePayload);
+    $paidAmount = binance_pay_extract_paid_amount($responsePayload);
+    $paidCurrency = binance_pay_extract_order_currency($responsePayload);
+
+    $stmt = $mysqli->prepare("UPDATE pedidos SET binance_pay_request_id = ?, binance_pay_order_no = ?, binance_pay_reference = ?, binance_pay_status = ?, binance_pay_message = ?, binance_pay_checkout_url = ?, binance_pay_payload = ?, binance_pay_paid_amount = ?, binance_pay_paid_currency = ?, binance_pay_ultimo_check = NOW(), binance_pay_historial_json = ? WHERE id = ? AND estado = ? LIMIT 1");
+    if (!$stmt) {
+        return false;
+    }
+
+    $stmt->bind_param('sssssssissis', $requestId, $orderNo, $reference, $status, $message, $checkoutUrl, $payloadJson, $paidAmount, $paidCurrency, $historyJson, $orderId, $expectedStatus);
+    $ok = $stmt->execute();
+    $stmt->close();
+
+    return $ok;
+}
+
+function persist_order_binance_pay_snapshot(mysqli $mysqli, int $orderId, array $payload, string $source = 'sync'): bool {
+    $order = fetch_order_by_id($mysqli, $orderId);
+    if (!$order) {
+        return false;
+    }
+
+    $requestId = binance_pay_extract_request_id($payload);
+    if ($requestId === '') {
+        $requestId = trim((string) ($order['binance_pay_request_id'] ?? ''));
+    }
+    $orderNo = binance_pay_extract_order_no($payload);
+    if ($orderNo === '') {
+        $orderNo = trim((string) ($order['binance_pay_order_no'] ?? ''));
+    }
+    $reference = binance_pay_extract_reference($payload);
+    if ($reference === '') {
+        $reference = trim((string) ($order['binance_pay_reference'] ?? ''));
+    }
+    $status = binance_pay_normalize_status($payload['status'] ?? $order['binance_pay_status'] ?? '');
+    $message = binance_pay_extract_message($payload);
+    if ($message === '') {
+        $message = trim((string) ($order['binance_pay_message'] ?? ''));
+    }
+    $checkoutUrl = binance_pay_extract_checkout_url($payload);
+    if ($checkoutUrl === '') {
+        $checkoutUrl = trim((string) ($order['binance_pay_checkout_url'] ?? ''));
+    }
+    $paidAmount = binance_pay_extract_paid_amount($payload);
+    if ($paidAmount === null && isset($order['binance_pay_paid_amount']) && is_numeric($order['binance_pay_paid_amount'])) {
+        $paidAmount = round((float) $order['binance_pay_paid_amount'], 2);
+    }
+    $paidCurrency = binance_pay_extract_order_currency($payload);
+    if ($paidCurrency === '') {
+        $paidCurrency = strtoupper(trim((string) ($order['binance_pay_paid_currency'] ?? '')));
+    }
+
+    $historyJson = binance_pay_append_history(
+        $order['binance_pay_historial_json'] ?? null,
+        $source,
+        $payload,
+        (string) ($order['estado'] ?? 'pendiente')
+    );
+    $payloadJson = binance_pay_payload_json($payload);
+
+    $stmt = $mysqli->prepare("UPDATE pedidos SET binance_pay_request_id = ?, binance_pay_order_no = ?, binance_pay_reference = ?, binance_pay_status = ?, binance_pay_message = ?, binance_pay_checkout_url = ?, binance_pay_payload = ?, binance_pay_paid_amount = ?, binance_pay_paid_currency = ?, binance_pay_ultimo_check = NOW(), binance_pay_historial_json = ? WHERE id = ? LIMIT 1");
+    if (!$stmt) {
+        return false;
+    }
+
+    $stmt->bind_param('sssssssissi', $requestId, $orderNo, $reference, $status, $message, $checkoutUrl, $payloadJson, $paidAmount, $paidCurrency, $historyJson, $orderId);
+    $ok = $stmt->execute();
+    $stmt->close();
+
+    return $ok;
+}
+
+function build_binance_pay_notify_url(): ?string {
+    $candidate = rtrim(app_base_url(), '/') . '/api/pedidos.php?action=binance_notify';
+    if (!preg_match('#^https?://#i', $candidate)) {
+        return null;
+    }
+
+    $host = parse_url($candidate, PHP_URL_HOST);
+    if (!is_string($host) || !is_public_callback_host($host)) {
+        return null;
+    }
+
+    return $candidate;
+}
+
+function build_binance_pay_redirect_url(): string {
+    $config = binance_pay_config();
+    $candidate = trim((string) ($config['store_url'] ?? ''));
+    if ($candidate === '' || !preg_match('#^https?://#i', $candidate)) {
+        $candidate = app_base_url();
+    }
+
+    return rtrim($candidate, '/');
+}
+
+function build_binance_checkout_response_payload(array $order): array {
+    $message = trim((string) ($order['binance_pay_message'] ?? ''));
+    if ($message === '') {
+        $message = 'Abre Binance Pay y completa el pago para continuar con tu pedido.';
+    }
+
+    return [
+        'payment_mode' => 'binance',
+        'payment_gateway' => 'binance_pay',
+        'provider_flow' => 'binance_checkout',
+        'provider_status' => trim((string) ($order['binance_pay_status'] ?? 'created')),
+        'provider_reference' => trim((string) ($order['binance_pay_reference'] ?? '')),
+        'provider_message' => $message,
+        'checkout_url' => trim((string) ($order['binance_pay_checkout_url'] ?? '')),
+        'remaining_seconds' => max(0, order_expiration_timestamp($order) - time()),
+    ];
+}
+
+function build_order_status_response_payload(array $order, int $orderId): array {
+    $providerReference = trim((string) ($order['ff_api_referencia'] ?? ''));
+    if ($providerReference === '') {
+        $providerReference = trim((string) ($order['binance_pay_reference'] ?? ''));
+    }
+
+    $providerMessage = trim((string) ($order['ff_api_mensaje'] ?? ''));
+    if ($providerMessage === '') {
+        $providerMessage = trim((string) ($order['binance_pay_message'] ?? ''));
+    }
+
+    $providerStatus = trim((string) ($order['recargas_api_estado'] ?? ''));
+    if ($providerStatus === '') {
+        $providerStatus = trim((string) ($order['binance_pay_status'] ?? ''));
+    }
+
+    $paymentGateway = '';
+    if (
+        trim((string) ($order['binance_pay_reference'] ?? '')) !== ''
+        || trim((string) ($order['binance_pay_order_no'] ?? '')) !== ''
+        || trim((string) ($order['binance_pay_request_id'] ?? '')) !== ''
+    ) {
+        $paymentGateway = 'binance_pay';
+    }
+
+    return [
+        'ok' => true,
+        'order_id' => $orderId,
+        'estado' => (string) ($order['estado'] ?? ''),
+        'provider_flow' => order_provider_flow_from_row($order),
+        'provider_status' => $providerStatus,
+        'provider_reference' => $providerReference,
+        'provider_message' => $providerMessage,
+        'provider_code' => (string) ($order['recargas_api_codigo_entregado'] ?? ''),
+        'checkout_url' => trim((string) ($order['binance_pay_checkout_url'] ?? '')),
+        'payment_gateway' => $paymentGateway,
+        'remaining_seconds' => max(0, order_expiration_timestamp($order) - time()),
+    ];
+}
+
+function sync_local_order_with_binance_payload(mysqli $mysqli, array $order, array $payload, string $source = 'sync'): array {
+    $orderId = (int) ($order['id'] ?? 0);
+    if ($orderId <= 0) {
+        return [
+            'order' => $order,
+            'local_status' => trim((string) ($order['estado'] ?? '')),
+            'provider_flow' => order_provider_flow_from_row($order),
+        ];
+    }
+
+    persist_order_binance_pay_snapshot($mysqli, $orderId, $payload, $source);
+    $order = fetch_order_by_id($mysqli, $orderId) ?: $order;
+
+    $binanceStatus = binance_pay_normalize_status($payload['status'] ?? ($order['binance_pay_status'] ?? ''));
+    $reference = binance_pay_extract_reference($payload);
+    if ($reference === '') {
+        $reference = trim((string) ($order['binance_pay_reference'] ?? ''));
+    }
+    $message = trim(binance_pay_extract_message($payload));
+    if ($message === '') {
+        $message = trim((string) ($order['binance_pay_message'] ?? ''));
+    }
+
+    if ($message === '') {
+        if (binance_pay_is_paid_status($binanceStatus)) {
+            $message = 'Pago aprobado correctamente por Binance Pay.';
+        } elseif (binance_pay_is_failed_status($binanceStatus)) {
+            $message = 'El pago fue rechazado o cancelado en Binance Pay.';
+        } else {
+            $message = 'El pago sigue pendiente de confirmación en Binance Pay.';
+        }
+    }
+
+    $localStatus = trim((string) ($order['estado'] ?? ''));
+    if ($localStatus === 'enviado' || $localStatus === 'cancelado') {
+        return [
+            'order' => $order,
+            'local_status' => $localStatus,
+            'provider_flow' => order_provider_flow_from_row($order),
+        ];
+    }
+
+    if ($binanceStatus === '' || binance_pay_is_pending_status($binanceStatus)) {
+        return [
+            'order' => $order,
+            'local_status' => $localStatus,
+            'provider_flow' => order_provider_flow_from_row($order),
+        ];
+    }
+
+    if (binance_pay_is_failed_status($binanceStatus)) {
+        if ($localStatus === 'pendiente') {
+            $verifiedReference = $reference !== '' ? $reference : trim((string) ($order['numero_referencia'] ?? ''));
+            $cancelStatus = 'cancelado';
+            $stmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, estado = ? WHERE id = ? AND estado = 'pendiente' LIMIT 1");
+            if ($stmt) {
+                $stmt->bind_param('ssi', $verifiedReference, $cancelStatus, $orderId);
+                $stmt->execute();
+                $stmt->close();
+            }
+            $order = fetch_order_by_id($mysqli, $orderId) ?: $order;
+        }
+
+        return [
+            'order' => $order,
+            'local_status' => trim((string) ($order['estado'] ?? 'cancelado')),
+            'provider_flow' => order_provider_flow_from_row($order),
+        ];
+    }
+
+    if (!binance_pay_is_paid_status($binanceStatus) || $localStatus !== 'pendiente') {
+        return [
+            'order' => $order,
+            'local_status' => trim((string) ($order['estado'] ?? $localStatus)),
+            'provider_flow' => order_provider_flow_from_row($order),
+        ];
+    }
+
+    $verifiedReference = $reference !== '' ? $reference : trim((string) ($order['numero_referencia'] ?? ''));
+    $phone = substr(trim((string) ($order['telefono_contacto'] ?? '')), 0, 40);
+    $paymentMethodName = 'Binance Pay';
+    $updatedOrder = $order;
+    $usesCatalogApi = game_uses_catalog_api($mysqli, (int) ($updatedOrder['juego_id'] ?? 0));
+
+    if (!$usesCatalogApi) {
+        $paidStatus = 'pagado';
+        $stmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, estado = ? WHERE id = ? AND estado = 'pendiente' LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param('ssi', $verifiedReference, $paidStatus, $orderId);
+            $stmt->execute();
+            $stmt->close();
+        }
+
+        $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+        if (trim((string) ($paidOrder['estado'] ?? '')) === 'pagado') {
+            recharge_notifications_emit_for_order($mysqli, $paidOrder);
+            register_influencer_coupon_sale($mysqli, $paidOrder);
+            notify_bank_payment_verified_paid($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone);
+        }
+
+        return [
+            'order' => $paidOrder,
+            'local_status' => trim((string) ($paidOrder['estado'] ?? 'pagado')),
+            'provider_flow' => order_provider_flow_from_row($paidOrder),
+        ];
+    }
+
+    $packageApiId = (int) ($updatedOrder['paquete_api'] ?? 0);
+    $orderPlayerFields = order_player_fields_from_json((string) ($updatedOrder['player_fields_json'] ?? ''));
+
+    try {
+        $providerResult = execute_catalog_api_purchase($packageApiId, (string) ($updatedOrder['user_identifier'] ?? ''), $orderPlayerFields);
+    } catch (Throwable $e) {
+        $providerResult = [
+            'success' => false,
+            'accepted' => false,
+            'message' => $e->getMessage(),
+            'reference' => '',
+            'payload' => ['exception' => $e->getMessage()],
+        ];
+    }
+
+    $mysqli = ensure_mysqli_connection($mysqli);
+    $providerPayloadData = (array) ($providerResult['payload'] ?? []);
+    $providerReference = (string) ($providerResult['reference'] ?? '');
+    $providerMessage = provider_order_status_message($providerPayloadData, (string) ($providerResult['message'] ?? 'No se recibió mensaje del proveedor.'));
+    $providerPayload = json_encode($providerPayloadData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $providerOrderId = recargas_api_extract_provider_order_id($providerPayloadData);
+    $providerState = strtolower(trim((string) (($providerPayloadData['estado'] ?? ''))));
+    $providerCode = provider_delivered_code_text($providerPayloadData);
+
+    if (!empty($providerResult['success'])) {
+        $verifiedStatus = 'enviado';
+        $providerHistoryJson = append_provider_history(
+            $updatedOrder['recargas_api_historial_json'] ?? null,
+            build_provider_history_entry(
+                'purchase',
+                $providerState,
+                $verifiedStatus,
+                $providerMessage,
+                $providerReference,
+                $providerOrderId,
+                $providerCode
+            )
+        );
+        $verifyStmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, ff_api_referencia = ?, ff_api_mensaje = ?, ff_api_payload = ?, recargas_api_pedido_id = ?, recargas_api_estado = ?, recargas_api_codigo_entregado = ?, recargas_api_ultimo_check = NOW(), recargas_api_historial_json = ?, estado = ? WHERE id = ? AND estado = 'pendiente'");
+        if ($verifyStmt) {
+            $verifyStmt->bind_param('sssssssssi', $verifiedReference, $providerReference, $providerMessage, $providerPayload, $providerOrderId, $providerState, $providerCode, $providerHistoryJson, $verifiedStatus, $orderId);
+            $verifyStmt->execute();
+            $verifyStmt->close();
+        }
+
+        $verifiedOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+        if (trim((string) ($verifiedOrder['estado'] ?? '')) === 'enviado') {
+            win_points_handle_order_status_change($mysqli, $orderId, 'enviado');
+            recharge_notifications_emit_for_order($mysqli, $verifiedOrder);
+            ensure_provider_webhook_registration();
+            register_influencer_coupon_sale($mysqli, $verifiedOrder);
+            notify_free_fire_recharge_success($mysqli, $verifiedOrder, $paymentMethodName, $verifiedReference, $phone, $providerReference, $providerMessage);
+        }
+
+        return [
+            'order' => $verifiedOrder,
+            'local_status' => trim((string) ($verifiedOrder['estado'] ?? 'enviado')),
+            'provider_flow' => order_provider_flow_from_row($verifiedOrder),
+        ];
+    }
+
+    $inventoryShortage = recharge_availability_message_indicates_inventory_shortage($providerMessage);
+    if ($inventoryShortage) {
+        try {
+            $shortageResult = mark_order_inventory_shortage_review(
+                $mysqli,
+                $updatedOrder,
+                'pendiente',
+                $verifiedReference,
+                $phone,
+                $providerReference,
+                $providerMessage,
+                $providerPayload,
+                $providerOrderId,
+                $providerCode
+            );
+        } catch (Throwable $e) {
+            return [
+                'order' => fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder,
+                'local_status' => trim((string) ($updatedOrder['estado'] ?? 'pendiente')),
+                'provider_flow' => order_provider_flow_from_row($updatedOrder),
+                'sync_error' => $e->getMessage(),
+            ];
+        }
+
+        $paidOrder = $shortageResult['order'];
+        recharge_notifications_emit_for_order($mysqli, $paidOrder);
+        register_influencer_coupon_sale($mysqli, $paidOrder);
+        notify_provider_inventory_shortage($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerMessage, $shortageResult['lock'] ?? []);
+
+        return [
+            'order' => $paidOrder,
+            'local_status' => trim((string) ($paidOrder['estado'] ?? 'pagado')),
+            'provider_flow' => order_provider_flow_from_row($paidOrder),
+        ];
+    }
+
+    $manualProcessing = !empty($providerResult['manual_processing']);
+    $acceptedLike = !empty($providerResult['accepted'])
+        || ($manualProcessing && provider_message_indicates_pending_lookup($providerMessage));
+    $trackingFollowUp = provider_message_indicates_transport_timeout($providerMessage);
+
+    if ($trackingFollowUp || $acceptedLike) {
+        $paidStatus = 'pagado';
+        $trackedState = $providerState !== '' ? $providerState : 'pending_confirmation';
+        $providerHistoryJson = append_provider_history(
+            $updatedOrder['recargas_api_historial_json'] ?? null,
+            build_provider_history_entry(
+                $trackingFollowUp ? 'purchase_timeout' : 'purchase',
+                $trackedState,
+                $paidStatus,
+                $providerMessage,
+                $providerReference,
+                $providerOrderId,
+                $providerCode
+            )
+        );
+        $paidStmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, ff_api_referencia = ?, ff_api_mensaje = ?, ff_api_payload = ?, recargas_api_pedido_id = ?, recargas_api_estado = ?, recargas_api_codigo_entregado = ?, recargas_api_ultimo_check = NOW(), recargas_api_historial_json = ?, estado = ? WHERE id = ? AND estado = 'pendiente'");
+        if ($paidStmt) {
+            $paidStmt->bind_param('sssssssssi', $verifiedReference, $providerReference, $providerMessage, $providerPayload, $providerOrderId, $trackedState, $providerCode, $providerHistoryJson, $paidStatus, $orderId);
+            $paidStmt->execute();
+            $paidStmt->close();
+        }
+
+        $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+        recharge_notifications_emit_for_order($mysqli, $paidOrder);
+        ensure_provider_webhook_registration();
+        register_influencer_coupon_sale($mysqli, $paidOrder);
+        notify_catalog_purchase_pending($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerReference, $providerMessage);
+
+        if ($trackingFollowUp) {
+            continue_provider_follow_up_in_background($mysqli, (int) ($paidOrder['id'] ?? $orderId), 8, 8);
+        } elseif ($acceptedLike) {
+            $autoSyncAttempts = $manualProcessing ? 5 : 3;
+            $autoSyncDelaySeconds = $manualProcessing ? 4 : 2;
+            try {
+                $autoSyncResult = try_auto_sync_provider_order($mysqli, $paidOrder, $autoSyncAttempts, $autoSyncDelaySeconds);
+                if (is_array($autoSyncResult['order'] ?? null)) {
+                    $paidOrder = $autoSyncResult['order'];
+                } else {
+                    $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $paidOrder;
+                }
+            } catch (Throwable $e) {
+                $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $paidOrder;
+            }
+        }
+
+        return [
+            'order' => $paidOrder,
+            'local_status' => trim((string) ($paidOrder['estado'] ?? 'pagado')),
+            'provider_flow' => order_provider_flow_from_row($paidOrder),
+        ];
+    }
+
+    $cancelStatus = 'cancelado';
+    $failedHistoryJson = append_provider_history(
+        $updatedOrder['recargas_api_historial_json'] ?? null,
+        build_provider_history_entry(
+            'purchase_failed',
+            $providerState,
+            $cancelStatus,
+            $providerMessage,
+            $providerReference,
+            $providerOrderId,
+            $providerCode
+        )
+    );
+    $cancelStmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, ff_api_referencia = ?, ff_api_mensaje = ?, ff_api_payload = ?, recargas_api_pedido_id = ?, recargas_api_estado = ?, recargas_api_codigo_entregado = ?, recargas_api_ultimo_check = NOW(), recargas_api_historial_json = ?, estado = ? WHERE id = ? AND estado = 'pendiente'");
+    if ($cancelStmt) {
+        $cancelStmt->bind_param('sssssssssi', $verifiedReference, $providerReference, $providerMessage, $providerPayload, $providerOrderId, $providerState, $providerCode, $failedHistoryJson, $cancelStatus, $orderId);
+        $cancelStmt->execute();
+        $cancelStmt->close();
+    }
+
+    $cancelledOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+
+    return [
+        'order' => $cancelledOrder,
+        'local_status' => trim((string) ($cancelledOrder['estado'] ?? 'cancelado')),
+        'provider_flow' => order_provider_flow_from_row($cancelledOrder),
+    ];
+}
+
+function try_auto_sync_binance_order(mysqli $mysqli, array $order, string $source = 'sync'): array {
+    if (!binance_pay_is_enabled()) {
+        return [
+            'order' => $order,
+            'local_status' => trim((string) ($order['estado'] ?? '')),
+            'provider_flow' => order_provider_flow_from_row($order),
+        ];
+    }
+
+    $reference = trim((string) ($order['binance_pay_reference'] ?? ''));
+    if ($reference === '') {
+        return [
+            'order' => $order,
+            'local_status' => trim((string) ($order['estado'] ?? '')),
+            'provider_flow' => order_provider_flow_from_row($order),
+        ];
+    }
+
+    $payload = binance_pay_query_payment($reference);
+    return sync_local_order_with_binance_payload($mysqli, $order, $payload, $source);
 }
 
 function fetch_active_payment_method(mysqli $mysqli, int $methodId): ?array {
@@ -1757,7 +2355,25 @@ function order_provider_flow_from_row(array $order): string {
         return 'tracking';
     }
 
-    return $localStatus === 'pagado' ? 'accepted' : '';
+    $hasProviderTracking = trim((string) ($order['ff_api_referencia'] ?? '')) !== ''
+        || trim((string) ($order['recargas_api_pedido_id'] ?? '')) !== ''
+        || trim((string) ($order['recargas_api_estado'] ?? '')) !== '';
+    if ($hasProviderTracking && $localStatus === 'pagado') {
+        return 'accepted';
+    }
+
+    $hasBinanceTracking = trim((string) ($order['binance_pay_reference'] ?? '')) !== ''
+        || trim((string) ($order['binance_pay_order_no'] ?? '')) !== ''
+        || trim((string) ($order['binance_pay_request_id'] ?? '')) !== '';
+    if ($hasBinanceTracking && $localStatus === 'pendiente') {
+        $binanceStatus = binance_pay_normalize_status($order['binance_pay_status'] ?? '');
+        if (binance_pay_is_failed_status($binanceStatus)) {
+            return 'cancelled';
+        }
+        return 'binance_checkout';
+    }
+
+    return '';
 }
 
 function build_provider_sync_snapshot(array $order, ?string $syncError = null): array {
@@ -3792,7 +4408,7 @@ if ($action === 'submit_payment') {
 
     $orderId = intval($_POST['order_id'] ?? 0);
     $paymentMode = trim((string) ($_POST['payment_mode'] ?? 'money'));
-    $paymentMode = in_array($paymentMode, ['money', 'points'], true) ? $paymentMode : 'money';
+    $paymentMode = in_array($paymentMode, ['money', 'points', 'binance'], true) ? $paymentMode : 'money';
     $paymentMethodId = intval($_POST['payment_method_id'] ?? 0);
     $referenceNumberRaw = trim((string) ($_POST['reference_number'] ?? ''));
     $phoneRaw = trim((string) ($_POST['phone'] ?? ''));
@@ -3811,6 +4427,90 @@ if ($action === 'submit_payment') {
     if (order_is_expired($order)) {
         $expiration = cancel_expired_order($mysqli, $order);
         json_error($expiration['message'] ?: 'La orden ya expiró.', 409);
+    }
+
+    if ($paymentMode === 'binance') {
+        if (!binance_pay_is_enabled()) {
+            json_error('Binance Pay no está activo en esta tienda.', 409);
+        }
+        if (!binance_pay_is_configured()) {
+            json_error('Faltan credenciales de CoinPal para usar Binance Pay.', 409);
+        }
+
+        $existingCheckoutUrl = trim((string) ($order['binance_pay_checkout_url'] ?? ''));
+        $existingStatus = binance_pay_normalize_status($order['binance_pay_status'] ?? '');
+        if ($existingCheckoutUrl !== '' && ($existingStatus === '' || binance_pay_is_pending_status($existingStatus))) {
+            $existingOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
+            json_response(array_merge([
+                'ok' => true,
+                'message' => 'Tu checkout de Binance Pay sigue activo. Continúa el pago para completar tu pedido.',
+                'order_id' => $orderId,
+                'estado' => (string) ($existingOrder['estado'] ?? 'pendiente'),
+            ], build_binance_checkout_response_payload($existingOrder)));
+        }
+
+        $notifyUrl = build_binance_pay_notify_url();
+        if ($notifyUrl === null) {
+            json_error('La tienda no tiene una URL pública válida para recibir confirmaciones de Binance Pay.', 409);
+        }
+
+        $currencyCode = strtoupper(trim((string) ($order['moneda'] ?? '')));
+        if ($currencyCode === '') {
+            json_error('La orden no tiene una moneda válida para Binance Pay.', 409);
+        }
+
+        $orderAmount = round((float) ($order['precio'] ?? 0), 2);
+        if ($orderAmount <= 0) {
+            json_error('La orden no tiene un monto válido para Binance Pay.', 409);
+        }
+
+        $checkoutInput = [
+            'request_id' => binance_pay_generate_request_id(),
+            'order_no' => binance_pay_make_order_no('VG'),
+            'order_currency_type' => 'fiat',
+            'order_currency' => $currencyCode,
+            'order_amount' => number_format($orderAmount, 2, '.', ''),
+            'notify_url' => $notifyUrl,
+            'redirect_url' => build_binance_pay_redirect_url(),
+            'payer_ip' => binance_pay_client_ip($_SERVER),
+            'order_description' => trim((string) ($order['juego_nombre'] ?? 'Pedido')) . ' - ' . trim((string) ($order['paquete_nombre'] ?? ('#' . $orderId))),
+            'remark' => 'pedido:' . $orderId,
+        ];
+
+        try {
+            $requestPayload = binance_pay_build_checkout_payload($checkoutInput);
+            $responsePayload = binance_pay_http_post_form(
+                binance_pay_checkout_url(),
+                $requestPayload,
+                [],
+                binance_pay_checkout_timeout_seconds(),
+                true
+            );
+            if (!binance_pay_response_is_success($responsePayload)) {
+                throw new RuntimeException(binance_pay_error_message_from_response($responsePayload));
+            }
+        } catch (Throwable $e) {
+            json_error($e->getMessage(), 502);
+        }
+
+        if (!persist_order_binance_pay_checkout($mysqli, $orderId, $requestPayload, $responsePayload)) {
+            $latestOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
+            if (trim((string) ($latestOrder['estado'] ?? '')) !== 'pendiente') {
+                json_response(array_merge([
+                    'ok' => true,
+                    'message' => 'La orden cambió de estado mientras se preparaba el checkout.',
+                ], build_order_status_response_payload($latestOrder, $orderId)));
+            }
+            json_error('No se pudo registrar el checkout de Binance Pay en el pedido.', 500);
+        }
+
+        $checkoutOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
+        json_response(array_merge([
+            'ok' => true,
+            'message' => 'Abre Binance Pay y completa el pago para continuar con tu pedido.',
+            'order_id' => $orderId,
+            'estado' => 'pendiente',
+        ], build_binance_checkout_response_payload($checkoutOrder)));
     }
 
     if ($paymentMode === 'points') {
@@ -4865,14 +5565,22 @@ if ($action === 'order_status') {
     }
 
     $attemptSync = !empty($_POST['attempt_sync']) || !empty($_GET['attempt_sync']);
-    if ($attemptSync && (string) ($order['estado'] ?? '') === 'pagado' && order_provider_flow_from_row($order) !== 'inventory_shortage') {
+    if ($attemptSync) {
+        $localStatus = trim((string) ($order['estado'] ?? ''));
+        $providerOrderId = trim((string) ($order['recargas_api_pedido_id'] ?? ''));
+        $binanceReference = trim((string) ($order['binance_pay_reference'] ?? ''));
+
         try {
-            $providerOrderId = trim((string) ($order['recargas_api_pedido_id'] ?? ''));
-            if ($providerOrderId !== '') {
-                $syncResult = try_auto_sync_provider_order($mysqli, $order, 1, 0);
-                $order = is_array($syncResult['order'] ?? null) ? $syncResult['order'] : (fetch_order_by_id($mysqli, $orderId) ?: $order);
-            } else {
-                $syncResult = try_recover_uncertain_provider_purchase($mysqli, $order, 1, 0);
+            if ($localStatus === 'pagado' && order_provider_flow_from_row($order) !== 'inventory_shortage' && ($providerOrderId !== '' || trim((string) ($order['ff_api_referencia'] ?? '')) !== '')) {
+                if ($providerOrderId !== '') {
+                    $syncResult = try_auto_sync_provider_order($mysqli, $order, 1, 0);
+                    $order = is_array($syncResult['order'] ?? null) ? $syncResult['order'] : (fetch_order_by_id($mysqli, $orderId) ?: $order);
+                } else {
+                    $syncResult = try_recover_uncertain_provider_purchase($mysqli, $order, 1, 0);
+                    $order = is_array($syncResult['order'] ?? null) ? $syncResult['order'] : (fetch_order_by_id($mysqli, $orderId) ?: $order);
+                }
+            } elseif (binance_pay_is_enabled() && $binanceReference !== '' && in_array($localStatus, ['pendiente', 'pagado'], true)) {
+                $syncResult = try_auto_sync_binance_order($mysqli, $order, 'status_poll');
                 $order = is_array($syncResult['order'] ?? null) ? $syncResult['order'] : (fetch_order_by_id($mysqli, $orderId) ?: $order);
             }
         } catch (Throwable $e) {
@@ -4881,17 +5589,7 @@ if ($action === 'order_status') {
         }
     }
 
-    json_response([
-        'ok' => true,
-        'order_id' => $orderId,
-        'estado' => (string) ($order['estado'] ?? ''),
-        'provider_flow' => order_provider_flow_from_row($order),
-        'provider_status' => (string) ($order['recargas_api_estado'] ?? ''),
-        'provider_reference' => (string) ($order['ff_api_referencia'] ?? ''),
-        'provider_message' => (string) ($order['ff_api_mensaje'] ?? ''),
-        'provider_code' => (string) ($order['recargas_api_codigo_entregado'] ?? ''),
-        'remaining_seconds' => max(0, order_expiration_timestamp($order) - time()),
-    ]);
+    json_response(build_order_status_response_payload($order, $orderId));
 }
 
 if ($action === 'sync_provider_status') {
@@ -4910,16 +5608,27 @@ if ($action === 'sync_provider_status') {
         json_error('Pedido no encontrado.', 404);
     }
 
+    $hasBinanceTracking = trim((string) ($order['binance_pay_reference'] ?? '')) !== ''
+        || trim((string) ($order['binance_pay_order_no'] ?? '')) !== ''
+        || trim((string) ($order['binance_pay_request_id'] ?? '')) !== '';
+    $syncGateway = 'provider';
+
     try {
         $providerOrderId = trim((string) ($order['recargas_api_pedido_id'] ?? ''));
-        if ($providerOrderId === '') {
+        if ($providerOrderId !== '') {
+            $providerDetail = recargas_api_fetch_order_detail($providerOrderId);
+            $syncResult = sync_local_order_with_provider_detail($mysqli, $order, $providerDetail, true);
+        } elseif ($hasBinanceTracking) {
+            if (!binance_pay_is_enabled()) {
+                json_error('Binance Pay no está activo en esta tienda.', 409);
+            }
+            $syncGateway = 'binance_pay';
+            $syncResult = try_auto_sync_binance_order($mysqli, $order, 'admin_sync');
+        } else {
             $syncResult = try_recover_uncertain_provider_purchase($mysqli, $order, 2, 2);
             if (!is_array($syncResult)) {
                 json_error('Este pedido aun no pudo vincularse con una orden externa del proveedor.', 404);
             }
-        } else {
-            $providerDetail = recargas_api_fetch_order_detail($providerOrderId);
-            $syncResult = sync_local_order_with_provider_detail($mysqli, $order, $providerDetail, true);
         }
     } catch (Throwable $e) {
         json_error($e->getMessage(), 502);
@@ -4930,21 +5639,62 @@ if ($action === 'sync_provider_status') {
         : (fetch_order_by_id($mysqli, $orderId) ?: $order);
     $resolvedProviderOrderId = trim((string) ($syncedOrder['recargas_api_pedido_id'] ?? ''));
     $resolvedProviderStatus = trim((string) ($syncResult['provider_status'] ?? ''));
+    if ($resolvedProviderStatus === '') {
+        $resolvedProviderStatus = trim((string) ($syncedOrder['recargas_api_estado'] ?? ''));
+    }
+    if ($resolvedProviderStatus === '') {
+        $resolvedProviderStatus = trim((string) ($syncedOrder['binance_pay_status'] ?? ''));
+    }
+
     $resolvedProviderReference = trim((string) ($syncResult['provider_reference'] ?? ''));
-    if ($resolvedProviderOrderId === '' && $resolvedProviderStatus === '' && $resolvedProviderReference === '') {
+    if ($resolvedProviderReference === '') {
+        $resolvedProviderReference = trim((string) ($syncedOrder['ff_api_referencia'] ?? ''));
+    }
+    if ($resolvedProviderReference === '') {
+        $resolvedProviderReference = trim((string) ($syncedOrder['binance_pay_reference'] ?? ''));
+    }
+
+    $resolvedProviderMessage = trim((string) ($syncResult['provider_message'] ?? ''));
+    if ($resolvedProviderMessage === '') {
+        $resolvedProviderMessage = trim((string) ($syncedOrder['ff_api_mensaje'] ?? ''));
+    }
+    if ($resolvedProviderMessage === '') {
+        $resolvedProviderMessage = trim((string) ($syncedOrder['binance_pay_message'] ?? ''));
+    }
+
+    $resolvedProviderCode = trim((string) ($syncResult['provider_code'] ?? ''));
+    if ($resolvedProviderCode === '') {
+        $resolvedProviderCode = trim((string) ($syncedOrder['recargas_api_codigo_entregado'] ?? ''));
+    }
+
+    $resolvedPaymentGateway = $syncGateway === 'binance_pay' ? 'binance_pay' : '';
+    if ($resolvedPaymentGateway === '' && $hasBinanceTracking && $resolvedProviderOrderId === '') {
+        $resolvedPaymentGateway = 'binance_pay';
+    }
+
+    if ($syncGateway === 'binance_pay') {
+        if ($resolvedProviderStatus === '' && $resolvedProviderReference === '' && $resolvedProviderMessage === '') {
+            json_error('No se pudo obtener una respuesta util de Binance Pay para este pedido.', 404);
+        }
+    } elseif ($resolvedProviderOrderId === '' && $resolvedProviderStatus === '' && $resolvedProviderReference === '') {
         json_error('Aun no se encontro un pedido externo asociado a esta orden para sincronizar.', 404);
     }
 
     json_response([
         'ok' => true,
-        'message' => 'Pedido sincronizado correctamente con el proveedor.',
+        'message' => $syncGateway === 'binance_pay'
+            ? 'Pedido sincronizado correctamente con Binance Pay.'
+            : 'Pedido sincronizado correctamente con el proveedor.',
         'order_id' => $orderId,
-        'estado' => $syncResult['local_status'],
-        'provider_status' => $syncResult['provider_status'],
-        'provider_reference' => $syncResult['provider_reference'],
-        'provider_message' => $syncResult['provider_message'],
-        'provider_code' => $syncResult['provider_code'],
-        'refund_amount' => $syncResult['refund_amount'],
+        'estado' => trim((string) ($syncResult['local_status'] ?? ($syncedOrder['estado'] ?? ''))),
+        'provider_status' => $resolvedProviderStatus,
+        'provider_reference' => $resolvedProviderReference,
+        'provider_message' => $resolvedProviderMessage,
+        'provider_code' => $resolvedProviderCode,
+        'refund_amount' => $syncResult['refund_amount'] ?? null,
+        'provider_flow' => order_provider_flow_from_row($syncedOrder),
+        'payment_gateway' => $resolvedPaymentGateway,
+        'checkout_url' => trim((string) ($syncedOrder['binance_pay_checkout_url'] ?? '')),
     ]);
 }
 
@@ -5347,6 +6097,51 @@ if ($action === 'provider_webhook') {
         'order_id' => (int) ($order['id'] ?? 0),
         'estado' => $syncResult['local_status'],
     ]);
+}
+
+if ($action === 'binance_notify') {
+    if (!binance_pay_is_enabled()) {
+        http_response_code(503);
+        header('Content-Type: text/plain; charset=UTF-8');
+        echo 'disabled';
+        exit;
+    }
+
+    try {
+        $payload = binance_pay_notify_payload($_POST);
+    } catch (Throwable $e) {
+        http_response_code(422);
+        header('Content-Type: text/plain; charset=UTF-8');
+        echo 'invalid';
+        exit;
+    }
+
+    $order = find_local_order_by_binance_identifiers(
+        $mysqli,
+        binance_pay_extract_reference($payload),
+        binance_pay_extract_order_no($payload),
+        binance_pay_extract_request_id($payload)
+    );
+
+    if (!$order) {
+        http_response_code(404);
+        header('Content-Type: text/plain; charset=UTF-8');
+        echo 'missing';
+        exit;
+    }
+
+    try {
+        sync_local_order_with_binance_payload($mysqli, $order, $payload, 'webhook');
+        http_response_code(200);
+        header('Content-Type: text/plain; charset=UTF-8');
+        echo 'success';
+    } catch (Throwable $e) {
+        error_log('TVG Binance Pay webhook failed for order #' . (int) ($order['id'] ?? 0) . ': ' . $e->getMessage());
+        http_response_code(500);
+        header('Content-Type: text/plain; charset=UTF-8');
+        echo 'error';
+    }
+    exit;
 }
 
 if ($action === 'update_status') {

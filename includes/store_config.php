@@ -549,6 +549,12 @@ function store_config_descriptions(): array {
         'ff_api_usuario' => 'Usuario para la API de Free Fire',
         'ff_api_clave' => 'Clave para la API de Free Fire',
         'ff_api_tipo' => 'Tipo para la API de Free Fire',
+        'api_binance' => 'Activa o desactiva la configuracion e integracion de Binance Pay via CoinPal para este tenant.',
+        'binance_pay_merchant_no' => 'Merchant No configurado para Binance Pay via CoinPal.',
+        'binance_pay_secret_key' => 'Secret Key configurada para Binance Pay via CoinPal.',
+        'binance_pay_store_id' => 'Store ID registrado en CoinPal para esta tienda.',
+        'binance_pay_access_token' => 'Access Token del Store registrado en CoinPal para esta tienda.',
+        'binance_pay_store_url' => 'URL o dominio registrado en CoinPal My Store para esta tienda.',
     ];
 
     foreach (store_theme_definitions() as $key => $definition) {
@@ -622,6 +628,12 @@ function store_config_defaults(): array {
         'ff_api_usuario' => '',
         'ff_api_clave' => '',
         'ff_api_tipo' => 'recargaFreefire',
+        'api_binance' => '0',
+        'binance_pay_merchant_no' => '',
+        'binance_pay_secret_key' => '',
+        'binance_pay_store_id' => '',
+        'binance_pay_access_token' => '',
+        'binance_pay_store_url' => '',
     ];
 
     foreach (store_theme_definitions() as $key => $definition) {

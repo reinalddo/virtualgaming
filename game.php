@@ -11,9 +11,11 @@ require_once __DIR__ . "/includes/package_features.php";
 require_once __DIR__ . "/includes/payment_difference.php";
 require_once __DIR__ . "/includes/game_entry_window_per_game.php";
 require_once __DIR__ . "/includes/win_points.php";
+require_once __DIR__ . "/includes/binance_pay.php";
 currency_ensure_schema();
 package_features_ensure_schema($mysqli);
 $paymentSupportWhatsappBase = store_config_whatsapp_link(store_config_get('whatsapp', ''));
+$binancePayCheckoutEnabled = binance_pay_is_enabled() && binance_pay_is_configured();
 $rememberLastPurchaseIdentifierEnabled = trim((string) store_config_get('guardar_ultimo_id', '0')) === '1';
 
 function fetch_user_legacy_purchase_defaults(mysqli $mysqli, int $userId): array {
@@ -2312,6 +2314,8 @@ include __DIR__ . "/includes/header.php";
   let defaultOrderUserIdentifier = <?= json_encode($loggedUserLastPurchaseIdentifier, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   let defaultPaymentPhone = <?= json_encode($loggedUserLastPurchasePhone, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const paymentMethodsByCurrency = <?= json_encode($paymentMethodsByCurrency, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+  const binancePayCheckoutEnabled = <?= $binancePayCheckoutEnabled ? 'true' : 'false' ?>;
+  const binancePayButtonLabel = 'Binance Pay';
   const paymentSupportWhatsappBase = <?= json_encode($paymentSupportWhatsappBase, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const winPointsState = <?= json_encode([
     'enabled' => $winPointsEnabled,
@@ -3092,6 +3096,10 @@ include __DIR__ . "/includes/header.php";
     );
   }
 
+  function canUseBinanceCheckout(pack) {
+    return Boolean(binancePayCheckoutEnabled && pack && Number(pack.priceValue || 0) > 0);
+  }
+
   function getPaymentModeButtons() {
     return paymentModeOptions ? Array.from(paymentModeOptions.querySelectorAll('.payment-mode-btn')) : [];
   }
@@ -3115,7 +3123,13 @@ include __DIR__ . "/includes/header.php";
   }
 
   function paymentOptionKey(mode, methodId = '') {
-    return mode === 'points' ? 'points' : `money:${String(methodId || '')}`;
+    if (mode === 'points') {
+      return 'points';
+    }
+    if (mode === 'binance') {
+      return 'binance';
+    }
+    return `money:${String(methodId || '')}`;
   }
 
   function shouldExpandSinglePaymentOption() {
@@ -3124,7 +3138,7 @@ include __DIR__ . "/includes/header.php";
     }
 
     const methods = getPaymentMethodsForCurrency(activePaymentOrder.currency);
-    const usableOptionCount = methods.length + (activePaymentOrder.canUsePoints ? 1 : 0);
+    const usableOptionCount = methods.length + (activePaymentOrder.canUseBinance ? 1 : 0) + (activePaymentOrder.canUsePoints ? 1 : 0);
     return usableOptionCount === 1;
   }
 
@@ -3144,6 +3158,10 @@ include __DIR__ . "/includes/header.php";
     const copy = escapePaymentHtml(String(activePaymentOrder && activePaymentOrder.pointsCopy ? activePaymentOrder.pointsCopy : ''));
     const message = escapePaymentHtml(String(activePaymentOrder && activePaymentOrder.pointsMessage ? activePaymentOrder.pointsMessage : '')).replace(/\n/g, '<br>');
     return `<div class="payment-mode-item-card payment-mode-item-card-points"><div class="payment-mode-item-card-title">Canje con premios</div><div class="payment-mode-item-details">${copy}</div><div class="payment-win-points-message mt-3">${message}</div></div>`;
+  }
+
+  function paymentBinanceAccordionMarkup() {
+    return `<div class="payment-mode-item-card payment-mode-item-card-points"><div class="payment-mode-item-card-title">${escapePaymentHtml(binancePayButtonLabel)}</div><div class="payment-mode-item-details">Paga de forma segura desde CoinPal usando tu cuenta de Binance Pay. Abriremos el checkout externo y esta ventana seguirá monitoreando la confirmación automáticamente.</div></div>`;
   }
 
   function renderPaymentModeOptions() {
@@ -3166,13 +3184,18 @@ include __DIR__ . "/includes/header.php";
       const methodMeta = escapePaymentHtml(paymentMethodMetaLabel(method));
       return `<div class="payment-mode-item" data-payment-option="money" data-method-id="${methodId}"><button type="button" class="payment-mode-btn" data-payment-option="money" data-method-id="${methodId}" aria-expanded="false"><span class="payment-mode-btn-main"><span class="payment-mode-btn-radio" aria-hidden="true"></span><span class="payment-mode-btn-text"><span class="payment-mode-btn-title">${methodName}</span><span class="payment-mode-btn-meta">${methodMeta}</span></span></span><span class="payment-mode-btn-caret" aria-hidden="true"></span></button><div class="payment-mode-item-body"><div class="payment-mode-item-body-inner">${paymentMethodAccordionMarkup(method)}</div></div></div>`;
     }).join('');
+    const binanceHtml = activePaymentOrder.canUseBinance
+      ? `<div class="payment-mode-item" data-payment-option="binance"><button type="button" class="payment-mode-btn" data-payment-option="binance" aria-expanded="false"><span class="payment-mode-btn-main"><span class="payment-mode-btn-radio" aria-hidden="true"></span><span class="payment-mode-btn-text"><span class="payment-mode-btn-title">${escapePaymentHtml(binancePayButtonLabel)}</span><span class="payment-mode-btn-meta">Checkout externo seguro con CoinPal</span></span></span><span class="payment-mode-btn-caret" aria-hidden="true"></span></button><div class="payment-mode-item-body"><div class="payment-mode-item-body-inner">${paymentBinanceAccordionMarkup()}</div></div></div>`
+      : '';
     const pointsMeta = escapePaymentHtml(formatWinPointsAmount(winPointsState.balance || 0));
     const pointsHtml = `<div class="payment-mode-item" data-payment-option="points"><button type="button" class="payment-mode-btn" data-payment-option="points" aria-expanded="false"><span class="payment-mode-btn-main"><span class="payment-mode-btn-radio" aria-hidden="true"></span><span class="payment-mode-btn-text"><span class="payment-mode-btn-title">${escapePaymentHtml(paymentPointsOptionLabel(hasRule, requiredPoints))}</span><span class="payment-mode-btn-meta">Saldo disponible: ${pointsMeta}</span></span></span><span class="payment-mode-btn-caret" aria-hidden="true"></span></button><div class="payment-mode-item-body"><div class="payment-mode-item-body-inner">${paymentPointsAccordionMarkup()}</div></div></div>`;
 
-    paymentModeOptions.innerHTML = showPointsOption ? `${buttonsHtml}${pointsHtml}` : buttonsHtml;
+    paymentModeOptions.innerHTML = `${buttonsHtml}${binanceHtml}${showPointsOption ? pointsHtml : ''}`;
     getPaymentModeButtons().forEach((button) => {
       button.addEventListener('click', function() {
-        const buttonMode = button.dataset.paymentOption === 'points' ? 'points' : 'money';
+        const buttonMode = button.dataset.paymentOption === 'points'
+          ? 'points'
+          : (button.dataset.paymentOption === 'binance' ? 'binance' : 'money');
         const methodId = buttonMode === 'money' ? button.dataset.methodId || '' : '';
         setActivePaymentMode(buttonMode, methodId, { expandSelected: true });
       });
@@ -3186,20 +3209,25 @@ include __DIR__ . "/includes/header.php";
 
     const selectedMethod = resolveSelectedPaymentMethod(activePaymentOrder.currency, preferredMethodId || activePaymentOrder.selectedMethodId);
     const canUseMoney = !!selectedMethod && !!activePaymentOrder.canUseMoney;
+    const canUseBinance = !!activePaymentOrder.canUseBinance;
     const canUsePoints = !!activePaymentOrder.canUsePoints;
-    let nextMode = mode === 'points' ? 'points' : 'money';
+    let nextMode = mode === 'points' ? 'points' : (mode === 'binance' ? 'binance' : 'money');
 
     activePaymentOrder.selectedMethodId = selectedMethod ? String(selectedMethod.id) : '';
 
     if (nextMode === 'points' && !canUsePoints) {
-      nextMode = canUseMoney ? 'money' : 'points';
+      nextMode = canUseMoney ? 'money' : (canUseBinance ? 'binance' : 'points');
+    }
+    if (nextMode === 'binance' && !canUseBinance) {
+      nextMode = canUseMoney ? 'money' : (canUsePoints ? 'points' : 'binance');
     }
     if (nextMode === 'money' && !canUseMoney) {
-      nextMode = canUsePoints ? 'points' : 'money';
+      nextMode = canUseBinance ? 'binance' : (canUsePoints ? 'points' : 'money');
     }
 
     activePaymentOrder.paymentMode = nextMode;
     const usingPoints = nextMode === 'points';
+    const usingBinance = nextMode === 'binance';
     const selectedOptionKey = paymentOptionKey(nextMode, selectedMethod ? selectedMethod.id : '');
 
     if (Object.prototype.hasOwnProperty.call(options, 'expandSelected')) {
@@ -3211,17 +3239,21 @@ include __DIR__ . "/includes/header.php";
     if (paymentMethodSelect) {
       paymentMethodSelect.value = selectedMethod ? String(selectedMethod.id) : '';
     }
-    renderPaymentMethodDetails(selectedMethod || null);
+    renderPaymentMethodDetails(usingBinance ? null : (selectedMethod || null));
     if (paymentMethodCard) {
       const usingAccordion = paymentWinPointsCard && !paymentWinPointsCard.classList.contains('d-none');
       paymentMethodCard.classList.toggle('d-none', usingAccordion);
     }
     getPaymentModeButtons().forEach((button) => {
-      const buttonMode = button.dataset.paymentOption === 'points' ? 'points' : 'money';
+      const buttonMode = button.dataset.paymentOption === 'points'
+        ? 'points'
+        : (button.dataset.paymentOption === 'binance' ? 'binance' : 'money');
       const buttonMethodId = button.dataset.methodId || '';
       const isSelected = buttonMode === 'points'
         ? usingPoints
-        : (!usingPoints && String(buttonMethodId) === String(activePaymentOrder.selectedMethodId || ''));
+        : (buttonMode === 'binance'
+          ? usingBinance
+          : (!usingPoints && !usingBinance && String(buttonMethodId) === String(activePaymentOrder.selectedMethodId || '')));
       const isExpanded = paymentOptionKey(buttonMode, buttonMethodId) === String(activePaymentOrder.expandedPaymentOptionKey || '');
       const buttonItem = button.closest('.payment-mode-item');
       button.classList.toggle('is-active', isSelected);
@@ -3230,15 +3262,21 @@ include __DIR__ . "/includes/header.php";
         buttonItem.classList.toggle('is-expanded', isExpanded);
       }
       button.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
-      button.disabled = buttonMode === 'points' ? !canUsePoints : !canUseMoney;
+      button.disabled = buttonMode === 'points' ? !canUsePoints : (buttonMode === 'binance' ? !canUseBinance : !canUseMoney);
     });
+    if (paymentReferenceGroup) {
+      paymentReferenceGroup.classList.toggle('d-none', usingPoints || usingBinance);
+    }
+    if (paymentPhoneGroup) {
+      paymentPhoneGroup.classList.toggle('d-none', usingPoints || usingBinance);
+    }
     if (paymentMoneyPanel) {
-      paymentMoneyPanel.classList.toggle('is-active', !usingPoints && canUseMoney);
+      paymentMoneyPanel.classList.toggle('is-active', !usingPoints && (canUseMoney || canUseBinance));
     }
     if (paymentSubmitButton) {
       paymentSubmitButton.textContent = usingPoints
         ? `Canjear ${formatWinPointsAmount(activePaymentOrder.pointsRequired || 0)}`
-        : defaultPaymentSubmitButtonLabel;
+        : (usingBinance ? 'Continuar con Binance Pay' : defaultPaymentSubmitButtonLabel);
     }
   }
 
@@ -3257,17 +3295,22 @@ include __DIR__ . "/includes/header.php";
     const hasRule = !!pack.redeemActive && requiredPoints > 0;
     const currentBalance = Number(winPointsState.balance || 0);
     const canUsePoints = hasRule && currentBalance >= requiredPoints;
+    const canUseBinance = canUseBinanceCheckout(pack);
     const showRewardsState = !!(winPointsState.enabled && winPointsState.loggedIn);
 
     activePaymentOrder.canUseMoney = Boolean(currentMethod);
+    activePaymentOrder.canUseBinance = canUseBinance;
     activePaymentOrder.canUsePoints = showRewardsState ? canUsePoints : false;
     activePaymentOrder.pointsRequired = showRewardsState ? requiredPoints : 0;
     activePaymentOrder.selectedMethodId = currentMethod ? String(currentMethod.id) : '';
     activePaymentOrder.expandedPaymentOptionKey = shouldExpandSinglePaymentOption()
-      ? paymentOptionKey(activePaymentOrder.canUseMoney ? 'money' : 'points', activePaymentOrder.selectedMethodId)
+      ? paymentOptionKey(
+        activePaymentOrder.canUseMoney ? 'money' : (activePaymentOrder.canUsePoints ? 'points' : 'binance'),
+        activePaymentOrder.selectedMethodId
+      )
       : '';
 
-    if (!currentMethod) {
+    if (!currentMethod && !canUseBinance) {
       paymentWinPointsCard.classList.add('d-none');
       if (paymentMethodCard) {
         paymentMethodCard.classList.remove('d-none');
@@ -3282,7 +3325,9 @@ include __DIR__ . "/includes/header.php";
         paymentWinPointsTitle.textContent = 'Premios disponibles';
       }
       if (paymentWinPointsCopy) {
-        paymentWinPointsCopy.textContent = 'Elige si deseas completar esta orden con transferencia o con tus premios acumulados.';
+        paymentWinPointsCopy.textContent = canUseBinance
+          ? 'Elige si deseas completar esta orden con transferencia, Binance Pay o con tus premios acumulados.'
+          : 'Elige si deseas completar esta orden con transferencia o con tus premios acumulados.';
       }
       paymentWinPointsBalance.textContent = formatWinPointsAmount(currentBalance);
       paymentWinPointsBalance.classList.remove('d-none');
@@ -3291,7 +3336,9 @@ include __DIR__ . "/includes/header.php";
         paymentWinPointsTitle.textContent = 'Metodos de pago disponibles';
       }
       if (paymentWinPointsCopy) {
-        paymentWinPointsCopy.textContent = 'Elige el metodo con el que deseas completar esta orden.';
+        paymentWinPointsCopy.textContent = canUseBinance
+          ? 'Elige si deseas completar esta orden manualmente o con Binance Pay.'
+          : 'Elige el metodo con el que deseas completar esta orden.';
       }
       paymentWinPointsBalance.textContent = '';
       paymentWinPointsBalance.classList.add('d-none');
@@ -3320,7 +3367,9 @@ include __DIR__ . "/includes/header.php";
     }
     renderPaymentModeOptions();
     setActivePaymentMode(
-      showRewardsState ? (activePaymentOrder.canUseMoney ? 'money' : 'points') : 'money',
+      showRewardsState
+        ? (activePaymentOrder.canUseMoney ? 'money' : (activePaymentOrder.canUsePoints ? 'points' : 'binance'))
+        : (activePaymentOrder.canUseMoney ? 'money' : 'binance'),
       activePaymentOrder.selectedMethodId,
       { expandSelected: shouldExpandSinglePaymentOption() }
     );
@@ -4061,6 +4110,7 @@ include __DIR__ . "/includes/header.php";
       }
 
       const nextState = String((data && data.estado) || '').toLowerCase();
+      const providerFlow = String((data && data.provider_flow) || '').toLowerCase();
       if (nextState === 'enviado') {
         clearPaymentStatusPolling();
         renderDeliveredCodes(data);
@@ -4084,15 +4134,75 @@ include __DIR__ . "/includes/header.php";
         return;
       }
 
+      if (nextState === 'pagado') {
+        const paidMessage = (data && data.provider_message) ? data.provider_message : 'El pago fue confirmado correctamente.';
+        const hasProviderDetails = extractPaymentReasons(data).length > 0;
+        const isAcceptedFlow = providerFlow === 'accepted' || providerFlow === 'tracking';
+        const requiresManualReview = providerFlow === 'manual_review' || providerFlow === 'inventory_shortage' || (!isAcceptedFlow && hasProviderDetails);
+
+        if (!isAcceptedFlow) {
+          clearPaymentStatusPolling();
+          setPaymentAlert(paidMessage, requiresManualReview ? 'warning' : 'success');
+          if (providerFlow === 'inventory_shortage') {
+            renderProviderPaymentDetails(data, reference, totalText);
+          } else {
+            clearPaymentSupportUi();
+          }
+          setPaymentFormDisabled(true);
+          clearPaymentTimer();
+          setCancelOrderButtonMode('close');
+          showPaymentStatusModal(requiresManualReview ? 'Revisión requerida' : 'Operación exitosa', paidMessage, requiresManualReview ? 'danger' : 'success');
+          return;
+        }
+      }
+
+      if (nextState === 'pagado') {
+        const paidMessage = (data && data.provider_message) ? data.provider_message : 'El pago fue confirmado correctamente.';
+        const hasProviderDetails = extractPaymentReasons(data).length > 0;
+        const isAcceptedFlow = providerFlow === 'accepted' || providerFlow === 'tracking';
+        const requiresManualReview = providerFlow === 'manual_review' || providerFlow === 'inventory_shortage' || (!isAcceptedFlow && hasProviderDetails);
+
+        if (!isAcceptedFlow) {
+          clearPaymentStatusPolling();
+          setPaymentAlert(paidMessage, requiresManualReview ? 'warning' : 'success');
+          if (providerFlow === 'inventory_shortage') {
+            renderProviderPaymentDetails(data, reference, totalText);
+          } else {
+            clearPaymentSupportUi();
+          }
+          setPaymentFormDisabled(true);
+          clearPaymentTimer();
+          setCancelOrderButtonMode('close');
+          showPaymentStatusModal(requiresManualReview ? 'Revisión requerida' : 'Operación exitosa', paidMessage, requiresManualReview ? 'danger' : 'success');
+          return;
+        }
+      }
+
+      if (nextState === 'pendiente' && providerFlow === 'binance_checkout') {
+        const pendingMessage = (data && data.provider_message) ? data.provider_message : 'Completa el pago en Binance Pay para continuar con tu pedido.';
+        setPaymentAlert(pendingMessage, 'info');
+        renderBinancePaymentDetails(data, (data && data.provider_reference) ? data.provider_reference : reference, totalText);
+      }
+
       if (attempt >= maxAttempts) {
         clearPaymentStatusPolling();
-        setPaymentAlert('La compra sigue en proceso. Puedes dejar esta ventana y el sistema continuará el seguimiento.', 'info');
-        renderProviderPaymentDetails(data, reference, totalText);
-        showPaymentStatusModal('Compra en proceso', 'La compra sigue en proceso. El sistema continuará el seguimiento automático.', 'info');
+        if (providerFlow === 'binance_checkout') {
+          setPaymentAlert('El checkout sigue pendiente. Puedes completar el pago y volver a esta ventana para continuar el seguimiento.', 'info');
+          renderBinancePaymentDetails(data, (data && data.provider_reference) ? data.provider_reference : reference, totalText);
+          showPaymentStatusModal('Pago pendiente en Binance Pay', 'El checkout sigue pendiente. Puedes dejar esta ventana abierta mientras completas el pago.', 'info');
+        } else {
+          setPaymentAlert('La compra sigue en proceso. Puedes dejar esta ventana y el sistema continuará el seguimiento.', 'info');
+          renderProviderPaymentDetails(data, reference, totalText);
+          showPaymentStatusModal('Compra en proceso', 'La compra sigue en proceso. El sistema continuará el seguimiento automático.', 'info');
+        }
         return;
       }
 
-      renderProviderPaymentDetails(data, reference, totalText);
+      if (providerFlow === 'binance_checkout') {
+        renderBinancePaymentDetails(data, (data && data.provider_reference) ? data.provider_reference : reference, totalText);
+      } else {
+        renderProviderPaymentDetails(data, reference, totalText);
+      }
       setPaymentStatusWaiting(true);
       paymentStatusPollTimer = setTimeout(() => {
         pollOrderResolution(reference, totalText, attempt + 1);
@@ -4504,6 +4614,48 @@ include __DIR__ . "/includes/header.php";
     scrollPaymentModalToTop();
   }
 
+  function renderBinancePaymentDetails(data, reference, totalText) {
+    clearPaymentSupportUi();
+
+    const checkoutUrl = String((data && data.checkout_url) || '').trim();
+    const reasons = extractPaymentReasons(data);
+    const title = 'Completa el pago en Binance Pay';
+    const summary = 'Abrimos un checkout externo de CoinPal para que completes el pago con Binance Pay mientras esta ventana sigue consultando la confirmación.';
+    const steps = [
+      'Abre la ventana de Binance Pay y completa el pago con tu cuenta o QR.',
+      'Mantén esta ventana abierta: el sistema seguirá revisando la confirmación automáticamente.',
+      'Si ya pagaste y el estado no cambia de inmediato, espera unos segundos mientras llega el webhook o la sincronización.'
+    ];
+
+    renderSupportCard(paymentModalReasons, title, summary, steps, reasons);
+    renderSupportCard(paymentStatusModalReasons, title, summary, steps, reasons);
+
+    const actions = [];
+    if (checkoutUrl !== '') {
+      actions.push({
+        label: 'Abrir Binance Pay',
+        className: 'btn-info',
+        onClick: () => {
+          window.open(checkoutUrl, '_blank', 'noopener');
+        },
+      });
+    }
+
+    const whatsappUrl = buildPaymentSupportWhatsappUrl(activePaymentOrder ? activePaymentOrder.orderId : '', reference, totalText);
+    if (whatsappUrl) {
+      actions.push({
+        label: 'Contactar por WhatsApp',
+        className: 'btn-outline-info',
+        onClick: () => {
+          window.open(whatsappUrl, '_blank', 'noopener');
+        },
+      });
+    }
+
+    renderPaymentActionButtons(actions);
+    scrollPaymentModalToTop();
+  }
+
   function renderPaymentServerFailure(errorMessage, reference, totalText) {
     renderPaymentFailureDetails({
       failure_type: 'server_or_data_mismatch',
@@ -4669,7 +4821,8 @@ include __DIR__ . "/includes/header.php";
   function openPaymentModal(orderId, expiresAt, remainingSeconds, pack, userId, totalText, orderEmail) {
     const currentMethod = renderPaymentMethodsByCurrency(pack.moneda || '');
     const canUsePoints = canRedeemPackWithPoints(pack);
-    if (!currentMethod && !canUsePoints) {
+    const canUseBinance = canUseBinanceCheckout(pack);
+    if (!currentMethod && !canUsePoints && !canUseBinance) {
       showToast('No hay métodos de pago activos disponibles.', 'error');
       return false;
     }
@@ -4684,8 +4837,9 @@ include __DIR__ . "/includes/header.php";
       currency: pack.moneda || '',
       email: orderEmail || '',
       canUseMoney: Boolean(currentMethod),
+      canUseBinance,
       canUsePoints,
-      paymentMode: currentMethod ? 'money' : 'points',
+      paymentMode: currentMethod ? 'money' : (canUsePoints ? 'points' : 'binance'),
       selectedMethodId: currentMethod ? String(currentMethod.id) : '',
       pointsRequired: Number(pack.redeemRequiredPoints || 0),
       expiring: false,
@@ -4892,7 +5046,9 @@ include __DIR__ . "/includes/header.php";
                     return;
                   }
 
-                  const paymentMode = activePaymentOrder.paymentMode === 'points' ? 'points' : 'money';
+                  const paymentMode = activePaymentOrder.paymentMode === 'points'
+                    ? 'points'
+                    : (activePaymentOrder.paymentMode === 'binance' ? 'binance' : 'money');
                   const methods = getPaymentMethodsForCurrency(activePaymentOrder.currency);
                   const selectedMethod = methods.find((method) => String(method.id) === String(activePaymentOrder.selectedMethodId || paymentMethodSelect.value)) || methods[0] || null;
                   if (paymentMode === 'money' && !selectedMethod) {
@@ -4900,12 +5056,16 @@ include __DIR__ . "/includes/header.php";
                     return;
                   }
 
-                  const reference = paymentMode === 'points' ? '' : paymentReferenceInput.value.trim();
-                  const phone = paymentMode === 'points' ? '' : paymentPhoneInput.value.trim();
+                  const reference = paymentMode === 'money' ? paymentReferenceInput.value.trim() : '';
+                  const phone = paymentMode === 'money' ? paymentPhoneInput.value.trim() : '';
                   const requiredDigits = Number(selectedMethod ? (selectedMethod.referencia_digitos || 0) : 0);
 
                   if (paymentMode === 'points' && !activePaymentOrder.canUsePoints) {
                     setPaymentAlert('Este paquete no tiene un canje disponible con tus premios en este momento.', 'danger');
+                    return;
+                  }
+                  if (paymentMode === 'binance' && !activePaymentOrder.canUseBinance) {
+                    setPaymentAlert('Binance Pay no está disponible para esta orden.', 'danger');
                     return;
                   }
                   if (paymentMode === 'money' && !reference) {
@@ -4923,12 +5083,20 @@ include __DIR__ . "/includes/header.php";
 
                   setPaymentFormDisabled(true);
                   setPaymentAlert('', 'info');
+                  let checkoutWindow = null;
+                  if (paymentMode === 'binance') {
+                    checkoutWindow = window.open('', '_blank', 'noopener');
+                  }
                   setLoadingModalContent(
-                    paymentMode === 'points' ? 'Canjeando premios...' : (paymentSendingOrderContent.title || 'Enviando orden...'),
+                    paymentMode === 'points'
+                      ? 'Canjeando premios...'
+                      : (paymentMode === 'binance' ? 'Abriendo Binance Pay...' : (paymentSendingOrderContent.title || 'Enviando orden...')),
                     paymentMode === 'points'
                       ? 'Estamos validando tu saldo y procesando la recarga con tus premios. No cierres esta ventana.'
-                      : (paymentSendingOrderContent.message || 'Estamos registrando tu comprobante y procesando la orden según la moneda del pedido. No cierres esta ventana.'),
-                    paymentMode === 'points' ? 'processing' : 'sending'
+                      : (paymentMode === 'binance'
+                        ? 'Estamos creando el checkout externo de Binance Pay. No cierres esta ventana.'
+                        : (paymentSendingOrderContent.message || 'Estamos registrando tu comprobante y procesando la orden según la moneda del pedido. No cierres esta ventana.')),
+                    paymentMode === 'points' ? 'processing' : (paymentMode === 'binance' ? 'processing' : 'sending')
                   );
                   setOverlayVisible(loadingModal, true);
                   fetch(buildAppUrl('/api/pedidos.php'), {
@@ -4959,7 +5127,17 @@ include __DIR__ . "/includes/header.php";
 
                     setOverlayVisible(loadingModal, false);
 
+                    if (paymentMode === 'binance' && checkoutWindow && !checkoutWindow.closed) {
+                      const checkoutUrl = String((data && data.checkout_url) || '').trim();
+                      if (checkoutUrl !== '') {
+                        checkoutWindow.location.href = checkoutUrl;
+                      } else {
+                        checkoutWindow.close();
+                      }
+                    }
+
                     const nextState = String((data && data.estado) || '').toLowerCase();
+                    const providerFlow = String((data && data.provider_flow) || '').toLowerCase();
                     if (nextState === 'enviado') {
                       const successMessage = data.message || (paymentMode === 'points'
                         ? 'Canje realizado y recarga procesada correctamente.'
@@ -4989,9 +5167,19 @@ include __DIR__ . "/includes/header.php";
                       return;
                     }
 
+                    if (nextState === 'pendiente' && providerFlow === 'binance_checkout') {
+                      const pendingMessage = data.message || 'Completa el pago en Binance Pay para continuar con tu pedido.';
+                      setPaymentAlert(pendingMessage, 'info');
+                      renderBinancePaymentDetails(data, (data && data.provider_reference) ? data.provider_reference : reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
+                      setCancelOrderButtonMode('cancel');
+                      showPaymentStatusModal('Completa el pago en Binance Pay', pendingMessage, 'info');
+                      setPaymentStatusWaiting(true);
+                      pollOrderResolution((data && data.provider_reference) ? data.provider_reference : reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '', 1);
+                      return;
+                    }
+
                     if (nextState === 'pagado') {
                       const paidMessage = data.message || 'El pago fue confirmado correctamente.';
-                      const providerFlow = String((data && data.provider_flow) || '').toLowerCase();
                       const hasProviderDetails = extractPaymentReasons(data).length > 0;
                       const isAcceptedFlow = providerFlow === 'accepted' || providerFlow === 'tracking';
                       const requiresManualReview = providerFlow === 'manual_review' || (!isAcceptedFlow && hasProviderDetails);
@@ -5035,6 +5223,9 @@ include __DIR__ . "/includes/header.php";
                   })
                   .catch((error) => {
                     setOverlayVisible(loadingModal, false);
+                    if (checkoutWindow && !checkoutWindow.closed) {
+                      checkoutWindow.close();
+                    }
                     const rawErrorMessage = String((error && error.message) || '').trim();
                     const errorMessage = rawErrorMessage.toLowerCase() === 'failed to fetch'
                       ? 'No se pudo conectar con el servidor para validar el pago. Vuelve a intentarlo en unos segundos.'
@@ -5159,7 +5350,8 @@ include __DIR__ . "/includes/header.php";
                 }
                 const paymentMethods = getPaymentMethodsForCurrency(pack.moneda || '');
                 const pointsCheckoutAvailable = canRedeemPackWithPoints(pack);
-                if (!paymentMethods.length && !pointsCheckoutAvailable) {
+                const binanceCheckoutAvailable = canUseBinanceCheckout(pack);
+                if (!paymentMethods.length && !pointsCheckoutAvailable && !binanceCheckoutAvailable) {
                   showToast('No hay métodos de pago activos disponibles.', 'error');
                   return;
                 }

@@ -14,7 +14,11 @@ $cfg = store_config_all();
 $activeTab = defined('ADMIN_CONFIG_ACTIVE_TAB') ? ADMIN_CONFIG_ACTIVE_TAB : ($_GET['tab'] ?? 'correo');
 $startupPopupTabEnabled = store_config_get('inicio_popup_tab_habilitado', '1') === '1';
 $rechargeNotificationsTabEnabled = ($cfg['notificaciones_recargas'] ?? '0') === '1';
+$binanceApiTabEnabled = store_config_get('api_binance', '0') === '1';
 $allowedTabs = ['correo', 'cabecera', 'sociales', 'api-banco', 'api-free-fire', 'personalizar-colores', 'galeria', 'metodos-pago'];
+if ($binanceApiTabEnabled) {
+  $allowedTabs[] = 'api-binance';
+}
 if ($rechargeNotificationsTabEnabled) {
   $allowedTabs[] = 'notificaciones-recargas';
 }
@@ -83,6 +87,7 @@ if ($paymentWindowSuccessTitle === '') {
   $paymentWindowSuccessTitle = 'Pago exitoso';
 }
 $paymentWindowSuccessExtraMessage = trim((string) ($cfg['ventana_pago_exitoso_mensaje_extra'] ?? ''));
+$currentPublicUrl = rtrim(app_url('/'), '/');
 $paymentWindowThemeGroups = [
   'Ventana de pago principal' => [
     'theme_payment_main_overlay_bg',
@@ -852,6 +857,11 @@ $googleCallbackUrl = google_oauth_callback_url();
           <div class="neon-tabs-item">
             <a href="/admin/configuracion?tab=api-free-fire" class="neon-tab-link <?= $activeTab === 'api-free-fire' ? 'active' : '' ?>">Datos API</a>
           </div>
+          <?php if ($binanceApiTabEnabled): ?>
+            <div class="neon-tabs-item">
+              <a href="/admin/configuracion?tab=api-binance" class="neon-tab-link <?= $activeTab === 'api-binance' ? 'active' : '' ?>">API Binance Pay</a>
+            </div>
+          <?php endif; ?>
           <div class="neon-tabs-item">
             <a href="/admin/configuracion?tab=personalizar-colores" class="neon-tab-link <?= $activeTab === 'personalizar-colores' ? 'active' : '' ?>">Personalizar Colores</a>
           </div>
@@ -872,7 +882,7 @@ $googleCallbackUrl = google_oauth_callback_url();
       <div class="card neon-card mb-4">
         <div class="card-header text-center py-4" style="background: linear-gradient(90deg, var(--theme-highlight) 0%, var(--theme-success) 100%); color: var(--theme-button-text-strong); border-radius: 16px 16px 0 0;">
           <h2 class="h4 fw-bold mb-0" style="font-family: 'Oxanium', 'Montserrat', 'Arial', sans-serif; letter-spacing: 0.08em;">
-            <?php if ($activeTab === 'correo'): ?>Configuración de correo corporativo<?php elseif ($activeTab === 'cabecera'): ?>Datos de cabecera<?php elseif ($activeTab === 'notificaciones-recargas'): ?>Notificaciones Recargas<?php elseif ($activeTab === 'sociales'): ?>Redes Sociales<?php elseif ($activeTab === 'api-banco'): ?>Datos conexión Banco<?php elseif ($activeTab === 'api-free-fire'): ?>Datos API<?php elseif ($activeTab === 'personalizar-colores'): ?>Personalizar Colores<?php elseif ($activeTab === 'ventana-inicial'): ?>Ventana Inicial<?php elseif ($activeTab === 'galeria'): ?>Galería principal del index<?php else: ?>Métodos de Pago<?php endif; ?>
+            <?php if ($activeTab === 'correo'): ?>Configuración de correo corporativo<?php elseif ($activeTab === 'cabecera'): ?>Datos de cabecera<?php elseif ($activeTab === 'notificaciones-recargas'): ?>Notificaciones Recargas<?php elseif ($activeTab === 'sociales'): ?>Redes Sociales<?php elseif ($activeTab === 'api-banco'): ?>Datos conexión Banco<?php elseif ($activeTab === 'api-free-fire'): ?>Datos API<?php elseif ($activeTab === 'api-binance'): ?>API Binance Pay<?php elseif ($activeTab === 'personalizar-colores'): ?>Personalizar Colores<?php elseif ($activeTab === 'ventana-inicial'): ?>Ventana Inicial<?php elseif ($activeTab === 'galeria'): ?>Galería principal del index<?php else: ?>Métodos de Pago<?php endif; ?>
           </h2>
         </div>
         <div class="card-body p-4">
@@ -1276,6 +1286,48 @@ $googleCallbackUrl = google_oauth_callback_url();
               </div>
 
               <button type="submit" class="neon-btn w-100 py-3 mt-4">Guardar datos API</button>
+            </form>
+          <?php elseif ($activeTab === 'api-binance'): ?>
+            <form method="post">
+              <input type="hidden" name="config_section" value="api-binance">
+              <div class="config-section-note mb-4">Configura aquí las credenciales de CoinPal usadas para cobrar exclusivamente con Binance Pay. En VirtualGaming este tab solo se muestra cuando la función <strong>api_binance</strong> está activa para el tenant.</div>
+
+              <div class="gallery-table-wrap mb-2">
+                <h3 class="h5 fw-bold text-info mb-3">Credenciales CoinPal / Binance Pay</h3>
+                <div class="row g-3">
+                  <div class="col-md-6">
+                    <label class="form-label">Merchant No</label>
+                    <input type="text" name="binance_pay_merchant_no" value="<?= htmlspecialchars($cfg['binance_pay_merchant_no'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="1000...">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Secret Key</label>
+                    <input type="password" name="binance_pay_secret_key" value="<?= htmlspecialchars($cfg['binance_pay_secret_key'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="Pega aquí tu Secret Key">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Store ID</label>
+                    <input type="text" name="binance_pay_store_id" value="<?= htmlspecialchars($cfg['binance_pay_store_id'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="1000...">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Access Token</label>
+                    <input type="text" name="binance_pay_access_token" value="<?= htmlspecialchars($cfg['binance_pay_access_token'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="Token del Store en CoinPal">
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label">Store URL registrado en CoinPal</label>
+                    <input type="url" name="binance_pay_store_url" value="<?= htmlspecialchars($cfg['binance_pay_store_url'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="https://tudominio.com">
+                    <div class="form-text mt-2">Debe coincidir con el dominio agregado en <strong>CoinPal Merchant Dashboard &gt; My Account &gt; My Store</strong>.</div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Método de pago configurado</label>
+                    <input type="text" class="form-control" value="Binance Pay" readonly>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">URL pública detectada actualmente</label>
+                    <input type="text" class="form-control" value="<?= htmlspecialchars($currentPublicUrl, ENT_QUOTES, 'UTF-8') ?>" readonly>
+                  </div>
+                </div>
+              </div>
+
+              <button type="submit" class="neon-btn w-100 py-3 mt-4">Guardar configuración de Binance Pay</button>
             </form>
           <?php elseif ($activeTab === 'personalizar-colores'): ?>
             <form method="post">

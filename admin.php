@@ -259,6 +259,25 @@ function admin_extra_features_ensure_schema(): void {
         }
     }
 
+    $configDescriptions = store_config_descriptions();
+    store_config_upsert('api_binance', store_config_get('api_binance', '0') === '1' ? '1' : '0', $configDescriptions['api_binance'] ?? 'Activa o desactiva la configuracion e integracion de Binance Pay via CoinPal para este tenant.');
+    $featureName = 'API Binance Pay';
+    $featureDescription = 'Activa pagos automaticos con Binance Pay via CoinPal para este tenant.';
+    $stmt = $mysqli->prepare(
+        "UPDATE configuracion_general
+         SET mostrar_a_cliente = 1,
+             funcion_venta = COALESCE(NULLIF(funcion_venta, ''), ?),
+             descripcion_venta = COALESCE(NULLIF(descripcion_venta, ''), ?),
+             precio = COALESCE(precio, 0),
+             comision_venta = COALESCE(comision_venta, 0)
+         WHERE clave = 'api_binance'"
+    );
+    if ($stmt) {
+        $stmt->bind_param('ss', $featureName, $featureDescription);
+        $stmt->execute();
+        $stmt->close();
+    }
+
     $ensured = true;
 }
 
@@ -1503,8 +1522,12 @@ switch ($seccion) {
         require_once __DIR__ . '/includes/home_gallery.php';
         require_once __DIR__ . '/includes/payment_methods.php';
         $startupPopupTabEnabled = store_config_get('inicio_popup_tab_habilitado', '1') === '1';
+        $binanceApiTabEnabled = store_config_get('api_binance', '0') === '1';
         $activeTab = $_GET['tab'] ?? 'correo';
         $allowedTabs = ['correo', 'cabecera', 'notificaciones-recargas', 'sociales', 'api-banco', 'api-free-fire', 'personalizar-colores', 'galeria', 'metodos-pago'];
+        if ($binanceApiTabEnabled) {
+            $allowedTabs[] = 'api-binance';
+        }
         if ($startupPopupTabEnabled) {
             $allowedTabs[] = 'ventana-inicial';
         }
@@ -1820,6 +1843,39 @@ switch ($seccion) {
 
                 store_config_upsert('recargas_api_key', $recargasApiKey);
                 admin_set_flash('success', 'Datos API actualizados.');
+            }
+
+            if ($activeTab === 'api-binance') {
+                $merchantNo = trim((string) ($_POST['binance_pay_merchant_no'] ?? ''));
+                $secretKey = trim((string) ($_POST['binance_pay_secret_key'] ?? ''));
+                $storeId = trim((string) ($_POST['binance_pay_store_id'] ?? ''));
+                $accessToken = trim((string) ($_POST['binance_pay_access_token'] ?? ''));
+                $storeUrl = trim((string) ($_POST['binance_pay_store_url'] ?? ''));
+
+                if ($merchantNo !== '' && preg_match('/^\d+$/', $merchantNo) !== 1) {
+                    admin_set_flash('error', 'El Merchant No debe contener solo números.');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'api-binance']);
+                }
+
+                if ($storeId !== '' && preg_match('/^\d+$/', $storeId) !== 1) {
+                    admin_set_flash('error', 'El Store ID debe contener solo números.');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'api-binance']);
+                }
+
+                if ($storeUrl !== '' && !store_config_is_valid_social_url($storeUrl)) {
+                    admin_set_flash('error', 'La URL registrada en CoinPal debe ser una URL válida con http:// o https://');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'api-binance']);
+                }
+
+                store_config_upsert('binance_pay_merchant_no', $merchantNo);
+                store_config_upsert('binance_pay_secret_key', $secretKey);
+                store_config_upsert('binance_pay_store_id', $storeId);
+                store_config_upsert('binance_pay_access_token', $accessToken);
+                store_config_upsert('binance_pay_store_url', $storeUrl);
+                admin_set_flash('success', 'Configuración de Binance Pay actualizada.');
             }
 
             if ($activeTab === 'personalizar-colores') {

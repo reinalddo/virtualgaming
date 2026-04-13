@@ -9,6 +9,7 @@ if (!isset($_SESSION['auth_user']) || !in_array($adminRole, ['admin', 'empleado'
 
 require_once __DIR__ . '/../includes/db_connect.php';
 require_once __DIR__ . '/../includes/recargas_api.php';
+require_once __DIR__ . '/../includes/binance_pay.php';
 require_once __DIR__ . '/../includes/header.php';
 
 $ordersApiUrl = app_path('/api/pedidos.php');
@@ -138,6 +139,142 @@ function order_provider_history_lines(array $order, int $limit = 3): array {
   return $lines;
 }
 
+function order_has_binance_tracking(array $order): bool {
+  return trim((string) ($order['binance_pay_reference'] ?? '')) !== ''
+    || trim((string) ($order['binance_pay_order_no'] ?? '')) !== ''
+    || trim((string) ($order['binance_pay_request_id'] ?? '')) !== '';
+}
+
+function order_binance_reference(array $order): string {
+  $reference = trim((string) ($order['binance_pay_reference'] ?? ''));
+  if ($reference !== '') {
+    return $reference;
+  }
+
+  $orderNo = trim((string) ($order['binance_pay_order_no'] ?? ''));
+  if ($orderNo !== '') {
+    return $orderNo;
+  }
+
+  return trim((string) ($order['binance_pay_request_id'] ?? ''));
+}
+
+function order_binance_status_label(array $order): string {
+  if (!order_has_binance_tracking($order)) {
+    return '';
+  }
+
+  $status = trim((string) ($order['binance_pay_status'] ?? ''));
+  $reference = order_binance_reference($order);
+  $parts = ['Binance Pay: ' . ($status !== '' ? $status : 'sin estado')];
+
+  if ($reference !== '') {
+    $parts[] = 'Ref: ' . $reference;
+  }
+
+  return implode(' | ', $parts);
+}
+
+function order_binance_detail_lines(array $order): array {
+  if (!order_has_binance_tracking($order)) {
+    return [];
+  }
+
+  $lines = [];
+  $message = trim((string) ($order['binance_pay_message'] ?? ''));
+  if ($message !== '') {
+    $lines[] = 'Respuesta Binance: ' . $message;
+  }
+
+  $paidAmount = isset($order['binance_pay_paid_amount']) ? (float) $order['binance_pay_paid_amount'] : 0.0;
+  $paidCurrency = trim((string) ($order['binance_pay_paid_currency'] ?? ''));
+  if ($paidAmount > 0 || $paidCurrency !== '') {
+    $amountLabel = format_money($paidAmount);
+    if ($paidCurrency !== '') {
+      $amountLabel .= ' ' . $paidCurrency;
+    }
+    $lines[] = 'Monto confirmado: ' . trim($amountLabel);
+  }
+
+  $checkedAt = trim((string) ($order['binance_pay_ultimo_check'] ?? ''));
+  if ($checkedAt !== '') {
+    $lines[] = 'Ultimo check Binance: ' . $checkedAt;
+  }
+
+  $checkoutUrl = trim((string) ($order['binance_pay_checkout_url'] ?? ''));
+  if ($checkoutUrl !== '') {
+    $lines[] = 'Checkout Binance activo';
+  }
+
+  return $lines;
+}
+
+function order_binance_history_lines(array $order, int $limit = 3): array {
+  $json = $order['binance_pay_historial_json'] ?? null;
+  if (!is_string($json) || trim($json) === '') {
+    return [];
+  }
+
+  $decoded = json_decode($json, true);
+  if (!is_array($decoded)) {
+    return [];
+  }
+
+  $entries = array_slice(array_values(array_filter($decoded, 'is_array')), -$limit);
+  $lines = [];
+
+  foreach ($entries as $entry) {
+    $parts = [];
+    $recordedAt = trim((string) ($entry['recorded_at'] ?? ''));
+    $source = trim((string) ($entry['source'] ?? ''));
+    $providerStatus = trim((string) ($entry['provider_status'] ?? ''));
+    $localStatus = trim((string) ($entry['local_status'] ?? ''));
+    $providerMessage = trim((string) ($entry['provider_message'] ?? ''));
+
+    if ($recordedAt !== '') {
+      $parts[] = $recordedAt;
+    }
+    if ($source !== '') {
+      $parts[] = $source;
+    }
+    if ($providerStatus !== '') {
+      $parts[] = 'Binance: ' . $providerStatus;
+    }
+    if ($localStatus !== '') {
+      $parts[] = 'Local: ' . $localStatus;
+    }
+    if ($providerMessage !== '') {
+      $parts[] = $providerMessage;
+    }
+
+    if ($parts) {
+      $lines[] = 'Historial Binance: ' . implode(' | ', $parts);
+    }
+  }
+
+  return $lines;
+}
+
+function order_can_sync_gateway(array $order): bool {
+  if (($order['estado'] ?? '') === 'enviado') {
+    return false;
+  }
+
+  if (trim((string) ($order['recargas_api_pedido_id'] ?? '')) !== '') {
+    return true;
+  }
+
+  return binance_pay_is_enabled() && order_has_binance_tracking($order);
+}
+
+function order_sync_button_label(array $order): string {
+  if (order_has_binance_tracking($order) && trim((string) ($order['recargas_api_pedido_id'] ?? '')) === '') {
+    return 'Sincronizar Binance';
+  }
+
+  return 'Sincronizar API';
+}
+
 function order_can_retry_recharge(array $order): bool {
   if (($order['estado'] ?? '') !== 'pagado') {
     return false;
@@ -161,12 +298,18 @@ function order_normalize_date_query($value): string {
 
 function order_search_index(array $order): string {
   $playerFieldLines = order_player_fields_lines($order);
+  $binanceDetailLines = order_binance_detail_lines($order);
+  $binanceHistoryLines = order_binance_history_lines($order);
   $parts = [
     '#' . ($order['id'] ?? ''),
     $order['creado_en'] ?? '',
     $order['user_identifier'] ?? '',
     $order['email'] ?? '',
     $order['numero_referencia'] ?? '',
+    $order['binance_pay_reference'] ?? '',
+    $order['binance_pay_order_no'] ?? '',
+    $order['binance_pay_request_id'] ?? '',
+    $order['binance_pay_status'] ?? '',
     $order['telefono_contacto'] ?? '',
     $order['juego_nombre'] ?? '',
     $order['paquete_nombre'] ?? '',
@@ -178,6 +321,8 @@ function order_search_index(array $order): string {
     implode(' ', $playerFieldLines),
     implode(' ', order_provider_detail_lines($order)),
     implode(' ', order_provider_history_lines($order)),
+    implode(' ', $binanceDetailLines),
+    implode(' ', $binanceHistoryLines),
   ];
 
   return strtolower(trim(implode(' ', array_map(static fn ($value) => trim((string) $value), $parts))));
@@ -389,6 +534,9 @@ if ($initialTab === '') {
                   <?php $providerStatusLine = order_provider_status_label($order); ?>
                   <?php $providerDetailLines = order_provider_detail_lines($order); ?>
                   <?php $providerHistoryLines = order_provider_history_lines($order); ?>
+                  <?php $binanceStatusLine = order_binance_status_label($order); ?>
+                  <?php $binanceDetailLines = order_binance_detail_lines($order); ?>
+                  <?php $binanceHistoryLines = order_binance_history_lines($order); ?>
                   <tr id="pedido-<?= $order['id'] ?>" data-order-row="<?= $order['id'] ?>" data-status="<?= $st ?>" data-created-date="<?= htmlspecialchars(substr((string) ($order['creado_en'] ?? ''), 0, 10)) ?>" data-search-text="<?= htmlspecialchars(order_search_index($order)) ?>" style="background:#181f2a; color:#fff;">
                     <td style="background:#181f2a; color:#00fff7;">
                       <div style="font-weight:bold;">#<?= $order['id'] ?></div>
@@ -403,14 +551,28 @@ if ($initialTab === '') {
                       <?php if ($providerStatusLine !== ''): ?>
                         <div style="color:#fbbf24; margin-top:0.2rem; font-size:0.85em;"><?= htmlspecialchars($providerStatusLine) ?></div>
                       <?php endif; ?>
+                      <?php if ($binanceStatusLine !== ''): ?>
+                        <div style="color:#86efac; margin-top:0.2rem; font-size:0.85em;"><?= htmlspecialchars($binanceStatusLine) ?></div>
+                      <?php endif; ?>
                       <?php foreach ($providerDetailLines as $providerDetailLine): ?>
                         <div style="color:#fca5a5; margin-top:0.2rem; font-size:0.85em;"><?= htmlspecialchars($providerDetailLine) ?></div>
+                      <?php endforeach; ?>
+                      <?php foreach ($binanceDetailLines as $binanceDetailLine): ?>
+                        <div style="color:#93c5fd; margin-top:0.2rem; font-size:0.85em;"><?= htmlspecialchars($binanceDetailLine) ?></div>
                       <?php endforeach; ?>
                       <?php foreach ($providerHistoryLines as $providerHistoryLine): ?>
                         <div style="color:#c4b5fd; margin-top:0.2rem; font-size:0.8em;"><?= htmlspecialchars($providerHistoryLine) ?></div>
                       <?php endforeach; ?>
+                      <?php foreach ($binanceHistoryLines as $binanceHistoryLine): ?>
+                        <div style="color:#a7f3d0; margin-top:0.2rem; font-size:0.8em;"><?= htmlspecialchars($binanceHistoryLine) ?></div>
+                      <?php endforeach; ?>
                     </td>
-                    <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars(order_meta_value($order['numero_referencia'] ?? '')) ?></td>
+                    <td style="background:#181f2a; color:#b2f6ff;">
+                      <div><?= htmlspecialchars(order_meta_value($order['numero_referencia'] ?? '')) ?></div>
+                      <?php if (order_has_binance_tracking($order)): ?>
+                        <div style="color:#86efac; margin-top:0.2rem; font-size:0.85em;">Binance: <?= htmlspecialchars(order_meta_value(order_binance_reference($order))) ?></div>
+                      <?php endif; ?>
+                    </td>
                     <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars(order_meta_value($order['telefono_contacto'] ?? '')) ?></td>
                     <td style="background:#181f2a; color:#00fff7;">
                       <div style="font-weight:bold;">
@@ -438,8 +600,8 @@ if ($initialTab === '') {
                       <?php if (order_can_retry_recharge($order)): ?>
                         <button type="button" class="btn btn-outline-info btn-sm mt-2 js-retry-recharge" data-order-id="<?= (int) $order['id'] ?>">Enviar recarga</button>
                       <?php endif; ?>
-                      <?php if (($order['estado'] ?? '') !== 'enviado' && !empty($order['recargas_api_pedido_id'])): ?>
-                        <button type="button" class="btn btn-outline-warning btn-sm mt-2 js-sync-provider" data-order-id="<?= (int) $order['id'] ?>">Sincronizar API</button>
+                      <?php if (order_can_sync_gateway($order)): ?>
+                        <button type="button" class="btn btn-outline-warning btn-sm mt-2 js-sync-provider" data-order-id="<?= (int) $order['id'] ?>" data-sync-label="<?= htmlspecialchars(order_sync_button_label($order)) ?>"><?= htmlspecialchars(order_sync_button_label($order)) ?></button>
                       <?php endif; ?>
                     </td>
                   </tr>
@@ -455,6 +617,9 @@ if ($initialTab === '') {
               <?php $providerStatusLine = order_provider_status_label($order); ?>
               <?php $providerDetailLines = order_provider_detail_lines($order); ?>
               <?php $providerHistoryLines = order_provider_history_lines($order); ?>
+              <?php $binanceStatusLine = order_binance_status_label($order); ?>
+              <?php $binanceDetailLines = order_binance_detail_lines($order); ?>
+              <?php $binanceHistoryLines = order_binance_history_lines($order); ?>
               <div id="pedido-card-<?= $order['id'] ?>" data-order-card="<?= $order['id'] ?>" data-status="<?= $st ?>" data-created-date="<?= htmlspecialchars(substr((string) ($order['creado_en'] ?? ''), 0, 10)) ?>" data-search-text="<?= htmlspecialchars(order_search_index($order)) ?>" style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:1rem; color:#00fff7; margin-bottom:1.5rem;">
                 <div style="display:flex; align-items:center; justify-content:space-between;">
                   <div style="font-weight:bold; font-size:1.1em; color:#00fff7;">#<?= $order['id'] ?></div>
@@ -468,13 +633,25 @@ if ($initialTab === '') {
                 <?php if ($providerStatusLine !== ''): ?>
                   <div style="color:#fbbf24; font-size:0.9em;"><?= htmlspecialchars($providerStatusLine) ?></div>
                 <?php endif; ?>
+                <?php if ($binanceStatusLine !== ''): ?>
+                  <div style="color:#86efac; font-size:0.9em;"><?= htmlspecialchars($binanceStatusLine) ?></div>
+                <?php endif; ?>
                 <?php foreach ($providerDetailLines as $providerDetailLine): ?>
                   <div style="color:#fca5a5; font-size:0.9em;"><?= htmlspecialchars($providerDetailLine) ?></div>
+                <?php endforeach; ?>
+                <?php foreach ($binanceDetailLines as $binanceDetailLine): ?>
+                  <div style="color:#93c5fd; font-size:0.9em;"><?= htmlspecialchars($binanceDetailLine) ?></div>
                 <?php endforeach; ?>
                 <?php foreach ($providerHistoryLines as $providerHistoryLine): ?>
                   <div style="color:#c4b5fd; font-size:0.85em;"><?= htmlspecialchars($providerHistoryLine) ?></div>
                 <?php endforeach; ?>
+                <?php foreach ($binanceHistoryLines as $binanceHistoryLine): ?>
+                  <div style="color:#a7f3d0; font-size:0.85em;"><?= htmlspecialchars($binanceHistoryLine) ?></div>
+                <?php endforeach; ?>
                 <div style="color:#b2f6ff; font-size:1em;">Referencia: <?= htmlspecialchars(order_meta_value($order['numero_referencia'] ?? '')) ?></div>
+                <?php if (order_has_binance_tracking($order)): ?>
+                  <div style="color:#86efac; font-size:0.95em;">Ref Binance: <?= htmlspecialchars(order_meta_value(order_binance_reference($order))) ?></div>
+                <?php endif; ?>
                 <div style="color:#b2f6ff; font-size:1em;">Teléfono: <?= htmlspecialchars(order_meta_value($order['telefono_contacto'] ?? '')) ?></div>
                 <div style="margin-top:0.5em; color:#00fff7; font-size:1em;">Juego: <span style="color:#b2f6ff; font-weight:bold;">
                   <?php
@@ -502,8 +679,8 @@ if ($initialTab === '') {
                 <?php if (order_can_retry_recharge($order)): ?>
                   <button type="button" class="btn btn-outline-info btn-sm mt-3 js-retry-recharge" data-order-id="<?= (int) $order['id'] ?>">Enviar recarga</button>
                 <?php endif; ?>
-                <?php if (($order['estado'] ?? '') !== 'enviado' && !empty($order['recargas_api_pedido_id'])): ?>
-                  <button type="button" class="btn btn-outline-warning btn-sm mt-3 js-sync-provider" data-order-id="<?= (int) $order['id'] ?>">Sincronizar API</button>
+                <?php if (order_can_sync_gateway($order)): ?>
+                  <button type="button" class="btn btn-outline-warning btn-sm mt-3 js-sync-provider" data-order-id="<?= (int) $order['id'] ?>" data-sync-label="<?= htmlspecialchars(order_sync_button_label($order)) ?>"><?= htmlspecialchars(order_sync_button_label($order)) ?></button>
                 <?php endif; ?>
               </div>
             <?php endforeach; ?>
@@ -852,6 +1029,7 @@ if ($initialTab === '') {
     document.querySelectorAll('.js-sync-provider').forEach(button => {
       button.addEventListener('click', async () => {
         const orderId = button.dataset.orderId;
+        const syncLabel = button.dataset.syncLabel || 'Sincronizar pedido';
         if (!orderId) {
           return;
         }
@@ -869,7 +1047,12 @@ if ($initialTab === '') {
           }
           const syncNotes = [data.message || 'Pedido sincronizado correctamente.'];
           if (data.provider_status) {
-            syncNotes.push(`Estado proveedor: ${data.provider_status}`);
+            const statusLabel = data.payment_gateway === 'binance_pay' ? 'Estado Binance' : 'Estado proveedor';
+            syncNotes.push(`${statusLabel}: ${data.provider_status}`);
+          }
+          if (data.provider_reference) {
+            const referenceLabel = data.payment_gateway === 'binance_pay' ? 'Referencia Binance' : 'Referencia proveedor';
+            syncNotes.push(`${referenceLabel}: ${data.provider_reference}`);
           }
           if (data.provider_message) {
             syncNotes.push(`Detalle API: ${data.provider_message}`);
@@ -877,7 +1060,7 @@ if ($initialTab === '') {
           alert(syncNotes.join('\n'));
           window.location.reload();
         } catch (err) {
-          alert(err.message || 'No se pudo sincronizar el pedido con la API.');
+          alert(err.message || `No se pudo completar ${syncLabel.toLowerCase()}.`);
         } finally {
           button.disabled = false;
           setAdminLoadingVisible(false);

@@ -33,6 +33,7 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('google_analytics_script', '', 'Código script completo de Google Analytics o Google Tag que se inserta en el footer público'),
 ('notificaciones_recargas', '0', 'Activa o desactiva por tenant las notificaciones de recargas en la tienda'),
 ('verificacion_nombre_api', '0', 'Activa o desactiva por tenant la verificación de nombres de jugador mediante API'),
+('api_binance', '0', 'Activa o desactiva la configuracion e integracion de Binance Pay via CoinPal para este tenant.'),
 ('recarga_notificaciones_activas', '1', 'Activa o desactiva las notificaciones flotantes de recargas en el sitio público'),
 ('recarga_notificaciones_logo', '', 'Ruta del logo usado en la notificación flotante de recargas'),
 ('facebook', '', 'URL de Facebook de la tienda'),
@@ -53,6 +54,11 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('inicio_popup_video_url', '', 'Enlace de YouTube usado en la ventana inicial con video'),
 ('ff_bank_api_base_url', 'https://pagonorte.net', 'Enlace base de la API del banco para consultar movimientos'),
 ('ff_bank_dias_disponibles', '', 'Dias disponibles reportados por la API del banco al consultar movimientos'),
+('binance_pay_merchant_no', '', 'Merchant No configurado para Binance Pay via CoinPal.'),
+('binance_pay_secret_key', '', 'Secret Key configurada para Binance Pay via CoinPal.'),
+('binance_pay_store_id', '', 'Store ID registrado en CoinPal para esta tienda.'),
+('binance_pay_access_token', '', 'Access Token del Store registrado en CoinPal para esta tienda.'),
+('binance_pay_store_url', '', 'URL o dominio registrado en CoinPal My Store para esta tienda.'),
 ('ff_api_usuario', '', 'Usuario para la API de Free Fire'),
 ('ff_api_clave', '', 'Clave para la API de Free Fire'),
 ('ff_api_tipo', 'recargaFreefire', 'Tipo para la API de Free Fire'),
@@ -142,3 +148,11 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('theme_custom_startup_video_popup_accent', '#F87171', 'Copia editable: Color de detalles destacados y botón de cierre de la ventana inicial con video'),
 ('theme_custom_startup_video_popup_button_bg', '#25D366', 'Copia editable: Color principal del botón del canal en la ventana inicial con video'),
 ('theme_custom_startup_video_popup_button_text', '#F8FAFC', 'Copia editable: Color del texto e icono del botón principal de la ventana inicial con video');
+
+UPDATE configuracion_general
+SET mostrar_a_cliente = 1,
+    funcion_venta = 'API Binance Pay',
+    descripcion_venta = 'Activa pagos automaticos con Binance Pay via CoinPal para este tenant.',
+    precio = COALESCE(precio, 0),
+    comision_venta = COALESCE(comision_venta, 0)
+WHERE clave = 'api_binance';
