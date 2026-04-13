@@ -2666,11 +2666,12 @@ include __DIR__ . "/includes/header.php";
     clearPaymentStatusPolling();
     setOverlayVisible(paymentStatusModal, false);
     setPaymentFormDisabled(false);
+      clearPaymentSupportUi();
 
     const nextMode = activePaymentOrder.canUseMoney ? 'money' : (activePaymentOrder.canUsePoints ? 'points' : 'binance');
     setActivePaymentMode(nextMode, activePaymentOrder.selectedMethodId, { expandSelected: true });
     setCancelOrderButtonMode('cancel');
-    setPaymentAlert('Puedes completar esta misma orden con otro método de pago si Binance Pay no te funciona.', 'warning');
+      setPaymentAlert('', 'info');
     scrollPaymentSubmitIntoView();
   }
 
