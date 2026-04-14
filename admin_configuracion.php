@@ -1296,7 +1296,7 @@ $googleCallbackUrl = google_oauth_callback_url();
                 <h3 class="h5 fw-bold text-info mb-3">Credenciales CoinPal / Binance Pay</h3>
                 <div class="row g-3">
                   <div class="col-12">
-                    <input type="hidden" name="api_binance_usuario" value="0">
+                    <input type="hidden" name="api_binance_usuario_present" value="1">
                     <div class="form-check form-switch">
                       <input class="form-check-input" type="checkbox" role="switch" id="api-binance-usuario" name="api_binance_usuario" value="1" <?= ($cfg['api_binance_usuario'] ?? '1') === '1' ? 'checked' : '' ?>>
                       <label class="form-check-label fw-semibold" for="api-binance-usuario">Habilitar Binance Pay para clientes</label>
