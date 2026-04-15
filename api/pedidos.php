@@ -380,9 +380,12 @@ function load_mail_settings(mysqli $mysqli): array {
 function resolve_admin_email(mysqli $mysqli): ?string {
     $mysqli = ensure_mysqli_connection($mysqli);
 
-    $envEmail = trim((string) getenv('TVG_ADMIN_EMAIL'));
-    if ($envEmail !== '' && filter_var($envEmail, FILTER_VALIDATE_EMAIL)) {
-        return $envEmail;
+    $settings = load_mail_settings($mysqli);
+    foreach (['correo_corporativo', 'smtp_user'] as $key) {
+        $candidate = trim((string) ($settings[$key] ?? ''));
+        if ($candidate !== '' && filter_var($candidate, FILTER_VALIDATE_EMAIL)) {
+            return $candidate;
+        }
     }
 
     if (table_exists($mysqli, 'usuarios')) {
@@ -395,12 +398,9 @@ function resolve_admin_email(mysqli $mysqli): ?string {
         }
     }
 
-    $settings = load_mail_settings($mysqli);
-    foreach (['correo_corporativo', 'smtp_user'] as $key) {
-        $candidate = trim((string) ($settings[$key] ?? ''));
-        if ($candidate !== '' && filter_var($candidate, FILTER_VALIDATE_EMAIL)) {
-            return $candidate;
-        }
+    $envEmail = trim((string) getenv('TVG_ADMIN_EMAIL'));
+    if ($envEmail !== '' && filter_var($envEmail, FILTER_VALIDATE_EMAIL)) {
+        return $envEmail;
     }
 
     return null;
@@ -1004,6 +1004,54 @@ function resolve_store_logo_file_path(string $brandLogo): ?string {
     return is_file($absolutePath) ? $absolutePath : null;
 }
 
+function email_branding_logo_asset(?string $logoPath, string $logoUrl = ''): array {
+    if (!is_string($logoPath) || $logoPath === '' || !is_file($logoPath)) {
+        return [
+            'path' => '',
+            'mime' => '',
+            'url' => $logoUrl,
+        ];
+    }
+
+    $mime = detect_local_file_mime_type($logoPath);
+    if ($mime !== 'image/webp' || !function_exists('imagecreatefromwebp') || !function_exists('imagepng')) {
+        return [
+            'path' => $logoPath,
+            'mime' => $mime,
+            'url' => $logoUrl,
+        ];
+    }
+
+    $targetPath = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR
+        . 'tvg-mail-logo-' . sha1($logoPath . '|' . (string) @filemtime($logoPath)) . '.png';
+
+    if (!is_file($targetPath)) {
+        $image = @imagecreatefromwebp($logoPath);
+        if ($image !== false) {
+            if (function_exists('imagepalettetotruecolor')) {
+                @imagepalettetotruecolor($image);
+            }
+            @imagesavealpha($image, true);
+            @imagepng($image, $targetPath, 6);
+            @imagedestroy($image);
+        }
+    }
+
+    if (is_file($targetPath)) {
+        return [
+            'path' => $targetPath,
+            'mime' => 'image/png',
+            'url' => $logoUrl,
+        ];
+    }
+
+    return [
+        'path' => $logoPath,
+        'mime' => $mime,
+        'url' => $logoUrl,
+    ];
+}
+
 function email_branding(): array {
     $brandPrefix = trim(store_config_get('nombre_prefijo', 'TIENDA'));
     $brandName = trim(store_config_get('nombre_tienda', 'TVirtualGaming'));
@@ -1019,12 +1067,14 @@ function email_branding(): array {
         }
     }
 
+    $logoAsset = email_branding_logo_asset($logoPath, $logoUrl);
+
     return [
         'prefix' => $brandPrefix !== '' ? $brandPrefix : 'TIENDA',
         'name' => $brandName !== '' ? $brandName : 'TVirtualGaming',
-        'logo_url' => $logoUrl,
-        'logo_path' => $logoPath,
-        'logo_mime' => $logoPath !== null ? detect_local_file_mime_type($logoPath) : '',
+        'logo_url' => $logoAsset['url'] ?? $logoUrl,
+        'logo_path' => $logoAsset['path'] ?? '',
+        'logo_mime' => $logoAsset['mime'] ?? '',
     ];
 }
 
