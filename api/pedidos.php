@@ -2959,10 +2959,147 @@ function movement_reference_matches(string $fullReference, string $reportedRefer
     return $fullReference === $reportedReference;
 }
 
+function find_reference_reuse_conflict(mysqli $mysqli, string $reportedReference, int $requiredDigits, int $orderId): ?array {
+    $mysqli = ensure_mysqli_connection($mysqli);
+
+    if ($reportedReference === '') {
+        return null;
+    }
+
+    if ($requiredDigits > 0) {
+        $stmt = $mysqli->prepare(
+            "SELECT id, numero_referencia, estado
+             FROM pedidos
+             WHERE id <> ?
+               AND numero_referencia IS NOT NULL
+               AND TRIM(numero_referencia) <> ''
+               AND estado IN ('enviado', 'cancelado')
+               AND RIGHT(TRIM(numero_referencia), ?) = ?
+             ORDER BY id DESC
+             LIMIT 1"
+        );
+        if ($stmt) {
+            $stmt->bind_param('iis', $orderId, $requiredDigits, $reportedReference);
+        }
+    } else {
+        $stmt = $mysqli->prepare(
+            "SELECT id, numero_referencia, estado
+             FROM pedidos
+             WHERE id <> ?
+               AND numero_referencia = ?
+               AND estado IN ('enviado', 'cancelado')
+             ORDER BY id DESC
+             LIMIT 1"
+        );
+        if ($stmt) {
+            $stmt->bind_param('is', $orderId, $reportedReference);
+        }
+    }
+
+    if ($stmt) {
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result ? $result->fetch_assoc() : null;
+        $stmt->close();
+        if ($row) {
+            return [
+                'type' => 'closed_order_reference',
+                'order_id' => (int) ($row['id'] ?? 0),
+                'status' => trim((string) ($row['estado'] ?? '')),
+                'reference' => trim((string) ($row['numero_referencia'] ?? '')),
+            ];
+        }
+    }
+
+    if ($requiredDigits > 0) {
+        $stmt = $mysqli->prepare(
+            "SELECT m.id, m.referencia, COALESCE(m.checked, 0) AS checked, COALESCE(m.pedido_id, 0) AS pedido_id, COALESCE(p.estado, '') AS pedido_estado
+             FROM movimientos m
+             LEFT JOIN pedidos p ON p.id = m.pedido_id
+             WHERE RIGHT(TRIM(m.referencia), ?) = ?
+             ORDER BY m.id DESC"
+        );
+        if ($stmt) {
+            $stmt->bind_param('is', $requiredDigits, $reportedReference);
+        }
+    } else {
+        $stmt = $mysqli->prepare(
+            "SELECT m.id, m.referencia, COALESCE(m.checked, 0) AS checked, COALESCE(m.pedido_id, 0) AS pedido_id, COALESCE(p.estado, '') AS pedido_estado
+             FROM movimientos m
+             LEFT JOIN pedidos p ON p.id = m.pedido_id
+             WHERE m.referencia = ?
+             ORDER BY m.id DESC"
+        );
+        if ($stmt) {
+            $stmt->bind_param('s', $reportedReference);
+        }
+    }
+
+    if (!$stmt) {
+        return null;
+    }
+
+    $stmt->execute();
+    $result = $stmt->get_result();
+    while ($result && ($row = $result->fetch_assoc())) {
+        $linkedOrderId = (int) ($row['pedido_id'] ?? 0);
+        $isChecked = (int) ($row['checked'] ?? 0) === 1;
+        $linkedStatus = trim((string) ($row['pedido_estado'] ?? ''));
+
+        if ($linkedOrderId === $orderId) {
+            continue;
+        }
+
+        if ($isChecked) {
+            $stmt->close();
+            return [
+                'type' => 'verified_movement',
+                'movement_id' => (int) ($row['id'] ?? 0),
+                'reference' => trim((string) ($row['referencia'] ?? '')),
+                'order_id' => $linkedOrderId,
+                'status' => $linkedStatus,
+            ];
+        }
+
+        if ($linkedOrderId > 0 && in_array($linkedStatus, ['enviado', 'cancelado'], true)) {
+            $stmt->close();
+            return [
+                'type' => 'closed_order_movement',
+                'movement_id' => (int) ($row['id'] ?? 0),
+                'reference' => trim((string) ($row['referencia'] ?? '')),
+                'order_id' => $linkedOrderId,
+                'status' => $linkedStatus,
+            ];
+        }
+    }
+    $stmt->close();
+
+    return null;
+}
+
+function reference_reuse_conflict_message(array $conflict): string {
+    $orderId = (int) ($conflict['order_id'] ?? 0);
+    $status = trim((string) ($conflict['status'] ?? ''));
+
+    if (($conflict['type'] ?? '') === 'verified_movement') {
+        if ($orderId > 0) {
+            return 'La referencia ingresada ya fue verificada anteriormente y está asociada al pedido #' . $orderId . '. No puede reutilizarse para otra recarga.';
+        }
+
+        return 'La referencia ingresada ya fue verificada anteriormente en Movimientos para una recarga manual y no puede reutilizarse en la web.';
+    }
+
+    if ($orderId > 0 && $status !== '') {
+        return 'La referencia ingresada ya está asociada al pedido #' . $orderId . ' en estado ' . $status . ' y no puede reutilizarse.';
+    }
+
+    return 'La referencia ingresada ya fue usada en otra recarga y no puede reutilizarse.';
+}
+
 function movement_is_available_for_order(mysqli $mysqli, string $reference, int $orderId): bool {
     $mysqli = ensure_mysqli_connection($mysqli);
 
-    $stmt = $mysqli->prepare('SELECT pedido_id FROM movimientos WHERE referencia = ? LIMIT 1');
+    $stmt = $mysqli->prepare('SELECT pedido_id, COALESCE(checked, 0) AS checked FROM movimientos WHERE referencia = ? LIMIT 1');
     if (!$stmt) {
         return false;
     }
@@ -2977,7 +3114,17 @@ function movement_is_available_for_order(mysqli $mysqli, string $reference, int 
     }
 
     $linkedOrderId = isset($row['pedido_id']) ? (int) $row['pedido_id'] : 0;
-    return $linkedOrderId === 0 || $linkedOrderId === $orderId;
+    $isChecked = (int) ($row['checked'] ?? 0) === 1;
+
+    if ($linkedOrderId !== 0 && $linkedOrderId !== $orderId) {
+        return false;
+    }
+
+    if ($isChecked && $linkedOrderId !== $orderId) {
+        return false;
+    }
+
+    return true;
 }
 
 function bank_amount_matches_order_total(float $movementAmount, float $orderAmount): bool {
@@ -4916,6 +5063,11 @@ if ($action === 'submit_payment') {
 
     $phone = substr($phoneRaw, 0, 40);
     $referenceNumber = substr($referenceNumberRaw, 0, 120);
+
+    $referenceConflict = find_reference_reuse_conflict($mysqli, $referenceNumber, $referenceDigitsLimit, $orderId);
+    if ($referenceConflict !== null) {
+        json_error(reference_reuse_conflict_message($referenceConflict), 409);
+    }
 
     $stmt = $mysqli->prepare('UPDATE pedidos SET numero_referencia = ?, telefono_contacto = ? WHERE id = ? AND estado = ?');
     if (!$stmt) {
