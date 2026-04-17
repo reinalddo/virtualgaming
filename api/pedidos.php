@@ -2824,10 +2824,33 @@ function parse_bank_movement_datetime(?string $value): ?string {
     }
 
     $normalized = str_ireplace([' a. m.', ' p. m.', ' a.m.', ' p.m.', ' am', ' pm'], [' AM', ' PM', ' AM', ' PM', ' AM', ' PM'], $raw);
-    $date = DateTime::createFromFormat('d/m/Y h:i:s A', $normalized)
-        ?: DateTime::createFromFormat('d/m/Y h:i A', $normalized)
-        ?: DateTime::createFromFormat('d/m/Y H:i:s', $normalized)
-        ?: DateTime::createFromFormat('d/m/Y H:i', $normalized);
+    $normalized = preg_replace('/\s+/', ' ', $normalized) ?: $normalized;
+
+    $formats = [
+        'd/m/Y h:i:s A',
+        'd/m/Y h:i A',
+        'd/m/Y g:i:s A',
+        'd/m/Y g:i A',
+        'd/m/Y H:i:s',
+        'd/m/Y H:i',
+        'd-m-Y h:i:s A',
+        'd-m-Y h:i A',
+        'd-m-Y g:i:s A',
+        'd-m-Y g:i A',
+        'd-m-Y H:i:s',
+        'd-m-Y H:i',
+        'Y-m-d H:i:s',
+        'Y-m-d H:i',
+        'Y-m-d',
+    ];
+
+    $date = null;
+    foreach ($formats as $format) {
+        $date = DateTime::createFromFormat($format, $normalized);
+        if ($date instanceof DateTime) {
+            break;
+        }
+    }
 
     return $date ? $date->format('Y-m-d H:i:s') : null;
 }
@@ -3195,21 +3218,27 @@ function bank_mismatch_failure_type(bool $referenceMatch, bool $amountMatch): st
 }
 
 function bank_movement_business_day(?string $movementDate): ?string {
-    $raw = trim((string) $movementDate);
-    if ($raw === '') {
+    $parsedDate = parse_bank_movement_datetime($movementDate);
+    if ($parsedDate === null) {
         return null;
     }
 
-    $date = DateTime::createFromFormat('Y-m-d H:i:s', $raw)
-        ?: DateTime::createFromFormat('Y-m-d', $raw);
+    return substr($parsedDate, 0, 10);
+}
 
-    return $date ? $date->format('Y-m-d') : null;
+function resolve_bank_movement_business_day(array $movement): ?string {
+    $movementDay = bank_movement_business_day((string) ($movement['fecha_movimiento'] ?? ''));
+    if ($movementDay !== null) {
+        return $movementDay;
+    }
+
+    return bank_movement_business_day((string) ($movement['fecha_raw'] ?? ''));
 }
 
 function bank_movement_is_valid_for_today(array $movement): bool {
-    $movementDay = bank_movement_business_day((string) ($movement['fecha_movimiento'] ?? ''));
+    $movementDay = resolve_bank_movement_business_day($movement);
     if ($movementDay === null) {
-        return true;
+        return false;
     }
 
     return $movementDay === date('Y-m-d');
@@ -3235,7 +3264,7 @@ function find_expired_bank_movement_by_reference(array $movements, string $repor
             continue;
         }
 
-        $movementDay = bank_movement_business_day((string) ($movement['fecha_movimiento'] ?? ''));
+        $movementDay = resolve_bank_movement_business_day($movement);
         if ($movementDay === null || $movementDay === date('Y-m-d')) {
             continue;
         }
