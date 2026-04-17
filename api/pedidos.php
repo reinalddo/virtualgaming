@@ -3194,6 +3194,61 @@ function bank_mismatch_failure_type(bool $referenceMatch, bool $amountMatch): st
     return 'server_or_data_mismatch';
 }
 
+function bank_movement_business_day(?string $movementDate): ?string {
+    $raw = trim((string) $movementDate);
+    if ($raw === '') {
+        return null;
+    }
+
+    $date = DateTime::createFromFormat('Y-m-d H:i:s', $raw)
+        ?: DateTime::createFromFormat('Y-m-d', $raw);
+
+    return $date ? $date->format('Y-m-d') : null;
+}
+
+function bank_movement_is_valid_for_today(array $movement): bool {
+    $movementDay = bank_movement_business_day((string) ($movement['fecha_movimiento'] ?? ''));
+    if ($movementDay === null) {
+        return true;
+    }
+
+    return $movementDay === date('Y-m-d');
+}
+
+function format_bank_movement_business_day(?string $movementDay): string {
+    $raw = trim((string) $movementDay);
+    if ($raw === '') {
+        return '';
+    }
+
+    $date = DateTime::createFromFormat('Y-m-d', $raw);
+    return $date ? $date->format('d/m/Y') : $raw;
+}
+
+function find_expired_bank_movement_by_reference(array $movements, string $reportedReference, int $requiredDigits): ?array {
+    foreach ($movements as $movement) {
+        $reference = (string) ($movement['referencia'] ?? '');
+        if ($reference === '') {
+            continue;
+        }
+        if (!movement_reference_matches($reference, $reportedReference, $requiredDigits)) {
+            continue;
+        }
+
+        $movementDay = bank_movement_business_day((string) ($movement['fecha_movimiento'] ?? ''));
+        if ($movementDay === null || $movementDay === date('Y-m-d')) {
+            continue;
+        }
+
+        return [
+            'movement' => $movement,
+            'movement_day' => $movementDay,
+        ];
+    }
+
+    return null;
+}
+
 function find_matching_bank_movement(mysqli $mysqli, array $movements, string $reportedReference, float $orderAmount, int $requiredDigits, int $orderId): ?array {
     foreach ($movements as $movement) {
         $reference = (string) ($movement['referencia'] ?? '');
@@ -3201,6 +3256,9 @@ function find_matching_bank_movement(mysqli $mysqli, array $movements, string $r
             continue;
         }
         if (!movement_reference_matches($reference, $reportedReference, $requiredDigits)) {
+            continue;
+        }
+        if (!bank_movement_is_valid_for_today($movement)) {
             continue;
         }
         if (!bank_amount_matches_order_total((float) ($movement['monto'] ?? 0), $orderAmount)) {
@@ -3222,6 +3280,9 @@ function find_bank_movement_by_reference(mysqli $mysqli, array $movements, strin
             continue;
         }
         if (!movement_reference_matches($reference, $reportedReference, $requiredDigits)) {
+            continue;
+        }
+        if (!bank_movement_is_valid_for_today($movement)) {
             continue;
         }
         if (!movement_is_available_for_order($mysqli, $reference, $orderId)) {
@@ -5219,6 +5280,34 @@ if ($action === 'submit_payment') {
                 error_log('TVG bank validation attempts for order #' . $orderId . ': ' . (int) ($retryResult['attempts'] ?? 1));
             } catch (Throwable $e) {
                 json_error('Su Pago está en proceso, Espere 1 min y vuelva a intentar', 502);
+            }
+        }
+
+        if ($matchingMovement === null) {
+            $expiredReference = find_expired_bank_movement_by_reference($bankMovements, $referenceNumber, $referenceDigitsLimit);
+            if ($expiredReference !== null) {
+                $expiredDayLabel = format_bank_movement_business_day((string) ($expiredReference['movement_day'] ?? ''));
+                $expiredReasons = [];
+                if ($expiredDayLabel !== '') {
+                    $expiredReasons[] = 'La referencia corresponde a un pago registrado el ' . $expiredDayLabel . ' y ya no puede usarse hoy en la web.';
+                } else {
+                    $expiredReasons[] = 'La referencia corresponde a un pago de otro día y ya no puede usarse hoy en la web.';
+                }
+                $expiredReasons[] = 'Los pagos reportados en esta ventana solo son válidos el mismo día en que se realizan.';
+                $expiredReasons[] = 'Debes comunicarte con el administrador por WhatsApp para revisar tu caso.';
+
+                json_response([
+                    'ok' => true,
+                    'message' => 'Esta referencia ya caducó. Los pagos solo son válidos el mismo día en que se realizan. Comunícate con el administrador por WhatsApp.',
+                    'order_id' => $orderId,
+                    'estado' => 'pendiente',
+                    'verified' => false,
+                    'bank_checked' => true,
+                    'reasons' => $expiredReasons,
+                    'reference_match' => true,
+                    'amount_match' => false,
+                    'failure_type' => 'expired_reference',
+                ]);
             }
         }
 

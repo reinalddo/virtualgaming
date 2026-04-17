@@ -4699,6 +4699,14 @@ include __DIR__ . "/includes/header.php";
         'Si la transferencia es reciente, espera 1 o 2 minutos y vuelve a intentar.',
         'Si el comprobante está correcto y el problema continúa, contacta al administrador por WhatsApp.'
       ];
+    } else if (failureType === 'expired_reference') {
+      title = 'La referencia ya caducó';
+      summary = 'Los pagos reportados en la web solo son válidos el mismo día en que se realizan.';
+      steps = [
+        'La referencia que ingresaste pertenece a un pago de otro día y ya no puede reutilizarse en esta ventana.',
+        'Comunícate con el administrador por WhatsApp y comparte tu comprobante para que revise el caso.',
+        'Si necesitas completar una nueva compra, realiza un nuevo pago y registra una referencia del mismo día.'
+      ];
     } else if (failureType === 'amount_mismatch') {
       title = 'El monto no coincide';
       summary = 'La referencia sí se encontró, pero el monto recibido por el banco no coincide con el total esperado del pedido.';
