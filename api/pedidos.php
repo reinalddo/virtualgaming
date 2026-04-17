@@ -5203,35 +5203,6 @@ if ($action === 'submit_payment') {
 
     $phone = substr($phoneRaw, 0, 40);
     $referenceNumber = substr($referenceNumberRaw, 0, 120);
-
-    $referenceConflict = find_reference_reuse_conflict($mysqli, $referenceNumber, $referenceDigitsLimit, $orderId);
-    if ($referenceConflict !== null) {
-        json_error(reference_reuse_conflict_message($referenceConflict), 409);
-    }
-
-    $stmt = $mysqli->prepare('UPDATE pedidos SET numero_referencia = ?, telefono_contacto = ? WHERE id = ? AND estado = ?');
-    if (!$stmt) {
-        json_error('No se pudo actualizar el pedido.', 500);
-    }
-    $expectedStatus = 'pendiente';
-    $stmt->bind_param('ssis', $referenceNumber, $phone, $orderId, $expectedStatus);
-    if (!$stmt->execute()) {
-        $stmt->close();
-        json_error('No se pudieron guardar los datos del pago.', 500);
-    }
-    $stmt->close();
-    update_user_last_purchase_details(
-        $mysqli,
-        (int) ($order['cliente_usuario_id'] ?? 0),
-        should_store_last_purchase_identifier() ? (string) ($order['user_identifier'] ?? '') : null,
-        $phone
-    );
-
-    $updatedOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
-    $adminEmail = resolve_admin_email($mysqli);
-    $paymentMethodName = (string) ($method['nombre'] ?? 'Método de pago');
-    $brandingImages = email_branding_embedded_images();
-    $usesCatalogApi = game_uses_catalog_api($mysqli, (int) ($updatedOrder['juego_id'] ?? 0));
     $bankFlowRequested = $orderSupportsBankApi || $methodSupportsBankApi;
     $usesBankValidation = $orderSupportsBankApi && $methodSupportsBankApi && $currencyMatchesOrder;
     $paymentDifferenceEnabled = payment_difference_feature_enabled() && $usesBankValidation;
@@ -5262,8 +5233,9 @@ if ($action === 'submit_payment') {
         }
     }
 
+    $preselectedMatchingMovement = null;
     if ($usesBankValidation) {
-        $matchingMovement = $paymentDifferenceEnabled
+        $preselectedMatchingMovement = $paymentDifferenceEnabled
             ? find_bank_movement_by_reference(
                 $mysqli,
                 $bankMovements,
@@ -5275,10 +5247,56 @@ if ($action === 'submit_payment') {
                 $mysqli,
                 $bankMovements,
                 $referenceNumber,
-                (float) ($updatedOrder['precio'] ?? 0),
+                (float) ($order['precio'] ?? 0),
                 $referenceDigitsLimit,
                 $orderId
             );
+    }
+
+    $referenceConflict = null;
+    if ($usesBankValidation) {
+        if ($preselectedMatchingMovement !== null) {
+            $referenceConflict = find_reference_reuse_conflict(
+                $mysqli,
+                (string) ($preselectedMatchingMovement['referencia'] ?? $referenceNumber),
+                0,
+                $orderId
+            );
+        }
+    } else {
+        $referenceConflict = find_reference_reuse_conflict($mysqli, $referenceNumber, $referenceDigitsLimit, $orderId);
+    }
+
+    if ($referenceConflict !== null) {
+        json_error(reference_reuse_conflict_message($referenceConflict), 409);
+    }
+
+    $stmt = $mysqli->prepare('UPDATE pedidos SET numero_referencia = ?, telefono_contacto = ? WHERE id = ? AND estado = ?');
+    if (!$stmt) {
+        json_error('No se pudo actualizar el pedido.', 500);
+    }
+    $expectedStatus = 'pendiente';
+    $stmt->bind_param('ssis', $referenceNumber, $phone, $orderId, $expectedStatus);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        json_error('No se pudieron guardar los datos del pago.', 500);
+    }
+    $stmt->close();
+    update_user_last_purchase_details(
+        $mysqli,
+        (int) ($order['cliente_usuario_id'] ?? 0),
+        should_store_last_purchase_identifier() ? (string) ($order['user_identifier'] ?? '') : null,
+        $phone
+    );
+
+    $updatedOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
+    $adminEmail = resolve_admin_email($mysqli);
+    $paymentMethodName = (string) ($method['nombre'] ?? 'Método de pago');
+    $brandingImages = email_branding_embedded_images();
+    $usesCatalogApi = game_uses_catalog_api($mysqli, (int) ($updatedOrder['juego_id'] ?? 0));
+
+    if ($usesBankValidation) {
+        $matchingMovement = $preselectedMatchingMovement;
 
         if ($matchingMovement === null) {
             try {
