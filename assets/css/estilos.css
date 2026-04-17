@@ -561,6 +561,15 @@ body {
   padding: 0 0 1.5rem;
 }
 
+.social-footer-shell-public {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: relative;
+  z-index: 2;
+  clear: both;
+}
+
 .social-footer-card {
   border: 1px solid rgba(var(--theme-primary-rgb), 0.24);
   border-radius: 1.5rem;

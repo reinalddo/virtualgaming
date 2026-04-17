@@ -822,7 +822,7 @@ $rechargeNotificationsScript = str_replace('__LIVE_RECHARGE_ENABLED__', $recharg
     </div>
   </div>
   <?php if ($hasFacebook || $hasInstagram): ?>
-    <footer class="social-footer-shell mt-5">
+    <div class="social-footer-shell social-footer-shell-public mt-5" role="contentinfo">
       <div class="social-footer-card">
         <p class="social-footer-kicker mb-2">Redes oficiales</p>
         <div class="social-footer-links">
@@ -844,7 +844,7 @@ $rechargeNotificationsScript = str_replace('__LIVE_RECHARGE_ENABLED__', $recharg
           <?php endif; ?>
         </div>
       </div>
-    </footer>
+    </div>
   <?php endif; ?>
   <?php if ($hasWhatsapp || $hasWhatsappChannel): ?>
     <div class="floating-social-stack" aria-label="Accesos rápidos de contacto">
