@@ -144,12 +144,28 @@ $menuScript = <<<'SCRIPT'
     hideElement(userMenu);
   };
 
+  const syncPublicModalLayerState = () => {
+    const hasAccountModal = Boolean(
+      (authModal && authModal.classList.contains("d-flex"))
+      || (userOrdersModal && userOrdersModal.classList.contains("d-flex"))
+      || (userRewardsModal && userRewardsModal.classList.contains("d-flex"))
+      || (userProfileModal && userProfileModal.classList.contains("d-flex"))
+    );
+    const hasOverlayModal = Boolean(document.querySelector('.app-overlay-modal.is-visible'));
+    const hasBootstrapModal = document.body.classList.contains('modal-open');
+    document.body.classList.toggle('public-modal-active', hasAccountModal || hasOverlayModal || hasBootstrapModal);
+  };
+
+  window.syncPublicModalLayerState = syncPublicModalLayerState;
+
   const openUserModal = (modal) => {
     showElement(modal, "d-flex");
+    syncPublicModalLayerState();
   };
 
   const closeUserModal = (modal) => {
     hideElement(modal, "d-flex");
+    syncPublicModalLayerState();
   };
 
   const closeAllUserModals = () => {
@@ -466,6 +482,7 @@ $menuScript = <<<'SCRIPT'
   const openAuthModal = (mode) => {
     if (!authModal || !authLogin || !authRegister) return;
     showElement(authModal, "d-flex");
+    syncPublicModalLayerState();
     if (mode === "register") {
       hideElement(authLogin, "d-grid");
       showElement(authRegister, "d-grid");
@@ -478,6 +495,7 @@ $menuScript = <<<'SCRIPT'
   const closeAuthModal = () => {
     if (!authModal) return;
     hideElement(authModal, "d-flex");
+    syncPublicModalLayerState();
   };
 
   const togglePassword = (inputId, button) => {
@@ -507,6 +525,8 @@ $menuScript = <<<'SCRIPT'
   if (authInitialMode === "login" || authInitialMode === "register") {
     openAuthModal(authInitialMode);
   }
+
+  syncPublicModalLayerState();
 
   if (authTrigger && authMenu && authContainer) {
     authTrigger.addEventListener("click", (event) => {
