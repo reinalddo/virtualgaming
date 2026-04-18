@@ -570,17 +570,6 @@ body {
   clear: both;
 }
 
-body.public-modal-active .social-footer-shell-public,
-body.public-modal-active .floating-social-stack,
-body.public-modal-active .live-recharge-stack,
-body.modal-open .social-footer-shell-public,
-body.modal-open .floating-social-stack,
-body.modal-open .live-recharge-stack {
-  opacity: 0 !important;
-  visibility: hidden !important;
-  pointer-events: none !important;
-}
-
 .social-footer-card {
   border: 1px solid rgba(var(--theme-primary-rgb), 0.24);
   border-radius: 1.5rem;

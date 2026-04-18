@@ -4022,9 +4022,6 @@ include __DIR__ . "/includes/header.php";
 
   function syncOverlayState() {
     document.body.classList.toggle('overlay-open', Boolean(document.querySelector('.app-overlay-modal.is-visible')));
-    if (typeof window.syncPublicModalLayerState === 'function') {
-      window.syncPublicModalLayerState();
-    }
   }
 
   function setOverlayVisible(modalElement, visible) {
