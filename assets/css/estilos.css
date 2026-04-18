@@ -643,11 +643,18 @@ body {
   position: fixed;
   right: 1rem;
   bottom: 1rem;
-  z-index: 0;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 0.6rem;
+}
+
+body.overlay-open .floating-social-stack,
+body.modal-open .floating-social-stack {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .floating-social-button {

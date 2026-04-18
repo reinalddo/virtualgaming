@@ -4021,7 +4021,16 @@ include __DIR__ . "/includes/header.php";
   }
 
   function syncOverlayState() {
-    document.body.classList.toggle('overlay-open', Boolean(document.querySelector('.app-overlay-modal.is-visible')));
+    const overlayVisible = Boolean(document.querySelector('.app-overlay-modal.is-visible'));
+    document.body.classList.toggle('overlay-open', overlayVisible);
+    document.querySelectorAll('.floating-social-stack').forEach((element) => {
+      if (!(element instanceof HTMLElement)) {
+        return;
+      }
+      element.style.opacity = overlayVisible ? '0' : '';
+      element.style.visibility = overlayVisible ? 'hidden' : '';
+      element.style.pointerEvents = overlayVisible ? 'none' : '';
+    });
   }
 
   function setOverlayVisible(modalElement, visible) {
