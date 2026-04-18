@@ -3906,7 +3906,17 @@ function notify_provider_inventory_shortage(
     $whatsappHtml = $whatsappLink !== ''
         ? '<p style="margin:0 0 10px;"><a href="' . email_escape($whatsappLink) . '" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:12px 18px;border-radius:999px;background:#25d366;color:#081018;text-decoration:none;font-weight:700;">Hablar por WhatsApp con el administrador</a></p>'
         : '';
-    $lockSummary = 'Juego bloqueado automáticamente. Paquetes desactivados: ' . max(0, (int) ($lockInfo['packages_updated'] ?? 0)) . '.';
+    $packagesUpdated = max(0, (int) ($lockInfo['packages_updated'] ?? 0));
+    $activePackagesRemaining = max(0, (int) ($lockInfo['active_packages_remaining'] ?? 0));
+    $gameDeactivated = !empty($lockInfo['game_deactivated']);
+    if ($packagesUpdated > 0) {
+        $lockSummary = 'Paquete afectado desactivado automáticamente. Paquetes activos restantes: ' . $activePackagesRemaining . '.';
+    } else {
+        $lockSummary = 'No se realizaron cambios automáticos en otros paquetes.';
+    }
+    if ($gameDeactivated) {
+        $lockSummary .= ' El juego también se desactivó porque ya no quedaron paquetes activos.';
+    }
 
     $customerHtml = render_order_email('Pago verificado, recarga pendiente por disponibilidad', 'Cliente',
         '<p style="margin:0 0 10px;">Tu pago fue verificado correctamente, pero por los momentos no hay suficientes recargas disponibles para completar la entrega automática de ' . email_escape($gameName) . '.</p>'
@@ -3933,9 +3943,9 @@ function notify_provider_inventory_shortage(
     );
     $adminHtml = render_order_email('Pago verificado, disponibilidad insuficiente', 'Administrador',
         '<p style="margin:0 0 10px;">El pago fue verificado, pero el proveedor reportó disponibilidad insuficiente para ' . email_escape($gameName) . '.</p>'
-        . '<p style="margin:0 0 10px;">El pedido quedó en estado <strong style="color:#f59e0b;">Verificado</strong> para entrega manual y el catálogo se bloqueó automáticamente por prevención.</p>'
+        . '<p style="margin:0 0 10px;">El pedido quedó en estado <strong style="color:#f59e0b;">Verificado</strong> para entrega manual y la disponibilidad del paquete afectado se ajustó automáticamente por prevención.</p>'
         . '<p style="margin:0 0 10px;">' . email_escape($lockSummary) . '</p>'
-        . '<p style="margin:0 0 10px;">Reactiva luego el juego completo o solo los paquetes con disponibilidad, y usa el botón <strong>Enviar recarga</strong> cuando repongas saldo.</p>'
+        . '<p style="margin:0 0 10px;">Reactiva luego el paquete cuando repongas saldo. Si todos los paquetes quedaron inactivos, al reactivar uno el juego volverá a publicarse.</p>'
         . $providerMessageText,
         [
             'order_id' => $orderId,
@@ -4008,7 +4018,11 @@ function mark_order_inventory_shortage_review(
     $stmt->close();
 
     $updatedOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
-    $lockInfo = recharge_availability_lock_game_and_packages($mysqli, (int) ($updatedOrder['juego_id'] ?? 0));
+    $lockInfo = recharge_availability_lock_package_for_inventory_shortage(
+        $mysqli,
+        (int) ($updatedOrder['juego_id'] ?? 0),
+        (int) ($updatedOrder['paquete_id'] ?? 0)
+    );
 
     return [
         'order' => $updatedOrder,
@@ -5007,7 +5021,7 @@ if ($action === 'submit_payment') {
 
             json_response([
                 'ok' => true,
-                'message' => 'No hay suficientes recargas disponibles. El pedido sigue verificado y el catálogo quedó bloqueado por prevención.',
+                'message' => 'No hay suficientes recargas disponibles. El pedido sigue verificado y el paquete afectado fue restringido por prevención.',
                 'order_id' => $orderId,
                 'estado' => 'pagado',
                 'provider_flow' => 'inventory_shortage',
@@ -6260,7 +6274,7 @@ if ($action === 'admin_retry_recharge') {
 
             json_response([
                 'ok' => true,
-                'message' => 'No hay suficientes recargas disponibles. El pedido sigue verificado y el catálogo quedó bloqueado por prevención.',
+                'message' => 'No hay suficientes recargas disponibles. El pedido sigue verificado y el paquete afectado fue restringido por prevención.',
                 'order_id' => $orderId,
                 'estado' => 'pagado',
                 'provider_flow' => 'inventory_shortage',

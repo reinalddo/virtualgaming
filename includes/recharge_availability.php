@@ -129,6 +129,66 @@ function recharge_availability_set_package_active(mysqli $mysqli, int $packageId
     return $ok;
 }
 
+function recharge_availability_count_active_packages(mysqli $mysqli, int $gameId): int {
+    if ($gameId <= 0) {
+        return 0;
+    }
+
+    recharge_availability_ensure_columns($mysqli);
+    $stmt = $mysqli->prepare('SELECT COUNT(*) AS total FROM juego_paquetes WHERE juego_id = ? AND COALESCE(activo, 1) = 1');
+    if (!$stmt) {
+        return 0;
+    }
+
+    $stmt->bind_param('i', $gameId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result ? $result->fetch_assoc() : null;
+    $stmt->close();
+
+    return max(0, (int) ($row['total'] ?? 0));
+}
+
+function recharge_availability_lock_package_for_inventory_shortage(mysqli $mysqli, int $gameId, int $packageId): array {
+    $result = [
+        'game_updated' => false,
+        'game_deactivated' => false,
+        'game_active' => false,
+        'packages_updated' => 0,
+        'package_updated' => false,
+        'active_packages_remaining' => 0,
+    ];
+
+    if ($gameId <= 0 || $packageId <= 0) {
+        return $result;
+    }
+
+    recharge_availability_ensure_columns($mysqli);
+
+    $packageStmt = $mysqli->prepare('UPDATE juego_paquetes SET activo = 0 WHERE id = ? AND juego_id = ? AND COALESCE(activo, 1) = 1');
+    if ($packageStmt) {
+        $packageStmt->bind_param('ii', $packageId, $gameId);
+        if ($packageStmt->execute()) {
+            $result['packages_updated'] = max(0, (int) $packageStmt->affected_rows);
+            $result['package_updated'] = $result['packages_updated'] > 0;
+        }
+        $packageStmt->close();
+    }
+
+    $result['active_packages_remaining'] = recharge_availability_count_active_packages($mysqli, $gameId);
+    $result['game_active'] = recharge_availability_is_game_active($mysqli, $gameId);
+
+    if ($result['game_active'] && $result['active_packages_remaining'] === 0) {
+        $result['game_updated'] = recharge_availability_set_game_active($mysqli, $gameId, false);
+        $result['game_deactivated'] = $result['game_updated'];
+        if ($result['game_deactivated']) {
+            $result['game_active'] = false;
+        }
+    }
+
+    return $result;
+}
+
 function recharge_availability_lock_game_and_packages(mysqli $mysqli, int $gameId): array {
     if ($gameId <= 0) {
         return [
