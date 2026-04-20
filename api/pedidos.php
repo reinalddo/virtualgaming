@@ -902,6 +902,48 @@ function is_public_callback_host(string $host): bool {
     return true;
 }
 
+function current_public_app_base_url(): ?string {
+    $candidate = rtrim(app_base_url(), '/');
+    if (!preg_match('#^https?://#i', $candidate)) {
+        return null;
+    }
+
+    $host = parse_url($candidate, PHP_URL_HOST);
+    if (!is_string($host) || !is_public_callback_host($host)) {
+        return null;
+    }
+
+    return $candidate;
+}
+
+function tenant_public_hosts(): array {
+    $config = tenant_config();
+    $hosts = [];
+
+    foreach ((array) (($config['tenant']['domains'] ?? [])) as $domain) {
+        $normalized = tenant_normalize_host((string) $domain);
+        if ($normalized !== '' && is_public_callback_host($normalized)) {
+            $hosts[] = $normalized;
+        }
+    }
+
+    $currentHost = tenant_normalize_host();
+    if ($currentHost !== '' && is_public_callback_host($currentHost)) {
+        $hosts[] = $currentHost;
+    }
+
+    return array_values(array_unique($hosts));
+}
+
+function is_tenant_public_host(string $host): bool {
+    $normalizedHost = tenant_normalize_host($host);
+    if ($normalizedHost === '' || !is_public_callback_host($normalizedHost)) {
+        return false;
+    }
+
+    return in_array($normalizedHost, tenant_public_hosts(), true);
+}
+
 function resolve_provider_webhook_url(): ?string {
     $configuredUrl = trim((string) getenv('TVG_RECARGAS_WEBHOOK_URL'));
     if ($configuredUrl === '') {
@@ -1526,11 +1568,12 @@ function clear_order_binance_pay_tracking(mysqli $mysqli, int $orderId): bool {
 }
 
 function build_binance_pay_notify_url(): ?string {
-    $candidate = rtrim(app_base_url(), '/') . '/api/pedidos.php?action=binance_notify';
-    if (!preg_match('#^https?://#i', $candidate)) {
+    $baseUrl = current_public_app_base_url();
+    if ($baseUrl === null) {
         return null;
     }
 
+    $candidate = $baseUrl . '/api/pedidos.php?action=binance_notify';
     $host = parse_url($candidate, PHP_URL_HOST);
     if (!is_string($host) || !is_public_callback_host($host)) {
         return null;
@@ -1542,8 +1585,13 @@ function build_binance_pay_notify_url(): ?string {
 function build_binance_pay_redirect_url(): string {
     $config = binance_pay_config();
     $candidate = trim((string) ($config['store_url'] ?? ''));
-    if ($candidate === '' || !preg_match('#^https?://#i', $candidate)) {
-        $candidate = app_base_url();
+    $candidateHost = is_string(parse_url($candidate, PHP_URL_HOST)) ? (string) parse_url($candidate, PHP_URL_HOST) : '';
+
+    if ($candidate === '' || !preg_match('#^https?://#i', $candidate) || !is_tenant_public_host($candidateHost)) {
+        $fallbackBaseUrl = current_public_app_base_url();
+        if ($fallbackBaseUrl !== null) {
+            $candidate = $fallbackBaseUrl;
+        }
     }
 
     return rtrim($candidate, '/');
@@ -4817,7 +4865,7 @@ if ($action === 'submit_payment') {
                 true
             );
             if (!binance_pay_response_is_success($responsePayload)) {
-                throw new RuntimeException(binance_pay_error_message_from_response($responsePayload));
+                throw new RuntimeException(binance_pay_error_message_from_response($responsePayload, 200));
             }
         } catch (Throwable $e) {
             json_error($e->getMessage(), 502);
