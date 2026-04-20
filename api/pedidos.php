@@ -4847,12 +4847,6 @@ if ($action === 'submit_payment') {
             'payer_ip' => binance_pay_client_ip($_SERVER),
             'order_description' => trim((string) ($order['juego_nombre'] ?? 'Pedido')) . ' - ' . trim((string) ($order['paquete_nombre'] ?? ('#' . $orderId))),
             'remark' => 'pedido:' . $orderId,
-            'extra' => [
-                'selectedPaymentMethod' => 'binance',
-                'nextStep' => 'redirect',
-                'storeId' => trim((string) ($binanceConfig['store_id'] ?? '')),
-                'accessToken' => trim((string) ($binanceConfig['access_token'] ?? '')),
-            ],
         ];
 
         try {
@@ -4868,6 +4862,7 @@ if ($action === 'submit_payment') {
                 throw new RuntimeException(binance_pay_error_message_from_response($responsePayload, 200));
             }
         } catch (Throwable $e) {
+            error_log('TVG Binance Pay checkout failed for order #' . $orderId . ': ' . $e->getMessage());
             json_error($e->getMessage(), 502);
         }
 
