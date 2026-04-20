@@ -4430,6 +4430,14 @@ include __DIR__ . "/includes/header.php";
     }
 
     const loweredMessage = rawMessage.toLowerCase();
+    if (loweredMessage.includes('signature verification failed')) {
+      return 'No se pudo validar Binance Pay con la configuración actual de la tienda. Intenta de nuevo o contacta al administrador.';
+    }
+
+    if (loweredMessage.includes('signature verification failed')) {
+      return 'No se pudo validar Binance Pay con la configuración actual de la tienda. Intenta de nuevo o contacta al administrador.';
+    }
+
     if (
       loweredMessage === 'failed to fetch'
       || loweredMessage.includes('unexpected token')

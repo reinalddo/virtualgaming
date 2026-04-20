@@ -269,6 +269,7 @@ function binance_pay_sign(array $data, ?string $apiKey = null): string {
         . trim((string) ($data['requestId'] ?? ''))
         . trim((string) ($data['merchantNo'] ?? ''))
         . trim((string) ($data['orderNo'] ?? ''))
+        . trim((string) ($data['orderCurrencyType'] ?? ''))
         . trim((string) ($data['orderAmount'] ?? ''))
         . trim((string) ($data['orderCurrency'] ?? ''));
 
