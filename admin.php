@@ -739,6 +739,62 @@ function admin_filter_influencer_sales_by_user(array $sales, array $users, strin
     }));
 }
 
+function admin_filter_influencer_sales_by_payment_state(array $sales, string $paymentFilter): array {
+    if ($paymentFilter === 'todos') {
+        return array_values($sales);
+    }
+
+    return array_values(array_filter($sales, static function ($sale) use ($paymentFilter) {
+        $status = trim((string) ($sale['estado_pago_influencer'] ?? $sale['estado_pago'] ?? 'pendiente'));
+        if (!in_array($status, ['pendiente', 'pagado'], true)) {
+            $status = 'pendiente';
+        }
+
+        return $status === $paymentFilter;
+    }));
+}
+
+function admin_fetch_influencer_sales_dataset(PDO $pdo, array $influencerUsers, bool $isInfluencerViewer, array $adminUser, ?string $dateFrom, ?string $dateTo, string $selectedInfluencerFilterId, string $paymentFilter): array {
+    $influencerSalesSql = "SELECT s.*, p.estado_pago_influencer, p.juego_nombre
+        FROM cupones_influencer_ventas s
+        INNER JOIN pedidos p ON p.id = s.pedido_id
+        WHERE 1=1";
+    $influencerSalesParams = [];
+
+    if ($dateFrom !== null) {
+        $influencerSalesSql .= ' AND DATE(s.creado_en) >= ?';
+        $influencerSalesParams[] = $dateFrom;
+    }
+    if ($dateTo !== null) {
+        $influencerSalesSql .= ' AND DATE(s.creado_en) <= ?';
+        $influencerSalesParams[] = $dateTo;
+    }
+    if ($isInfluencerViewer) {
+        $identityFilter = admin_build_influencer_sales_identity_filter($adminUser);
+        if (!empty($identityFilter['clauses'])) {
+            $influencerSalesSql .= ' AND (' . implode(' OR ', $identityFilter['clauses']) . ')';
+            $influencerSalesParams = array_merge($influencerSalesParams, $identityFilter['params']);
+        } else {
+            $influencerSalesSql .= ' AND 1 = 0';
+        }
+    }
+
+    $influencerSalesSql .= ' ORDER BY s.creado_en DESC';
+    $influencerSalesStmt = $pdo->prepare($influencerSalesSql);
+    $influencerSalesStmt->execute($influencerSalesParams);
+    $influencerSalesAllStates = $influencerSalesStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if (!$isInfluencerViewer && $selectedInfluencerFilterId !== '') {
+        $influencerSalesAllStates = admin_filter_influencer_sales_by_user($influencerSalesAllStates, $influencerUsers, $selectedInfluencerFilterId);
+    }
+
+    return [
+        'allStates' => $influencerSalesAllStates,
+        'sales' => admin_filter_influencer_sales_by_payment_state($influencerSalesAllStates, $paymentFilter),
+        'totals' => admin_build_influencer_sales_totals($influencerSalesAllStates),
+    ];
+}
+
 function admin_build_influencer_sales_totals(array $sales): array {
     $totals = [
         'pendiente' => ['count' => 0, 'amounts' => []],
@@ -1359,6 +1415,68 @@ switch ($seccion) {
                     $redirectQuery['filtro_influencer_usuario'] = $redirectInfluencerUserId;
                 }
             }
+            admin_redirect('cupones', $redirectQuery);
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['actualizar_pendientes_filtrados_influencer'])) {
+            if ($isInfluencerViewer) {
+                admin_set_flash('error', 'No tienes permisos para modificar el estado de pago de comisiones.');
+                admin_redirect('cupones', ['tab' => 'influencers']);
+            }
+
+            $influencerUsers = admin_fetch_influencer_users($pdo);
+            $redirectFilter = $influencerFiltersEnabled ? admin_normalize_influencer_payment_filter($_POST['filtro_estado_pago'] ?? 'pendiente') : 'todos';
+            $redirectDateFrom = $influencerFiltersEnabled ? admin_normalize_date_filter($_POST['fecha_desde'] ?? null) : null;
+            $redirectDateTo = $influencerFiltersEnabled ? admin_normalize_date_filter($_POST['fecha_hasta'] ?? null) : null;
+            $redirectInfluencerUserId = $influencerFiltersEnabled ? admin_normalize_influencer_user_filter($_POST['filtro_influencer_usuario'] ?? '', $influencerUsers) : '';
+
+            $redirectQuery = ['tab' => 'influencers'];
+            if ($influencerFiltersEnabled) {
+                $redirectQuery['filtro_estado_pago'] = $redirectFilter;
+                if ($redirectDateFrom !== null) {
+                    $redirectQuery['fecha_desde'] = $redirectDateFrom;
+                }
+                if ($redirectDateTo !== null) {
+                    $redirectQuery['fecha_hasta'] = $redirectDateTo;
+                }
+                if ($redirectInfluencerUserId !== '') {
+                    $redirectQuery['filtro_influencer_usuario'] = $redirectInfluencerUserId;
+                }
+            }
+
+            if (!$influencerFiltersEnabled || $redirectFilter !== 'pendiente') {
+                admin_set_flash('error', 'Esta acción solo está disponible al mostrar solo comisiones pendientes.');
+                admin_redirect('cupones', $redirectQuery);
+            }
+
+            $salesDataset = admin_fetch_influencer_sales_dataset(
+                $pdo,
+                $influencerUsers,
+                $isInfluencerViewer,
+                $adminUser,
+                $redirectDateFrom,
+                $redirectDateTo,
+                $redirectInfluencerUserId,
+                $redirectFilter
+            );
+            $pendingOrderIds = array_values(array_unique(array_map(static function ($sale): int {
+                return max(0, (int) ($sale['pedido_id'] ?? 0));
+            }, $salesDataset['sales'])));
+            $pendingOrderIds = array_values(array_filter($pendingOrderIds, static function (int $pedidoId): bool {
+                return $pedidoId > 0;
+            }));
+
+            if (empty($pendingOrderIds)) {
+                admin_set_flash('error', 'No hay comisiones pendientes dentro del filtro actual.');
+                admin_redirect('cupones', $redirectQuery);
+            }
+
+            $placeholders = implode(', ', array_fill(0, count($pendingOrderIds), '?'));
+            $params = array_merge(['pagado'], $pendingOrderIds);
+            $stmt = $pdo->prepare("UPDATE pedidos SET estado_pago_influencer = ? WHERE id IN ($placeholders) AND (estado_pago_influencer IS NULL OR estado_pago_influencer = '' OR estado_pago_influencer = 'pendiente')");
+            $stmt->execute($params);
+
+            admin_set_flash('success', 'Se marcaron ' . count($pendingOrderIds) . ' comisión(es) pendiente(s) como pagadas.');
             admin_redirect('cupones', $redirectQuery);
         }
 
@@ -2583,46 +2701,19 @@ require_once __DIR__ . '/includes/header.php';
                         }
                     }
                 }
-                $influencerSalesSql = "SELECT s.*, p.estado_pago_influencer, p.juego_nombre
-                    FROM cupones_influencer_ventas s
-                    INNER JOIN pedidos p ON p.id = s.pedido_id
-                    WHERE 1=1";
-                $influencerSalesParams = [];
-                if ($influencerDateFrom !== null) {
-                    $influencerSalesSql .= ' AND DATE(s.creado_en) >= ?';
-                    $influencerSalesParams[] = $influencerDateFrom;
-                }
-                if ($influencerDateTo !== null) {
-                    $influencerSalesSql .= ' AND DATE(s.creado_en) <= ?';
-                    $influencerSalesParams[] = $influencerDateTo;
-                }
-                if ($isInfluencerViewer) {
-                    $identityFilter = admin_build_influencer_sales_identity_filter($adminUser);
-                    if (!empty($identityFilter['clauses'])) {
-                        $influencerSalesSql .= ' AND (' . implode(' OR ', $identityFilter['clauses']) . ')';
-                        $influencerSalesParams = array_merge($influencerSalesParams, $identityFilter['params']);
-                    } else {
-                        $influencerSalesSql .= ' AND 1 = 0';
-                    }
-                }
-                $influencerSalesSql .= ' ORDER BY s.creado_en DESC';
-                $influencerSalesStmt = $pdo->prepare($influencerSalesSql);
-                $influencerSalesStmt->execute($influencerSalesParams);
-                $influencerSalesAllStates = $influencerSalesStmt->fetchAll(PDO::FETCH_ASSOC);
-                if (!$isInfluencerViewer && $selectedInfluencerFilterId !== '') {
-                    $influencerSalesAllStates = admin_filter_influencer_sales_by_user($influencerSalesAllStates, $influencerUsers, $selectedInfluencerFilterId);
-                }
-                $influencerSalesTotals = admin_build_influencer_sales_totals($influencerSalesAllStates);
-                $influencerSales = $influencerSalesAllStates;
-                if ($influencerPaymentFilter !== 'todos') {
-                    $influencerSales = array_values(array_filter($influencerSales, static function ($sale) use ($influencerPaymentFilter) {
-                        $status = trim((string) ($sale['estado_pago_influencer'] ?? $sale['estado_pago'] ?? 'pendiente'));
-                        if (!in_array($status, ['pendiente', 'pagado'], true)) {
-                            $status = 'pendiente';
-                        }
-                        return $status === $influencerPaymentFilter;
-                    }));
-                }
+                $influencerSalesDataset = admin_fetch_influencer_sales_dataset(
+                    $pdo,
+                    $influencerUsers,
+                    $isInfluencerViewer,
+                    $adminUser,
+                    $influencerDateFrom,
+                    $influencerDateTo,
+                    $selectedInfluencerFilterId,
+                    $influencerPaymentFilter
+                );
+                $influencerSalesAllStates = $influencerSalesDataset['allStates'];
+                $influencerSalesTotals = $influencerSalesDataset['totals'];
+                $influencerSales = $influencerSalesDataset['sales'];
                 $edit_cupon = null;
                 if (isset($_GET['editar_cupon'])) {
                     $edit_id = intval($_GET['editar_cupon']);
@@ -3002,6 +3093,18 @@ require_once __DIR__ . '/includes/header.php';
                                 </div>
                             <?php endforeach; ?>
                         </div>
+                        <?php if (!$isInfluencerViewer && $influencerPaymentFilter === 'pendiente' && !empty($influencerSales)): ?>
+                        <form method="POST" action="" class="mb-4" onsubmit="return confirm('¿Cambiar estos pendientes visibles a pagado?');">
+                            <input type="hidden" name="actualizar_pendientes_filtrados_influencer" value="1">
+                            <input type="hidden" name="filtro_estado_pago" value="<?= htmlspecialchars($influencerPaymentFilter) ?>">
+                            <input type="hidden" name="fecha_desde" value="<?= htmlspecialchars((string) ($influencerDateFrom ?? '')) ?>">
+                            <input type="hidden" name="fecha_hasta" value="<?= htmlspecialchars((string) ($influencerDateTo ?? '')) ?>">
+                            <input type="hidden" name="filtro_influencer_usuario" value="<?= htmlspecialchars($selectedInfluencerFilterId) ?>">
+                            <button type="submit" class="btn btn-warning fw-semibold" style="border:none; color:#181f2a; box-shadow:0 0 18px rgba(245,158,11,0.28);">
+                                Cambiar estos Pendientes a Pagado
+                            </button>
+                        </form>
+                        <?php endif; ?>
                         <?php endif; ?>
                         <?php if (empty($influencerSales)): ?>
                             <p class="mb-0" style="color:#b2f6ff;">Aún no hay ventas registradas para cupones de influencers.</p>
