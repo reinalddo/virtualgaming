@@ -142,6 +142,30 @@ function binance_pay_error_message_from_response(?array $data, int $status): str
     return 'CoinPal respondió con código HTTP ' . $status . '.';
 }
 
+function binance_pay_customer_message(string $message, ?string $currencyCode = null): string {
+    $rawMessage = trim($message);
+    if ($rawMessage === '') {
+        return 'No se pudo completar la validación con Binance Pay.';
+    }
+
+    $loweredMessage = strtolower($rawMessage);
+    $normalizedCurrency = strtoupper(trim((string) $currencyCode));
+
+    if (str_contains($loweredMessage, 'signature verification failed')) {
+        return 'No se pudo validar Binance Pay con la configuración actual de la tienda. Intenta de nuevo o contacta al administrador.';
+    }
+
+    if (str_contains($loweredMessage, 'payment in this currency is not supported')) {
+        if ($normalizedCurrency !== '') {
+            return 'Binance Pay no admite pagos en ' . $normalizedCurrency . ' para esta tienda. Cambia la moneda del pedido o habilita una moneda compatible en CoinPal.';
+        }
+
+        return 'Binance Pay no admite la moneda actual de este pedido para esta tienda. Cambia la moneda del pedido o habilita una moneda compatible en CoinPal.';
+    }
+
+    return $rawMessage;
+}
+
 function binance_pay_connect_timeout_seconds(): int {
     return 10;
 }

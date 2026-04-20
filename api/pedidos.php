@@ -4862,8 +4862,12 @@ if ($action === 'submit_payment') {
                 throw new RuntimeException(binance_pay_error_message_from_response($responsePayload, 200));
             }
         } catch (Throwable $e) {
-            error_log('TVG Binance Pay checkout failed for order #' . $orderId . ': ' . $e->getMessage());
-            json_error($e->getMessage(), 502);
+            $rawMessage = trim((string) $e->getMessage());
+            $customerMessage = binance_pay_customer_message($rawMessage, $currencyCode);
+            $loweredMessage = strtolower($rawMessage);
+            $statusCode = (str_contains($loweredMessage, 'signature verification failed') || str_contains($loweredMessage, 'payment in this currency is not supported')) ? 409 : 502;
+            error_log('TVG Binance Pay checkout failed for order #' . $orderId . ': ' . $rawMessage);
+            json_error($customerMessage, $statusCode);
         }
 
         if (!persist_order_binance_pay_checkout($mysqli, $orderId, $requestPayload, $responsePayload)) {
