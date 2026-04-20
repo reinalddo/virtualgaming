@@ -4841,6 +4841,7 @@ include __DIR__ . "/includes/header.php";
     clearPaymentSupportUi();
 
     const checkoutUrl = String((data && data.checkout_url) || '').trim();
+    const resolvedTotalText = String((data && data.binance_total_text) || totalText || '').trim();
     const reasons = filterBinanceReasons(data);
     const title = 'Completa el pago en Binance Pay';
     const summary = 'Abrimos un checkout externo de CoinPal para que completes el pago con Binance Pay mientras esta ventana sigue consultando la confirmación.';
@@ -4859,7 +4860,7 @@ include __DIR__ . "/includes/header.php";
         label: 'Abrir Binance Pay',
         className: 'btn-info',
         onClick: () => {
-          reopenBinanceCheckout(checkoutUrl, reference, totalText);
+          reopenBinanceCheckout(checkoutUrl, reference, resolvedTotalText);
         },
       });
     }
@@ -4882,7 +4883,7 @@ include __DIR__ . "/includes/header.php";
       },
     });
 
-    const whatsappUrl = buildPaymentSupportWhatsappUrl(activePaymentOrder ? activePaymentOrder.orderId : '', reference, totalText);
+    const whatsappUrl = buildPaymentSupportWhatsappUrl(activePaymentOrder ? activePaymentOrder.orderId : '', reference, resolvedTotalText);
     if (whatsappUrl) {
       actions.push({
         label: 'Contactar por WhatsApp',

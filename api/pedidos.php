@@ -1153,6 +1153,138 @@ function default_payment_method_for_currency(string $currencyCode): ?array {
     return is_array($method) ? $method : null;
 }
 
+function active_currencies_for_checkout(): array {
+    static $cached = null;
+
+    if (is_array($cached)) {
+        return $cached;
+    }
+
+    $cached = [];
+    $mysqli = ensure_mysqli_connection(currency_db());
+    $res = $mysqli->query('SELECT * FROM monedas WHERE COALESCE(activo, 1) = 1 ORDER BY es_base DESC, nombre ASC, id ASC');
+    if ($res instanceof mysqli_result) {
+        while ($row = $res->fetch_assoc()) {
+            $cached[] = $row;
+        }
+    }
+
+    return $cached;
+}
+
+function currency_convert_amount_between_codes(float $amount, ?string $fromCode, ?string $toCode): float {
+    $fromNormalized = currency_normalize_code((string) $fromCode);
+    $toNormalized = currency_normalize_code((string) $toCode);
+
+    if ($amount <= 0) {
+        return 0.0;
+    }
+
+    if ($fromNormalized === '' || $toNormalized === '') {
+        return round($amount, 2);
+    }
+
+    $toCurrency = currency_find_by_code($toNormalized);
+    if ($toCurrency === null) {
+        return round($amount, 2);
+    }
+
+    if ($fromNormalized === $toNormalized) {
+        return currency_apply_amount_rule($amount, $toCurrency);
+    }
+
+    $fromCurrency = currency_find_by_code($fromNormalized);
+    if ($fromCurrency === null) {
+        return currency_apply_amount_rule($amount, $toCurrency);
+    }
+
+    $fromRate = (float) ($fromCurrency['tasa'] ?? 0);
+    if ($fromRate <= 0) {
+        return currency_apply_amount_rule($amount, $toCurrency);
+    }
+
+    $baseAmount = $amount / $fromRate;
+    return currency_convert_from_base($baseAmount, $toCurrency);
+}
+
+function preferred_binance_checkout_currency(): ?array {
+    $activeCurrencies = active_currencies_for_checkout();
+    if ($activeCurrencies === []) {
+        return null;
+    }
+
+    $byCode = [];
+    $firstNonBankCurrency = null;
+    $fallbackCurrency = null;
+
+    foreach ($activeCurrencies as $currency) {
+        $code = normalize_currency_code((string) ($currency['clave'] ?? ''));
+        if ($code === '') {
+            continue;
+        }
+
+        if (!isset($byCode[$code])) {
+            $byCode[$code] = $currency;
+        }
+        if ($fallbackCurrency === null) {
+            $fallbackCurrency = $currency;
+        }
+        if ($code !== 'VES' && $firstNonBankCurrency === null) {
+            $firstNonBankCurrency = $currency;
+        }
+    }
+
+    foreach ($activeCurrencies as $currency) {
+        $code = normalize_currency_code((string) ($currency['clave'] ?? ''));
+        if ($code !== '' && $code !== 'VES' && (int) ($currency['es_base'] ?? 0) === 1) {
+            return $currency;
+        }
+    }
+
+    foreach (['USD', 'EUR', 'BRL', 'COP', 'MXN', 'CLP', 'PEN'] as $preferredCode) {
+        if (isset($byCode[$preferredCode])) {
+            return $byCode[$preferredCode];
+        }
+    }
+
+    return $firstNonBankCurrency ?: $fallbackCurrency;
+}
+
+function resolve_binance_checkout_money(array $order): array {
+    $orderCurrencyCode = normalize_currency_code((string) ($order['moneda'] ?? ''));
+    $targetCurrency = preferred_binance_checkout_currency();
+    $targetCurrencyCode = normalize_currency_code((string) ($targetCurrency['clave'] ?? $orderCurrencyCode));
+    $sourceAmount = payment_difference_normalize_amount((float) ($order['precio'] ?? 0));
+    $checkoutAmount = $sourceAmount;
+
+    if ($targetCurrencyCode !== '' && $orderCurrencyCode !== '' && $targetCurrencyCode !== $orderCurrencyCode) {
+        $checkoutAmount = currency_convert_amount_between_codes($sourceAmount, $orderCurrencyCode, $targetCurrencyCode);
+    } elseif (is_array($targetCurrency)) {
+        $checkoutAmount = currency_apply_amount_rule($sourceAmount, $targetCurrency);
+    }
+
+    return [
+        'currency' => $targetCurrencyCode,
+        'amount' => round($checkoutAmount, 2),
+        'text' => $targetCurrencyCode !== '' ? ($targetCurrencyCode . ' ' . currency_format_amount($checkoutAmount, $targetCurrency)) : '',
+        'uses_order_currency' => $targetCurrencyCode !== '' && $targetCurrencyCode === $orderCurrencyCode,
+    ];
+}
+
+function build_binance_checkout_money_payload(array $order): array {
+    $money = resolve_binance_checkout_money($order);
+    $currencyCode = trim((string) ($money['currency'] ?? ''));
+    if ($currencyCode === '') {
+        return [];
+    }
+
+    return [
+        'binance_currency' => $currencyCode,
+        'binance_amount' => (float) ($money['amount'] ?? 0),
+        'binance_total_text' => trim((string) ($money['text'] ?? '')),
+    ];
+}
+
 function payment_method_details_html(?array $method): string {
     if (!$method) {
         return '<p style="margin:14px 0 0;color:#fca5a5;">Aún no hay un método de pago activo configurado para esta moneda. Nuestro equipo revisará tu pedido para indicarte cómo completar el pago.</p>';
@@ -1603,7 +1735,7 @@ function build_binance_checkout_response_payload(array $order): array {
         $message = 'Abre Binance Pay y completa el pago para continuar con tu pedido.';
     }
 
-    return [
+    return array_merge([
         'payment_mode' => 'binance',
         'payment_gateway' => 'binance_pay',
         'provider_flow' => 'binance_checkout',
@@ -1612,7 +1744,7 @@ function build_binance_checkout_response_payload(array $order): array {
         'provider_message' => $message,
         'checkout_url' => trim((string) ($order['binance_pay_checkout_url'] ?? '')),
         'remaining_seconds' => max(0, order_expiration_timestamp($order) - time()),
-    ];
+    ], build_binance_checkout_money_payload($order));
 }
 
 function build_order_status_response_payload(array $order, int $orderId): array {
@@ -1640,7 +1772,7 @@ function build_order_status_response_payload(array $order, int $orderId): array 
         $paymentGateway = 'binance_pay';
     }
 
-    return [
+    return array_merge([
         'ok' => true,
         'order_id' => $orderId,
         'estado' => (string) ($order['estado'] ?? ''),
@@ -1652,7 +1784,7 @@ function build_order_status_response_payload(array $order, int $orderId): array 
         'checkout_url' => trim((string) ($order['binance_pay_checkout_url'] ?? '')),
         'payment_gateway' => $paymentGateway,
         'remaining_seconds' => max(0, order_expiration_timestamp($order) - time()),
-    ];
+    ], $paymentGateway === 'binance_pay' ? build_binance_checkout_money_payload($order) : []);
 }
 
 function sync_local_order_with_binance_payload(mysqli $mysqli, array $order, array $payload, string $source = 'sync'): array {
@@ -4824,17 +4956,16 @@ if ($action === 'submit_payment') {
             json_error('La tienda no tiene una URL pública válida para recibir confirmaciones de Binance Pay.', 409);
         }
 
-        $currencyCode = strtoupper(trim((string) ($order['moneda'] ?? '')));
+        $binanceCheckoutMoney = resolve_binance_checkout_money($order);
+        $currencyCode = strtoupper(trim((string) ($binanceCheckoutMoney['currency'] ?? '')));
         if ($currencyCode === '') {
             json_error('La orden no tiene una moneda válida para Binance Pay.', 409);
         }
 
-        $orderAmount = round((float) ($order['precio'] ?? 0), 2);
+        $orderAmount = round((float) ($binanceCheckoutMoney['amount'] ?? 0), 2);
         if ($orderAmount <= 0) {
             json_error('La orden no tiene un monto válido para Binance Pay.', 409);
         }
-
-        $binanceConfig = binance_pay_config();
 
         $checkoutInput = [
             'request_id' => binance_pay_generate_request_id(),
