@@ -2774,7 +2774,7 @@ include __DIR__ . "/includes/header.php";
           'payment_mode=binance'
         ].join('&')
       });
-      const data = await response.json();
+      const data = await parseApiJsonResponse(response, 'No se pudo reabrir el checkout de Binance Pay en este momento.');
       if (!response.ok || !data.ok) {
         throw new Error((data && data.message) ? data.message : 'No se pudo reabrir el checkout de Binance Pay.');
       }
@@ -2798,7 +2798,7 @@ include __DIR__ . "/includes/header.php";
       if (popup && !popup.closed) {
         popup.close();
       }
-      setPaymentAlert((error && error.message) ? error.message : 'No se pudo reabrir el checkout de Binance Pay.', 'danger');
+      setPaymentAlert(normalizeApiRequestErrorMessage(error, 'No se pudo reabrir el checkout de Binance Pay en este momento.'), 'danger');
     }
   }
 
@@ -2886,7 +2886,7 @@ include __DIR__ . "/includes/header.php";
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: `action=activate_payment_difference_credit&order_id=${encodeURIComponent(activePaymentOrder.orderId)}`
       });
-      const data = await response.json();
+      const data = await parseApiJsonResponse(response, 'No se pudo activar el saldo a favor en este momento.');
       if (!response.ok || !data.ok) {
         throw new Error((data && data.message) ? data.message : 'No se pudo activar el saldo a favor.');
       }
@@ -2902,7 +2902,7 @@ include __DIR__ . "/includes/header.php";
       scrollToOrderForm();
     } catch (error) {
       setOverlayVisible(loadingModal, false);
-      const errorMessage = String((error && error.message) || 'No se pudo activar el saldo a favor.');
+      const errorMessage = normalizeApiRequestErrorMessage(error, 'No se pudo activar el saldo a favor en este momento.');
       setPaymentAlert(errorMessage, 'danger');
       showPaymentStatusModal('No se pudo activar el saldo a favor', errorMessage, 'danger');
     }
@@ -4273,7 +4273,7 @@ include __DIR__ . "/includes/header.php";
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: payload.toString(),
       });
-      const data = await response.json();
+      const data = await parseApiJsonResponse(response, 'No se pudo consultar el estado del pedido en este momento.');
       if (!response.ok || !data.ok) {
         throw new Error((data && data.message) ? data.message : 'No se pudo consultar el estado del pedido.');
       }
@@ -4403,6 +4403,44 @@ include __DIR__ . "/includes/header.php";
     toast.style.zIndex = '9999';
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 2500);
+  }
+
+  async function parseApiJsonResponse(response, fallbackMessage) {
+    const rawText = await response.text();
+    const trimmed = String(rawText || '').trim();
+
+    if (trimmed === '') {
+      if (response.ok) {
+        return {};
+      }
+      throw new Error(fallbackMessage || 'No se pudo procesar la respuesta del servidor.');
+    }
+
+    try {
+      return JSON.parse(trimmed);
+    } catch (error) {
+      throw new Error(fallbackMessage || 'No se pudo procesar la respuesta del servidor.');
+    }
+  }
+
+  function normalizeApiRequestErrorMessage(error, fallbackMessage) {
+    const rawMessage = String((error && error.message) || '').trim();
+    if (rawMessage === '') {
+      return fallbackMessage;
+    }
+
+    const loweredMessage = rawMessage.toLowerCase();
+    if (
+      loweredMessage === 'failed to fetch'
+      || loweredMessage.includes('unexpected token')
+      || loweredMessage.includes('is not valid json')
+      || loweredMessage.includes('<!doctype')
+      || loweredMessage.includes('<html')
+    ) {
+      return fallbackMessage;
+    }
+
+    return rawMessage;
   }
 
   function clearPaymentTimer() {
@@ -5215,7 +5253,7 @@ include __DIR__ . "/includes/header.php";
                     body: `action=cancel_order&order_id=${encodeURIComponent(activePaymentOrder.orderId)}`
                   })
                   .then(async (response) => {
-                    const data = await response.json();
+                    const data = await parseApiJsonResponse(response, 'No se pudo cancelar la orden en este momento.');
                     if (!response.ok || !data.ok) {
                       throw new Error((data && data.message) ? data.message : 'No se pudo cancelar la orden.');
                     }
@@ -5226,7 +5264,7 @@ include __DIR__ . "/includes/header.php";
                   })
                   .catch((error) => {
                     setOverlayVisible(paymentCancelConfirmModal, false);
-                    setPaymentAlert(error.message || 'No se pudo cancelar la orden.', 'danger');
+                    setPaymentAlert(normalizeApiRequestErrorMessage(error, 'No se pudo cancelar la orden en este momento.'), 'danger');
                   })
                   .finally(() => {
                     paymentCancelConfirmButton.disabled = false;
@@ -5307,7 +5345,7 @@ include __DIR__ . "/includes/header.php";
                     ].join('&')
                   })
                   .then(async (response) => {
-                    const data = await response.json();
+                    const data = await parseApiJsonResponse(response, 'No pudimos validar tu pago en este momento. Espera 1 minuto y vuelve a intentarlo.');
                     if (!response.ok || !data.ok) {
                       throw new Error((data && data.message) ? data.message : 'No se pudieron guardar los datos del pago.');
                     }
@@ -5429,10 +5467,10 @@ include __DIR__ . "/includes/header.php";
                     if (checkoutWindow && !checkoutWindow.closed) {
                       checkoutWindow.close();
                     }
-                    const rawErrorMessage = String((error && error.message) || '').trim();
-                    const errorMessage = rawErrorMessage.toLowerCase() === 'failed to fetch'
-                      ? 'No se pudo conectar con el servidor para validar el pago. Vuelve a intentarlo en unos segundos.'
-                      : (rawErrorMessage || 'No se pudo validar el pago por respuesta del servidor.');
+                    const errorMessage = normalizeApiRequestErrorMessage(
+                      error,
+                      'No pudimos validar tu pago en este momento. Espera 1 minuto y vuelve a intentarlo.'
+                    );
                     setPaymentAlert(errorMessage, 'danger');
                     renderPaymentServerFailure(errorMessage, reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
                     setPaymentFormDisabled(false);
