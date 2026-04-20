@@ -2984,6 +2984,7 @@ include __DIR__ . "/includes/header.php";
           }
           closePaymentModal(true);
           resetCheckoutState();
+            showToast('Tu recarga continuará con el proceso normal. El saldo a favor no fue activado.', 'success');
         }
       }
     ];
