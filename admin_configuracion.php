@@ -1175,10 +1175,11 @@ $googleCallbackUrl = google_oauth_callback_url();
                 if ($bankPreviewBaseUrl === '') {
                   $bankPreviewBaseUrl = 'https://pagonorte.net';
                 }
+                $bankPreviewPassword = trim((string) ($cfg['ff_bank_clave'] ?? '')) !== '' ? '********' : '';
                 $bankPreviewUrl = store_config_build_bank_movements_url($bankPreviewBaseUrl, [
                   'posicion' => trim((string) ($cfg['ff_bank_posicion'] ?? '')),
                   'token' => trim((string) ($cfg['ff_bank_token'] ?? '')),
-                  'password' => trim((string) ($cfg['ff_bank_clave'] ?? '')),
+                  'password' => $bankPreviewPassword,
                 ]);
               ?>
 
@@ -1212,13 +1213,13 @@ $googleCallbackUrl = google_oauth_callback_url();
                   </div>
                   <div class="col-md-4">
                     <label class="form-label">Clave</label>
-                    <input type="text" name="ff_bank_clave" value="<?= htmlspecialchars($cfg['ff_bank_clave'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" pattern="^[A-Za-z0-9._!-]+$">
+                    <input type="password" name="ff_bank_clave" value="<?= htmlspecialchars($cfg['ff_bank_clave'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" pattern="^[A-Za-z0-9._!-]+$" autocomplete="new-password" spellcheck="false">
                     <div class="form-text">Solo letras, números y estos caracteres especiales: . - _ ! sin espacios.</div>
                   </div>
                   <div class="col-12">
                     <label class="form-label">Enlace final enviado a la API</label>
                     <input type="text" id="bank-api-preview-url" value="<?= htmlspecialchars($bankPreviewUrl, ENT_QUOTES, 'UTF-8') ?>" class="form-control" readonly onclick="this.select()">
-                    <div class="form-text">Este campo es solo de lectura y se actualiza automáticamente con el enlace exacto que se enviará a la API bancaria.</div>
+                    <div class="form-text">Este campo es solo de lectura y se actualiza automáticamente. La clave se oculta por seguridad.</div>
                   </div>
                 </div>
               </div>
@@ -1254,10 +1255,11 @@ $googleCallbackUrl = google_oauth_callback_url();
                       ? baseUrl
                       : (baseUrl + '/recargas/movimientos.jsp');
                   }
+                  const maskedPassword = String(passwordInput.value || '').trim() !== '' ? '********' : '';
                   const query = new URLSearchParams({
                     posicion: String(positionInput.value || '').trim(),
                     token: String(tokenInput.value || '').trim(),
-                    password: String(passwordInput.value || '').trim()
+                    password: maskedPassword
                   });
                   previewInput.value = endpointUrl + '?' + query.toString();
                 };
