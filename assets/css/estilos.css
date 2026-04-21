@@ -639,6 +639,10 @@ body {
   box-shadow: 0 0 26px rgba(244, 114, 182, 0.22);
 }
 
+.social-footer-link-tiktok:hover {
+  box-shadow: 0 0 26px rgba(255, 255, 255, 0.18);
+}
+
 .floating-social-stack {
   position: fixed;
   right: 1rem;

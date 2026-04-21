@@ -1128,6 +1128,10 @@ $googleCallbackUrl = google_oauth_callback_url();
                   <input type="url" name="instagram" value="<?= htmlspecialchars($cfg['instagram'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="https://instagram.com/tucuenta">
                 </div>
                 <div class="col-md-6">
+                  <label class="form-label">TikTok</label>
+                  <input type="url" name="tiktok" value="<?= htmlspecialchars($cfg['tiktok'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="https://tiktok.com/@tuusuario">
+                </div>
+                <div class="col-md-6">
                   <label class="form-label">Whatsapp</label>
                   <input type="tel" name="whatsapp" value="<?= htmlspecialchars($cfg['whatsapp'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="+584121234567" pattern="^\+?[1-9]\d{9,14}$" inputmode="tel">
                   <div class="form-text">Ingresa solo el número en formato internacional, con código de país y sin enlaces. Ejemplo: +584121234567.</div>

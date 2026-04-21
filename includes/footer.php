@@ -26,6 +26,7 @@ if (!in_array($rechargeNotificationPosition, $allowedRechargeNotificationPositio
 
 $facebookUrl = store_config_normalize_social_url(store_config_get('facebook', ''));
 $instagramUrl = store_config_normalize_social_url(store_config_get('instagram', ''));
+$tiktokUrl = store_config_normalize_social_url(store_config_get('tiktok', ''));
 $whatsappValue = store_config_get('whatsapp', '');
 $whatsappMessage = store_config_get('mensaje_whatsapp', '');
 $whatsappFloatingEnabled = store_config_get('whatsapp_flotante_activo', '1') !== '0';
@@ -37,6 +38,7 @@ $googleAnalyticsScript = trim(store_config_get('google_analytics_script', ''));
 
 $hasFacebook = store_config_is_valid_social_url($facebookUrl);
 $hasInstagram = store_config_is_valid_social_url($instagramUrl);
+$hasTiktok = store_config_is_valid_social_url($tiktokUrl);
 $hasWhatsapp = $whatsappFloatingEnabled && $whatsappUrl !== '';
 $hasWhatsappChannel = $whatsappChannelFloatingEnabled && store_config_is_valid_social_url($whatsappChannelUrl);
 
@@ -821,7 +823,7 @@ $rechargeNotificationsScript = str_replace('__LIVE_RECHARGE_ENABLED__', $recharg
 ?>
     </div>
   </div>
-  <?php if ($hasFacebook || $hasInstagram): ?>
+  <?php if ($hasFacebook || $hasInstagram || $hasTiktok): ?>
     <div class="social-footer-shell social-footer-shell-public mt-5" role="contentinfo">
       <div class="social-footer-card">
         <p class="social-footer-kicker mb-2">Redes oficiales</p>
@@ -840,6 +842,14 @@ $rechargeNotificationsScript = str_replace('__LIVE_RECHARGE_ENABLED__', $recharg
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" role="img"><rect x="3.5" y="3.5" width="17" height="17" rx="5"></rect><circle cx="12" cy="12" r="4"></circle><circle cx="17.3" cy="6.7" r="1"></circle></svg>
               </span>
               <span>Instagram</span>
+            </a>
+          <?php endif; ?>
+          <?php if ($hasTiktok): ?>
+            <a href="<?php echo htmlspecialchars($tiktokUrl, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer" class="social-footer-link social-footer-link-tiktok" aria-label="TikTok">
+              <span class="social-footer-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="currentColor" role="img"><path d="M14.57 3c.2 1.68 1.17 3.24 2.62 4.14.93.58 2 .88 3.08.88V11a8.1 8.1 0 0 1-3.37-.73v5.16a6.53 6.53 0 1 1-6.53-6.53c.28 0 .57.02.84.06v3.16a3.52 3.52 0 1 0 2.84 3.44V3h2.52Z"/></svg>
+              </span>
+              <span>TikTok</span>
             </a>
           <?php endif; ?>
         </div>

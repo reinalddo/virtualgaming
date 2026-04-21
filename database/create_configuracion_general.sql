@@ -39,6 +39,7 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('recarga_notificaciones_logo', '', 'Ruta del logo usado en la notificación flotante de recargas'),
 ('facebook', '', 'URL de Facebook de la tienda'),
 ('instagram', '', 'URL de Instagram de la tienda'),
+('tiktok', '', 'URL de TikTok de la tienda'),
 ('whatsapp', '', 'Número o enlace de WhatsApp de la tienda'),
 ('mensaje_whatsapp', '', 'Mensaje predefinido para el botón flotante de WhatsApp'),
 ('whatsapp_flotante_activo', '1', 'Activa o desactiva el botón flotante de WhatsApp en el sitio público'),

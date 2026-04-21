@@ -1872,6 +1872,7 @@ switch ($seccion) {
             if ($activeTab === 'sociales') {
                 $facebook = store_config_normalize_social_url((string) ($_POST['facebook'] ?? ''));
                 $instagram = store_config_normalize_social_url((string) ($_POST['instagram'] ?? ''));
+                $tiktok = store_config_normalize_social_url((string) ($_POST['tiktok'] ?? ''));
                 $whatsapp = store_config_normalize_whatsapp((string) ($_POST['whatsapp'] ?? ''));
                 $whatsappMessage = store_config_normalize_whatsapp_message((string) ($_POST['mensaje_whatsapp'] ?? ''));
                 $whatsappFloatingEnabled = isset($_POST['whatsapp_flotante_activo']) ? '1' : '0';
@@ -1892,6 +1893,12 @@ switch ($seccion) {
                     admin_redirect('configuracion', ['tab' => 'sociales']);
                 }
 
+                if ($tiktok !== '' && !store_config_is_valid_social_url($tiktok)) {
+                    admin_set_flash('error', 'El enlace de TikTok no es válido. Usa una URL completa con http:// o https://');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'sociales']);
+                }
+
                 if ($whatsapp !== '' && !store_config_is_valid_whatsapp($whatsapp)) {
                     admin_set_flash('error', 'El número de WhatsApp debe incluir código de país y número telefónico, por ejemplo: +584121234567.');
                     define('ADMIN_CONFIG_POST_HANDLED', true);
@@ -1906,6 +1913,7 @@ switch ($seccion) {
 
                 store_config_upsert('facebook', $facebook);
                 store_config_upsert('instagram', $instagram);
+                store_config_upsert('tiktok', $tiktok);
                 store_config_upsert('whatsapp', $whatsapp);
                 store_config_upsert('mensaje_whatsapp', $whatsappMessage);
                 store_config_upsert('whatsapp_flotante_activo', $whatsappFloatingEnabled);
