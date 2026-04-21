@@ -1172,6 +1172,26 @@ function active_currencies_for_checkout(): array {
     return $cached;
 }
 
+function active_currency_for_code(?string $currencyCode): ?array {
+    $rawCode = strtoupper(trim((string) $currencyCode));
+    $normalizedCode = normalize_currency_code($currencyCode);
+    if ($rawCode === '' && $normalizedCode === '') {
+        return null;
+    }
+
+    foreach (active_currencies_for_checkout() as $currency) {
+        $currencyRawCode = strtoupper(trim((string) ($currency['clave'] ?? '')));
+        if ($rawCode !== '' && $currencyRawCode === $rawCode) {
+            return $currency;
+        }
+        if ($normalizedCode !== '' && normalize_currency_code($currencyRawCode) === $normalizedCode) {
+            return $currency;
+        }
+    }
+
+    return null;
+}
+
 function currency_convert_amount_between_codes(float $amount, ?string $fromCode, ?string $toCode): float {
     $fromNormalized = currency_normalize_code((string) $fromCode);
     $toNormalized = currency_normalize_code((string) $toCode);
@@ -1184,7 +1204,7 @@ function currency_convert_amount_between_codes(float $amount, ?string $fromCode,
         return round($amount, 2);
     }
 
-    $toCurrency = currency_find_by_code($toNormalized);
+    $toCurrency = active_currency_for_code($toCode);
     if ($toCurrency === null) {
         return round($amount, 2);
     }
@@ -1193,7 +1213,7 @@ function currency_convert_amount_between_codes(float $amount, ?string $fromCode,
         return currency_apply_amount_rule($amount, $toCurrency);
     }
 
-    $fromCurrency = currency_find_by_code($fromNormalized);
+    $fromCurrency = active_currency_for_code($fromCode);
     if ($fromCurrency === null) {
         return currency_apply_amount_rule($amount, $toCurrency);
     }
@@ -1241,7 +1261,7 @@ function preferred_binance_checkout_currency(): ?array {
         }
     }
 
-    foreach (['USD', 'EUR', 'BRL', 'COP', 'MXN', 'CLP', 'PEN'] as $preferredCode) {
+    foreach (['USDT', 'USD', 'EUR', 'BRL', 'COP', 'MXN', 'CLP', 'PEN'] as $preferredCode) {
         if (isset($byCode[$preferredCode])) {
             return $byCode[$preferredCode];
         }
@@ -1256,6 +1276,10 @@ function resolve_binance_checkout_money(array $order): array {
     $targetCurrencyCode = normalize_currency_code((string) ($targetCurrency['clave'] ?? $orderCurrencyCode));
     $sourceAmount = payment_difference_normalize_amount((float) ($order['precio'] ?? 0));
     $checkoutAmount = $sourceAmount;
+
+    if (!is_array($targetCurrency)) {
+        $targetCurrency = active_currency_for_code($targetCurrencyCode);
+    }
 
     if ($targetCurrencyCode !== '' && $orderCurrencyCode !== '' && $targetCurrencyCode !== $orderCurrencyCode) {
         $checkoutAmount = currency_convert_amount_between_codes($sourceAmount, $orderCurrencyCode, $targetCurrencyCode);

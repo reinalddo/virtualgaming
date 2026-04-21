@@ -2455,6 +2455,105 @@ include __DIR__ . "/includes/header.php";
     return currencyEntry ? Boolean(currencyEntry.mostrar_decimales) : fallback;
   }
 
+  function normalizeCurrencyAlias(currencyCode) {
+    const normalized = String(currencyCode || '').trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
+    if (!normalized) {
+      return '';
+    }
+
+    if (
+      normalized === 'BS'
+      || normalized === 'BSS'
+      || normalized.includes('VES')
+      || normalized.includes('VEF')
+      || normalized.includes('BOLIVAR')
+      || normalized.includes('BOLIVARES')
+      || normalized.endsWith('BS')
+    ) {
+      return 'VES';
+    }
+
+    return normalized;
+  }
+
+  function findCurrencyEntryByCode(currencyCode) {
+    const rawTarget = String(currencyCode || '').trim().toUpperCase();
+    const normalizedTarget = normalizeCurrencyAlias(currencyCode);
+    return Object.values(monedas).find((item) => {
+      const rawCode = String(item && item.clave ? item.clave : '').trim().toUpperCase();
+      return (rawTarget !== '' && rawCode === rawTarget) || (normalizedTarget !== '' && normalizeCurrencyAlias(rawCode) === normalizedTarget);
+    }) || null;
+  }
+
+  function resolvePreferredBinanceCurrencyEntry() {
+    const currencyEntries = Object.values(monedas || {});
+    if (!currencyEntries.length) {
+      return null;
+    }
+
+    for (const preferredCode of ['USDT', 'USD', 'EUR', 'BRL', 'COP', 'MXN', 'CLP', 'PEN']) {
+      const entry = findCurrencyEntryByCode(preferredCode);
+      if (entry) {
+        return entry;
+      }
+    }
+
+    return currencyEntries.find((entry) => normalizeCurrencyAlias(entry && entry.clave ? entry.clave : '') !== 'VES') || currencyEntries[0] || null;
+  }
+
+  function convertCurrencyAmountBetweenCodes(amount, fromCode, toCode) {
+    const numericAmount = Number(amount || 0);
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      return 0;
+    }
+
+    const targetEntry = findCurrencyEntryByCode(toCode);
+    if (!targetEntry) {
+      return numericAmount;
+    }
+
+    const fromNormalized = normalizeCurrencyAlias(fromCode);
+    const toNormalized = normalizeCurrencyAlias(toCode);
+    if (fromNormalized !== '' && fromNormalized === toNormalized) {
+      return normalizeCurrencyAmount(numericAmount, Boolean(targetEntry.mostrar_decimales));
+    }
+
+    const sourceEntry = findCurrencyEntryByCode(fromCode);
+    if (!sourceEntry) {
+      return normalizeCurrencyAmount(numericAmount, Boolean(targetEntry.mostrar_decimales));
+    }
+
+    const sourceRate = Number(sourceEntry.tasa || 0);
+    const targetRate = Number(targetEntry.tasa || 0);
+    if (!Number.isFinite(sourceRate) || sourceRate <= 0 || !Number.isFinite(targetRate) || targetRate <= 0) {
+      return normalizeCurrencyAmount(numericAmount, Boolean(targetEntry.mostrar_decimales));
+    }
+
+    const baseAmount = numericAmount / sourceRate;
+    return normalizeCurrencyAmount(baseAmount * targetRate, Boolean(targetEntry.mostrar_decimales));
+  }
+
+  function resolveBinanceDisplayMoney(pack) {
+    const targetEntry = resolvePreferredBinanceCurrencyEntry();
+    const sourceCurrency = String((pack && pack.moneda) || monedaActualClave || '').trim().toUpperCase();
+    const sourceAmount = Number(pack && pack.priceValue ? pack.priceValue : 0);
+    if (!targetEntry) {
+      return {
+        currency: sourceCurrency,
+        amount: normalizeCurrencyAmount(sourceAmount, Boolean(pack && pack.showDecimals)),
+        text: formatPaymentDifferenceMoney(sourceCurrency, sourceAmount, pack && pack.showDecimals),
+      };
+    }
+
+    const targetCurrency = String(targetEntry.clave || '').trim().toUpperCase();
+    const amount = convertCurrencyAmountBetweenCodes(sourceAmount, sourceCurrency, targetCurrency);
+    return {
+      currency: targetCurrency,
+      amount,
+      text: formatPaymentDifferenceMoney(targetCurrency, amount, Boolean(targetEntry.mostrar_decimales)),
+    };
+  }
+
   function formatPaymentDifferenceMoney(currencyCode, amount, showDecimals = null) {
     const useDecimals = showDecimals === null ? getCurrencyShowDecimals(currencyCode) : Boolean(showDecimals);
     return `${String(currencyCode || '').trim().toUpperCase() || monedaActualClave} ${formatCurrencyAmount(amount, useDecimals)}`;
@@ -3321,7 +3420,12 @@ include __DIR__ . "/includes/header.php";
   }
 
   function paymentBinanceAccordionMarkup() {
-    return `<div class="payment-mode-item-card payment-mode-item-card-points"><div class="payment-mode-item-card-title">${escapePaymentHtml(binancePayButtonLabel)}</div><div class="payment-mode-item-details">Paga de forma segura desde CoinPal usando tu cuenta de Binance Pay. Abriremos el checkout externo y esta ventana seguirá monitoreando la confirmación automáticamente.</div></div>`;
+    const binanceMoney = resolveBinanceDisplayMoney(activePaymentOrder && activePaymentOrder.pack ? activePaymentOrder.pack : null);
+    const totalText = escapePaymentHtml(String((binanceMoney && binanceMoney.text) || ''));
+    const totalMarkup = totalText !== ''
+      ? `<div class="payment-mode-item-currency">Total estimado en Binance Pay: ${totalText}</div>`
+      : '';
+    return `<div class="payment-mode-item-card payment-mode-item-card-points"><div class="payment-mode-item-card-title">${escapePaymentHtml(binancePayButtonLabel)}</div>${totalMarkup}<div class="payment-mode-item-details">Paga de forma segura desde CoinPal usando tu cuenta de Binance Pay. Abriremos el checkout externo y esta ventana seguirá monitoreando la confirmación automáticamente.</div></div>`;
   }
 
   function renderPaymentModeOptions() {
