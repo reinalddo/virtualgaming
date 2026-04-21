@@ -15,18 +15,11 @@ require_once __DIR__ . '/../includes/header.php';
 $ordersApiUrl = app_path('/api/pedidos.php');
 
 $statuses = ['pendiente','pagado','enviado','cancelado'];
+$ordersPerPage = 20;
 $ordersByStatus = array_fill_keys($statuses, []);
-
-$ordersRes = $mysqli->query("SELECT * FROM pedidos ORDER BY creado_en DESC");
-if ($ordersRes) {
-    while ($row = $ordersRes->fetch_assoc()) {
-        $estado = $row['estado'] ?? 'pendiente';
-        if (!isset($ordersByStatus[$estado])) {
-            $ordersByStatus[$estado] = [];
-        }
-        $ordersByStatus[$estado][] = $row;
-    }
-}
+$statusTotals = array_fill_keys($statuses, 0);
+$statusPages = array_fill_keys($statuses, 1);
+$statusTotalPages = array_fill_keys($statuses, 1);
 
 function format_money($amount): string {
     return number_format((float)$amount, 2, '.', ',');
@@ -296,6 +289,227 @@ function order_normalize_date_query($value): string {
   return preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) === 1 ? $date : '';
 }
 
+function order_normalize_search_query($value): string {
+  $search = trim((string) $value);
+  if (preg_match('/^#(\d+)$/', $search, $matches) === 1) {
+    return $matches[1];
+  }
+
+  return $search;
+}
+
+function orders_admin_page_param(string $status): string {
+  return 'page_' . $status;
+}
+
+function orders_admin_bind_params(mysqli_stmt $stmt, string $types, array $params): void {
+  if ($types === '' || $params === []) {
+    return;
+  }
+
+  $bindParams = [$types];
+  foreach ($params as $index => $value) {
+    $bindParams[] = &$params[$index];
+  }
+
+  call_user_func_array([$stmt, 'bind_param'], $bindParams);
+}
+
+function orders_admin_fetch_all(mysqli $mysqli, string $sql, string $types = '', array $params = []): array {
+  $stmt = $mysqli->prepare($sql);
+  if (!$stmt) {
+    return [];
+  }
+
+  orders_admin_bind_params($stmt, $types, $params);
+  $stmt->execute();
+  $result = $stmt->get_result();
+  $rows = $result instanceof mysqli_result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+  $stmt->close();
+
+  return is_array($rows) ? $rows : [];
+}
+
+function orders_admin_fetch_one(mysqli $mysqli, string $sql, string $types = '', array $params = []): ?array {
+  $rows = orders_admin_fetch_all($mysqli, $sql, $types, $params);
+  return $rows[0] ?? null;
+}
+
+function orders_admin_fetch_value(mysqli $mysqli, string $sql, string $types = '', array $params = [], string $column = 'total'): int {
+  $row = orders_admin_fetch_one($mysqli, $sql, $types, $params);
+  return (int) ($row[$column] ?? 0);
+}
+
+function orders_admin_filter_parts(?string $status, string $search, string $dateFrom, string $dateTo): array {
+  $clauses = [];
+  $types = '';
+  $params = [];
+
+  if ($status !== null && $status !== '') {
+    $clauses[] = 'estado = ?';
+    $types .= 's';
+    $params[] = $status;
+  }
+
+  if ($dateFrom !== '') {
+    $clauses[] = 'DATE(creado_en) >= ?';
+    $types .= 's';
+    $params[] = $dateFrom;
+  }
+
+  if ($dateTo !== '') {
+    $clauses[] = 'DATE(creado_en) <= ?';
+    $types .= 's';
+    $params[] = $dateTo;
+  }
+
+  $normalizedSearch = order_normalize_search_query($search);
+  if ($normalizedSearch !== '') {
+    $searchClauses = [];
+    $searchTypes = '';
+    $searchParams = [];
+
+    if (ctype_digit($normalizedSearch)) {
+      $searchClauses[] = 'id = ?';
+      $searchTypes .= 'i';
+      $searchParams[] = (int) $normalizedSearch;
+    }
+
+    $searchLike = '%' . $normalizedSearch . '%';
+    $searchExpressions = [
+      'CAST(id AS CHAR)',
+      'user_identifier',
+      'email',
+      'numero_referencia',
+      'telefono_contacto',
+      'juego_nombre',
+      'paquete_nombre',
+      'paquete_cantidad',
+      'moneda',
+      'cupon',
+      'estado',
+      'CAST(precio AS CHAR)',
+      'binance_pay_reference',
+      'binance_pay_order_no',
+      'binance_pay_request_id',
+      'binance_pay_status',
+      'recargas_api_pedido_id',
+      'recargas_api_estado',
+      'ff_api_mensaje',
+      'recargas_api_codigo_entregado',
+      'player_fields_json',
+      'recargas_api_historial_json',
+      'binance_pay_historial_json',
+    ];
+
+    foreach ($searchExpressions as $expression) {
+      $searchClauses[] = $expression . ' LIKE ?';
+      $searchTypes .= 's';
+      $searchParams[] = $searchLike;
+    }
+
+    $clauses[] = '(' . implode(' OR ', $searchClauses) . ')';
+    $types .= $searchTypes;
+    $params = array_merge($params, $searchParams);
+  }
+
+  return [
+    'clauses' => $clauses,
+    'types' => $types,
+    'params' => $params,
+  ];
+}
+
+function orders_admin_where_sql(array $clauses): string {
+  return $clauses ? ' WHERE ' . implode(' AND ', $clauses) : '';
+}
+
+function orders_admin_query_string(array $overrides = [], array $remove = []): string {
+  $params = $_GET;
+
+  foreach ($remove as $key) {
+    unset($params[$key]);
+  }
+
+  foreach ($overrides as $key => $value) {
+    if ($value === null || $value === '') {
+      unset($params[$key]);
+      continue;
+    }
+
+    $params[$key] = (string) $value;
+  }
+
+  $query = http_build_query($params);
+  return $query !== '' ? '?' . $query : '';
+}
+
+function orders_admin_summary_text(int $rendered, int $total, int $page, int $totalPages): string {
+  if ($total <= 0) {
+    return 'Total: 0 pedidos';
+  }
+
+  $summary = 'Mostrando ' . $rendered . ' de ' . $total . ' pedidos';
+  if ($totalPages > 1) {
+    $summary .= ' | Página ' . $page . ' de ' . $totalPages;
+  }
+
+  return $summary;
+}
+
+function orders_admin_render_pagination(string $status, int $currentPage, int $totalPages): string {
+  if ($totalPages <= 1) {
+    return '';
+  }
+
+  $pageParam = orders_admin_page_param($status);
+  $startPage = max(1, $currentPage - 2);
+  $endPage = min($totalPages, $currentPage + 2);
+
+  if (($endPage - $startPage) < 4) {
+    $missing = 4 - ($endPage - $startPage);
+    $startPage = max(1, $startPage - $missing);
+    $endPage = min($totalPages, $endPage + $missing);
+  }
+
+  $html = '<nav class="orders-pagination" aria-label="Paginación ' . htmlspecialchars(order_status_label($status), ENT_QUOTES, 'UTF-8') . '">';
+  $html .= '<div class="orders-pagination-links">';
+
+  if ($currentPage > 1) {
+    $prevUrl = app_path('/admin/pedidos') . orders_admin_query_string([
+      'tab' => $status,
+      $pageParam => $currentPage - 1,
+    ]);
+    $html .= '<a class="orders-pagination-link" href="' . htmlspecialchars($prevUrl, ENT_QUOTES, 'UTF-8') . '">Anterior</a>';
+  }
+
+  for ($page = $startPage; $page <= $endPage; $page++) {
+    if ($page === $currentPage) {
+      $html .= '<span class="orders-pagination-link is-active">' . $page . '</span>';
+      continue;
+    }
+
+    $pageUrl = app_path('/admin/pedidos') . orders_admin_query_string([
+      'tab' => $status,
+      $pageParam => $page,
+    ]);
+    $html .= '<a class="orders-pagination-link" href="' . htmlspecialchars($pageUrl, ENT_QUOTES, 'UTF-8') . '">' . $page . '</a>';
+  }
+
+  if ($currentPage < $totalPages) {
+    $nextUrl = app_path('/admin/pedidos') . orders_admin_query_string([
+      'tab' => $status,
+      $pageParam => $currentPage + 1,
+    ]);
+    $html .= '<a class="orders-pagination-link" href="' . htmlspecialchars($nextUrl, ENT_QUOTES, 'UTF-8') . '">Siguiente</a>';
+  }
+
+  $html .= '</div>';
+  $html .= '</nav>';
+
+  return $html;
+}
+
 function order_search_index(array $order): string {
   $playerFieldLines = order_player_fields_lines($order);
   $binanceDetailLines = order_binance_detail_lines($order);
@@ -360,28 +574,98 @@ function order_status_button_style(string $status, bool $isActive = false): stri
 }
 
 $requestedOrderId = max(0, (int) ($_GET['pedido'] ?? 0));
-$initialOrderSearch = trim((string) ($_GET['order_search'] ?? ''));
+$initialOrderSearch = order_normalize_search_query($_GET['order_search'] ?? '');
 if ($requestedOrderId > 0 && $initialOrderSearch === '') {
   $initialOrderSearch = (string) $requestedOrderId;
 }
 $initialDateFrom = order_normalize_date_query($_GET['date_from'] ?? '');
 $initialDateTo = order_normalize_date_query($_GET['date_to'] ?? '');
+$countFilterParts = orders_admin_filter_parts(null, $initialOrderSearch, $initialDateFrom, $initialDateTo);
+$countSql = 'SELECT estado, COUNT(*) AS total FROM pedidos' . orders_admin_where_sql($countFilterParts['clauses']) . ' GROUP BY estado';
+foreach (orders_admin_fetch_all($mysqli, $countSql, $countFilterParts['types'], $countFilterParts['params']) as $statusRow) {
+  $statusKey = (string) ($statusRow['estado'] ?? '');
+  if (isset($statusTotals[$statusKey])) {
+    $statusTotals[$statusKey] = (int) ($statusRow['total'] ?? 0);
+  }
+}
+
+$targetOrder = null;
+if ($requestedOrderId > 0) {
+  $targetOrder = orders_admin_fetch_one(
+    $mysqli,
+    'SELECT id, estado, creado_en FROM pedidos WHERE id = ? LIMIT 1',
+    'i',
+    [$requestedOrderId]
+  );
+}
+
 $initialTab = trim((string) ($_GET['tab'] ?? ''));
 if (!in_array($initialTab, $statuses, true)) {
   $initialTab = '';
 }
-if ($requestedOrderId > 0 && $initialTab === '') {
-  foreach ($ordersByStatus as $statusKey => $statusOrders) {
-    foreach ($statusOrders as $statusOrder) {
-      if ((int) ($statusOrder['id'] ?? 0) === $requestedOrderId) {
-        $initialTab = $statusKey;
-        break 2;
-      }
+if ($targetOrder && $initialTab === '') {
+  $targetStatus = trim((string) ($targetOrder['estado'] ?? ''));
+  if (in_array($targetStatus, $statuses, true)) {
+    $initialTab = $targetStatus;
+  }
+}
+if ($initialTab === '') {
+  foreach ($statuses as $statusKey) {
+    if (($statusTotals[$statusKey] ?? 0) > 0) {
+      $initialTab = $statusKey;
+      break;
     }
   }
 }
 if ($initialTab === '') {
   $initialTab = 'pendiente';
+}
+
+foreach ($statuses as $statusKey) {
+  $pageParam = orders_admin_page_param($statusKey);
+  $statusPages[$statusKey] = max(1, (int) ($_GET[$pageParam] ?? 1));
+}
+
+if ($targetOrder) {
+  $targetStatus = trim((string) ($targetOrder['estado'] ?? ''));
+  if (in_array($targetStatus, $statuses, true)) {
+    $targetPageParam = orders_admin_page_param($targetStatus);
+    if (!isset($_GET[$targetPageParam])) {
+      $positionFilterParts = orders_admin_filter_parts($targetStatus, $initialOrderSearch, $initialDateFrom, $initialDateTo);
+      $positionFilterParts['clauses'][] = '(creado_en > ? OR (creado_en = ? AND id >= ?))';
+      $positionFilterParts['types'] .= 'ssi';
+      $positionFilterParts['params'][] = (string) ($targetOrder['creado_en'] ?? '');
+      $positionFilterParts['params'][] = (string) ($targetOrder['creado_en'] ?? '');
+      $positionFilterParts['params'][] = (int) ($targetOrder['id'] ?? 0);
+
+      $positionSql = 'SELECT COUNT(*) AS total FROM pedidos' . orders_admin_where_sql($positionFilterParts['clauses']);
+      $position = orders_admin_fetch_value($mysqli, $positionSql, $positionFilterParts['types'], $positionFilterParts['params']);
+      if ($position > 0) {
+        $statusPages[$targetStatus] = max(1, (int) ceil($position / $ordersPerPage));
+      }
+    }
+  }
+}
+
+foreach ($statuses as $statusKey) {
+  $total = (int) ($statusTotals[$statusKey] ?? 0);
+  $totalPages = $total > 0 ? (int) ceil($total / $ordersPerPage) : 1;
+  $statusTotalPages[$statusKey] = max(1, $totalPages);
+  $statusPages[$statusKey] = min(max(1, $statusPages[$statusKey]), $statusTotalPages[$statusKey]);
+
+  if ($total === 0) {
+    $ordersByStatus[$statusKey] = [];
+    continue;
+  }
+
+  $offset = ($statusPages[$statusKey] - 1) * $ordersPerPage;
+  $statusFilterParts = orders_admin_filter_parts($statusKey, $initialOrderSearch, $initialDateFrom, $initialDateTo);
+  $statusSql = 'SELECT * FROM pedidos'
+    . orders_admin_where_sql($statusFilterParts['clauses'])
+    . ' ORDER BY creado_en DESC, id DESC LIMIT ? OFFSET ?';
+  $statusTypes = $statusFilterParts['types'] . 'ii';
+  $statusParams = array_merge($statusFilterParts['params'], [$ordersPerPage, $offset]);
+  $ordersByStatus[$statusKey] = orders_admin_fetch_all($mysqli, $statusSql, $statusTypes, $statusParams);
 }
 ?>
 <main class="container-lg mt-5 mb-5 px-2">
@@ -457,6 +741,34 @@ if ($initialTab === '') {
       border-color: #00ffb3 !important;
       box-shadow: 0 0 0 2px rgba(0, 255, 179, 0.2), 0 0 24px rgba(0, 255, 179, 0.32) !important;
     }
+    .orders-pagination {
+      margin-top: 1.25rem;
+      display: flex;
+      justify-content: center;
+    }
+    .orders-pagination-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+    .orders-pagination-link {
+      min-width: 2.5rem;
+      padding: 0.45rem 0.8rem;
+      border-radius: 999px;
+      border: 1px solid #00fff7;
+      color: #00fff7;
+      background: #181f2a;
+      text-decoration: none;
+      font-weight: 700;
+      text-align: center;
+      box-shadow: 0 0 8px rgba(0, 255, 247, 0.2);
+    }
+    .orders-pagination-link.is-active {
+      color: #181f2a;
+      background: #00fff7;
+      box-shadow: 0 0 12px rgba(0, 255, 247, 0.45);
+    }
   </style>
   <div class="row mb-4">
     <div class="col-12 text-center">
@@ -475,7 +787,8 @@ if ($initialTab === '') {
       <?php endforeach; ?>
     </div>
     <div class="col-12 mt-3">
-      <form id="date-filter-form" class="row g-2 align-items-center justify-content-center" style="margin-bottom:0.5rem;">
+      <form id="date-filter-form" method="get" action="<?= htmlspecialchars(app_path('/admin/pedidos'), ENT_QUOTES, 'UTF-8') ?>" class="row g-2 align-items-center justify-content-center" style="margin-bottom:0.5rem;">
+        <input type="hidden" id="current-tab-input" name="tab" value="<?= htmlspecialchars($initialTab, ENT_QUOTES, 'UTF-8') ?>">
         <div class="col-auto">
           <label class="form-label mb-0" style="color:#00fff7;">Desde:</label>
           <input type="date" id="date-from" name="date_from" class="form-control form-control-sm" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
@@ -501,18 +814,24 @@ if ($initialTab === '') {
 
   <?php foreach ($statuses as $st): ?>
     <?php $list = $ordersByStatus[$st] ?? []; ?>
-    <section data-panel="<?= $st ?>" class="tab-panel mt-6<?= ($st !== ($initialTab ?? 'pendiente')) ? ' hidden' : '' ?>">
+    <section
+      data-panel="<?= $st ?>"
+      data-total-count="<?= (int) ($statusTotals[$st] ?? 0) ?>"
+      data-current-page="<?= (int) ($statusPages[$st] ?? 1) ?>"
+      data-total-pages="<?= (int) ($statusTotalPages[$st] ?? 1) ?>"
+      class="tab-panel mt-6<?= ($st !== ($initialTab ?? 'pendiente')) ? ' hidden' : '' ?>"
+    >
       <div style="border-radius:16px; border:2px solid #00fff7; background:#181f2a; box-shadow:0 0 24px #00fff733; padding:1.5rem; margin-bottom:2rem;">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
           <div style="display:flex; align-items:center; gap:0.75rem;">
             <span style="display:inline-block; height:10px; width:10px; border-radius:50%; background:<?= order_status_color($st) ?>;"></span>
             <h2 style="font-size:1.2em; font-weight:bold; color:#00fff7;">Estado: <?= htmlspecialchars(order_status_label($st)) ?></h2>
           </div>
-          <p data-total-label style="font-size:1em; color:#b2f6ff;">Total: <?= count($list) ?> pedidos</p>
+          <p data-total-label style="font-size:1em; color:#b2f6ff;"><?= htmlspecialchars(orders_admin_summary_text(count($list), (int) ($statusTotals[$st] ?? 0), (int) ($statusPages[$st] ?? 1), (int) ($statusTotalPages[$st] ?? 1)), ENT_QUOTES, 'UTF-8') ?></p>
         </div>
 
-        <?php if (count($list) === 0): ?>
-          <p style="margin-top:1.5rem; color:#b2f6ff; font-size:1em;">No hay pedidos en este estado.</p>
+        <?php if (($statusTotals[$st] ?? 0) === 0): ?>
+          <p style="margin-top:1.5rem; color:#b2f6ff; font-size:1em;">No hay pedidos en este estado con los filtros actuales.</p>
         <?php else: ?>
           <div class="table-responsive d-none d-md-block" style="margin-top:1.5rem;">
             <table class="table align-middle" style="background:#181f2a; color:#00fff7; border-radius:12px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733;">
@@ -685,6 +1004,7 @@ if ($initialTab === '') {
               </div>
             <?php endforeach; ?>
           </div>
+          <?= orders_admin_render_pagination($st, (int) ($statusPages[$st] ?? 1), (int) ($statusTotalPages[$st] ?? 1)) ?>
         <?php endif; ?>
       </div>
     </section>
@@ -716,6 +1036,7 @@ if ($initialTab === '') {
   const dateTo = document.getElementById('date-to');
   const orderSearch = document.getElementById('order-search');
   const clearBtn = document.getElementById('clear-date-filter');
+  const currentTabInput = document.getElementById('current-tab-input');
   const calendarFromBtn = document.getElementById('calendar-from-btn');
   const calendarToBtn = document.getElementById('calendar-to-btn');
 
@@ -757,32 +1078,35 @@ if ($initialTab === '') {
   });
   adjustDateFilterResponsive();
 
-  function applyFilters(){
-    const from = dateFrom.value;
-    const to = dateTo.value;
-    const query = (orderSearch?.value || '').trim().toLowerCase();
+  function buildOrdersUrl(overrides = {}, resetPageParams = false) {
+    const url = new URL(window.location.href);
 
-    document.querySelectorAll('.tab-panel').forEach(panel => {
-      panel.querySelectorAll('[data-order-row], [data-order-card]').forEach(item => {
-        const createdDate = item.dataset.createdDate || '';
-        const searchText = item.dataset.searchText || '';
-        let visible = true;
-
-        if (from && createdDate && createdDate < from) {
-          visible = false;
-        }
-        if (to && createdDate && createdDate > to) {
-          visible = false;
-        }
-        if (query && !searchText.includes(query)) {
-          visible = false;
-        }
-
-        item.style.display = visible ? '' : 'none';
+    if (resetPageParams) {
+      STATUS_ORDER.forEach(status => {
+        url.searchParams.delete(`page_${status}`);
       });
+    }
+
+    Object.entries(overrides).forEach(([key, value]) => {
+      if (value === null || value === undefined || value === '') {
+        url.searchParams.delete(key);
+        return;
+      }
+
+      url.searchParams.set(key, String(value));
     });
 
-    updateTabCounts();
+    return url.toString();
+  }
+
+  function applyFilters(){
+    window.location.href = buildOrdersUrl({
+      date_from: dateFrom ? dateFrom.value : '',
+      date_to: dateTo ? dateTo.value : '',
+      order_search: orderSearch ? orderSearch.value.trim() : '',
+      tab: currentTabInput ? currentTabInput.value : initialTab,
+      pedido: null,
+    }, true);
   }
 
   function highlightTargetOrder() {
@@ -803,11 +1127,6 @@ if ($initialTab === '') {
     e.preventDefault();
     applyFilters();
   });
-
-  if (orderSearch) {
-    orderSearch.addEventListener('input', applyFilters);
-    orderSearch.addEventListener('search', applyFilters);
-  }
 
   clearBtn.addEventListener('click', function(){
     dateFrom.value = '';
@@ -846,6 +1165,10 @@ if ($initialTab === '') {
     if (activeTab) {
       activeTab.classList.add('active','border-cyan-400','text-cyan-200');
     }
+    if (currentTabInput) {
+      currentTabInput.value = tab;
+    }
+    window.history.replaceState({}, '', buildOrdersUrl({ tab }));
     localStorage.setItem('tvg_tab', tab);
   }
   if (dateFrom && serverDateFrom) {
@@ -860,7 +1183,7 @@ if ($initialTab === '') {
 
   const initial = initialTab || localStorage.getItem('tvg_tab') || 'pendiente';
   showTab(initial);
-  applyFilters();
+  updateTabCounts();
   setTimeout(highlightTargetOrder, 120);
   tabs.forEach(btn => btn.addEventListener('click', () => showTab(btn.dataset.tab)));
 
@@ -942,13 +1265,19 @@ if ($initialTab === '') {
 
   function updateTabCounts() {
     panels.forEach(panel => {
-      const source = window.innerWidth >= 768
-        ? Array.from(panel.querySelectorAll('[data-order-row]'))
-        : Array.from(panel.querySelectorAll('[data-order-card]'));
-      const count = source.filter(item => item.style.display !== 'none').length;
+      const renderedRows = panel.querySelectorAll('[data-order-row]').length;
+      const renderedCards = panel.querySelectorAll('[data-order-card]').length;
+      const count = Math.max(renderedRows, renderedCards);
+      const totalCount = parseInt(panel.dataset.totalCount || String(count), 10) || 0;
+      const currentPage = parseInt(panel.dataset.currentPage || '1', 10) || 1;
+      const totalPages = parseInt(panel.dataset.totalPages || '1', 10) || 1;
       const totalLabel = panel.querySelector('[data-total-label]');
       if (totalLabel) {
-        totalLabel.textContent = `Total: ${count} pedidos`;
+        let summary = totalCount > 0 ? `Mostrando ${count} de ${totalCount} pedidos` : 'Total: 0 pedidos';
+        if (totalCount > 0 && totalPages > 1) {
+          summary += ` | Página ${currentPage} de ${totalPages}`;
+        }
+        totalLabel.textContent = summary;
       }
     });
   }
@@ -971,10 +1300,10 @@ if ($initialTab === '') {
       throw new Error(data.message || 'Error');
     }
 
-    moveOrder(orderId, newStatus);
-    refreshDesktopStatusSelects(orderId, newStatus);
-    updateCardStatusButtons(orderId, newStatus);
-    updateTabCounts();
+    window.location.href = buildOrdersUrl({
+      tab: newStatus,
+      pedido: orderId,
+    }, true);
   }
 
   function bindStatusSelectors(){
