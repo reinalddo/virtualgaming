@@ -445,8 +445,21 @@ include __DIR__ . "/includes/header.php";
       <div class="col-md-8">
         <div class="card bg-dark border-info mb-2">
           <div class="card-body">
-            <p class="small text-secondary mb-1">Paquete seleccionado</p>
-            <p id="selected-pack" class="fw-bold text-white">Ninguno</p>
+            <div class="purchase-summary-head">
+              <div class="purchase-summary-pack-copy">
+                <p class="small text-secondary mb-1">Paquete seleccionado</p>
+                <p id="selected-pack" class="fw-bold text-white mb-0">Ninguno</p>
+              </div>
+              <div class="purchase-quantity-panel">
+                <label for="order-quantity" class="purchase-quantity-label">Cantidad a comprar</label>
+                <div class="purchase-quantity-stepper">
+                  <button type="button" id="order-quantity-decrease" class="purchase-quantity-btn" aria-label="Disminuir cantidad" disabled>-</button>
+                  <input type="number" id="order-quantity" min="1" step="1" value="1" inputmode="numeric" class="purchase-quantity-input" disabled>
+                  <button type="button" id="order-quantity-increase" class="purchase-quantity-btn" aria-label="Aumentar cantidad" disabled>+</button>
+                </div>
+                <div id="order-quantity-help" class="purchase-quantity-help">Minimo 1 recarga.</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -2150,6 +2163,108 @@ include __DIR__ . "/includes/header.php";
     overflow: hidden;
   }
 
+  .purchase-summary-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(15.5rem, 17rem);
+    gap: 1rem;
+    align-items: start;
+  }
+
+  .purchase-summary-pack-copy {
+    min-width: 0;
+  }
+
+  .purchase-quantity-panel {
+    justify-self: end;
+    width: 100%;
+    max-width: 17rem;
+    padding: 0.9rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(var(--theme-button-primary-rgb), 0.28);
+    background: linear-gradient(180deg, rgba(var(--theme-button-surface-rgb), 0.82), rgba(var(--theme-bg-main-rgb), 0.94));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  }
+
+  .purchase-quantity-label {
+    display: block;
+    margin-bottom: 0.55rem;
+    color: var(--theme-button-primary);
+    font-size: 0.84rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .purchase-quantity-stepper {
+    display: grid;
+    grid-template-columns: 3.25rem minmax(0, 1fr) 3.25rem;
+    gap: 0.55rem;
+    align-items: center;
+  }
+
+  .purchase-quantity-btn,
+  .purchase-quantity-input {
+    border-radius: 0.9rem;
+    border: 1px solid rgba(var(--theme-button-primary-rgb), 0.65);
+  }
+
+  .purchase-quantity-btn {
+    min-height: 4rem;
+    padding: 0;
+    background: linear-gradient(180deg, rgba(var(--theme-button-primary-rgb), 0.22), rgba(var(--theme-button-primary-rgb), 0.1));
+    color: var(--theme-button-primary);
+    font-size: 1.9rem;
+    font-weight: 800;
+    line-height: 1;
+    box-shadow: 0 0.75rem 1.75rem rgba(0, 0, 0, 0.2);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
+  }
+
+  .purchase-quantity-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 1rem 2rem rgba(var(--theme-button-primary-rgb), 0.18);
+    border-color: rgba(var(--theme-button-primary-rgb), 0.95);
+  }
+
+  .purchase-quantity-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  .purchase-quantity-input {
+    min-height: 4rem;
+    width: 100%;
+    padding: 0.55rem 0.75rem;
+    background: rgba(var(--theme-bg-main-rgb), 0.88);
+    color: var(--theme-price-text);
+    font-size: 1.65rem;
+    font-weight: 800;
+    text-align: center;
+    letter-spacing: 0.04em;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+    appearance: textfield;
+  }
+
+  .purchase-quantity-input:focus {
+    outline: none;
+    border-color: rgba(var(--theme-button-primary-rgb), 0.98);
+    box-shadow: 0 0 0 0.2rem rgba(var(--theme-button-primary-rgb), 0.14);
+  }
+
+  .purchase-quantity-input::-webkit-outer-spin-button,
+  .purchase-quantity-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  .purchase-quantity-help {
+    margin-top: 0.55rem;
+    color: var(--theme-text-muted);
+    font-size: 0.82rem;
+    line-height: 1.35;
+  }
+
   .pack-card {
     min-height: 15rem;
     position: relative;
@@ -2283,6 +2398,30 @@ include __DIR__ . "/includes/header.php";
   }
 
   @media (max-width: 575.98px) {
+    .purchase-summary-head {
+      grid-template-columns: 1fr;
+    }
+
+    .purchase-quantity-panel {
+      justify-self: stretch;
+      max-width: none;
+      padding: 0.8rem;
+    }
+
+    .purchase-quantity-stepper {
+      grid-template-columns: 3rem minmax(0, 1fr) 3rem;
+      gap: 0.45rem;
+    }
+
+    .purchase-quantity-btn,
+    .purchase-quantity-input {
+      min-height: 3.5rem;
+    }
+
+    .purchase-quantity-input {
+      font-size: 1.45rem;
+    }
+
     .pack-card {
       min-height: 13.75rem;
     }
@@ -2332,6 +2471,10 @@ include __DIR__ . "/includes/header.php";
   const packageFeatureIconSvgMap = <?= json_encode(package_feature_icon_svg_map(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const packCards2 = Array.from(document.querySelectorAll('.pack-card'));
   const selectedPack = document.getElementById("selected-pack");
+  const orderQuantityDecreaseButton = document.getElementById('order-quantity-decrease');
+  const orderQuantityIncreaseButton = document.getElementById('order-quantity-increase');
+  const orderQuantityInput = document.getElementById('order-quantity');
+  const orderQuantityHelp = document.getElementById('order-quantity-help');
   const selectedPrice = document.getElementById("selected-price");
   const selectedPriceDetail = document.getElementById('selected-price-detail');
   const selectedWinPointsTotal = document.getElementById('selected-win-points-total');
@@ -2445,6 +2588,52 @@ include __DIR__ . "/includes/header.php";
     maxLength: 150
   };
 
+  function normalizeOrderQuantity(value) {
+    const digitsOnly = String(value ?? '').replace(/\D+/g, '');
+    const parsedValue = parseInt(digitsOnly, 10);
+    return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : 1;
+  }
+
+  function getOrderQuantity() {
+    return orderQuantityInput ? normalizeOrderQuantity(orderQuantityInput.value) : 1;
+  }
+
+  function syncOrderQuantityInput(nextValue = null) {
+    const resolvedValue = normalizeOrderQuantity(nextValue === null ? getOrderQuantity() : nextValue);
+    if (orderQuantityInput) {
+      orderQuantityInput.value = String(resolvedValue);
+      orderQuantityInput.disabled = !activePack;
+    }
+    if (orderQuantityDecreaseButton) {
+      orderQuantityDecreaseButton.disabled = !activePack;
+    }
+    if (orderQuantityIncreaseButton) {
+      orderQuantityIncreaseButton.disabled = !activePack;
+    }
+    if (orderQuantityHelp) {
+      orderQuantityHelp.textContent = activePack
+        ? 'Minimo 1 recarga.'
+        : 'Selecciona un paquete para indicar la cantidad.';
+    }
+    return resolvedValue;
+  }
+
+  function getPackTotalPrice(pack, quantity = getOrderQuantity()) {
+    if (!pack) {
+      return 0;
+    }
+
+    return normalizeCurrencyAmount(Number(pack.priceValue || 0) * normalizeOrderQuantity(quantity), pack.showDecimals);
+  }
+
+  function getPackRewardPoints(pack, quantity = getOrderQuantity()) {
+    return Math.max(0, Number(pack && pack.rewardPoints ? pack.rewardPoints : 0)) * normalizeOrderQuantity(quantity);
+  }
+
+  function getPackRequiredPoints(pack, quantity = getOrderQuantity()) {
+    return Math.max(0, Number(pack && pack.redeemRequiredPoints ? pack.redeemRequiredPoints : 0)) * normalizeOrderQuantity(quantity);
+  }
+
   function getCurrencyShowDecimals(currencyCode, fallback = monedaActualMostrarDecimales) {
     const target = String(currencyCode || '').trim().toUpperCase();
     if (target === '') {
@@ -2536,7 +2725,7 @@ include __DIR__ . "/includes/header.php";
   function resolveBinanceDisplayMoney(pack) {
     const targetEntry = resolvePreferredBinanceCurrencyEntry();
     const sourceCurrency = String((pack && pack.moneda) || monedaActualClave || '').trim().toUpperCase();
-    const sourceAmount = Number(pack && pack.priceValue ? pack.priceValue : 0);
+    const sourceAmount = Number(pack ? getPackTotalPrice(pack, Number(pack.purchaseQuantity || getOrderQuantity())) : 0);
     if (!targetEntry) {
       return {
         currency: sourceCurrency,
@@ -3173,7 +3362,10 @@ include __DIR__ . "/includes/header.php";
 
   function renderPaymentSummary(pack, userId, totalText) {
     const safeUser = userId || '-';
-    const safeProduct = (pack && pack.name) ? pack.name : 'Producto';
+    const quantity = normalizeOrderQuantity(pack && pack.purchaseQuantity ? pack.purchaseQuantity : 1);
+    const safeProduct = (pack && pack.name)
+      ? (quantity > 1 ? `${pack.name} x${quantity}` : pack.name)
+      : 'Producto';
     const safeTotal = totalText || '-';
 
     paymentSummaryUser.textContent = safeUser;
@@ -3368,13 +3560,13 @@ include __DIR__ . "/includes/header.php";
       && winPointsState.loggedIn
       && pack
       && pack.redeemActive
-      && Number(pack.redeemRequiredPoints || 0) > 0
-      && Number(winPointsState.balance || 0) >= Number(pack.redeemRequiredPoints || 0)
+      && getPackRequiredPoints(pack) > 0
+      && Number(winPointsState.balance || 0) >= getPackRequiredPoints(pack)
     );
   }
 
   function canUseBinanceCheckout(pack) {
-    return Boolean(binancePayCheckoutEnabled && pack && Number(pack.priceValue || 0) > 0);
+    return Boolean(binancePayCheckoutEnabled && pack && getPackTotalPrice(pack) > 0);
   }
 
   function getPaymentModeButtons() {
@@ -3572,8 +3764,9 @@ include __DIR__ . "/includes/header.php";
       return;
     }
 
-    const rewardPoints = Number(pack.rewardPoints || 0);
-    const requiredPoints = Number(pack.redeemRequiredPoints || 0);
+    const quantity = normalizeOrderQuantity(activePaymentOrder.purchaseQuantity || pack.purchaseQuantity || 1);
+    const rewardPoints = getPackRewardPoints(pack, quantity);
+    const requiredPoints = getPackRequiredPoints(pack, quantity);
     const hasRule = !!pack.redeemActive && requiredPoints > 0;
     const currentBalance = Number(winPointsState.balance || 0);
     const canUsePoints = hasRule && currentBalance >= requiredPoints;
@@ -3584,6 +3777,7 @@ include __DIR__ . "/includes/header.php";
     activePaymentOrder.canUseBinance = canUseBinance;
     activePaymentOrder.canUsePoints = showRewardsState ? canUsePoints : false;
     activePaymentOrder.pointsRequired = showRewardsState ? requiredPoints : 0;
+    activePaymentOrder.purchaseQuantity = quantity;
     activePaymentOrder.selectedMethodId = currentMethod ? String(currentMethod.id) : '';
     activePaymentOrder.expandedPaymentOptionKey = shouldExpandSinglePaymentOption()
       ? paymentOptionKey(
@@ -3627,7 +3821,9 @@ include __DIR__ . "/includes/header.php";
     }
 
     if (showRewardsState && rewardPoints > 0) {
-      activePaymentOrder.pointsCopy = `Este paquete te entrega +${rewardPoints} ${winPointsState.name} cuando la recarga quede enviada.`;
+      activePaymentOrder.pointsCopy = quantity > 1
+        ? `Esta compra te entrega +${rewardPoints} ${winPointsState.name} cuando las ${quantity} recargas queden enviadas.`
+        : `Este paquete te entrega +${rewardPoints} ${winPointsState.name} cuando la recarga quede enviada.`;
     } else {
       activePaymentOrder.pointsCopy = showRewardsState
         ? `Tu saldo disponible se puede usar en los paquetes que tengan canje activo.`
@@ -3635,7 +3831,9 @@ include __DIR__ . "/includes/header.php";
     }
 
     if (showRewardsState && hasRule && canUsePoints) {
-      activePaymentOrder.pointsMessage = `Puedes canjear este paquete usando ${formatWinPointsAmount(requiredPoints)}.`;
+      activePaymentOrder.pointsMessage = quantity > 1
+        ? `Puedes canjear ${quantity} recargas usando ${formatWinPointsAmount(requiredPoints)}.`
+        : `Puedes canjear este paquete usando ${formatWinPointsAmount(requiredPoints)}.`;
     } else if (showRewardsState && hasRule) {
       activePaymentOrder.pointsMessage = `Necesitas ${formatWinPointsAmount(requiredPoints)} para canjear este paquete. Tu saldo actual es ${formatWinPointsAmount(currentBalance)}.`;
     } else {
@@ -5272,12 +5470,14 @@ include __DIR__ . "/includes/header.php";
     syncPlayerVerificationUi();
   }
   function updateResumenCompra(pack) {
+    const quantity = syncOrderQuantityInput();
     if (pack) {
+      pack.purchaseQuantity = quantity;
       selectedPack.textContent = pack.name;
-      selectedTotalValue = normalizeCurrencyAmount(pack.priceValue, pack.showDecimals);
+      selectedTotalValue = getPackTotalPrice(pack, quantity);
       updateSelectedPriceDisplay(pack);
       if (selectedWinPointsTotal) {
-        const requiredPoints = Number(pack.redeemRequiredPoints || 0);
+        const requiredPoints = getPackRequiredPoints(pack, quantity);
         const hasWinPointsRedemption = Boolean(pack.redeemActive) && requiredPoints > 0;
         selectedWinPointsTotal.textContent = hasWinPointsRedemption
           ? `Canje: ${formatWinPointsAmount(requiredPoints)}`
@@ -5287,6 +5487,7 @@ include __DIR__ . "/includes/header.php";
     } else {
       selectedTotalValue = 0;
       selectedPack.textContent = 'Ninguno';
+      syncOrderQuantityInput(1);
       updateSelectedPriceDisplay(null);
       if (selectedWinPointsTotal) {
         selectedWinPointsTotal.textContent = '';
@@ -5311,6 +5512,7 @@ include __DIR__ . "/includes/header.php";
   if (packCards2.length) {
     // Ya no se selecciona automáticamente ningún paquete al cargar
   }
+  syncOrderQuantityInput(1);
   renderPlayerFields(null);
   if (verifyPlayerButton) {
     verifyPlayerButton.addEventListener('click', verifyCurrentPlayer);
@@ -5319,13 +5521,61 @@ include __DIR__ . "/includes/header.php";
                 return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
               }
 
-              function resetCouponState() {
+              function resetCouponState(clearInput = false) {
                 couponApplied = false;
                 couponValue = '';
                 couponInput.disabled = false;
+                if (clearInput && couponInput) {
+                  couponInput.value = '';
+                }
                 if (applyCouponButton) {
                   applyCouponButton.disabled = false;
                 }
+              }
+
+              if (orderQuantityInput) {
+                const triggerQuantityInputUpdate = function(nextQuantity) {
+                  orderQuantityInput.value = String(normalizeOrderQuantity(nextQuantity));
+                  orderQuantityInput.dispatchEvent(new Event('input', { bubbles: true }));
+                };
+
+                if (orderQuantityDecreaseButton) {
+                  orderQuantityDecreaseButton.addEventListener('click', function() {
+                    if (orderQuantityDecreaseButton.disabled) {
+                      return;
+                    }
+                    triggerQuantityInputUpdate(Math.max(1, getOrderQuantity() - 1));
+                    orderQuantityInput.focus();
+                  });
+                }
+
+                if (orderQuantityIncreaseButton) {
+                  orderQuantityIncreaseButton.addEventListener('click', function() {
+                    if (orderQuantityIncreaseButton.disabled) {
+                      return;
+                    }
+                    triggerQuantityInputUpdate(getOrderQuantity() + 1);
+                    orderQuantityInput.focus();
+                  });
+                }
+
+                orderQuantityInput.addEventListener('input', function() {
+                  const quantity = syncOrderQuantityInput(orderQuantityInput.value);
+                  if (couponInput.value.trim() !== '' || couponApplied) {
+                    resetCouponState(true);
+                  }
+                  if (activePack) {
+                    activePack.purchaseQuantity = quantity;
+                    updateResumenCompra(activePack);
+                  } else {
+                    updateResumenCompra(null);
+                  }
+                  updateButtonState();
+                });
+
+                orderQuantityInput.addEventListener('blur', function() {
+                  syncOrderQuantityInput(orderQuantityInput.value);
+                });
               }
 
               if (paymentMethodSelect) {
@@ -5659,7 +5909,7 @@ include __DIR__ . "/includes/header.php";
                   return;
                 }
                 // Aseguramos que el precio sea un número puro
-                const precioNumerico = String(normalizeCurrencyAmount(pack.priceValue, pack.showDecimals));
+                const precioNumerico = String(getPackTotalPrice(pack));
                 console.log('Enviando cupón:', cupon, 'Precio:', precioNumerico);
                 if (!cupon) {
                   showToast('Ingresa un cupón.', 'error');
@@ -5675,6 +5925,7 @@ include __DIR__ . "/includes/header.php";
                   console.log('Respuesta backend:', data);
                   if (data.success) {
                     selectedTotalValue = normalizeCurrencyAmount(data.nuevo_total, pack.showDecimals);
+                    pack.purchaseQuantity = getOrderQuantity();
                     updateSelectedPriceDisplay(pack);
                     showToast(data.message + ` Descuento: ${formatCurrencyAmount(data.descuento, pack.showDecimals)}`,'success');
                     couponInput.disabled = true;
@@ -5792,11 +6043,9 @@ include __DIR__ . "/includes/header.php";
                 }
 
                 let precioFinal = selectedPrice.textContent.replace(/[^\d.]/g, '');
-                if (!couponApplied || !couponVal) {
-                  precioFinal = String(normalizeCurrencyAmount(pack.priceValue, pack.showDecimals));
-                } else {
-                  precioFinal = String(normalizeCurrencyAmount(selectedTotalValue, pack.showDecimals));
-                }
+                const purchaseQuantity = getOrderQuantity();
+                pack.purchaseQuantity = purchaseQuantity;
+                precioFinal = String(normalizeCurrencyAmount(selectedTotalValue, pack.showDecimals));
 
                 const pedidoData = {
                   action: 'create',
@@ -5805,9 +6054,10 @@ include __DIR__ . "/includes/header.php";
                   game_name: "<?= $game['nombre'] ?>",
                   pack_name: pack.name || '',
                   pack_amount: pack.cantidad || '',
+                  quantity: String(purchaseQuantity),
                   currency: pack.moneda || '',
                   price: precioFinal,
-                  pack_base: String(normalizeCurrencyAmount(pack.priceValue, pack.showDecimals)),
+                  pack_base: String(getPackTotalPrice(pack, purchaseQuantity)),
                   user_identifier: userId,
                   player_fields_json: JSON.stringify(playerFields),
                   email: email,

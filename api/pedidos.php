@@ -88,6 +88,7 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         numero_referencia VARCHAR(120) DEFAULT NULL,
         telefono_contacto VARCHAR(40) DEFAULT NULL,
         cupon VARCHAR(60) DEFAULT NULL,
+        cantidad_compra INT NOT NULL DEFAULT 1,
         ff_api_referencia VARCHAR(120) DEFAULT NULL,
         ff_api_mensaje VARCHAR(255) DEFAULT NULL,
         ff_api_payload LONGTEXT DEFAULT NULL,
@@ -145,6 +146,7 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         'numero_referencia' => "ALTER TABLE pedidos ADD COLUMN numero_referencia VARCHAR(120) NULL AFTER cliente_usuario_id",
         'telefono_contacto' => "ALTER TABLE pedidos ADD COLUMN telefono_contacto VARCHAR(40) NULL AFTER numero_referencia",
         'cupon' => "ALTER TABLE pedidos ADD COLUMN cupon VARCHAR(60) NULL AFTER telefono_contacto",
+        'cantidad_compra' => "ALTER TABLE pedidos ADD COLUMN cantidad_compra INT NOT NULL DEFAULT 1 AFTER cupon",
         'ff_api_referencia' => "ALTER TABLE pedidos ADD COLUMN ff_api_referencia VARCHAR(120) NULL AFTER cupon",
         'ff_api_mensaje' => "ALTER TABLE pedidos ADD COLUMN ff_api_mensaje VARCHAR(255) NULL AFTER ff_api_referencia",
         'ff_api_payload' => "ALTER TABLE pedidos ADD COLUMN ff_api_payload LONGTEXT NULL AFTER ff_api_mensaje",
@@ -545,6 +547,16 @@ function format_order_price_value(float $price, string $currencyCode): string {
     }
 
     return trim($label) . ' ' . currency_format_amount($price, $currency);
+}
+
+function order_purchase_quantity(array $order): int {
+    $quantity = (int) ($order['cantidad_compra'] ?? 1);
+    return $quantity > 0 ? $quantity : 1;
+}
+
+function order_purchase_quantity_text(int $quantity): string {
+    $safeQuantity = max(1, $quantity);
+    return $safeQuantity === 1 ? '1 recarga' : $safeQuantity . ' recargas';
 }
 
 function json_error(string $message, int $code = 400): void {
@@ -1934,7 +1946,7 @@ function sync_local_order_with_binance_payload(mysqli $mysqli, array $order, arr
     $orderPlayerFields = order_player_fields_from_json((string) ($updatedOrder['player_fields_json'] ?? ''));
 
     try {
-        $providerResult = execute_catalog_api_purchase($packageApiId, (string) ($updatedOrder['user_identifier'] ?? ''), $orderPlayerFields);
+        $providerResult = execute_catalog_api_purchase($packageApiId, (string) ($updatedOrder['user_identifier'] ?? ''), $orderPlayerFields, order_purchase_quantity($updatedOrder));
     } catch (Throwable $e) {
         $providerResult = [
             'success' => false,
@@ -2966,7 +2978,7 @@ function continue_provider_follow_up_in_background(mysqli $mysqli, int $orderId,
     }
 }
 
-function execute_catalog_api_purchase(int $productId, ?string $userIdentifier, array $playerFields = []): array {
+function execute_catalog_api_purchase_once(int $productId, ?string $userIdentifier, array $playerFields = []): array {
     if ($productId <= 0) {
         throw new RuntimeException('El paquete seleccionado no tiene un producto API configurado.');
     }
@@ -3034,6 +3046,128 @@ function execute_catalog_api_purchase(int $productId, ?string $userIdentifier, a
         'reference' => sanitize_str((string) ($response['referencia'] ?? $response['pedido_id'] ?? ''), 120),
         'payload' => $response,
     ];
+}
+
+function summarize_catalog_api_purchase_results(array $attemptResults, int $quantity): array {
+    $successCount = 0;
+    $acceptedCount = 0;
+    $manualProcessing = false;
+    $references = [];
+    $providerOrderIds = [];
+    $deliveredCodes = [];
+    $attemptPayloads = [];
+    $messages = [];
+
+    foreach ($attemptResults as $attemptResult) {
+        if (!empty($attemptResult['success'])) {
+            $successCount++;
+        }
+        if (!empty($attemptResult['accepted'])) {
+            $acceptedCount++;
+        }
+        if (!empty($attemptResult['manual_processing'])) {
+            $manualProcessing = true;
+        }
+
+        $attemptPayload = (array) ($attemptResult['payload'] ?? []);
+        $attemptPayloads[] = [
+            'intento' => (int) ($attemptResult['attempt'] ?? (count($attemptPayloads) + 1)),
+            'success' => !empty($attemptResult['success']),
+            'accepted' => !empty($attemptResult['accepted']),
+            'manual_processing' => !empty($attemptResult['manual_processing']),
+            'message' => trim((string) ($attemptResult['message'] ?? '')),
+            'reference' => trim((string) ($attemptResult['reference'] ?? '')),
+            'payload' => $attemptPayload,
+        ];
+
+        $message = trim((string) ($attemptResult['message'] ?? ''));
+        if ($message !== '') {
+            $messages[] = $message;
+        }
+
+        $reference = sanitize_str((string) ($attemptResult['reference'] ?? ''), 120) ?? '';
+        if ($reference !== '') {
+            $references[$reference] = true;
+        }
+
+        $providerOrderId = recargas_api_extract_provider_order_id($attemptPayload);
+        if ($providerOrderId !== '') {
+            $providerOrderIds[$providerOrderId] = true;
+        }
+
+        foreach (provider_extract_delivered_codes($attemptPayload) as $code) {
+            $normalizedCode = trim((string) $code);
+            if ($normalizedCode !== '') {
+                $deliveredCodes[$normalizedCode] = true;
+            }
+        }
+    }
+
+    $failureCount = max(0, $quantity - $successCount - $acceptedCount);
+    $partialSuccess = $successCount > 0 && $successCount < $quantity;
+    $overallSuccess = $successCount === $quantity;
+    $overallAccepted = !$overallSuccess && ($acceptedCount > 0 || $partialSuccess);
+
+    if ($overallSuccess) {
+        $message = $quantity === 1
+            ? trim((string) ($attemptResults[0]['message'] ?? ''))
+            : 'Se procesaron correctamente las ' . $quantity . ' recargas solicitadas.';
+    } elseif ($partialSuccess) {
+        $message = 'Se procesaron ' . $successCount . ' de ' . $quantity . ' recargas. El resto quedo pendiente de revision manual.';
+    } elseif ($overallAccepted) {
+        $message = 'La compra por cantidad quedo en seguimiento mientras el proveedor confirma las ' . $quantity . ' recargas.';
+    } else {
+        $message = $quantity === 1
+            ? trim((string) ($attemptResults[0]['message'] ?? ''))
+            : 'No se pudo procesar ninguna de las ' . $quantity . ' recargas solicitadas.';
+    }
+
+    if ($message === '' && !empty($messages)) {
+        $message = $messages[0];
+    }
+    if ($message === '') {
+        $message = 'No se recibio un mensaje detallado del proveedor.';
+    }
+
+    return [
+        'success' => $overallSuccess,
+        'accepted' => $overallAccepted,
+        'manual_processing' => $manualProcessing || $partialSuccess,
+        'partial_success' => $partialSuccess,
+        'message' => $message,
+        'reference' => array_key_first($references) ?: '',
+        'payload' => [
+            'pedido_id' => array_key_first($providerOrderIds) ?: '',
+            'referencia' => array_key_first($references) ?: '',
+            'estado' => $overallSuccess ? 'completed' : ($overallAccepted ? 'processing' : 'failed'),
+            'mensaje' => $message,
+            'cantidad_compra' => $quantity,
+            'codigos_entregados' => array_keys($deliveredCodes),
+            'resumen' => [
+                'success_count' => $successCount,
+                'accepted_count' => $acceptedCount,
+                'failed_count' => $failureCount,
+                'partial_success' => $partialSuccess,
+            ],
+            'intentos' => $attemptPayloads,
+        ],
+    ];
+}
+
+function execute_catalog_api_purchase(int $productId, ?string $userIdentifier, array $playerFields = [], int $quantity = 1): array {
+    $purchaseQuantity = max(1, $quantity);
+    if ($purchaseQuantity === 1) {
+        return execute_catalog_api_purchase_once($productId, $userIdentifier, $playerFields);
+    }
+
+    $attemptResults = [];
+    for ($attempt = 1; $attempt <= $purchaseQuantity; $attempt++) {
+        $attemptResult = execute_catalog_api_purchase_once($productId, $userIdentifier, $playerFields);
+        $attemptResult['attempt'] = $attempt;
+        $attemptResults[] = $attemptResult;
+    }
+
+    return summarize_catalog_api_purchase_results($attemptResults, $purchaseQuantity);
 }
 
 function parse_bank_movement_datetime(?string $value): ?string {
@@ -4688,6 +4822,11 @@ if ($action === 'create') {
     $monto_ff = null;
     $paquete_api = null;
     $pack_amount_num = 1;
+    $purchaseQuantityRaw = trim((string) ($_POST['quantity'] ?? '1'));
+    if ($purchaseQuantityRaw === '' || preg_match('/^[1-9]\d*$/', $purchaseQuantityRaw) !== 1) {
+        json_error('La cantidad a comprar debe ser un numero entero mayor a cero.');
+    }
+    $purchaseQuantity = (int) $purchaseQuantityRaw;
     if ($pack_amount_text !== null && is_numeric($pack_amount_text)) {
         $pack_amount_num = intval($pack_amount_text);
     }
@@ -4753,7 +4892,7 @@ if ($action === 'create') {
     $winPointsEligible = win_points_enabled() && $cliente_usuario_id !== null && $cliente_usuario_id > 0;
     $winPointsAllowedForOrder = $winPointsEligible;
     if ($winPointsAllowedForOrder) {
-        $winPointsAward = win_points_package_reward($selectedPackage);
+        $winPointsAward = win_points_package_reward($selectedPackage) * $purchaseQuantity;
     }
 
     $selectedCurrency = currency_find_by_code((string) $currency);
@@ -4761,7 +4900,8 @@ if ($action === 'create') {
         json_error('La moneda seleccionada no es válida.');
     }
     $currency = currency_normalize_code((string) ($selectedCurrency['clave'] ?? $currency));
-    $price = currency_convert_from_base((float) ($selectedPackage['precio'] ?? 0), $selectedCurrency);
+    $unitPrice = currency_convert_from_base((float) ($selectedPackage['precio'] ?? 0), $selectedCurrency);
+    $price = currency_apply_amount_rule($unitPrice * $purchaseQuantity, $selectedCurrency);
     if ($price <= 0) {
         json_error('El paquete seleccionado no tiene un precio válido para la moneda elegida.');
     }
@@ -4848,12 +4988,12 @@ if ($action === 'create') {
         $price = payment_difference_normalize_amount($priceBeforeDifferenceCredit - $paymentDifferenceCreditApplied);
     }
 
-    $stmt = $mysqli->prepare("INSERT INTO pedidos (tenant_slug, juego_id, paquete_id, juego_nombre, paquete_nombre, paquete_cantidad, monto_ff, paquete_api, moneda, precio, precio_original, diferencia_pago_credito_aplicado, diferencia_pago_credito_origen_pedido_id, user_identifier, player_fields_json, email, cliente_usuario_id, cupon, cantidad, win_points_awarded, win_points_payment_mode, estado) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'pendiente')");
+    $stmt = $mysqli->prepare("INSERT INTO pedidos (tenant_slug, juego_id, paquete_id, juego_nombre, paquete_nombre, paquete_cantidad, monto_ff, paquete_api, moneda, precio, precio_original, diferencia_pago_credito_aplicado, diferencia_pago_credito_origen_pedido_id, user_identifier, player_fields_json, email, cliente_usuario_id, cupon, cantidad_compra, cantidad, win_points_awarded, win_points_payment_mode, estado) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'pendiente')");
     if (!$stmt) {
         json_error('No se pudo preparar el pedido');
     }
     $winPointsPaymentMode = 'money';
-    $stmt->bind_param('siissssisdddisssisiis', $tenant_slug, $game_id, $package_id, $game_name, $pack_name, $pack_amount_text, $monto_ff, $paquete_api, $currency, $price, $priceBeforeDifferenceCredit, $paymentDifferenceCreditApplied, $paymentDifferenceCreditSourceOrderId, $user_identifier, $player_fields_json, $email, $cliente_usuario_id, $cupon, $pack_amount_num, $winPointsAward, $winPointsPaymentMode);
+    $stmt->bind_param('siissssisdddisssisiiis', $tenant_slug, $game_id, $package_id, $game_name, $pack_name, $pack_amount_text, $monto_ff, $paquete_api, $currency, $price, $priceBeforeDifferenceCredit, $paymentDifferenceCreditApplied, $paymentDifferenceCreditSourceOrderId, $user_identifier, $player_fields_json, $email, $cliente_usuario_id, $cupon, $purchaseQuantity, $pack_amount_num, $winPointsAward, $winPointsPaymentMode);
     if (!$stmt->execute()) {
         json_error('No se pudo guardar el pedido');
     }
@@ -4886,6 +5026,7 @@ if ($action === 'create') {
         'game_name' => $game_name,
         'pack_name' => $pack_name,
         'pack_amount' => $pack_amount_text,
+        'quantity' => order_purchase_quantity_text($purchaseQuantity),
         'currency' => $currency,
         'price' => format_order_price_value((float) $price, $currency),
         'user_identifier' => $user_identifier,
@@ -4899,6 +5040,7 @@ if ($action === 'create') {
         'game_name' => $game_name,
         'pack_name' => $pack_name,
         'pack_amount' => $pack_amount_text,
+        'quantity' => order_purchase_quantity_text($purchaseQuantity),
         'currency' => $currency,
         'price' => format_order_price_value((float) $price, $currency),
         'user_identifier' => $user_identifier,
@@ -5098,7 +5240,7 @@ if ($action === 'submit_payment') {
             recharge_notifications_emit_for_order($mysqli, $paidOrder);
             json_response([
                 'ok' => true,
-                'message' => 'Canje realizado. Tu pedido quedó pagado y pendiente de entrega manual.',
+                'message' => 'Canje realizado. Tu pedido quedó pagado y pendiente de entrega manual para ' . order_purchase_quantity_text(order_purchase_quantity($paidOrder)) . '.',
                 'order_id' => $orderId,
                 'estado' => 'pagado',
                 'verified' => true,
@@ -5113,7 +5255,7 @@ if ($action === 'submit_payment') {
         $orderPlayerFields = order_player_fields_from_json((string) ($updatedOrder['player_fields_json'] ?? ''));
 
         try {
-            $providerResult = execute_catalog_api_purchase($packageApiId, (string) ($updatedOrder['user_identifier'] ?? ''), $orderPlayerFields);
+            $providerResult = execute_catalog_api_purchase($packageApiId, (string) ($updatedOrder['user_identifier'] ?? ''), $orderPlayerFields, order_purchase_quantity($updatedOrder));
         } catch (Throwable $e) {
             $providerResult = [
                 'success' => false,
@@ -5162,7 +5304,7 @@ if ($action === 'submit_payment') {
             recharge_notifications_emit_for_order($mysqli, $verifiedOrder);
             json_response([
                 'ok' => true,
-                'message' => 'Canje realizado y recarga procesada correctamente.',
+                'message' => 'Canje realizado y recarga procesada correctamente para ' . order_purchase_quantity_text(order_purchase_quantity($verifiedOrder)) . '.',
                 'order_id' => $orderId,
                 'estado' => 'enviado',
                 'verified' => true,
@@ -5296,7 +5438,7 @@ if ($action === 'submit_payment') {
                     if ($resolvedStatus === 'enviado') {
                         json_response([
                             'ok' => true,
-                            'message' => 'Canje realizado y recarga procesada correctamente.',
+                            'message' => 'Canje realizado y recarga procesada correctamente para ' . order_purchase_quantity_text(order_purchase_quantity($paidOrder)) . '.',
                             'order_id' => $orderId,
                             'estado' => 'enviado',
                             'verified' => true,
@@ -5657,7 +5799,7 @@ if ($action === 'submit_payment') {
             $orderPlayerFields = order_player_fields_from_json((string) ($updatedOrder['player_fields_json'] ?? ''));
 
             try {
-                $freeFireResult = execute_catalog_api_purchase($packageApiId, (string) ($updatedOrder['user_identifier'] ?? ''), $orderPlayerFields);
+                $freeFireResult = execute_catalog_api_purchase($packageApiId, (string) ($updatedOrder['user_identifier'] ?? ''), $orderPlayerFields, order_purchase_quantity($updatedOrder));
             } catch (Throwable $e) {
                 $freeFireResult = [
                     'success' => false,
@@ -5708,7 +5850,7 @@ if ($action === 'submit_payment') {
                 recharge_notifications_emit_for_order($mysqli, $verifiedOrder);
                 json_response(append_payment_difference_response([
                     'ok' => true,
-                    'message' => 'Pago verificado y recarga procesada correctamente.',
+                    'message' => 'Pago verificado y recarga procesada correctamente para ' . order_purchase_quantity_text(order_purchase_quantity($verifiedOrder)) . '.',
                     'order_id' => $orderId,
                     'estado' => 'enviado',
                     'verified' => true,
@@ -5854,7 +5996,7 @@ if ($action === 'submit_payment') {
                     if ($resolvedStatus === 'enviado') {
                         json_response(append_payment_difference_response([
                             'ok' => true,
-                            'message' => 'Pago verificado y recarga procesada correctamente.',
+                            'message' => 'Pago verificado y recarga procesada correctamente para ' . order_purchase_quantity_text(order_purchase_quantity($paidOrder)) . '.',
                             'order_id' => $orderId,
                             'estado' => 'enviado',
                             'verified' => true,
@@ -6332,7 +6474,7 @@ if ($action === 'admin_retry_recharge') {
         $orderPlayerFields = order_player_fields_from_json((string) ($order['player_fields_json'] ?? ''));
 
         try {
-            $providerResult = execute_catalog_api_purchase($packageApiId, (string) ($order['user_identifier'] ?? ''), $orderPlayerFields);
+            $providerResult = execute_catalog_api_purchase($packageApiId, (string) ($order['user_identifier'] ?? ''), $orderPlayerFields, order_purchase_quantity($order));
         } catch (Throwable $e) {
             $providerResult = [
                 'success' => false,

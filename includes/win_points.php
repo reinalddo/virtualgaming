@@ -727,6 +727,13 @@ if (!function_exists('win_points_package_reward')) {
     }
 }
 
+if (!function_exists('win_points_order_purchase_quantity')) {
+    function win_points_order_purchase_quantity(array $order): int {
+        $quantity = (int) ($order['cantidad_compra'] ?? 1);
+        return $quantity > 0 ? $quantity : 1;
+    }
+}
+
 if (!function_exists('win_points_fetch_package_reward')) {
     function win_points_fetch_package_reward(mysqli $mysqli, int $packageId): int {
         win_points_ensure_schema();
@@ -1056,6 +1063,8 @@ if (!function_exists('win_points_assign_pending_order_redemption')) {
             if ($requiredPoints <= 0) {
                 throw new RuntimeException('La regla de canje no tiene un costo válido en premios.');
             }
+
+            $requiredPoints *= win_points_order_purchase_quantity($order);
 
             $walletBalance = win_points_wallet_balance($mysqli, $userId);
             if ($walletBalance < $requiredPoints) {

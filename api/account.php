@@ -38,6 +38,11 @@ function account_pedidos_table_exists(mysqli $mysqli): bool {
     return $result && $result->num_rows > 0;
 }
 
+function account_pedidos_has_purchase_quantity_column(mysqli $mysqli): bool {
+    $result = $mysqli->query("SHOW COLUMNS FROM pedidos LIKE 'cantidad_compra'");
+    return $result && $result->num_rows > 0;
+}
+
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 if ($action === '') {
     account_json_error('Acción no especificada.', 422);
@@ -53,10 +58,11 @@ if ($action === 'orders') {
         account_json_ok(['orders' => []]);
     }
     $hasOwnerColumn = account_pedidos_has_owner_column($mysqli);
+    $purchaseQuantitySelect = account_pedidos_has_purchase_quantity_column($mysqli) ? 'cantidad_compra' : '1 AS cantidad_compra';
 
     if ($hasOwnerColumn) {
         $stmt = $mysqli->prepare(
-            "SELECT id, juego_nombre, paquete_nombre, paquete_cantidad, moneda, precio, email, estado, creado_en
+            "SELECT id, juego_nombre, paquete_nombre, paquete_cantidad, {$purchaseQuantitySelect}, moneda, precio, email, estado, creado_en
              FROM pedidos
              WHERE cliente_usuario_id = ?
                 OR (cliente_usuario_id IS NULL AND email = ?)
@@ -68,7 +74,7 @@ if ($action === 'orders') {
         $stmt->bind_param('is', $authUserId, $authUserEmail);
     } else {
         $stmt = $mysqli->prepare(
-            "SELECT id, juego_nombre, paquete_nombre, paquete_cantidad, moneda, precio, email, estado, creado_en
+            "SELECT id, juego_nombre, paquete_nombre, paquete_cantidad, {$purchaseQuantitySelect}, moneda, precio, email, estado, creado_en
              FROM pedidos
              WHERE email = ?
              ORDER BY creado_en DESC, id DESC"
@@ -88,6 +94,7 @@ if ($action === 'orders') {
                 'juego_nombre' => (string) ($row['juego_nombre'] ?? ''),
                 'paquete_nombre' => (string) ($row['paquete_nombre'] ?? ''),
                 'paquete_cantidad' => (string) ($row['paquete_cantidad'] ?? ''),
+                'cantidad_compra' => max(1, (int) ($row['cantidad_compra'] ?? 1)),
                 'moneda' => (string) ($row['moneda'] ?? ''),
                 'precio' => currency_format_amount_by_code((float) ($row['precio'] ?? 0), (string) ($row['moneda'] ?? '')),
                 'email' => (string) ($row['email'] ?? ''),

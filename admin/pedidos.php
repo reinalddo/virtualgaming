@@ -30,6 +30,16 @@ function order_meta_value($value): string {
   return $text !== '' ? $text : '—';
 }
 
+function order_purchase_quantity_admin(array $order): int {
+  $quantity = (int) ($order['cantidad_compra'] ?? 1);
+  return $quantity > 0 ? $quantity : 1;
+}
+
+function order_purchase_quantity_label_admin(array $order): string {
+  $quantity = order_purchase_quantity_admin($order);
+  return $quantity === 1 ? '1 recarga' : $quantity . ' recargas';
+}
+
 function order_player_fields_from_json_admin(?string $json): array {
   if (!is_string($json) || trim($json) === '') {
     return [];
@@ -528,6 +538,7 @@ function order_search_index(array $order): string {
     $order['juego_nombre'] ?? '',
     $order['paquete_nombre'] ?? '',
     $order['paquete_cantidad'] ?? '',
+    order_purchase_quantity_label_admin($order),
     $order['moneda'] ?? '',
     $order['precio'] ?? '',
     $order['cupon'] ?? '',
@@ -903,6 +914,7 @@ foreach ($statuses as $statusKey) {
                         ?>
                       </div>
                       <div style="color:#b2f6ff; margin-top:0.2rem;"><?= htmlspecialchars($order['paquete_nombre'] ?? '') ?></div>
+                      <div style="color:#7dd3fc; margin-top:0.2rem; font-size:0.85em;">Cantidad comprada: <?= htmlspecialchars(order_purchase_quantity_label_admin($order)) ?></div>
                     </td>
                     <td style="background:#181f2a; color:#00ffb3; font-weight:bold;"><?= htmlspecialchars($order['moneda'] ?? '') ?> <?= format_money($order['precio']) ?></td>
                     <td style="background:#181f2a; color:#b2f6ff;">
@@ -981,6 +993,7 @@ foreach ($statuses as $statusKey) {
                   ?>
                 </span></div>
                 <div style="color:#b2f6ff; font-size:1em;">Paquete: <span style="color:#00fff7; font-weight:bold;"><?= htmlspecialchars($order['paquete_nombre'] ?? '') ?></span></div>
+                <div style="color:#7dd3fc; font-size:0.95em;">Cantidad comprada: <?= htmlspecialchars(order_purchase_quantity_label_admin($order)) ?></div>
                 <div style="color:#00ffb3; font-weight:bold; margin-top:0.5em;">Total: <?= htmlspecialchars($order['moneda'] ?? '') ?> <?= format_money($order['precio']) ?></div>
                 <div style="color:#b2f6ff; font-size:0.95em; margin-top:0.5em;">Cupón: <?= !empty($order['cupon']) ? htmlspecialchars($order['cupon']) : '—' ?></div>
                 <div class="order-status-actions" data-order-actions="<?= $order['id'] ?>">
