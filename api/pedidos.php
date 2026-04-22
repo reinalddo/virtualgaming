@@ -4822,11 +4822,16 @@ if ($action === 'create') {
     $monto_ff = null;
     $paquete_api = null;
     $pack_amount_num = 1;
+    $purchaseQuantityEnabled = trim((string) store_config_get('cantidad_paquetes', '0')) === '1';
     $purchaseQuantityRaw = trim((string) ($_POST['quantity'] ?? '1'));
-    if ($purchaseQuantityRaw === '' || preg_match('/^[1-9]\d*$/', $purchaseQuantityRaw) !== 1) {
-        json_error('La cantidad a comprar debe ser un numero entero mayor a cero.');
+    if ($purchaseQuantityEnabled) {
+        if ($purchaseQuantityRaw === '' || preg_match('/^[1-9]\d*$/', $purchaseQuantityRaw) !== 1) {
+            json_error('La cantidad a comprar debe ser un numero entero mayor a cero.');
+        }
+        $purchaseQuantity = (int) $purchaseQuantityRaw;
+    } else {
+        $purchaseQuantity = 1;
     }
-    $purchaseQuantity = (int) $purchaseQuantityRaw;
     if ($pack_amount_text !== null && is_numeric($pack_amount_text)) {
         $pack_amount_num = intval($pack_amount_text);
     }

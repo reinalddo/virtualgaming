@@ -17,6 +17,7 @@ package_features_ensure_schema($mysqli);
 $paymentSupportWhatsappBase = store_config_whatsapp_link(store_config_get('whatsapp', ''));
 $binancePayCheckoutEnabled = binance_pay_is_enabled() && binance_pay_is_configured();
 $rememberLastPurchaseIdentifierEnabled = trim((string) store_config_get('guardar_ultimo_id', '0')) === '1';
+$packageQuantityPurchaseEnabled = trim((string) store_config_get('cantidad_paquetes', '0')) === '1';
 
 function fetch_user_legacy_purchase_defaults(mysqli $mysqli, int $userId): array {
   $defaults = [
@@ -445,11 +446,12 @@ include __DIR__ . "/includes/header.php";
       <div class="col-md-8">
         <div class="card bg-dark border-info mb-2">
           <div class="card-body">
-            <div class="purchase-summary-head">
+            <div class="purchase-summary-head<?= $packageQuantityPurchaseEnabled ? '' : ' purchase-summary-head-single' ?>">
               <div class="purchase-summary-pack-copy">
                 <p class="small text-secondary mb-1">Paquete seleccionado</p>
                 <p id="selected-pack" class="fw-bold text-white mb-0">Ninguno</p>
               </div>
+              <?php if ($packageQuantityPurchaseEnabled): ?>
               <div class="purchase-quantity-panel">
                 <label for="order-quantity" class="purchase-quantity-label">Cantidad a comprar</label>
                 <div class="purchase-quantity-stepper">
@@ -459,6 +461,7 @@ include __DIR__ . "/includes/header.php";
                 </div>
                 <div id="order-quantity-help" class="purchase-quantity-help">Minimo 1 recarga.</div>
               </div>
+              <?php endif; ?>
             </div>
           </div>
         </div>
@@ -2172,6 +2175,10 @@ include __DIR__ . "/includes/header.php";
 
   .purchase-summary-pack-copy {
     min-width: 0;
+  }
+
+  .purchase-summary-head-single {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .purchase-quantity-panel {
