@@ -532,7 +532,19 @@ function apply_coupon_to_price(float $price, array $coupon): float {
 }
 
 function format_order_price_value(float $price, string $currencyCode): string {
-    return currency_format_amount($price, currency_find_by_code($currencyCode));
+    $currency = currency_find_by_code($currencyCode);
+    $label = strtoupper(trim($currencyCode));
+
+    if (is_array($currency) && !empty($currency['clave'])) {
+        $label = trim((string) $currency['clave']);
+    }
+
+    $normalizedLabel = strtoupper(str_replace(['.', ' '], '', $label));
+    if ($normalizedLabel === 'VES' || $normalizedLabel === 'VEF' || $normalizedLabel === 'BS' || $normalizedLabel === 'BSS') {
+        $label = 'Bs.';
+    }
+
+    return trim($label) . ' ' . currency_format_amount($price, $currency);
 }
 
 function json_error(string $message, int $code = 400): void {
@@ -4904,6 +4916,7 @@ if ($action === 'create') {
         'ok' => true,
         'message' => 'Pedido registrado',
         'order_id' => $order_id,
+        'total_text' => format_order_price_value((float) ($storedOrder['precio'] ?? $price), (string) ($storedOrder['moneda'] ?? $currency)),
         'estado' => 'pendiente',
         'created_at' => date(DATE_ATOM, isset($storedOrder['creado_en_ts']) ? (int) $storedOrder['creado_en_ts'] : time()),
         'expires_at' => order_expiration_iso($storedOrder),

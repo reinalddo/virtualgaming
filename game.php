@@ -2887,7 +2887,7 @@ include __DIR__ . "/includes/header.php";
         syncActivePaymentOrderDeadline(Number(data.remaining_seconds || 0));
       }
 
-      renderBinancePaymentDetails(data, (data && data.provider_reference) ? data.provider_reference : reference, totalText || (paymentSummaryTotal ? paymentSummaryTotal.textContent : ''));
+      renderBinancePaymentDetails(data, (data && data.provider_reference) ? data.provider_reference : reference, totalText || getConfirmedPaymentTotalText());
 
       const opened = navigateBinanceCheckoutPopup(popup, refreshedCheckoutUrl);
       if (!opened) {
@@ -3217,6 +3217,24 @@ include __DIR__ . "/includes/header.php";
         paymentSummaryFeatures.classList.remove('d-none');
       }
     }
+  }
+
+  function getConfirmedPaymentTotalText(fallbackText = '') {
+    if (activePaymentOrder && typeof activePaymentOrder.confirmedTotalText === 'string') {
+      const confirmedTotal = activePaymentOrder.confirmedTotalText.trim();
+      if (confirmedTotal !== '') {
+        return confirmedTotal;
+      }
+    }
+
+    if (paymentSummaryTotal && typeof paymentSummaryTotal.textContent === 'string') {
+      const summaryTotal = paymentSummaryTotal.textContent.trim();
+      if (summaryTotal !== '') {
+        return summaryTotal;
+      }
+    }
+
+    return String(fallbackText || '').trim();
   }
 
   function formatWinPointsAmount(points) {
@@ -5188,6 +5206,7 @@ include __DIR__ . "/includes/header.php";
       paymentMode: currentMethod ? 'money' : (canUsePoints ? 'points' : 'binance'),
       selectedMethodId: currentMethod ? String(currentMethod.id) : '',
       pointsRequired: Number(pack.redeemRequiredPoints || 0),
+      confirmedTotalText: String(totalText || '-').trim() || '-',
       expiring: false,
     };
 
@@ -5510,9 +5529,9 @@ include __DIR__ . "/includes/header.php";
                       const cancelMessage = data.message || 'La orden fue cancelada.';
                       setPaymentAlert(cancelMessage, 'danger');
                       if (String((data && data.provider_flow) || '').trim() !== '') {
-                        renderProviderPaymentDetails(data, reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
+                        renderProviderPaymentDetails(data, reference, getConfirmedPaymentTotalText());
                       } else {
-                        renderPaymentFailureDetails(data, reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
+                        renderPaymentFailureDetails(data, reference, getConfirmedPaymentTotalText());
                       }
                       setPaymentFormDisabled(true);
                       clearPaymentTimer();
@@ -5524,11 +5543,11 @@ include __DIR__ . "/includes/header.php";
                     if (nextState === 'pendiente' && providerFlow === 'binance_checkout') {
                       const pendingMessage = data.message || 'Completa el pago en Binance Pay para continuar con tu pedido.';
                       setPaymentAlert(pendingMessage, 'info');
-                      renderBinancePaymentDetails(data, (data && data.provider_reference) ? data.provider_reference : reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
+                      renderBinancePaymentDetails(data, (data && data.provider_reference) ? data.provider_reference : reference, getConfirmedPaymentTotalText());
                       setCancelOrderButtonMode('cancel');
                       showPaymentStatusModal('Completa el pago en Binance Pay', pendingMessage, 'info');
                       setPaymentStatusWaiting(true);
-                      pollOrderResolution((data && data.provider_reference) ? data.provider_reference : reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '', 1);
+                      pollOrderResolution((data && data.provider_reference) ? data.provider_reference : reference, getConfirmedPaymentTotalText(), 1);
                       return;
                     }
 
@@ -5540,7 +5559,7 @@ include __DIR__ . "/includes/header.php";
 
                       setPaymentAlert(paidMessage, requiresManualReview ? 'warning' : (isAcceptedFlow ? 'info' : 'success'));
                       if (hasProviderDetails || providerFlow === 'accepted') {
-                        renderProviderPaymentDetails(data, reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
+                        renderProviderPaymentDetails(data, reference, getConfirmedPaymentTotalText());
                       } else {
                         clearPaymentSupportUi();
                       }
@@ -5555,7 +5574,7 @@ include __DIR__ . "/includes/header.php";
                       );
                       if (providerFlow === 'accepted' || providerFlow === 'tracking') {
                         setPaymentStatusWaiting(true);
-                        pollOrderResolution(reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '', 1);
+                        pollOrderResolution(reference, getConfirmedPaymentTotalText(), 1);
                       }
                       return;
                     }
@@ -5566,7 +5585,7 @@ include __DIR__ . "/includes/header.php";
                       }
                       const pendingMessage = data.message || 'No pudimos validar el pago automáticamente.';
                       setPaymentAlert(pendingMessage, 'danger');
-                      renderPaymentFailureDetails(data, reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
+                      renderPaymentFailureDetails(data, reference, getConfirmedPaymentTotalText());
                       setPaymentFormDisabled(false);
                       showPaymentStatusModal('Revisión requerida', pendingMessage, 'danger');
                       return;
@@ -5585,7 +5604,7 @@ include __DIR__ . "/includes/header.php";
                       'No pudimos validar tu pago en este momento. Espera 1 minuto y vuelve a intentarlo.'
                     );
                     setPaymentAlert(errorMessage, 'danger');
-                    renderPaymentServerFailure(errorMessage, reference, paymentSummaryTotal ? paymentSummaryTotal.textContent : '');
+                    renderPaymentServerFailure(errorMessage, reference, getConfirmedPaymentTotalText());
                     setPaymentFormDisabled(false);
                     showPaymentStatusModal('No se pudo completar la validación', errorMessage, 'danger');
                     if (activePaymentOrder && activePaymentOrder.expiresAtMs <= Date.now()) {
@@ -5830,9 +5849,11 @@ include __DIR__ . "/includes/header.php";
                     if (data && data.payment_difference && String(data.payment_difference.status || '').toLowerCase() === 'credit_applied') {
                       setPaymentDifferenceCreditState(null);
                     }
-                    const createdOrderTotalText = data && data.payment_difference && String(data.payment_difference.status || '').toLowerCase() === 'credit_applied'
-                      ? formatPaymentDifferenceMoney(pack.moneda || monedaActualClave, Number(data.payment_difference.remaining_amount || 0), pack.showDecimals)
-                      : selectedPrice.textContent;
+                    const createdOrderTotalText = String((data && data.total_text) || '').trim() || (
+                      data && data.payment_difference && String(data.payment_difference.status || '').toLowerCase() === 'credit_applied'
+                        ? formatPaymentDifferenceMoney(pack.moneda || monedaActualClave, Number(data.payment_difference.remaining_amount || 0), pack.showDecimals)
+                        : selectedPrice.textContent
+                    );
                     const opened = openPaymentModal(data.order_id, data.expires_at, data.remaining_seconds, pack, userId, createdOrderTotalText, email);
                     if (opened) {
                       showToast('Pedido registrado. Completa ahora los datos del pago.', 'success');
