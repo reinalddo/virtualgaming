@@ -469,7 +469,7 @@ include __DIR__ . "/includes/header.php";
       <div class="col-md-8">
         <div class="card bg-dark border-info mb-2">
           <div class="card-body">
-            <div class="purchase-summary-head<?= $packageQuantityPurchaseEnabled ? '' : ' purchase-summary-head-single' ?>">
+            <div id="purchase-summary-head" class="purchase-summary-head<?= $packageQuantityPurchaseEnabled ? '' : ' purchase-summary-head-single' ?>">
               <div class="purchase-summary-pack-copy">
                 <p class="small text-secondary mb-1">Paquete seleccionado</p>
                 <p id="selected-pack" class="fw-bold text-white mb-0">Ninguno</p>
@@ -479,7 +479,7 @@ include __DIR__ . "/includes/header.php";
                 </div>
               </div>
               <?php if ($packageQuantityPurchaseEnabled): ?>
-              <div class="purchase-quantity-panel">
+              <div id="purchase-quantity-panel" class="purchase-quantity-panel">
                 <label for="order-quantity" class="purchase-quantity-label">Cantidad a comprar</label>
                 <div class="purchase-quantity-stepper">
                   <button type="button" id="order-quantity-decrease" class="purchase-quantity-btn" aria-label="Disminuir cantidad" disabled>-</button>
@@ -2759,6 +2759,8 @@ include __DIR__ . "/includes/header.php";
   const packCards2 = Array.from(document.querySelectorAll('.pack-card'));
   const packAccountPreviewButtons = Array.from(document.querySelectorAll('.pack-account-preview-btn'));
   const selectedPack = document.getElementById("selected-pack");
+  const purchaseSummaryHead = document.getElementById('purchase-summary-head');
+  const purchaseQuantityPanel = document.getElementById('purchase-quantity-panel');
   const selectedPackAccountActions = document.getElementById('selected-pack-account-actions');
   const selectedPackPreviewButton = document.getElementById('selected-pack-preview-btn');
   const selectedPackBuyButton = document.getElementById('selected-pack-buy-btn');
@@ -2898,25 +2900,40 @@ include __DIR__ . "/includes/header.php";
   }
 
   function getOrderQuantity() {
+    if (activePack && isAccountSalePack(activePack)) {
+      return 1;
+    }
     return orderQuantityInput ? normalizeOrderQuantity(orderQuantityInput.value) : 1;
   }
 
   function syncOrderQuantityInput(nextValue = null) {
-    const resolvedValue = normalizeOrderQuantity(nextValue === null ? getOrderQuantity() : nextValue);
+    const quantityEnabled = Boolean(activePack) && !isAccountSalePack(activePack);
+    const resolvedValue = quantityEnabled
+      ? normalizeOrderQuantity(nextValue === null ? getOrderQuantity() : nextValue)
+      : 1;
     if (orderQuantityInput) {
       orderQuantityInput.value = String(resolvedValue);
-      orderQuantityInput.disabled = !activePack;
+      orderQuantityInput.disabled = !quantityEnabled;
     }
     if (orderQuantityDecreaseButton) {
-      orderQuantityDecreaseButton.disabled = !activePack;
+      orderQuantityDecreaseButton.disabled = !quantityEnabled;
     }
     if (orderQuantityIncreaseButton) {
-      orderQuantityIncreaseButton.disabled = !activePack;
+      orderQuantityIncreaseButton.disabled = !quantityEnabled;
     }
     if (orderQuantityHelp) {
       orderQuantityHelp.textContent = activePack
-        ? 'Minimo 1 recarga.'
+        ? (quantityEnabled ? 'Minimo 1 recarga.' : 'La compra de cuentas siempre es de 1 unidad.')
         : 'Selecciona un paquete para indicar la cantidad.';
+    }
+    if (purchaseQuantityPanel) {
+      purchaseQuantityPanel.classList.toggle('d-none', Boolean(activePack) && isAccountSalePack(activePack));
+    }
+    if (purchaseSummaryHead) {
+      purchaseSummaryHead.classList.toggle(
+        'purchase-summary-head-single',
+        !purchaseQuantityPanel || (Boolean(activePack) && isAccountSalePack(activePack))
+      );
     }
     return resolvedValue;
   }
