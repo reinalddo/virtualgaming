@@ -4373,6 +4373,16 @@ function mark_account_sale_as_sent(mysqli $mysqli, array $order, string $expecte
     }
     $stmt->close();
 
+    $packageId = (int) ($order['paquete_id'] ?? 0);
+    if ((int) ($order['vender_cuenta'] ?? 0) === 1 && $packageId > 0) {
+        $deactivateStmt = $mysqli->prepare("UPDATE juego_paquetes SET activo = 0 WHERE id = ?");
+        if ($deactivateStmt) {
+            $deactivateStmt->bind_param('i', $packageId);
+            $deactivateStmt->execute();
+            $deactivateStmt->close();
+        }
+    }
+
     $updatedOrder = fetch_order_by_id($mysqli, $orderId);
     if ($updatedOrder === null) {
         throw new RuntimeException('No se pudo recuperar la orden entregada.');

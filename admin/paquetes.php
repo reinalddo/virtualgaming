@@ -651,6 +651,8 @@ $packageFeatureIconOptions = package_feature_icon_options();
 $packageFeaturesByPackage = package_features_for_packages($mysqli, array_map(static fn (array $package): int => (int) ($package['id'] ?? 0), $paquetes));
 $packageAccountGalleryByPackage = package_account_sales_fetch_gallery_map($mysqli, array_map(static fn (array $package): int => (int) ($package['id'] ?? 0), $paquetes));
 $packageFeatureIconOptionsHtml = admin_package_feature_icon_options_html($packageFeatureIconOptions);
+$activePackageCount = count(array_filter($paquetes, static fn (array $package): bool => !isset($package['activo']) || !empty($package['activo'])));
+$inactivePackageCount = count($paquetes) - $activePackageCount;
 
 // Incluir header
 include '../includes/header.php';
@@ -837,6 +839,10 @@ include '../includes/header.php';
     <?php elseif ($usesApiCatalog && empty($apiProducts)): ?>
         <div class="alert alert-warning mb-4">No hay productos disponibles en la API para la categoría <?= htmlspecialchars($juegoCategoriaApi, ENT_QUOTES, 'UTF-8') ?>.</div>
     <?php endif; ?>
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        <button type="button" class="btn btn-info fw-bold js-package-tab-btn" data-package-tab="active">Activos <span data-package-tab-count="active"><?= $activePackageCount ?></span></button>
+        <button type="button" class="btn btn-outline-info fw-bold js-package-tab-btn" data-package-tab="inactive">Inactivos <span data-package-tab-count="inactive"><?= $inactivePackageCount ?></span></button>
+    </div>
     <div class="table-responsive d-none d-md-block">
         <table class="table table-dark table-bordered align-middle" style="border:2px solid #22d3ee;">
             <thead>
@@ -861,7 +867,8 @@ include '../includes/header.php';
                 <?php $packageFeatures = $packageFeaturesByPackage[(int) ($p['id'] ?? 0)] ?? []; ?>
                 <?php $packageGalleryItems = $packageAccountGalleryByPackage[(int) ($p['id'] ?? 0)] ?? []; ?>
                 <?php $packageSellsAccount = (int) ($p['vender_cuenta'] ?? 0) === 1; ?>
-                <tr style="background:#181f2a; color:#fff;">
+                <?php $packageIsActive = !isset($p['activo']) || !empty($p['activo']); ?>
+                <tr class="js-package-record" data-package-context="desktop" data-package-id="<?= (int) ($p['id'] ?? 0) ?>" data-package-status="<?= $packageIsActive ? 'active' : 'inactive' ?>" style="background:#181f2a; color:#fff;">
                     <td style="background:#181f2a;">
                         <?php if (!empty($p['imagen_icono'])): ?>
                             <img src="/<?= htmlspecialchars($p['imagen_icono']) ?>" alt="icono" class="rounded img-thumbnail" style="max-height:48px;max-width:48px;box-shadow:0 0 8px #22d3ee; border:2px solid #22d3ee; background:#222c3a;">
@@ -918,6 +925,7 @@ include '../includes/header.php';
             </tbody>
         </table>
     </div>
+    <div class="js-package-empty-state d-none d-md-block alert alert-secondary" data-package-empty-context="desktop" style="background:#181f2a;border:1px solid rgba(34,211,238,0.28);color:#b2f6ff;"></div>
     <!-- Cards móvil -->
     <div class="d-md-none">
         <div class="row gy-4">
@@ -925,7 +933,8 @@ include '../includes/header.php';
             <?php $packageFeatures = $packageFeaturesByPackage[(int) ($p['id'] ?? 0)] ?? []; ?>
             <?php $packageGalleryItems = $packageAccountGalleryByPackage[(int) ($p['id'] ?? 0)] ?? []; ?>
             <?php $packageSellsAccount = (int) ($p['vender_cuenta'] ?? 0) === 1; ?>
-            <div class="col-12">
+            <?php $packageIsActive = !isset($p['activo']) || !empty($p['activo']); ?>
+            <div class="col-12 js-package-record" data-package-context="mobile" data-package-id="<?= (int) ($p['id'] ?? 0) ?>" data-package-status="<?= $packageIsActive ? 'active' : 'inactive' ?>">
                 <div class="card neon-card p-3" style="background:#181f2a; border:2px solid #22d3ee; box-shadow:0 0 16px #22d3ee,0 0 4px #2dd4bf; color:#22d3ee;">
                     <div class="d-flex align-items-center mb-2">
                         <?php if (!empty($p['imagen_icono'])): ?>
@@ -982,6 +991,7 @@ include '../includes/header.php';
             </div>
             <?php endforeach; ?>
         </div>
+        <div class="js-package-empty-state d-none alert alert-secondary mt-3" data-package-empty-context="mobile" style="background:#181f2a;border:1px solid rgba(34,211,238,0.28);color:#b2f6ff;"></div>
     </div>
 
     <a href="<?= htmlspecialchars($adminGamesUrl, ENT_QUOTES, 'UTF-8') ?>" class="inline-block mt-4 text-neon">&larr; Volver a juegos</a>
@@ -1284,6 +1294,54 @@ async function submitAjaxAdminForm(form, requestData = null) {
     return payload;
 }
 
+window.adminPackageActiveTab = 'active';
+
+window.adminPackageRefreshTabCounts = function() {
+    const counts = { active: 0, inactive: 0 };
+    document.querySelectorAll('.js-package-record[data-package-context="desktop"]').forEach((record) => {
+        const status = record.dataset.packageStatus === 'inactive' ? 'inactive' : 'active';
+        counts[status] += 1;
+    });
+    document.querySelectorAll('[data-package-tab-count]').forEach((node) => {
+        const status = node.getAttribute('data-package-tab-count') === 'inactive' ? 'inactive' : 'active';
+        node.textContent = String(counts[status] || 0);
+    });
+};
+
+window.applyAdminPackageTabFilter = function(nextTab) {
+    const activeTab = nextTab === 'inactive' ? 'inactive' : 'active';
+    window.adminPackageActiveTab = activeTab;
+
+    document.querySelectorAll('.js-package-tab-btn').forEach((button) => {
+        const isCurrent = button.getAttribute('data-package-tab') === activeTab;
+        button.classList.toggle('btn-info', isCurrent);
+        button.classList.toggle('btn-outline-info', !isCurrent);
+    });
+
+    document.querySelectorAll('.js-package-record').forEach((record) => {
+        const status = record.dataset.packageStatus === 'inactive' ? 'inactive' : 'active';
+        record.classList.toggle('d-none', status !== activeTab);
+    });
+
+    document.querySelectorAll('.js-package-empty-state').forEach((emptyState) => {
+        const context = emptyState.getAttribute('data-package-empty-context') || '';
+        const visibleCount = Array.from(document.querySelectorAll('.js-package-record[data-package-context="' + context + '"]')).filter((record) => !record.classList.contains('d-none')).length;
+        emptyState.textContent = activeTab === 'inactive'
+            ? 'No hay paquetes inactivos en este juego.'
+            : 'No hay paquetes activos en este juego.';
+        emptyState.classList.toggle('d-none', visibleCount > 0);
+    });
+};
+
+document.querySelectorAll('.js-package-tab-btn').forEach((button) => {
+    button.addEventListener('click', () => {
+        window.applyAdminPackageTabFilter(button.getAttribute('data-package-tab') || 'active');
+    });
+});
+
+window.adminPackageRefreshTabCounts();
+window.applyAdminPackageTabFilter(window.adminPackageActiveTab);
+
 window.adminPackageToggle = async function(input) {
     if (!input || input.dataset.busy === '1' || !input.form) {
         return;
@@ -1310,6 +1368,15 @@ window.adminPackageToggle = async function(input) {
         if (label) {
             label.textContent = input.checked ? 'Activo' : 'Inactivo';
         }
+        const packageIdInput = form.querySelector('input[name="paquete_id"]');
+        const packageId = packageIdInput ? String(packageIdInput.value || '') : '';
+        document.querySelectorAll('.js-package-record').forEach((record) => {
+            if (String(record.getAttribute('data-package-id') || '') === packageId) {
+                record.dataset.packageStatus = input.checked ? 'active' : 'inactive';
+            }
+        });
+        window.adminPackageRefreshTabCounts();
+        window.applyAdminPackageTabFilter(window.adminPackageActiveTab);
     } catch (error) {
         input.checked = !input.checked;
         if (valueInput) {
