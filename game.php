@@ -388,7 +388,7 @@ include __DIR__ . "/includes/header.php";
             <div class="pack-card-content">
               <p class="pack-card-name mb-0 fw-semibold"><?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?></p>
               <?php if ($packIsAccountSale): ?>
-                <span class="pack-account-sale-badge">Vender Cuenta</span>
+                <span class="pack-account-sale-badge">Cuenta</span>
               <?php endif; ?>
               <div class="pack-card-footer">
                 <span class="moneda-label"><?= htmlspecialchars($clave_moneda) ?></span>
@@ -635,11 +635,11 @@ include __DIR__ . "/includes/header.php";
           <div class="account-gallery-modal-details">
             <p id="account-gallery-modal-price" class="account-gallery-modal-price mb-0"></p>
             <p class="account-gallery-modal-copy mb-0">La entrega de credenciales se mostrará después de verificar el pago.</p>
-            <p id="account-gallery-modal-caption" class="account-gallery-modal-caption mb-0"></p>
           </div>
           <div class="account-gallery-main-frame">
             <img id="account-gallery-modal-image" src="" alt="Vista previa de la cuenta" class="account-gallery-main-image d-none" />
             <div id="account-gallery-modal-placeholder" class="account-gallery-main-placeholder">Sin imágenes registradas</div>
+            <p id="account-gallery-modal-caption" class="account-gallery-modal-caption mb-0"></p>
           </div>
           <div id="account-gallery-modal-thumbs" class="account-gallery-thumbs"></div>
         </div>
@@ -2585,6 +2585,7 @@ include __DIR__ . "/includes/header.php";
 
   .account-gallery-main-frame {
     min-height: 420px;
+    position: relative;
     border-radius: 22px;
     border: 1px solid rgba(34, 211, 238, 0.2);
     background: radial-gradient(circle at top, rgba(14, 165, 233, 0.18), rgba(2, 6, 23, 0.98));
@@ -2619,6 +2620,28 @@ include __DIR__ . "/includes/header.php";
   .account-gallery-modal-caption {
     color: #cbd5e1;
     line-height: 1.65;
+  }
+
+  .account-gallery-modal-caption {
+    position: absolute;
+    left: 1rem;
+    bottom: 1rem;
+    z-index: 2;
+    max-width: min(78%, 26rem);
+    padding: 0.65rem 0.85rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(8, 15, 24, 0.88), rgba(15, 23, 42, 0.78));
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(10px);
+    color: #f8fafc;
+    font-weight: 600;
+    line-height: 1.45;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+  }
+
+  .account-gallery-modal-caption:empty {
+    display: none;
   }
 
   .account-gallery-thumbs {
@@ -5986,7 +6009,7 @@ include __DIR__ . "/includes/header.php";
       accountGalleryModalPrice.textContent = formatPaymentDifferenceMoney(pack.moneda || monedaActualClave, getPackTotalPrice(pack, Number(pack.purchaseQuantity || getOrderQuantity())), pack.showDecimals);
     }
     if (accountGalleryModalCaption) {
-      accountGalleryModalCaption.textContent = activeItem && activeItem.description ? activeItem.description : 'Explora la galería y luego continúa con la compra desde esta misma ventana.';
+      accountGalleryModalCaption.textContent = activeItem && activeItem.description ? activeItem.description : '';
     }
     if (accountGalleryModalImage && accountGalleryModalPlaceholder) {
       if (activeItem && activeItem.imageUrl) {
