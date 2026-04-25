@@ -12,12 +12,15 @@ require_once __DIR__ . "/includes/payment_difference.php";
 require_once __DIR__ . "/includes/game_entry_window_per_game.php";
 require_once __DIR__ . "/includes/win_points.php";
 require_once __DIR__ . "/includes/binance_pay.php";
+require_once __DIR__ . "/includes/package_account_sales.php";
 currency_ensure_schema();
 package_features_ensure_schema($mysqli);
+package_account_sales_ensure_schema($mysqli);
 $paymentSupportWhatsappBase = store_config_whatsapp_link(store_config_get('whatsapp', ''));
 $binancePayCheckoutEnabled = binance_pay_is_enabled() && binance_pay_is_configured();
 $rememberLastPurchaseIdentifierEnabled = trim((string) store_config_get('guardar_ultimo_id', '0')) === '1';
 $packageQuantityPurchaseEnabled = trim((string) store_config_get('cantidad_paquetes', '0')) === '1';
+$accountSaleFeatureEnabled = trim((string) store_config_get('vender_cuentas', '0')) === '1';
 
 function fetch_user_legacy_purchase_defaults(mysqli $mysqli, int $userId): array {
   $defaults = [
@@ -320,6 +323,9 @@ include __DIR__ . "/includes/header.php";
     while ($pack = $resPaq->fetch_assoc()) {
       $paquetes[] = $pack;
     }
+    $packageAccountSaleGalleryMap = $accountSaleFeatureEnabled
+      ? package_account_sales_fetch_gallery_map($mysqli, array_map(static fn (array $package): int => (int) ($package['id'] ?? 0), $paquetes))
+      : [];
     $packageFeaturesByPackage = package_features_for_packages($mysqli, array_map(static fn (array $package): int => (int) ($package['id'] ?? 0), $paquetes));
   ?>
   <div class="row row-cols-2 row-cols-sm-3 row-cols-lg-4 g-3 mb-4" id="pack-grid">
@@ -336,6 +342,18 @@ include __DIR__ . "/includes/header.php";
         $packWinPointsRuleActive = is_array($packWinPointsRule) && !empty($packWinPointsRule['activo']) && $packWinPointsRequired > 0;
         $apiRequiredFields = [];
         $packFeatures = $packageFeaturesByPackage[$packId] ?? [];
+        $packIsAccountSale = package_account_sales_is_enabled_for_package($pack, $accountSaleFeatureEnabled);
+        $packAccountGallery = $packIsAccountSale ? ($packageAccountSaleGalleryMap[$packId] ?? []) : [];
+        $packAccountGalleryPayload = array_values(array_map(static function (array $item): array {
+          $imageUrl = package_feature_public_asset_url((string) ($item['image_path'] ?? ''));
+          return [
+            'image_url' => $imageUrl,
+            'description' => package_account_sales_normalize_caption((string) ($item['description'] ?? '')),
+            'order' => max(1, (int) ($item['order'] ?? 1)),
+          ];
+        }, array_filter($packAccountGallery, static function (array $item): bool {
+          return trim((string) ($item['image_path'] ?? '')) !== '';
+        })));
         if ($usesCatalogApi && $packApiId > 0 && isset($apiProductsById[$packApiId])) {
           $apiRequiredFields = recargas_api_describe_required_fields($apiProductsById[$packApiId]);
         }
@@ -356,6 +374,8 @@ include __DIR__ . "/includes/header.php";
           data-win-points-active="<?= $packWinPointsRuleActive ? '1' : '0' ?>"
           data-package-image="<?= htmlspecialchars($packImageUrl, ENT_QUOTES, 'UTF-8') ?>"
           data-package-features="<?= htmlspecialchars(json_encode($packFeatures, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8') ?>"
+          data-account-sale="<?= $packIsAccountSale ? '1' : '0' ?>"
+          data-account-gallery="<?= htmlspecialchars(json_encode($packAccountGalleryPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8') ?>"
           data-moneda="<?= htmlspecialchars($clave_moneda) ?>">
           <div class="card-body p-0 d-flex flex-column">
             <div class="pack-card-media">
@@ -367,6 +387,9 @@ include __DIR__ . "/includes/header.php";
             </div>
             <div class="pack-card-content">
               <p class="pack-card-name mb-0 fw-semibold"><?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?></p>
+              <?php if ($packIsAccountSale): ?>
+                <span class="pack-account-sale-badge">Vender Cuenta</span>
+              <?php endif; ?>
               <div class="pack-card-footer">
                 <span class="moneda-label"><?= htmlspecialchars($clave_moneda) ?></span>
                 <span class="precio-label">
@@ -450,6 +473,10 @@ include __DIR__ . "/includes/header.php";
               <div class="purchase-summary-pack-copy">
                 <p class="small text-secondary mb-1">Paquete seleccionado</p>
                 <p id="selected-pack" class="fw-bold text-white mb-0">Ninguno</p>
+                <div id="selected-pack-account-actions" class="selected-pack-account-actions d-none">
+                  <button type="button" id="selected-pack-preview-btn" class="btn btn-outline-info selected-pack-account-btn">Ver más</button>
+                  <button type="button" id="selected-pack-buy-btn" class="btn btn-info selected-pack-account-btn">Comprar</button>
+                </div>
               </div>
               <?php if ($packageQuantityPurchaseEnabled): ?>
               <div class="purchase-quantity-panel">
@@ -512,6 +539,11 @@ include __DIR__ . "/includes/header.php";
       <div class="input-group">
         <input type="text" name="coupon" id="coupon-input" placeholder="Código opcional" pattern="[A-Za-z0-9]+" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" title="Solo letras y números, sin espacios ni caracteres especiales." class="form-control bg-dark text-info border-info" />
         <button type="button" id="apply-coupon-btn" class="btn btn-info fw-bold">Activar Código</button>
+      </div>
+    </div>
+    <div class="col-12">
+      <div id="account-sale-note" class="d-none alert account-sale-note mb-0">
+        Al verificar el pago te mostraremos los datos completos de la cuenta comprada junto con su galería registrada.
       </div>
     </div>
     <div class="col-12">
@@ -586,6 +618,34 @@ include __DIR__ . "/includes/header.php";
         <div id="payment-status-modal-reasons" class="d-none payment-reasons-card mb-3 text-start"></div>
         <div id="payment-status-modal-actions" class="d-none payment-support-actions mb-4"></div>
         <button type="button" id="payment-status-modal-accept" class="btn btn-info fw-bold px-4 payment-status-modal-accept-btn<?= $paymentWindowConfigEnabled ? ' payment-window-theme-enabled' : '' ?>">Aceptar</button>
+      </div>
+    </div>
+  </div>
+  <div id="account-gallery-modal" class="modal fade app-overlay-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content bg-dark border-info text-light p-0 account-gallery-modal-content">
+        <div class="account-gallery-modal-header">
+          <div>
+            <p class="account-gallery-modal-eyebrow mb-1">Vista previa</p>
+            <h4 id="account-gallery-modal-title" class="fw-bold text-info mb-0">Cuenta disponible</h4>
+          </div>
+          <button type="button" id="account-gallery-modal-close" class="btn btn-outline-light btn-sm">Cerrar</button>
+        </div>
+        <div class="account-gallery-modal-body">
+          <div class="account-gallery-modal-details">
+            <p id="account-gallery-modal-price" class="account-gallery-modal-price mb-0"></p>
+            <p class="account-gallery-modal-copy mb-0">La entrega de credenciales se mostrará después de verificar el pago.</p>
+            <p id="account-gallery-modal-caption" class="account-gallery-modal-caption mb-0"></p>
+          </div>
+          <div class="account-gallery-main-frame">
+            <img id="account-gallery-modal-image" src="" alt="Vista previa de la cuenta" class="account-gallery-main-image d-none" />
+            <div id="account-gallery-modal-placeholder" class="account-gallery-main-placeholder">Sin imágenes registradas</div>
+          </div>
+          <div id="account-gallery-modal-thumbs" class="account-gallery-thumbs"></div>
+        </div>
+        <div class="account-gallery-modal-actions">
+          <button type="button" id="account-gallery-modal-buy" class="btn btn-info fw-bold">Comprar</button>
+        </div>
       </div>
     </div>
   </div>
@@ -2451,6 +2511,202 @@ include __DIR__ . "/includes/header.php";
       font-size: 1rem;
     }
   }
+
+  .pack-account-sale-badge {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    border: 1px solid rgba(34, 211, 238, 0.45);
+    background: rgba(8, 15, 24, 0.95);
+    color: #67e8f9;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .selected-pack-account-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 0.9rem;
+  }
+
+  .selected-pack-account-btn {
+    min-width: 138px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .account-sale-note {
+    border: 1px solid rgba(34, 211, 238, 0.35);
+    background: linear-gradient(135deg, rgba(8, 15, 24, 0.96), rgba(17, 24, 39, 0.98));
+    color: #c7f9ff;
+  }
+
+  .account-gallery-modal-content {
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  }
+
+  .account-gallery-modal-header,
+  .account-gallery-modal-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.1rem 1.35rem;
+    background: linear-gradient(135deg, rgba(8, 15, 24, 0.96), rgba(17, 24, 39, 0.98));
+  }
+
+  .account-gallery-modal-eyebrow {
+    color: #67e8f9;
+    font-size: 0.78rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .account-gallery-modal-body {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    padding: 1.35rem;
+    background: #0b1220;
+  }
+
+  .account-gallery-modal-details {
+    display: grid;
+    gap: 0.55rem;
+  }
+
+  .account-gallery-main-frame {
+    min-height: 420px;
+    border-radius: 22px;
+    border: 1px solid rgba(34, 211, 238, 0.2);
+    background: radial-gradient(circle at top, rgba(14, 165, 233, 0.18), rgba(2, 6, 23, 0.98));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .account-gallery-main-image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 420px;
+    object-fit: cover;
+  }
+
+  .account-gallery-main-placeholder {
+    color: #94a3b8;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .account-gallery-modal-price {
+    color: #22d3ee;
+    font-size: 1.25rem;
+    font-weight: 800;
+  }
+
+  .account-gallery-modal-copy,
+  .account-gallery-modal-caption {
+    color: #cbd5e1;
+    line-height: 1.65;
+  }
+
+  .account-gallery-thumbs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.7rem;
+    justify-content: flex-start;
+  }
+
+  .account-gallery-thumb {
+    width: 88px;
+    flex: 0 0 88px;
+    border: 1px solid rgba(34, 211, 238, 0.22);
+    background: #081018;
+    border-radius: 16px;
+    padding: 0;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .account-gallery-thumb.is-active {
+    border-color: rgba(34, 211, 238, 0.9);
+    box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.12);
+    transform: translateY(-2px);
+  }
+
+  .account-gallery-thumb img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+  }
+
+  .account-sale-delivery-card {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .account-sale-delivery-copy {
+    padding: 1rem 1.05rem;
+    border-radius: 16px;
+    border: 1px solid rgba(52, 211, 153, 0.25);
+    background: rgba(8, 15, 24, 0.9);
+    color: #e2e8f0;
+    white-space: pre-wrap;
+    line-height: 1.65;
+  }
+
+  .account-sale-delivery-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.75rem;
+  }
+
+  .account-sale-delivery-gallery-item {
+    display: grid;
+    gap: 0.4rem;
+  }
+
+  .account-sale-delivery-gallery-item img {
+    width: 100%;
+    border-radius: 14px;
+    border: 1px solid rgba(34, 211, 238, 0.18);
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+  }
+
+  .account-sale-delivery-gallery-item span {
+    color: #cbd5e1;
+    font-size: 0.8rem;
+    line-height: 1.45;
+  }
+
+  .account-sale-copy-btn {
+    justify-self: start;
+  }
+
+  @media (max-width: 767.98px) {
+    .account-gallery-main-frame,
+    .account-gallery-main-image {
+      min-height: 260px;
+    }
+
+    .selected-pack-account-btn {
+      flex: 1 1 100%;
+    }
+  }
 </style>
 <script>
   // Todas las variables y lógica JS en un solo bloque
@@ -2461,6 +2717,7 @@ include __DIR__ . "/includes/header.php";
   let defaultPaymentPhone = <?= json_encode($loggedUserLastPurchasePhone, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const paymentMethodsByCurrency = <?= json_encode($paymentMethodsByCurrency, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const binancePayCheckoutEnabled = <?= $binancePayCheckoutEnabled ? 'true' : 'false' ?>;
+  const accountSaleFeatureEnabled = <?= $accountSaleFeatureEnabled ? 'true' : 'false' ?>;
   const binancePayButtonLabel = 'Binance Pay';
   const paymentSupportWhatsappBase = <?= json_encode($paymentSupportWhatsappBase, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const winPointsState = <?= json_encode([
@@ -2477,7 +2734,11 @@ include __DIR__ . "/includes/header.php";
   const paymentHeaderMinimalEnabled = <?= $paymentHeaderMinimalEnabled ? 'true' : 'false' ?>;
   const packageFeatureIconSvgMap = <?= json_encode(package_feature_icon_svg_map(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const packCards2 = Array.from(document.querySelectorAll('.pack-card'));
+  const packAccountPreviewButtons = Array.from(document.querySelectorAll('.pack-account-preview-btn'));
   const selectedPack = document.getElementById("selected-pack");
+  const selectedPackAccountActions = document.getElementById('selected-pack-account-actions');
+  const selectedPackPreviewButton = document.getElementById('selected-pack-preview-btn');
+  const selectedPackBuyButton = document.getElementById('selected-pack-buy-btn');
   const orderQuantityDecreaseButton = document.getElementById('order-quantity-decrease');
   const orderQuantityIncreaseButton = document.getElementById('order-quantity-increase');
   const orderQuantityInput = document.getElementById('order-quantity');
@@ -2487,7 +2748,9 @@ include __DIR__ . "/includes/header.php";
   const selectedWinPointsTotal = document.getElementById('selected-win-points-total');
   const paymentDifferenceBanner = document.getElementById('payment-difference-banner');
   const orderForm = document.getElementById("order-form");
+  const orderEmailInput = orderForm ? orderForm.querySelector('input[name="email"]') : null;
   const buyButton = document.getElementById("buy-button");
+  const accountSaleNote = document.getElementById('account-sale-note');
   const defaultBuyButtonLabel = 'Comprar Ahora';
   const paymentDifferenceBlockedBuyButtonLabel = 'Selecciona un paquete mayor al saldo a favor';
   const defaultPaymentSubmitButtonLabel = 'Pagado / Recargar';
@@ -2535,6 +2798,15 @@ include __DIR__ . "/includes/header.php";
   const paymentModalAlert = document.getElementById('payment-modal-alert');
   const paymentModalReasons = document.getElementById('payment-modal-reasons');
   const paymentModalActions = document.getElementById('payment-modal-actions');
+  const accountGalleryModal = document.getElementById('account-gallery-modal');
+  const accountGalleryModalTitle = document.getElementById('account-gallery-modal-title');
+  const accountGalleryModalPrice = document.getElementById('account-gallery-modal-price');
+  const accountGalleryModalImage = document.getElementById('account-gallery-modal-image');
+  const accountGalleryModalPlaceholder = document.getElementById('account-gallery-modal-placeholder');
+  const accountGalleryModalCaption = document.getElementById('account-gallery-modal-caption');
+  const accountGalleryModalThumbs = document.getElementById('account-gallery-modal-thumbs');
+  const accountGalleryModalClose = document.getElementById('account-gallery-modal-close');
+  const accountGalleryModalBuy = document.getElementById('account-gallery-modal-buy');
   const gameEntryWindowModal = document.getElementById('game-entry-window-modal');
   const gameEntryWindowConfirmation = document.getElementById('game-entry-window-confirmation');
   const gameEntryWindowCheckbox = document.getElementById('game-entry-window-check');
@@ -2580,6 +2852,7 @@ include __DIR__ . "/includes/header.php";
   const paymentCancelConfirmButton = document.getElementById('payment-cancel-confirm-btn');
   let lastFocusedElement = null;
   let activePack = null;
+  let activeAccountGalleryPreview = { pack: null, index: 0 };
   let selectedTotalValue = 0;
   let couponApplied = false;
   let couponValue = '';
@@ -3345,6 +3618,71 @@ include __DIR__ . "/includes/header.php";
     }
   }
 
+  function resolvePublicImageUrl(rawPath) {
+    const trimmed = String(rawPath || '').trim();
+    if (trimmed === '') {
+      return '';
+    }
+
+    if (/^https?:\/\//i.test(trimmed)) {
+      return trimmed;
+    }
+
+    return buildAppUrl(`/${trimmed.replace(/^\/+/, '')}`);
+  }
+
+  function parseAccountSaleGallery(rawValue) {
+    try {
+      const parsed = JSON.parse(String(rawValue || '[]'));
+      return Array.isArray(parsed)
+        ? parsed
+            .filter((item) => item && typeof item === 'object')
+            .map((item) => ({
+              imageUrl: resolvePublicImageUrl(item.image_url || item.image_path || ''),
+              description: String(item.description || '').trim(),
+              order: Number(item.order || 0),
+            }))
+            .filter((item) => item.imageUrl !== '')
+        : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function isAccountSalePack(pack) {
+    return Boolean(accountSaleFeatureEnabled && pack && pack.accountSale);
+  }
+
+  function setAccountSaleNote(pack) {
+    if (!accountSaleNote) {
+      return;
+    }
+
+    const visible = isAccountSalePack(pack);
+    accountSaleNote.classList.toggle('d-none', !visible);
+  }
+
+  function getAccountSalePayload(data) {
+    const payload = data && typeof data.account_sale === 'object' ? data.account_sale : null;
+    if (!payload || !payload.enabled) {
+      return null;
+    }
+
+    return {
+      delivered: !!payload.delivered,
+      accountText: String(payload.account_text || '').trim(),
+      gallery: Array.isArray(payload.gallery)
+        ? payload.gallery
+            .filter((item) => item && typeof item === 'object')
+            .map((item) => ({
+              imageUrl: resolvePublicImageUrl(item.image_url || item.image_path || ''),
+              description: String(item.description || '').trim(),
+            }))
+            .filter((item) => item.imageUrl !== '')
+        : [],
+    };
+  }
+
   function buildPackStateFromCard(card) {
     return {
       id: card.dataset.packageId,
@@ -3358,7 +3696,9 @@ include __DIR__ . "/includes/header.php";
       redeemActive: card.dataset.winPointsActive === '1',
       requiredFields: parseRequiredFields(card.dataset.requiredFields),
       imageUrl: String(card.dataset.packageImage || ''),
-      features: parsePackageFeatures(card.dataset.packageFeatures)
+      features: parsePackageFeatures(card.dataset.packageFeatures),
+      accountSale: card.dataset.accountSale === '1',
+      accountGallery: parseAccountSaleGallery(card.dataset.accountGallery)
     };
   }
 
@@ -3368,7 +3708,7 @@ include __DIR__ . "/includes/header.php";
   }
 
   function renderPaymentSummary(pack, userId, totalText) {
-    const safeUser = userId || '-';
+    const safeUser = isAccountSalePack(pack) ? 'Entrega directa' : (userId || '-');
     const quantity = normalizeOrderQuantity(pack && pack.purchaseQuantity ? pack.purchaseQuantity : 1);
     const safeProduct = (pack && pack.name)
       ? (quantity > 1 ? `${pack.name} x${quantity}` : pack.name)
@@ -3971,8 +4311,9 @@ include __DIR__ . "/includes/header.php";
     const existingValues = collectPlayerFields();
     const packRequiredFields = pack && Array.isArray(pack.requiredFields) ? pack.requiredFields : [];
     const requiredFields = packRequiredFields.length ? packRequiredFields : getPlayerVerificationDefaultFields();
-    const shouldShowPrimaryField = !gameUsesCatalogApi || !pack || requiredFields.length > 0;
+    const shouldShowPrimaryField = !isAccountSalePack(pack) && (!gameUsesCatalogApi || !pack || requiredFields.length > 0);
     const primaryConfig = requiredFields[0] || defaultPrimaryField;
+    setAccountSaleNote(pack);
 
     if (playerPrimaryField && playerPrimaryInput && playerPrimaryLabel) {
       syncPrimaryControl(primaryConfig);
@@ -4187,6 +4528,10 @@ include __DIR__ . "/includes/header.php";
   }
 
   function requiresVerifiedPlayerForCheckout() {
+    if (isAccountSalePack(activePack)) {
+      return false;
+    }
+
     return Boolean(
       playerVerificationConfig
       && (playerVerificationState.pending || (!playerVerificationState.verified && !playerVerificationState.serverUnavailable))
@@ -4198,7 +4543,7 @@ include __DIR__ . "/includes/header.php";
       return;
     }
 
-    if (!playerVerificationConfig) {
+    if (!playerVerificationConfig || isAccountSalePack(activePack)) {
       verifyPlayerButton.classList.add('d-none');
       return;
     }
@@ -4211,7 +4556,10 @@ include __DIR__ . "/includes/header.php";
   }
 
   function handlePlayerVerificationFieldChange() {
-    if (!playerVerificationConfig) {
+    if (!playerVerificationConfig || isAccountSalePack(activePack)) {
+      invalidatePlayerVerificationRequests();
+      resetPlayerVerificationState();
+      syncPlayerVerificationUi();
       return;
     }
 
@@ -4253,7 +4601,7 @@ include __DIR__ . "/includes/header.php";
   }
 
   async function verifyCurrentPlayer(options = {}) {
-    if (!playerVerificationConfig) {
+    if (!playerVerificationConfig || isAccountSalePack(activePack)) {
       return;
     }
 
@@ -4610,11 +4958,14 @@ include __DIR__ . "/includes/header.php";
       if (nextState === 'enviado') {
         clearPaymentStatusPolling();
         renderDeliveredCodes(data);
-        setPaymentAlert('Pago verificado y recarga procesada correctamente.', 'success');
+        const successMessage = getAccountSalePayload(data)
+          ? 'Pago verificado y cuenta entregada correctamente.'
+          : 'Pago verificado y recarga procesada correctamente.';
+        setPaymentAlert(successMessage, 'success');
         setPaymentFormDisabled(true);
         clearPaymentTimer();
         setCancelOrderButtonMode('close');
-        showPaymentStatusModal('Operación exitosa', 'Pago verificado y recarga procesada correctamente.', 'success');
+        showPaymentStatusModal('Operación exitosa', successMessage, 'success');
         return;
       }
 
@@ -5006,8 +5357,57 @@ include __DIR__ . "/includes/header.php";
     }
   }
 
+  function renderAccountSaleDeliveryCard(container, payload) {
+    if (!container || !payload) {
+      return false;
+    }
+
+    const accountText = String(payload.accountText || '').trim();
+    const gallery = Array.isArray(payload.gallery) ? payload.gallery : [];
+    if (accountText === '' && gallery.length === 0) {
+      return false;
+    }
+
+    container.className = `payment-reasons-card mb-3${container.id === 'payment-status-modal-reasons' ? ' text-start' : ''}`;
+    container.innerHTML = `
+      <div class="payment-reasons-title">Cuenta entregada</div>
+      <div class="payment-reasons-summary">Guarda esta información. La cuenta ya quedó disponible para ti.</div>
+      <div class="account-sale-delivery-card">
+        ${accountText !== '' ? `<div class="account-sale-delivery-copy">${escapePaymentHtml(accountText)}</div>` : ''}
+        ${accountText !== '' ? '<button type="button" class="btn btn-info fw-bold account-sale-copy-btn">Copiar datos de la cuenta</button>' : ''}
+        ${gallery.length ? `<div class="account-sale-delivery-gallery">${gallery.map((item) => `
+          <div class="account-sale-delivery-gallery-item">
+            <img src="${escapePaymentHtml(item.imageUrl)}" alt="Vista de la cuenta">
+            ${String(item.description || '').trim() !== '' ? `<span>${escapePaymentHtml(item.description)}</span>` : ''}
+          </div>
+        `).join('')}</div>` : ''}
+      </div>
+    `;
+
+    const copyButton = container.querySelector('.account-sale-copy-btn');
+    if (copyButton && accountText !== '') {
+      copyButton.addEventListener('click', async () => {
+        try {
+          const copied = await copyTextToClipboard(accountText);
+          showToast(copied ? 'Datos de la cuenta copiados.' : 'No se pudieron copiar los datos de la cuenta.', copied ? 'success' : 'error');
+        } catch (error) {
+          showToast('No se pudieron copiar los datos de la cuenta.', 'error');
+        }
+      });
+    }
+
+    return true;
+  }
+
   function renderDeliveredCodes(data) {
     clearPaymentSupportUi();
+    const accountSalePayload = getAccountSalePayload(data);
+    if (accountSalePayload && renderAccountSaleDeliveryCard(paymentModalReasons, accountSalePayload)) {
+      renderAccountSaleDeliveryCard(paymentStatusModalReasons, accountSalePayload);
+      scrollPaymentModalToTop();
+      return true;
+    }
+
     const codes = extractProviderCodes(data);
     if (!codes.length) {
       return false;
@@ -5491,6 +5891,9 @@ include __DIR__ . "/includes/header.php";
           : '';
         selectedWinPointsTotal.classList.toggle('d-none', !hasWinPointsRedemption);
       }
+      if (selectedPackAccountActions) {
+        selectedPackAccountActions.classList.toggle('d-none', !isAccountSalePack(pack));
+      }
     } else {
       selectedTotalValue = 0;
       selectedPack.textContent = 'Ninguno';
@@ -5500,29 +5903,166 @@ include __DIR__ . "/includes/header.php";
         selectedWinPointsTotal.textContent = '';
         selectedWinPointsTotal.classList.add('d-none');
       }
+      if (selectedPackAccountActions) {
+        selectedPackAccountActions.classList.add('d-none');
+      }
     }
   }
+
+  function findPackCardById(packageId) {
+    return packCards2.find((card) => String(card.dataset.packageId || '') === String(packageId || '')) || null;
+  }
+
+  function activatePackCard(card, options = {}) {
+    if (!card) {
+      return;
+    }
+
+    packCards2.forEach((item) => {
+      item.classList.remove('neon-selected');
+    });
+    card.classList.add('neon-selected');
+    activePack = buildPackStateFromCard(card);
+    updateResumenCompra(activePack);
+    renderPlayerFields(activePack);
+    handlePlayerVerificationFieldChange();
+    updateButtonState();
+    const shouldScroll = Object.prototype.hasOwnProperty.call(options, 'scroll')
+      ? options.scroll !== false
+      : !isAccountSalePack(activePack);
+    if (shouldScroll) {
+      scrollToOrderForm();
+    }
+  }
+
+  function focusAccountSaleEmailStep() {
+    closeAccountGalleryModal();
+    scrollToOrderForm();
+    if (orderEmailInput) {
+      if (!orderEmailInput.value.trim() && defaultOrderEmail) {
+        orderEmailInput.value = defaultOrderEmail;
+      }
+      orderEmailInput.focus();
+    }
+  }
+
+  function triggerAccountSaleBuyFlow(triggerButton = buyButton) {
+    if (!activePack || !isAccountSalePack(activePack)) {
+      return;
+    }
+
+    const loggedEmail = String(defaultOrderEmail || '').trim();
+    if (!winPointsState.loggedIn || loggedEmail === '') {
+      focusAccountSaleEmailStep();
+      return;
+    }
+
+    if (orderEmailInput) {
+      orderEmailInput.value = loggedEmail;
+    }
+    closeAccountGalleryModal();
+    submitOrderCreationRequest({
+      triggerButton,
+      forceEmail: loggedEmail,
+      forceUserId: '',
+      forcePlayerFields: {}
+    });
+  }
+
+  function renderAccountGalleryPreview(pack, activeIndex = 0) {
+    if (!accountGalleryModal || !pack) {
+      return;
+    }
+
+    const gallery = Array.isArray(pack.accountGallery) ? pack.accountGallery : [];
+    const safeIndex = gallery.length ? Math.max(0, Math.min(activeIndex, gallery.length - 1)) : 0;
+    const activeItem = gallery[safeIndex] || null;
+    activeAccountGalleryPreview = { pack, index: safeIndex };
+
+    if (accountGalleryModalTitle) {
+      accountGalleryModalTitle.textContent = pack.name || 'Cuenta disponible';
+    }
+    if (accountGalleryModalPrice) {
+      accountGalleryModalPrice.textContent = formatPaymentDifferenceMoney(pack.moneda || monedaActualClave, getPackTotalPrice(pack, Number(pack.purchaseQuantity || getOrderQuantity())), pack.showDecimals);
+    }
+    if (accountGalleryModalCaption) {
+      accountGalleryModalCaption.textContent = activeItem && activeItem.description ? activeItem.description : 'Explora la galería y luego continúa con la compra desde esta misma ventana.';
+    }
+    if (accountGalleryModalImage && accountGalleryModalPlaceholder) {
+      if (activeItem && activeItem.imageUrl) {
+        accountGalleryModalImage.src = activeItem.imageUrl;
+        accountGalleryModalImage.classList.remove('d-none');
+        accountGalleryModalPlaceholder.classList.add('d-none');
+      } else {
+        accountGalleryModalImage.src = '';
+        accountGalleryModalImage.classList.add('d-none');
+        accountGalleryModalPlaceholder.classList.remove('d-none');
+      }
+    }
+    if (accountGalleryModalThumbs) {
+      accountGalleryModalThumbs.innerHTML = gallery.map((item, index) => `
+        <button type="button" class="account-gallery-thumb${index === safeIndex ? ' is-active' : ''}" data-account-thumb-index="${index}" aria-label="Vista previa ${index + 1}">
+          <img src="${escapePaymentHtml(item.imageUrl)}" alt="Vista previa ${index + 1}">
+        </button>
+      `).join('');
+      accountGalleryModalThumbs.querySelectorAll('[data-account-thumb-index]').forEach((button) => {
+        button.addEventListener('click', () => {
+          renderAccountGalleryPreview(pack, Number(button.getAttribute('data-account-thumb-index') || '0'));
+        });
+      });
+    }
+  }
+
+  function openAccountGalleryModal(pack) {
+    if (!accountGalleryModal || !pack || !isAccountSalePack(pack)) {
+      return;
+    }
+
+    renderAccountGalleryPreview(pack, 0);
+    setOverlayVisible(accountGalleryModal, true);
+  }
+
+  function closeAccountGalleryModal() {
+    if (!accountGalleryModal) {
+      return;
+    }
+
+    setOverlayVisible(accountGalleryModal, false);
+  }
+
   packCards2.forEach((card) => {
     card.addEventListener("click", () => {
-      packCards2.forEach((item) => {
-        item.classList.remove("neon-selected");
-      });
-      card.classList.add("neon-selected");
-      activePack = buildPackStateFromCard(card);
-      updateResumenCompra(activePack);
-      renderPlayerFields(activePack);
-      handlePlayerVerificationFieldChange();
-      updateButtonState();
-      scrollToOrderForm();
+      activatePackCard(card);
     });
   });
+  if (selectedPackPreviewButton) {
+    selectedPackPreviewButton.addEventListener('click', () => {
+      if (activePack && isAccountSalePack(activePack)) {
+        openAccountGalleryModal(activePack);
+      }
+    });
+  }
+  if (selectedPackBuyButton) {
+    selectedPackBuyButton.addEventListener('click', () => {
+      triggerAccountSaleBuyFlow(selectedPackBuyButton);
+    });
+  }
   if (packCards2.length) {
     // Ya no se selecciona automáticamente ningún paquete al cargar
   }
   syncOrderQuantityInput(1);
   renderPlayerFields(null);
+  setAccountSaleNote(null);
   if (verifyPlayerButton) {
     verifyPlayerButton.addEventListener('click', verifyCurrentPlayer);
+  }
+  if (accountGalleryModalClose) {
+    accountGalleryModalClose.addEventListener('click', closeAccountGalleryModal);
+  }
+  if (accountGalleryModalBuy) {
+    accountGalleryModalBuy.addEventListener('click', () => {
+      triggerAccountSaleBuyFlow(accountGalleryModalBuy);
+    });
   }
               function normalizeCouponCode(value) {
                 return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -5769,9 +6309,11 @@ include __DIR__ . "/includes/header.php";
                     const nextState = String((data && data.estado) || '').toLowerCase();
                     const providerFlow = String((data && data.provider_flow) || '').toLowerCase();
                     if (nextState === 'enviado') {
-                      const successMessage = data.message || (paymentMode === 'points'
-                        ? 'Canje realizado y recarga procesada correctamente.'
-                        : 'La recarga fue procesada correctamente.');
+                      const successMessage = data.message || (getAccountSalePayload(data)
+                        ? (paymentMode === 'points' ? 'Canje realizado y cuenta entregada correctamente.' : 'La cuenta fue entregada correctamente.')
+                        : (paymentMode === 'points'
+                          ? 'Canje realizado y recarga procesada correctamente.'
+                          : 'La recarga fue procesada correctamente.'));
                       setPaymentAlert(successMessage, 'success');
                       renderDeliveredCodes(data);
                       renderOverpaidPaymentDifference(data);
@@ -5966,15 +6508,25 @@ include __DIR__ . "/includes/header.php";
               });
               setPaymentDifferenceCreditState(paymentDifferenceCreditState);
               openGameEntryWindowIfNeeded();
-              orderForm.addEventListener('submit', function(event) {
-                event.preventDefault();
-                const btn = buyButton;
+              function submitOrderCreationRequest(options = {}) {
+                const btn = options.triggerButton instanceof HTMLElement ? options.triggerButton : buyButton;
                 const couponVal = normalizeCouponCode(couponInput.value);
                 couponInput.value = couponVal;
-                const userId = playerPrimaryInput ? playerPrimaryInput.value.trim() : '';
-                const playerFields = collectPlayerFields();
-                const email = orderForm.email.value.trim();
-                const pack = activePack;
+                const pack = options.pack || activePack;
+                const userId = typeof options.forceUserId === 'string'
+                  ? options.forceUserId.trim()
+                  : (playerPrimaryInput ? playerPrimaryInput.value.trim() : '');
+                const playerFields = options.forcePlayerFields && typeof options.forcePlayerFields === 'object'
+                  ? options.forcePlayerFields
+                  : collectPlayerFields();
+                const email = typeof options.forceEmail === 'string'
+                  ? options.forceEmail.trim()
+                  : (orderEmailInput ? orderEmailInput.value.trim() : '');
+
+                if (orderEmailInput && email !== '') {
+                  orderEmailInput.value = email;
+                }
+
                 if (!pack) {
                   showToast('Debes seleccionar un paquete.', 'error');
                   return;
@@ -6002,10 +6554,8 @@ include __DIR__ . "/includes/header.php";
                       errorElem.textContent = 'Este campo es obligatorio.';
                       field.parentNode.appendChild(errorElem);
                     }
-                  } else {
-                    if (errorElem) {
-                      errorElem.remove();
-                    }
+                  } else if (errorElem) {
+                    errorElem.remove();
                   }
                 });
 
@@ -6026,13 +6576,13 @@ include __DIR__ . "/includes/header.php";
                   modalYes.onclick = function() {
                     setOverlayVisible(couponModal, false);
                     applyCouponButton.click();
-                    setTimeout(() => orderForm.dispatchEvent(new Event('submit', {cancelable: true})), 150);
+                    setTimeout(() => submitOrderCreationRequest(options), 150);
                   };
                   modalNo.onclick = function() {
                     setOverlayVisible(couponModal, false);
                     couponApplied = false;
                     couponInput.value = '';
-                    setTimeout(() => orderForm.dispatchEvent(new Event('submit', {cancelable: true})), 100);
+                    setTimeout(() => submitOrderCreationRequest(options), 100);
                   };
                   modalCancel.onclick = function() {
                     setOverlayVisible(couponModal, false);
@@ -6049,11 +6599,9 @@ include __DIR__ . "/includes/header.php";
                   btn.appendChild(spinner);
                 }
 
-                let precioFinal = selectedPrice.textContent.replace(/[^\d.]/g, '');
                 const purchaseQuantity = getOrderQuantity();
                 pack.purchaseQuantity = purchaseQuantity;
-                precioFinal = String(normalizeCurrencyAmount(selectedTotalValue, pack.showDecimals));
-
+                const precioFinal = String(normalizeCurrencyAmount(selectedTotalValue, pack.showDecimals));
                 const pedidoData = {
                   action: 'create',
                   game_id: "<?= $game['id'] ?>",
@@ -6086,15 +6634,13 @@ include __DIR__ . "/includes/header.php";
                   try {
                     data = await res.json();
                   } catch (e) {
-                    // Si no es JSON válido pero la respuesta es 200, asumimos éxito
                     if (res.ok) {
                       showToast('Pedido registrado correctamente', 'success');
                       resetCheckoutState();
                       return;
-                    } else {
-                      showToast('Error de red al registrar pedido', 'error');
-                      return;
                     }
+                    showToast('Error de red al registrar pedido', 'error');
+                    return;
                   }
                   if (data && data.ok) {
                     if (rememberLastPurchaseIdentifierEnabled && userId) {
@@ -6127,6 +6673,11 @@ include __DIR__ . "/includes/header.php";
                   removeBuySpinner();
                   setOverlayVisible(loadingModal, false);
                 });
+              }
+
+              orderForm.addEventListener('submit', function(event) {
+                event.preventDefault();
+                submitOrderCreationRequest({ triggerButton: buyButton });
               });
               </script>
             </section>

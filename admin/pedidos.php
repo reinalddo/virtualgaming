@@ -65,6 +65,53 @@ function order_player_fields_lines(array $order): array {
   return $lines;
 }
 
+function order_is_account_sale_admin(array $order): bool {
+  return (int) ($order['vender_cuenta'] ?? 0) === 1;
+}
+
+function order_account_sale_gallery_admin(array $order): array {
+  $decoded = json_decode((string) ($order['cuenta_galeria_json'] ?? ''), true);
+  return is_array($decoded) ? array_values(array_filter($decoded, 'is_array')) : [];
+}
+
+function order_account_sale_detail_lines(array $order): array {
+  if (!order_is_account_sale_admin($order)) {
+    return [];
+  }
+
+  $lines = ['Modo de entrega: Venta de cuenta'];
+  $accountText = trim((string) ($order['cuenta_entrega_texto'] ?? ''));
+  if ($accountText !== '') {
+    $preview = preg_replace('/\s+/u', ' ', $accountText) ?? $accountText;
+    $preview = trim($preview);
+    if (function_exists('mb_substr')) {
+      $preview = mb_substr($preview, 0, 180);
+    } else {
+      $preview = substr($preview, 0, 180);
+    }
+    if ($preview !== '') {
+      $lines[] = 'Datos de cuenta: ' . $preview . (strlen($preview) >= 180 ? '...' : '');
+    }
+  }
+
+  $galleryCount = count(order_account_sale_gallery_admin($order));
+  if ($galleryCount > 0) {
+    $lines[] = 'Galería registrada: ' . $galleryCount . ' imagen(es)';
+  }
+
+  return $lines;
+}
+
+function order_retry_button_label(array $order): string {
+  return order_is_account_sale_admin($order) ? 'Enviar cuenta' : 'Enviar recarga';
+}
+
+function order_retry_confirm_message(array $order): string {
+  return order_is_account_sale_admin($order)
+    ? 'Se enviará nuevamente la cuenta para este pedido. Usa esta acción solo si necesitas reenviar la entrega al cliente.'
+    : 'Se enviara nuevamente la recarga para este pedido verificado. Usa esta accion solo si la recarga anterior no se proceso realmente.';
+}
+
 function order_provider_status_label(array $order): string {
   $providerOrderId = trim((string) ($order['recargas_api_pedido_id'] ?? ''));
   if ($providerOrderId === '') {
@@ -279,7 +326,12 @@ function order_sync_button_label(array $order): string {
 }
 
 function order_can_retry_recharge(array $order): bool {
-  if (($order['estado'] ?? '') !== 'pagado') {
+  $status = (string) ($order['estado'] ?? '');
+  if (order_is_account_sale_admin($order)) {
+    return in_array($status, ['pagado', 'enviado'], true);
+  }
+
+  if ($status !== 'pagado') {
     return false;
   }
 
@@ -522,6 +574,7 @@ function orders_admin_render_pagination(string $status, int $currentPage, int $t
 
 function order_search_index(array $order): string {
   $playerFieldLines = order_player_fields_lines($order);
+  $accountSaleDetailLines = order_account_sale_detail_lines($order);
   $binanceDetailLines = order_binance_detail_lines($order);
   $binanceHistoryLines = order_binance_history_lines($order);
   $parts = [
@@ -544,6 +597,7 @@ function order_search_index(array $order): string {
     $order['cupon'] ?? '',
     $order['estado'] ?? '',
     implode(' ', $playerFieldLines),
+    implode(' ', $accountSaleDetailLines),
     implode(' ', order_provider_detail_lines($order)),
     implode(' ', order_provider_history_lines($order)),
     implode(' ', $binanceDetailLines),
@@ -861,6 +915,7 @@ foreach ($statuses as $statusKey) {
               <tbody id="table-body-<?= $st ?>">
                 <?php foreach ($list as $order): ?>
                   <?php $playerFieldLines = order_player_fields_lines($order); ?>
+                  <?php $accountSaleDetailLines = order_account_sale_detail_lines($order); ?>
                   <?php $providerStatusLine = order_provider_status_label($order); ?>
                   <?php $providerDetailLines = order_provider_detail_lines($order); ?>
                   <?php $providerHistoryLines = order_provider_history_lines($order); ?>
@@ -873,10 +928,13 @@ foreach ($statuses as $statusKey) {
                       <div style="color:#b2f6ff; margin-top:0.2rem;"><?= htmlspecialchars($order['creado_en']) ?></div>
                     </td>
                     <td style="background:#181f2a; color:#00fff7;">
-                      <div style="font-weight:bold;"><?= htmlspecialchars($order['user_identifier']) ?></div>
+                      <div style="font-weight:bold;"><?= htmlspecialchars(order_meta_value(order_is_account_sale_admin($order) ? 'Entrega de cuenta' : ($order['user_identifier'] ?? ''))) ?></div>
                       <div style="color:#b2f6ff; margin-top:0.2rem;"><?= htmlspecialchars($order['email']) ?></div>
                       <?php foreach ($playerFieldLines as $playerFieldLine): ?>
                         <div style="color:#7dd3fc; margin-top:0.2rem; font-size:0.9em;"><?= htmlspecialchars($playerFieldLine) ?></div>
+                      <?php endforeach; ?>
+                      <?php foreach ($accountSaleDetailLines as $accountSaleDetailLine): ?>
+                        <div style="color:#67e8f9; margin-top:0.2rem; font-size:0.85em;"><?= htmlspecialchars($accountSaleDetailLine) ?></div>
                       <?php endforeach; ?>
                       <?php if ($providerStatusLine !== ''): ?>
                         <div style="color:#fbbf24; margin-top:0.2rem; font-size:0.85em;"><?= htmlspecialchars($providerStatusLine) ?></div>
@@ -929,7 +987,7 @@ foreach ($statuses as $statusKey) {
                         <?php endforeach; ?>
                       </select>
                       <?php if (order_can_retry_recharge($order)): ?>
-                        <button type="button" class="btn btn-outline-info btn-sm mt-2 js-retry-recharge" data-order-id="<?= (int) $order['id'] ?>">Enviar recarga</button>
+                        <button type="button" class="btn btn-outline-info btn-sm mt-2 js-retry-recharge" data-order-id="<?= (int) $order['id'] ?>" data-confirm-message="<?= htmlspecialchars(order_retry_confirm_message($order), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(order_retry_button_label($order)) ?></button>
                       <?php endif; ?>
                       <?php if (order_can_sync_gateway($order)): ?>
                         <button type="button" class="btn btn-outline-warning btn-sm mt-2 js-sync-provider" data-order-id="<?= (int) $order['id'] ?>" data-sync-label="<?= htmlspecialchars(order_sync_button_label($order)) ?>"><?= htmlspecialchars(order_sync_button_label($order)) ?></button>
@@ -945,6 +1003,7 @@ foreach ($statuses as $statusKey) {
           <div id="cards-<?= $st ?>" class="d-block d-md-none" style="margin-top:1.5rem;">
             <?php foreach ($list as $order): ?>
               <?php $playerFieldLines = order_player_fields_lines($order); ?>
+              <?php $accountSaleDetailLines = order_account_sale_detail_lines($order); ?>
               <?php $providerStatusLine = order_provider_status_label($order); ?>
               <?php $providerDetailLines = order_provider_detail_lines($order); ?>
               <?php $providerHistoryLines = order_provider_history_lines($order); ?>
@@ -956,10 +1015,13 @@ foreach ($statuses as $statusKey) {
                   <div style="font-weight:bold; font-size:1.1em; color:#00fff7;">#<?= $order['id'] ?></div>
                   <div style="font-size:0.95em; color:#b2f6ff;"><?= htmlspecialchars($order['creado_en']) ?></div>
                 </div>
-                <div style="margin-top:0.5em; color:#00fff7; font-size:1em;">Cliente: <span style="color:#b2f6ff; font-weight:bold;"><?= htmlspecialchars($order['user_identifier']) ?></span></div>
+                <div style="margin-top:0.5em; color:#00fff7; font-size:1em;">Cliente: <span style="color:#b2f6ff; font-weight:bold;"><?= htmlspecialchars(order_meta_value(order_is_account_sale_admin($order) ? 'Entrega de cuenta' : ($order['user_identifier'] ?? ''))) ?></span></div>
                 <div style="color:#b2f6ff; font-size:1em;">Email: <?= htmlspecialchars($order['email']) ?></div>
                 <?php foreach ($playerFieldLines as $playerFieldLine): ?>
                   <div style="color:#7dd3fc; font-size:0.95em;"><?= htmlspecialchars($playerFieldLine) ?></div>
+                <?php endforeach; ?>
+                <?php foreach ($accountSaleDetailLines as $accountSaleDetailLine): ?>
+                  <div style="color:#67e8f9; font-size:0.9em;"><?= htmlspecialchars($accountSaleDetailLine) ?></div>
                 <?php endforeach; ?>
                 <?php if ($providerStatusLine !== ''): ?>
                   <div style="color:#fbbf24; font-size:0.9em;"><?= htmlspecialchars($providerStatusLine) ?></div>
@@ -1009,7 +1071,7 @@ foreach ($statuses as $statusKey) {
                   <?php endforeach; ?>
                 </div>
                 <?php if (order_can_retry_recharge($order)): ?>
-                  <button type="button" class="btn btn-outline-info btn-sm mt-3 js-retry-recharge" data-order-id="<?= (int) $order['id'] ?>">Enviar recarga</button>
+                  <button type="button" class="btn btn-outline-info btn-sm mt-3 js-retry-recharge" data-order-id="<?= (int) $order['id'] ?>" data-confirm-message="<?= htmlspecialchars(order_retry_confirm_message($order), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(order_retry_button_label($order)) ?></button>
                 <?php endif; ?>
                 <?php if (order_can_sync_gateway($order)): ?>
                   <button type="button" class="btn btn-outline-warning btn-sm mt-3 js-sync-provider" data-order-id="<?= (int) $order['id'] ?>" data-sync-label="<?= htmlspecialchars(order_sync_button_label($order)) ?>"><?= htmlspecialchars(order_sync_button_label($order)) ?></button>
@@ -1417,7 +1479,7 @@ foreach ($statuses as $statusKey) {
           return;
         }
 
-        const confirmed = window.confirm('Se enviara nuevamente la recarga para este pedido verificado. Usa esta accion solo si la recarga anterior no se proceso realmente.');
+        const confirmed = window.confirm(button.dataset.confirmMessage || 'Se enviara nuevamente la recarga para este pedido verificado. Usa esta accion solo si la recarga anterior no se proceso realmente.');
         if (!confirmed) {
           return;
         }
@@ -1434,7 +1496,7 @@ foreach ($statuses as $statusKey) {
             throw new Error((data && data.message) ? data.message : 'No se pudo enviar nuevamente la recarga.');
           }
 
-          const notes = [data.message || 'Recarga reenviada correctamente.'];
+          const notes = [data.message || 'Pedido reenviado correctamente.'];
           if (data.provider_status) {
             notes.push(`Estado proveedor: ${data.provider_status}`);
           }

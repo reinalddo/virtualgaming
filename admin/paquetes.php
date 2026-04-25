@@ -4,7 +4,9 @@
 require_once '../includes/db_connect.php';
 require_once '../includes/tenant.php';
 require_once '../includes/recargas_api.php';
+require_once '../includes/store_config.php';
 require_once '../includes/package_features.php';
+require_once '../includes/package_account_sales.php';
 require_once '../includes/recharge_availability.php';
 require_once '../includes/win_points.php';
 
@@ -26,7 +28,7 @@ function admin_packages_json_response(array $payload, int $statusCode = 200): vo
     exit;
 }
 
-function admin_package_store_upload(array $file): ?string {
+function admin_package_store_upload_to_dir(array $file, string $subdirectory): ?string {
     if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
         return null;
     }
@@ -37,7 +39,7 @@ function admin_package_store_upload(array $file): ?string {
         return null;
     }
 
-    $dir = tenant_upload_absolute_dir('paquetes');
+    $dir = tenant_upload_absolute_dir($subdirectory);
     if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
         return null;
     }
@@ -48,7 +50,15 @@ function admin_package_store_upload(array $file): ?string {
         return null;
     }
 
-    return tenant_upload_public_path('paquetes', $fileName, false);
+    return tenant_upload_public_path($subdirectory, $fileName, false);
+}
+
+function admin_package_store_upload(array $file): ?string {
+    return admin_package_store_upload_to_dir($file, 'paquetes');
+}
+
+function admin_package_store_account_gallery_upload(array $file): ?string {
+    return admin_package_store_upload_to_dir($file, 'paquetes/cuentas');
 }
 
 function admin_package_delete_upload(?string $path): void {
@@ -56,6 +66,96 @@ function admin_package_delete_upload(?string $path): void {
     if ($absolutePath !== null && is_file($absolutePath)) {
         @unlink($absolutePath);
     }
+}
+
+function admin_package_delete_gallery_uploads(array $galleryItems): void {
+    foreach ($galleryItems as $galleryItem) {
+        $imagePath = trim((string) ($galleryItem['image_path'] ?? ''));
+        if ($imagePath !== '') {
+            admin_package_delete_upload($imagePath);
+        }
+    }
+}
+
+function admin_package_normalize_uploaded_file_list(array $files): array {
+    $names = $files['name'] ?? null;
+    if (!is_array($names)) {
+        return $names !== null ? [$files] : [];
+    }
+
+    $normalized = [];
+    foreach (array_keys($names) as $index) {
+        $normalized[] = [
+            'name' => $files['name'][$index] ?? '',
+            'type' => $files['type'][$index] ?? '',
+            'tmp_name' => $files['tmp_name'][$index] ?? '',
+            'error' => $files['error'][$index] ?? UPLOAD_ERR_NO_FILE,
+            'size' => $files['size'][$index] ?? 0,
+        ];
+    }
+
+    return $normalized;
+}
+
+function admin_package_build_account_gallery_payload(array $existingPaths, array $existingDescriptions, array $existingRemovals, array $existingReplacementFiles, array $newDescriptions, array $newFiles): array {
+    $items = [];
+    $deletePaths = [];
+    $order = 1;
+    $removeLookup = [];
+
+    foreach ($existingRemovals as $index => $value) {
+        if ((string) $value === '1') {
+            $removeLookup[(int) $index] = true;
+        }
+    }
+
+    foreach ($existingPaths as $index => $path) {
+        $currentPath = trim((string) $path);
+        if ($currentPath === '') {
+            continue;
+        }
+
+        $description = package_account_sales_normalize_caption((string) ($existingDescriptions[$index] ?? ''));
+        $replacementPath = admin_package_store_account_gallery_upload($existingReplacementFiles[$index] ?? []);
+        if ($replacementPath !== null) {
+            $items[] = [
+                'image_path' => $replacementPath,
+                'description' => $description,
+                'order' => $order++,
+            ];
+            $deletePaths[] = $currentPath;
+            continue;
+        }
+
+        if (isset($removeLookup[(int) $index])) {
+            $deletePaths[] = $currentPath;
+            continue;
+        }
+
+        $items[] = [
+            'image_path' => $currentPath,
+            'description' => $description,
+            'order' => $order++,
+        ];
+    }
+
+    foreach ($newFiles as $index => $file) {
+        $newPath = admin_package_store_account_gallery_upload($file);
+        if ($newPath === null) {
+            continue;
+        }
+
+        $items[] = [
+            'image_path' => $newPath,
+            'description' => package_account_sales_normalize_caption((string) ($newDescriptions[$index] ?? '')),
+            'order' => $order++,
+        ];
+    }
+
+    return [
+        'items' => $items,
+        'delete_paths' => array_values(array_unique(array_filter($deletePaths, static fn (string $path): bool => trim($path) !== ''))),
+    ];
 }
 
 function ensure_juego_paquetes_monto_ff_column(mysqli $mysqli): void {
@@ -265,8 +365,11 @@ ensure_juego_paquetes_monto_ff_column($mysqli);
 ensure_juego_paquetes_activo_column($mysqli);
 ensure_juego_paquetes_paquete_api_column($mysqli);
 ensure_juego_paquetes_orden_column($mysqli);
+package_account_sales_ensure_schema($mysqli);
 package_features_ensure_schema($mysqli);
 win_points_ensure_schema();
+
+$accountSaleFeatureEnabled = trim((string) store_config_get('vender_cuentas', '0')) === '1';
 
 $adminGamesUrl = app_path('/admin/juegos');
 $adminPackageBaseUrl = app_path('/admin/paquetes');
@@ -385,6 +488,7 @@ if (isset($_GET['eliminar'])) {
     $stmt_img->bind_result($img_path);
     $stmt_img->fetch();
     $stmt_img->close();
+    $deletedGalleryItems = package_account_sales_delete_gallery($mysqli, $del_id);
     // Borrar el registro
     $stmt = $mysqli->prepare("DELETE FROM juego_paquetes WHERE id=? AND juego_id=?");
     $stmt->bind_param('ii', $del_id, $juego_id);
@@ -394,6 +498,7 @@ if (isset($_GET['eliminar'])) {
     if ($img_path) {
         admin_package_delete_upload((string) $img_path);
     }
+    admin_package_delete_gallery_uploads($deletedGalleryItems);
     header('Location: ' . $adminPackageBaseUrl . '/' . $juego_id);
     exit;
 }
@@ -405,19 +510,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_paquete_id'])) {
     $edit_clave = trim($_POST['edit_clave'] ?? '');
     $edit_monto_ff = $usesLegacyFreeFire ? trim((string) ($_POST['edit_monto_ff'] ?? '')) : '';
     $edit_paquete_api = $usesApiCatalog ? trim((string) ($_POST['edit_paquete_api'] ?? '')) : '';
+    $edit_vender_cuenta = $accountSaleFeatureEnabled && isset($_POST['edit_vender_cuenta']) ? 1 : 0;
+    $edit_cuenta_texto = $accountSaleFeatureEnabled
+        ? package_account_sales_normalize_text((string) ($_POST['edit_cuenta_texto'] ?? ''))
+        : '';
     $edit_cantidad = intval($_POST['edit_cantidad'] ?? 0);
     $edit_precio = floatval($_POST['edit_precio'] ?? 0);
     $edit_win_points_reward = max(0, (int) ($_POST['edit_win_points_reward'] ?? 0));
     $edit_activo = isset($_POST['edit_activo']) ? 1 : 0;
     $edit_imagen_icono = admin_package_store_upload($_FILES['edit_imagen_icono'] ?? []);
+    $editExistingGalleryFiles = admin_package_normalize_uploaded_file_list($_FILES['edit_existing_account_gallery_replace'] ?? []);
+    $editNewGalleryFiles = admin_package_normalize_uploaded_file_list($_FILES['edit_new_account_gallery_image'] ?? []);
+    $editGalleryPayload = $accountSaleFeatureEnabled
+        ? admin_package_build_account_gallery_payload(
+            $_POST['edit_existing_account_gallery_path'] ?? [],
+            $_POST['edit_existing_account_gallery_description'] ?? [],
+            $_POST['edit_existing_account_gallery_remove'] ?? [],
+            $editExistingGalleryFiles,
+            $_POST['edit_new_account_gallery_description'] ?? [],
+            $editNewGalleryFiles
+        )
+        : ['items' => [], 'delete_paths' => []];
     if ($edit_imagen_icono) {
-        $stmt = $mysqli->prepare("UPDATE juego_paquetes SET nombre=?, clave=?, monto_ff=NULLIF(?, ''), paquete_api=NULLIF(?, ''), cantidad=?, precio=?, win_points_reward=?, imagen_icono=?, activo=? WHERE id=?");
-        $stmt->bind_param('ssssidisii', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_paquete_api, $edit_cantidad, $edit_precio, $edit_win_points_reward, $edit_imagen_icono, $edit_activo, $edit_id);
+        $stmt = $mysqli->prepare("UPDATE juego_paquetes SET nombre=?, clave=?, monto_ff=NULLIF(?, ''), paquete_api=NULLIF(?, ''), vender_cuenta=?, cuenta_texto=NULLIF(?, ''), cantidad=?, precio=?, win_points_reward=?, imagen_icono=?, activo=? WHERE id=?");
+        $stmt->bind_param('ssssisidisii', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_paquete_api, $edit_vender_cuenta, $edit_cuenta_texto, $edit_cantidad, $edit_precio, $edit_win_points_reward, $edit_imagen_icono, $edit_activo, $edit_id);
     } else {
-        $stmt = $mysqli->prepare("UPDATE juego_paquetes SET nombre=?, clave=?, monto_ff=NULLIF(?, ''), paquete_api=NULLIF(?, ''), cantidad=?, precio=?, win_points_reward=?, activo=? WHERE id=?");
-        $stmt->bind_param('ssssidiii', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_paquete_api, $edit_cantidad, $edit_precio, $edit_win_points_reward, $edit_activo, $edit_id);
+        $stmt = $mysqli->prepare("UPDATE juego_paquetes SET nombre=?, clave=?, monto_ff=NULLIF(?, ''), paquete_api=NULLIF(?, ''), vender_cuenta=?, cuenta_texto=NULLIF(?, ''), cantidad=?, precio=?, win_points_reward=?, activo=? WHERE id=?");
+        $stmt->bind_param('ssssisidiii', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_paquete_api, $edit_vender_cuenta, $edit_cuenta_texto, $edit_cantidad, $edit_precio, $edit_win_points_reward, $edit_activo, $edit_id);
     }
     $stmt->execute();
+    $stmt->close();
+    if ($accountSaleFeatureEnabled) {
+        package_account_sales_replace_gallery($mysqli, $edit_id, $editGalleryPayload['items']);
+        foreach ($editGalleryPayload['delete_paths'] as $deletePath) {
+            admin_package_delete_upload($deletePath);
+        }
+    }
     if ($edit_activo === 1) {
         recharge_availability_set_game_active($mysqli, $juego_id, true);
     }
@@ -465,16 +593,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['cla
     $clave = trim($_POST['clave']);
     $monto_ff = $usesLegacyFreeFire ? trim((string) ($_POST['monto_ff'] ?? '')) : '';
     $paquete_api = $usesApiCatalog ? trim((string) ($_POST['paquete_api'] ?? '')) : '';
+    $vender_cuenta = $accountSaleFeatureEnabled && isset($_POST['vender_cuenta']) ? 1 : 0;
+    $cuenta_texto = $accountSaleFeatureEnabled
+        ? package_account_sales_normalize_text((string) ($_POST['cuenta_texto'] ?? ''))
+        : '';
     $cantidad = intval($_POST['cantidad']);
     $precio = floatval($_POST['precio']);
     $win_points_reward = max(0, (int) ($_POST['win_points_reward'] ?? $defaultWinPointsReward));
     $activo = isset($_POST['activo']) ? 1 : 0;
     $orden = admin_package_next_order($mysqli, $juego_id);
     $imagen_icono = admin_package_store_upload($_FILES['imagen_icono'] ?? []);
-    $stmt = $mysqli->prepare("INSERT INTO juego_paquetes (juego_id, nombre, clave, monto_ff, paquete_api, cantidad, precio, win_points_reward, imagen_icono, activo, orden) VALUES (?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param('issssidisii', $juego_id, $nombre, $clave, $monto_ff, $paquete_api, $cantidad, $precio, $win_points_reward, $imagen_icono, $activo, $orden);
+    $newGalleryFiles = admin_package_normalize_uploaded_file_list($_FILES['new_account_gallery_image'] ?? []);
+    $newGalleryPayload = $accountSaleFeatureEnabled
+        ? admin_package_build_account_gallery_payload([], [], [], [], $_POST['new_account_gallery_description'] ?? [], $newGalleryFiles)
+        : ['items' => [], 'delete_paths' => []];
+    $stmt = $mysqli->prepare("INSERT INTO juego_paquetes (juego_id, nombre, clave, monto_ff, paquete_api, vender_cuenta, cuenta_texto, cantidad, precio, win_points_reward, imagen_icono, activo, orden) VALUES (?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param('issssisidisii', $juego_id, $nombre, $clave, $monto_ff, $paquete_api, $vender_cuenta, $cuenta_texto, $cantidad, $precio, $win_points_reward, $imagen_icono, $activo, $orden);
     $stmt->execute();
     $newPackageId = (int) $mysqli->insert_id;
+    $stmt->close();
+    if ($accountSaleFeatureEnabled) {
+        package_account_sales_replace_gallery($mysqli, $newPackageId, $newGalleryPayload['items']);
+    }
     if ($activo === 1) {
         recharge_availability_set_game_active($mysqli, $juego_id, true);
     }
@@ -509,6 +649,7 @@ $paquetes = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
 $packageFeatureCatalog = package_feature_catalog_all($mysqli);
 $packageFeatureIconOptions = package_feature_icon_options();
 $packageFeaturesByPackage = package_features_for_packages($mysqli, array_map(static fn (array $package): int => (int) ($package['id'] ?? 0), $paquetes));
+$packageAccountGalleryByPackage = package_account_sales_fetch_gallery_map($mysqli, array_map(static fn (array $package): int => (int) ($package['id'] ?? 0), $paquetes));
 $packageFeatureIconOptionsHtml = admin_package_feature_icon_options_html($packageFeatureIconOptions);
 
 // Incluir header
@@ -564,6 +705,31 @@ include '../includes/header.php';
             <label class="form-label text-neon">Icono del paquete</label>
             <input type="file" name="imagen_icono" accept="image/*" class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;" onchange="previewNuevoPaqueteImg(event)">
         </div>
+        <?php if ($accountSaleFeatureEnabled): ?>
+        <div class="col-12">
+            <div class="rounded-4 p-3" data-account-sale-scope style="background:#101826;border:1px solid rgba(34,211,238,0.18);">
+                <div class="form-check form-switch mb-3">
+                    <input type="checkbox" name="vender_cuenta" class="form-check-input" id="packageSellAccountCheck" data-account-sale-toggle>
+                    <label class="form-check-label text-neon" for="packageSellAccountCheck">Vender Cuenta</label>
+                </div>
+                <div class="small mb-3" style="color:#8be9fd;">Si activas este paquete como venta de cuenta, el checkout entregará los datos guardados aquí y no ejecutará la recarga automática del juego aunque el paquete tenga API configurada.</div>
+                <div data-account-sale-config class="d-none">
+                    <div class="mb-3">
+                        <label class="form-label text-neon">Datos de la cuenta</label>
+                        <textarea name="cuenta_texto" rows="6" class="form-control" data-account-sale-textarea style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;" placeholder="Ej: correo, contraseña, región, detalles de acceso, advertencias y pasos para el cliente."></textarea>
+                    </div>
+                    <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-3">
+                        <div>
+                            <div class="text-neon fw-semibold">Galería de la cuenta</div>
+                            <div class="small" style="color:#8be9fd;">Agrega imágenes opcionales con una descripción corta para el botón Ver Más.</div>
+                        </div>
+                        <button type="button" class="btn btn-outline-info btn-sm" onclick="window.addPackageAccountGalleryRow('new-account-gallery-rows', 'new_account_gallery_image[]', 'new_account_gallery_description[]')">Agregar imagen</button>
+                    </div>
+                    <div id="new-account-gallery-rows" class="d-grid gap-2"></div>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
         <div class="col-12">
             <div class="rounded-4 p-3" style="background:#101826;border:1px solid rgba(34,211,238,0.18);">
                 <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-3">
@@ -693,6 +859,8 @@ include '../includes/header.php';
             <tbody>
             <?php foreach ($paquetes as $p): ?>
                 <?php $packageFeatures = $packageFeaturesByPackage[(int) ($p['id'] ?? 0)] ?? []; ?>
+                <?php $packageGalleryItems = $packageAccountGalleryByPackage[(int) ($p['id'] ?? 0)] ?? []; ?>
+                <?php $packageSellsAccount = (int) ($p['vender_cuenta'] ?? 0) === 1; ?>
                 <tr style="background:#181f2a; color:#fff;">
                     <td style="background:#181f2a;">
                         <?php if (!empty($p['imagen_icono'])): ?>
@@ -705,6 +873,12 @@ include '../includes/header.php';
                     </td>
                     <td class="fw-semibold text-neon" style="background:#181f2a; color:#22d3ee;">
                         <div><?= htmlspecialchars($p['nombre']) ?></div>
+                        <?php if ($packageSellsAccount): ?>
+                            <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                                <span class="badge rounded-pill px-3 py-2" style="background:rgba(34,211,238,0.14);border:1px solid rgba(34,211,238,0.28);color:#d8fbff;">Vender Cuenta</span>
+                                <span class="small" style="color:#8be9fd;">Galería: <?= count($packageGalleryItems) ?> imágenes</span>
+                            </div>
+                        <?php endif; ?>
                         <?= admin_package_feature_badges_html($packageFeatures) ?>
                     </td>
                     <td style="background:#181f2a; color:#fff;"><?= htmlspecialchars($p['clave']) ?></td>
@@ -749,6 +923,8 @@ include '../includes/header.php';
         <div class="row gy-4">
             <?php foreach ($paquetes as $p): ?>
             <?php $packageFeatures = $packageFeaturesByPackage[(int) ($p['id'] ?? 0)] ?? []; ?>
+            <?php $packageGalleryItems = $packageAccountGalleryByPackage[(int) ($p['id'] ?? 0)] ?? []; ?>
+            <?php $packageSellsAccount = (int) ($p['vender_cuenta'] ?? 0) === 1; ?>
             <div class="col-12">
                 <div class="card neon-card p-3" style="background:#181f2a; border:2px solid #22d3ee; box-shadow:0 0 16px #22d3ee,0 0 4px #2dd4bf; color:#22d3ee;">
                     <div class="d-flex align-items-center mb-2">
@@ -778,6 +954,10 @@ include '../includes/header.php';
                         </div>
                     </div>
                     <div style="color:#fff;"><span class="fw-semibold">Clave:</span> <?= htmlspecialchars($p['clave']) ?></div>
+                    <?php if ($packageSellsAccount): ?>
+                        <div style="color:#8be9fd;"><span class="fw-semibold">Modo:</span> Venta de cuenta</div>
+                        <div style="color:#8be9fd;"><span class="fw-semibold">Galería:</span> <?= count($packageGalleryItems) ?> imágenes</div>
+                    <?php endif; ?>
                     <?= admin_package_feature_badges_html($packageFeatures) ?>
                     <?php if ($usesApiCatalog): ?>
                         <?php $apiProductId = (int) ($p['paquete_api'] ?? 0); ?>
@@ -830,6 +1010,7 @@ if (isset($_GET['editar'])) {
     $paq_edit = $res_edit->get_result()->fetch_assoc();
     $paqEditFeatureIds = package_feature_catalog_ids_for_package($mysqli, $edit_id);
     $paqEditFeatures = $packageFeaturesByPackage[$edit_id] ?? [];
+    $paqEditGallery = package_account_sales_fetch_gallery($mysqli, $edit_id);
     if ($paq_edit):
 ?>
 <div class="fixed-top w-100 h-100 d-flex align-items-start justify-content-center" style="background:rgba(0,0,0,0.7);z-index:1050;overflow-y:auto;padding:1rem;">
@@ -894,6 +1075,62 @@ if (isset($_GET['editar'])) {
                 <img id="preview-edit-paquete-img" src="#" alt="Previsualización" style="display:none;max-width:120px;max-height:120px;border-radius:0.75rem;box-shadow:0 0 0.5rem #22d3ee55;" />
             </div>
         </div>
+        <?php if ($accountSaleFeatureEnabled): ?>
+        <div class="mb-3 rounded-4 p-3" data-account-sale-scope style="background:#101826;border:1px solid rgba(34,211,238,0.18);">
+            <div class="form-check form-switch mb-3">
+                <input type="checkbox" name="edit_vender_cuenta" class="form-check-input" id="editPackageSellAccountCheck" data-account-sale-toggle <?= !empty($paq_edit['vender_cuenta']) ? 'checked' : '' ?>>
+                <label class="form-check-label text-neon" for="editPackageSellAccountCheck">Vender Cuenta</label>
+            </div>
+            <div class="small mb-3" style="color:#8be9fd;">Este bloque define la entrega manual/automática de una cuenta. Si está activo, el pago se resolverá entregando estos datos en vez de disparar la recarga del juego.</div>
+            <div data-account-sale-config class="<?= !empty($paq_edit['vender_cuenta']) ? '' : 'd-none' ?>">
+                <div class="mb-3">
+                    <label class="form-label text-neon">Datos de la cuenta</label>
+                    <textarea name="edit_cuenta_texto" rows="6" class="form-control" data-account-sale-textarea style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;" placeholder="Correo, contraseña, instrucciones y observaciones para el cliente."><?= htmlspecialchars((string) ($paq_edit['cuenta_texto'] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea>
+                </div>
+                <div class="mb-3">
+                    <div class="text-neon fw-semibold mb-2">Galería actual</div>
+                    <?php if (!empty($paqEditGallery)): ?>
+                        <div class="d-grid gap-3">
+                            <?php foreach ($paqEditGallery as $galleryIndex => $galleryItem): ?>
+                                <div class="rounded-4 p-3" style="background:#0f172a;border:1px solid rgba(34,211,238,0.12);">
+                                    <input type="hidden" name="edit_existing_account_gallery_path[]" value="<?= htmlspecialchars((string) ($galleryItem['image_path'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                    <div class="d-flex flex-column flex-md-row gap-3">
+                                        <div class="flex-shrink-0">
+                                            <img src="/<?= htmlspecialchars((string) ($galleryItem['image_path'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" alt="Imagen actual" class="rounded" style="width:120px;height:120px;object-fit:cover;border:1px solid rgba(34,211,238,0.24);background:#081018;">
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <div class="mb-2">
+                                                <label class="form-label text-neon small">Descripción</label>
+                                                <input type="text" name="edit_existing_account_gallery_description[]" value="<?= htmlspecialchars((string) ($galleryItem['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;" maxlength="255">
+                                            </div>
+                                            <div class="mb-2">
+                                                <label class="form-label text-neon small">Reemplazar imagen</label>
+                                                <input type="file" name="edit_existing_account_gallery_replace[]" accept="image/*" class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
+                                            </div>
+                                            <div class="form-check">
+                                                <input type="checkbox" name="edit_existing_account_gallery_remove[<?= (int) $galleryIndex ?>]" value="1" class="form-check-input" id="removeAccountGallery<?= (int) $galleryIndex ?>">
+                                                <label class="form-check-label text-neon small" for="removeAccountGallery<?= (int) $galleryIndex ?>">Eliminar esta imagen al guardar</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php else: ?>
+                        <div class="small" style="color:#8be9fd;">Este paquete todavía no tiene imágenes asociadas.</div>
+                    <?php endif; ?>
+                </div>
+                <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-3">
+                    <div>
+                        <div class="text-neon fw-semibold">Agregar nuevas imágenes</div>
+                        <div class="small" style="color:#8be9fd;">Puedes sumar más capturas para la galería pública del botón Ver Más.</div>
+                    </div>
+                    <button type="button" class="btn btn-outline-info btn-sm" onclick="window.addPackageAccountGalleryRow('edit-account-gallery-rows', 'edit_new_account_gallery_image[]', 'edit_new_account_gallery_description[]')">Agregar imagen</button>
+                </div>
+                <div id="edit-account-gallery-rows" class="d-grid gap-2"></div>
+            </div>
+        </div>
+        <?php endif; ?>
         <div class="mb-3 rounded-4 p-3" style="background:#101826;border:1px solid rgba(34,211,238,0.18);">
             <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-3">
                 <div>
@@ -1209,6 +1446,73 @@ if (typeof window.removePackageFeatureRow !== 'function') {
     };
 }
 
+if (typeof window.removePackageAccountGalleryRow !== 'function') {
+    window.removePackageAccountGalleryRow = function(button) {
+        const row = button ? button.closest('.package-account-gallery-row') : null;
+        if (row) {
+            row.remove();
+        }
+    };
+}
+
+if (typeof window.addPackageAccountGalleryRow !== 'function') {
+    window.addPackageAccountGalleryRow = function(containerId, imageField, descriptionField) {
+        const container = document.getElementById(containerId);
+        if (!container) {
+            return;
+        }
+
+        const row = document.createElement('div');
+        row.className = 'package-account-gallery-row rounded-4 p-3';
+        row.style.background = '#0f172a';
+        row.style.border = '1px solid rgba(34,211,238,0.12)';
+        row.innerHTML = `
+            <div class="row g-2 align-items-end">
+                <div class="col-md-5">
+                    <label class="form-label text-neon small mb-1">Imagen</label>
+                    <input type="file" name="${imageField}" accept="image/*" class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label text-neon small mb-1">Descripción</label>
+                    <input type="text" name="${descriptionField}" class="form-control" maxlength="255" placeholder="Ej: Inventario principal" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
+                </div>
+                <div class="col-md-2">
+                    <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="window.removePackageAccountGalleryRow(this)">Quitar</button>
+                </div>
+            </div>`;
+        container.appendChild(row);
+    };
+}
+
+if (typeof window.bindPackageAccountSaleScopes !== 'function') {
+    window.bindPackageAccountSaleScopes = function(root = document) {
+        root.querySelectorAll('[data-account-sale-scope]').forEach((scope) => {
+            if (scope.dataset.accountSaleBound === '1') {
+                return;
+            }
+
+            const toggle = scope.querySelector('[data-account-sale-toggle]');
+            const config = scope.querySelector('[data-account-sale-config]');
+            const textarea = scope.querySelector('[data-account-sale-textarea]');
+            if (!toggle || !config) {
+                return;
+            }
+
+            const sync = function() {
+                const enabled = toggle.checked;
+                config.classList.toggle('d-none', !enabled);
+                if (textarea) {
+                    textarea.required = enabled;
+                }
+            };
+
+            scope.dataset.accountSaleBound = '1';
+            toggle.addEventListener('change', sync);
+            sync();
+        });
+    };
+}
+
 if (typeof window.addPackageFeatureRow !== 'function') {
     window.addPackageFeatureRow = function(containerId, nameField, iconField, iconOptionsHtml, applyModeField = '') {
         const container = document.getElementById(containerId);
@@ -1360,6 +1664,7 @@ if (typeof window.bindPackageFeatureApplyButtons !== 'function') {
 
 window.bindPackageFeatureIconPreview();
 window.bindPackageFeatureApplyButtons();
+window.bindPackageAccountSaleScopes();
 
 const packageFeatureApplyReplaceButton = document.getElementById('package-feature-apply-replace');
 const packageFeatureApplyAddButton = document.getElementById('package-feature-apply-add');

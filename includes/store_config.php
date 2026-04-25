@@ -551,6 +551,7 @@ function store_config_descriptions(): array {
         'ff_api_clave' => 'Clave para la API de Free Fire',
         'ff_api_tipo' => 'Tipo para la API de Free Fire',
         'cantidad_paquetes' => 'Activa o desactiva la venta de paquetes por cantidad dentro del checkout público del tenant.',
+        'vender_cuentas' => 'Activa o desactiva la venta de cuentas en lugar de recargas para los paquetes marcados con esa modalidad.',
         'api_binance' => 'Activa o desactiva la configuracion e integracion de Binance Pay via CoinPal para este tenant.',
         'api_binance_usuario' => 'Activa o desactiva el uso visible de Binance Pay para clientes y procesos automaticos de la tienda cuando el tenant ya tiene disponible api_binance.',
         'binance_pay_merchant_no' => 'Merchant No configurado para Binance Pay via CoinPal.',
@@ -633,6 +634,7 @@ function store_config_defaults(): array {
         'ff_api_clave' => '',
         'ff_api_tipo' => 'recargaFreefire',
         'cantidad_paquetes' => '0',
+        'vender_cuentas' => '0',
         'api_binance' => '0',
         'api_binance_usuario' => '1',
         'binance_pay_merchant_no' => '',
@@ -1065,6 +1067,9 @@ function store_config_ensure_defaults(): void {
     $quantityFeatureKey = 'cantidad_paquetes';
     $quantityFeatureName = 'Vender Paquetes por Cantidad';
     $quantityFeatureDescription = 'Vende tus paquetes por cantidad en una sola venta usando un campo para multiplicar el precio del paquete tantas veces seleccione la cantidad el usuario';
+    $accountSaleFeatureKey = 'vender_cuentas';
+    $accountSaleFeatureName = 'Vender Cuentas';
+    $accountSaleFeatureDescription = 'Entrega cuentas en lugar de recargas para los paquetes marcados con la opcion Vender Cuenta dentro del panel de paquetes';
 
     foreach (store_config_defaults() as $key => $value) {
         $description = $descriptions[$key] ?? null;
@@ -1077,6 +1082,20 @@ function store_config_ensure_defaults(): void {
             }
 
             $stmt->bind_param('sssss', $key, $value, $description, $quantityFeatureName, $quantityFeatureDescription);
+            $stmt->execute();
+            $stmt->close();
+            continue;
+        }
+
+        if ($key === $accountSaleFeatureKey) {
+            $stmt = $mysqli->prepare(
+                'INSERT IGNORE INTO configuracion_general (clave, valor, descripcion, mostrar_a_cliente, funcion_venta, descripcion_venta, precio, comision_venta) VALUES (?, ?, ?, 1, ?, ?, 25, 5)'
+            );
+            if (!$stmt) {
+                continue;
+            }
+
+            $stmt->bind_param('sssss', $key, $value, $description, $accountSaleFeatureName, $accountSaleFeatureDescription);
             $stmt->execute();
             $stmt->close();
             continue;

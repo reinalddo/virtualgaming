@@ -14,6 +14,7 @@ require_once __DIR__ . '/../includes/influencer_coupons.php';
 require_once __DIR__ . '/../includes/payment_methods.php';
 require_once __DIR__ . '/../includes/store_config.php';
 require_once __DIR__ . '/../includes/binance_pay.php';
+require_once __DIR__ . '/../includes/package_account_sales.php';
 require_once __DIR__ . '/../includes/recargas_api.php';
 require_once __DIR__ . '/../includes/recharge_availability.php';
 require_once __DIR__ . '/../includes/recharge_notifications.php';
@@ -63,6 +64,7 @@ if (!function_exists('ensure_mysqli_connection')) {
 currency_ensure_schema();
 payment_methods_ensure_table();
 recharge_availability_ensure_columns($mysqli);
+package_account_sales_ensure_schema($mysqli);
 
 function ensure_pedidos_table(mysqli $mysqli): void {
     $create = "CREATE TABLE IF NOT EXISTS pedidos (
@@ -89,6 +91,9 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         telefono_contacto VARCHAR(40) DEFAULT NULL,
         cupon VARCHAR(60) DEFAULT NULL,
         cantidad_compra INT NOT NULL DEFAULT 1,
+        vender_cuenta TINYINT(1) NOT NULL DEFAULT 0,
+        cuenta_entrega_texto LONGTEXT DEFAULT NULL,
+        cuenta_galeria_json LONGTEXT DEFAULT NULL,
         ff_api_referencia VARCHAR(120) DEFAULT NULL,
         ff_api_mensaje VARCHAR(255) DEFAULT NULL,
         ff_api_payload LONGTEXT DEFAULT NULL,
@@ -147,6 +152,9 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         'telefono_contacto' => "ALTER TABLE pedidos ADD COLUMN telefono_contacto VARCHAR(40) NULL AFTER numero_referencia",
         'cupon' => "ALTER TABLE pedidos ADD COLUMN cupon VARCHAR(60) NULL AFTER telefono_contacto",
         'cantidad_compra' => "ALTER TABLE pedidos ADD COLUMN cantidad_compra INT NOT NULL DEFAULT 1 AFTER cupon",
+        'vender_cuenta' => "ALTER TABLE pedidos ADD COLUMN vender_cuenta TINYINT(1) NOT NULL DEFAULT 0 AFTER cantidad_compra",
+        'cuenta_entrega_texto' => "ALTER TABLE pedidos ADD COLUMN cuenta_entrega_texto LONGTEXT NULL AFTER vender_cuenta",
+        'cuenta_galeria_json' => "ALTER TABLE pedidos ADD COLUMN cuenta_galeria_json LONGTEXT NULL AFTER cuenta_entrega_texto",
         'ff_api_referencia' => "ALTER TABLE pedidos ADD COLUMN ff_api_referencia VARCHAR(120) NULL AFTER cupon",
         'ff_api_mensaje' => "ALTER TABLE pedidos ADD COLUMN ff_api_mensaje VARCHAR(255) NULL AFTER ff_api_referencia",
         'ff_api_payload' => "ALTER TABLE pedidos ADD COLUMN ff_api_payload LONGTEXT NULL AFTER ff_api_mensaje",
@@ -1795,6 +1803,63 @@ function build_binance_checkout_response_payload(array $order): array {
     ], build_binance_checkout_money_payload($order));
 }
 
+function account_sale_feature_enabled(): bool {
+    return trim((string) store_config_get('vender_cuentas', '0')) === '1';
+}
+
+function order_is_account_sale(array $order): bool {
+    return account_sale_feature_enabled() && (int) ($order['vender_cuenta'] ?? 0) === 1;
+}
+
+function order_account_sale_gallery(array $order): array {
+    $gallery = json_decode((string) ($order['cuenta_galeria_json'] ?? ''), true);
+    if (!is_array($gallery)) {
+        return [];
+    }
+
+    $normalized = [];
+    foreach ($gallery as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $imagePath = trim((string) ($item['image_path'] ?? ''));
+        if ($imagePath === '') {
+            continue;
+        }
+
+        $normalized[] = [
+            'image_path' => $imagePath,
+            'description' => package_account_sales_normalize_caption((string) ($item['description'] ?? '')),
+            'order' => max(1, (int) ($item['order'] ?? 1)),
+        ];
+    }
+
+    return $normalized;
+}
+
+function build_account_sale_response_payload(array $order): ?array {
+    if (!order_is_account_sale($order)) {
+        return null;
+    }
+
+    return [
+        'enabled' => true,
+        'delivered' => strtolower(trim((string) ($order['estado'] ?? ''))) === 'enviado',
+        'account_text' => package_account_sales_normalize_text((string) ($order['cuenta_entrega_texto'] ?? '')),
+        'gallery' => order_account_sale_gallery($order),
+    ];
+}
+
+function append_account_sale_response(array $payload, array $order): array {
+    $accountSale = build_account_sale_response_payload($order);
+    if ($accountSale !== null) {
+        $payload['account_sale'] = $accountSale;
+    }
+
+    return $payload;
+}
+
 function build_order_status_response_payload(array $order, int $orderId): array {
     $providerReference = trim((string) ($order['ff_api_referencia'] ?? ''));
     if ($providerReference === '') {
@@ -1820,7 +1885,7 @@ function build_order_status_response_payload(array $order, int $orderId): array 
         $paymentGateway = 'binance_pay';
     }
 
-    return array_merge([
+    return append_account_sale_response(array_merge([
         'ok' => true,
         'order_id' => $orderId,
         'estado' => (string) ($order['estado'] ?? ''),
@@ -1832,7 +1897,7 @@ function build_order_status_response_payload(array $order, int $orderId): array 
         'checkout_url' => trim((string) ($order['binance_pay_checkout_url'] ?? '')),
         'payment_gateway' => $paymentGateway,
         'remaining_seconds' => max(0, order_expiration_timestamp($order) - time()),
-    ], $paymentGateway === 'binance_pay' ? build_binance_checkout_money_payload($order) : []);
+    ], $paymentGateway === 'binance_pay' ? build_binance_checkout_money_payload($order) : []), $order);
 }
 
 function sync_local_order_with_binance_payload(mysqli $mysqli, array $order, array $payload, string $source = 'sync'): array {
@@ -1918,6 +1983,32 @@ function sync_local_order_with_binance_payload(mysqli $mysqli, array $order, arr
     $paymentMethodName = 'Binance Pay';
     $updatedOrder = $order;
     $usesCatalogApi = game_uses_catalog_api($mysqli, (int) ($updatedOrder['juego_id'] ?? 0));
+
+    if (order_is_account_sale($updatedOrder)) {
+        try {
+            $sentOrder = mark_account_sale_as_sent($mysqli, $updatedOrder, 'pendiente', $verifiedReference, $phone);
+        } catch (Throwable $e) {
+            return [
+                'order' => fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder,
+                'local_status' => trim((string) ($updatedOrder['estado'] ?? 'pendiente')),
+                'provider_flow' => order_provider_flow_from_row($updatedOrder),
+                'sync_error' => $e->getMessage(),
+            ];
+        }
+
+        if (trim((string) ($sentOrder['estado'] ?? '')) === 'enviado') {
+            win_points_handle_order_status_change($mysqli, $orderId, 'enviado');
+            recharge_notifications_emit_for_order($mysqli, $sentOrder);
+            register_influencer_coupon_sale($mysqli, $sentOrder);
+            notify_account_sale_delivery($mysqli, $sentOrder, $paymentMethodName, $verifiedReference, $phone);
+        }
+
+        return [
+            'order' => $sentOrder,
+            'local_status' => trim((string) ($sentOrder['estado'] ?? 'enviado')),
+            'provider_flow' => order_provider_flow_from_row($sentOrder),
+        ];
+    }
 
     if (!$usesCatalogApi) {
         $paidStatus = 'pagado';
@@ -2630,6 +2721,9 @@ function provider_message_indicates_transport_timeout(string $message): bool {
 
 function order_provider_flow_from_row(array $order): string {
     $localStatus = strtolower(trim((string) ($order['estado'] ?? '')));
+    if (order_is_account_sale($order) && $localStatus === 'enviado') {
+        return 'account_sale';
+    }
     if ($localStatus === 'enviado') {
         return 'completed';
     }
@@ -4149,6 +4243,144 @@ function notify_free_fire_recharge_success(
     }
 }
 
+function render_account_sale_gallery_email_html(array $gallery): string {
+    if (empty($gallery)) {
+        return '';
+    }
+
+    $baseUrl = current_public_app_base_url();
+    $cards = [];
+    foreach ($gallery as $item) {
+        $imagePath = trim((string) ($item['image_path'] ?? ''));
+        if ($imagePath === '') {
+            continue;
+        }
+
+        $publicUrl = $imagePath;
+        if ($baseUrl !== null && !preg_match('#^https?://#i', $imagePath)) {
+            $publicUrl = rtrim($baseUrl, '/') . '/' . ltrim($imagePath, '/');
+        }
+
+        $description = package_account_sales_normalize_caption((string) ($item['description'] ?? ''));
+        $cards[] = '<div style="margin:0 0 16px;padding:14px;border-radius:18px;border:1px solid #1e3a5f;background:#081018;">'
+            . '<img src="' . email_escape($publicUrl) . '" alt="Imagen de la cuenta" style="display:block;width:100%;max-width:420px;border-radius:14px;border:1px solid #164e63;background:#020617;">'
+            . ($description !== '' ? '<p style="margin:12px 0 0;color:#cbd5e1;font-size:14px;">' . email_escape($description) . '</p>' : '')
+            . '</div>';
+    }
+
+    if (empty($cards)) {
+        return '';
+    }
+
+    return '<div style="margin:16px 0 0;"><p style="margin:0 0 10px;color:#e2e8f0;font-weight:700;">Galería incluida en la cuenta:</p>' . implode('', $cards) . '</div>';
+}
+
+function notify_account_sale_delivery(mysqli $mysqli, array $order, string $paymentMethodName, string $referenceNumber, string $phone, bool $resent = false): void {
+    $orderId = (int) ($order['id'] ?? 0);
+    if ($orderId <= 0) {
+        return;
+    }
+
+    $adminEmail = resolve_admin_email($mysqli);
+    $brandingImages = email_branding_embedded_images();
+    $accountText = nl2br(email_escape(package_account_sales_normalize_text((string) ($order['cuenta_entrega_texto'] ?? ''))));
+    $galleryHtml = render_account_sale_gallery_email_html(order_account_sale_gallery($order));
+    $customerTitle = $resent ? 'Cuenta reenviada' : 'Cuenta entregada';
+    $adminTitle = $resent ? 'Cuenta reenviada manualmente' : 'Cuenta entregada automáticamente';
+
+    $customerHtml = render_order_email($customerTitle, 'Cliente',
+        '<p style="margin:0 0 10px;">Tu pago fue verificado y la cuenta comprada ya está disponible.</p>'
+        . '<div style="margin:0 0 12px;padding:16px;border-radius:18px;border:1px solid #164e63;background:#081018;color:#e2e8f0;line-height:1.6;">' . $accountText . '</div>'
+        . $galleryHtml,
+        [
+            'order_id' => $orderId,
+            'game_name' => $order['juego_nombre'] ?? '',
+            'pack_name' => $order['paquete_nombre'] ?? '',
+            'pack_amount' => $order['paquete_cantidad'] ?? '',
+            'currency' => $order['moneda'] ?? '',
+            'price' => number_format((float) ($order['precio'] ?? 0), 2, '.', ','),
+            'email' => $order['email'] ?? '',
+            'coupon' => $order['cupon'] ?? null,
+            'payment_method' => $paymentMethodName,
+            'reference_number' => $referenceNumber,
+            'phone' => $phone,
+            'status' => 'Enviado',
+        ],
+        '#34d399'
+    );
+    $adminHtml = render_order_email($adminTitle, 'Administrador',
+        '<p style="margin:0 0 10px;">La orden de venta de cuenta quedó entregada al cliente.</p>'
+        . '<div style="margin:0 0 12px;padding:16px;border-radius:18px;border:1px solid #164e63;background:#081018;color:#e2e8f0;line-height:1.6;">' . $accountText . '</div>'
+        . $galleryHtml,
+        [
+            'order_id' => $orderId,
+            'game_name' => $order['juego_nombre'] ?? '',
+            'pack_name' => $order['paquete_nombre'] ?? '',
+            'pack_amount' => $order['paquete_cantidad'] ?? '',
+            'currency' => $order['moneda'] ?? '',
+            'price' => number_format((float) ($order['precio'] ?? 0), 2, '.', ','),
+            'email' => $order['email'] ?? '',
+            'coupon' => $order['cupon'] ?? null,
+            'payment_method' => $paymentMethodName,
+            'reference_number' => $referenceNumber,
+            'phone' => $phone,
+            'status' => 'Enviado',
+        ],
+        '#34d399'
+    );
+
+    if (!empty($order['email']) && filter_var($order['email'], FILTER_VALIDATE_EMAIL)) {
+        send_app_mail((string) $order['email'], ($resent ? 'Cuenta reenviada' : 'Cuenta entregada') . " #{$orderId}", $customerHtml, null, $brandingImages);
+    }
+    if ($adminEmail !== null) {
+        send_app_mail($adminEmail, ($resent ? 'Cuenta reenviada' : 'Cuenta entregada') . " #{$orderId}", $adminHtml, null, $brandingImages);
+    }
+}
+
+function mark_account_sale_as_sent(mysqli $mysqli, array $order, string $expectedStatus, string $referenceNumber, string $phone): array {
+    $orderId = (int) ($order['id'] ?? 0);
+    if ($orderId <= 0) {
+        throw new RuntimeException('Pedido inválido para la entrega de cuenta.');
+    }
+
+    $providerState = 'account_sale';
+    $sentStatus = 'enviado';
+    $providerMessage = $expectedStatus === 'pagado'
+        ? 'Venta de cuenta reenviada manualmente al cliente.'
+        : 'Venta de cuenta entregada correctamente al cliente.';
+    $historyJson = append_provider_history(
+        $order['recargas_api_historial_json'] ?? null,
+        build_provider_history_entry(
+            $expectedStatus === 'pagado' ? 'account_sale_resend' : 'account_sale_delivery',
+            $providerState,
+            $sentStatus,
+            $providerMessage,
+            '',
+            '',
+            ''
+        )
+    );
+
+    $stmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, telefono_contacto = ?, ff_api_mensaje = ?, recargas_api_estado = ?, recargas_api_ultimo_check = NOW(), recargas_api_historial_json = ?, estado = ? WHERE id = ? AND estado = ?");
+    if (!$stmt) {
+        throw new RuntimeException('No se pudo preparar la entrega de la cuenta.');
+    }
+
+    $stmt->bind_param('ssssssis', $referenceNumber, $phone, $providerMessage, $providerState, $historyJson, $sentStatus, $orderId, $expectedStatus);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        throw new RuntimeException('No se pudo actualizar la entrega de la cuenta.');
+    }
+    $stmt->close();
+
+    $updatedOrder = fetch_order_by_id($mysqli, $orderId);
+    if ($updatedOrder === null) {
+        throw new RuntimeException('No se pudo recuperar la orden entregada.');
+    }
+
+    return $updatedOrder;
+}
+
 function notify_free_fire_recharge_failure(
     mysqli $mysqli,
     array $order,
@@ -4854,6 +5086,9 @@ if ($action === 'create') {
     $tenant_slug = resolve_tenant_slug();
     $usesCatalogApi = game_uses_catalog_api($mysqli, (int) $game_id);
     $catalogProduct = null;
+    $selectedPackageIsAccountSale = false;
+    $accountSaleTextSnapshot = null;
+    $accountSaleGalleryJson = null;
 
     $missing = [];
     if (!$game_name && $game_id) {
@@ -4879,6 +5114,16 @@ if ($action === 'create') {
             $paquete_api = isset($selectedPackage['paquete_api']) ? (int) $selectedPackage['paquete_api'] : null;
             if ($pack_amount_text !== null && is_numeric($pack_amount_text)) {
                 $pack_amount_num = intval($pack_amount_text);
+            }
+            $selectedPackageIsAccountSale = package_account_sales_is_enabled_for_package($selectedPackage, account_sale_feature_enabled());
+            if ($selectedPackageIsAccountSale) {
+                $accountSaleSnapshot = package_account_sales_build_snapshot(
+                    $selectedPackage,
+                    package_account_sales_fetch_gallery($mysqli, $package_id)
+                );
+                $accountSaleTextSnapshot = $accountSaleSnapshot['account_text'] !== '' ? $accountSaleSnapshot['account_text'] : null;
+                $encodedAccountSaleGallery = json_encode($accountSaleSnapshot['gallery'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                $accountSaleGalleryJson = is_string($encodedAccountSaleGallery) ? $encodedAccountSaleGallery : null;
             }
         }
     }
@@ -4911,15 +5156,15 @@ if ($action === 'create') {
         json_error('El paquete seleccionado no tiene un precio válido para la moneda elegida.');
     }
 
-    if ($usesCatalogApi && ($paquete_api === null || $paquete_api <= 0)) {
+    if (!$selectedPackageIsAccountSale && $usesCatalogApi && ($paquete_api === null || $paquete_api <= 0)) {
         json_error('Este paquete no tiene un producto API configurado.');
     }
 
-    if (!$usesCatalogApi && game_uses_free_fire_api($mysqli, (int) $game_id) && $monto_ff === null) {
+    if (!$selectedPackageIsAccountSale && !$usesCatalogApi && game_uses_free_fire_api($mysqli, (int) $game_id) && $monto_ff === null) {
         json_error('Este paquete no tiene un monto API configurado para Free Fire.');
     }
 
-    if ($usesCatalogApi) {
+    if (!$selectedPackageIsAccountSale && $usesCatalogApi) {
         try {
             $catalogProduct = recargas_api_fetch_product_by_id((int) $paquete_api);
         } catch (Throwable $e) {
@@ -4947,7 +5192,7 @@ if ($action === 'create') {
     if ($package_id <= 0) $missing[] = 'package_id';
     if (!$pack_name) $missing[] = 'pack_name';
     if (!$currency) $missing[] = 'currency';
-    if (!$usesCatalogApi && !$user_identifier) $missing[] = 'user_identifier';
+    if (!$selectedPackageIsAccountSale && !$usesCatalogApi && !$user_identifier) $missing[] = 'user_identifier';
     if (!$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) $missing[] = 'email';
     if (!empty($missing)) {
         json_error('Faltan datos obligatorios del pedido: ' . implode(', ', $missing));
@@ -4993,12 +5238,12 @@ if ($action === 'create') {
         $price = payment_difference_normalize_amount($priceBeforeDifferenceCredit - $paymentDifferenceCreditApplied);
     }
 
-    $stmt = $mysqli->prepare("INSERT INTO pedidos (tenant_slug, juego_id, paquete_id, juego_nombre, paquete_nombre, paquete_cantidad, monto_ff, paquete_api, moneda, precio, precio_original, diferencia_pago_credito_aplicado, diferencia_pago_credito_origen_pedido_id, user_identifier, player_fields_json, email, cliente_usuario_id, cupon, cantidad_compra, cantidad, win_points_awarded, win_points_payment_mode, estado) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'pendiente')");
+    $stmt = $mysqli->prepare("INSERT INTO pedidos (tenant_slug, juego_id, paquete_id, juego_nombre, paquete_nombre, paquete_cantidad, monto_ff, paquete_api, moneda, precio, precio_original, diferencia_pago_credito_aplicado, diferencia_pago_credito_origen_pedido_id, user_identifier, player_fields_json, email, cliente_usuario_id, cupon, cantidad_compra, cantidad, vender_cuenta, cuenta_entrega_texto, cuenta_galeria_json, win_points_awarded, win_points_payment_mode, estado) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'pendiente')");
     if (!$stmt) {
         json_error('No se pudo preparar el pedido');
     }
     $winPointsPaymentMode = 'money';
-    $stmt->bind_param('siissssisdddisssisiiis', $tenant_slug, $game_id, $package_id, $game_name, $pack_name, $pack_amount_text, $monto_ff, $paquete_api, $currency, $price, $priceBeforeDifferenceCredit, $paymentDifferenceCreditApplied, $paymentDifferenceCreditSourceOrderId, $user_identifier, $player_fields_json, $email, $cliente_usuario_id, $cupon, $purchaseQuantity, $pack_amount_num, $winPointsAward, $winPointsPaymentMode);
+    $stmt->bind_param('siissssisdddisssisiiissis', $tenant_slug, $game_id, $package_id, $game_name, $pack_name, $pack_amount_text, $monto_ff, $paquete_api, $currency, $price, $priceBeforeDifferenceCredit, $paymentDifferenceCreditApplied, $paymentDifferenceCreditSourceOrderId, $user_identifier, $player_fields_json, $email, $cliente_usuario_id, $cupon, $purchaseQuantity, $pack_amount_num, $selectedPackageIsAccountSale, $accountSaleTextSnapshot, $accountSaleGalleryJson, $winPointsAward, $winPointsPaymentMode);
     if (!$stmt->execute()) {
         json_error('No se pudo guardar el pedido');
     }
@@ -5227,6 +5472,32 @@ if ($action === 'submit_payment') {
         $updatedOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
         $usesCatalogApi = game_uses_catalog_api($mysqli, (int) ($updatedOrder['juego_id'] ?? 0));
         $requiredPoints = max(0, (int) ($redemption['required_points'] ?? 0));
+
+        if (order_is_account_sale($updatedOrder)) {
+            try {
+                $sentOrder = mark_account_sale_as_sent($mysqli, $updatedOrder, 'pendiente', '', '');
+            } catch (Throwable $e) {
+                json_error($e->getMessage(), 500);
+            }
+
+            win_points_handle_order_status_change($mysqli, $orderId, 'enviado');
+            recharge_notifications_emit_for_order($mysqli, $sentOrder);
+            json_response(append_account_sale_response([
+                'ok' => true,
+                'message' => 'Canje realizado y cuenta entregada correctamente para ' . order_purchase_quantity_text(order_purchase_quantity($sentOrder)) . '.',
+                'order_id' => $orderId,
+                'estado' => 'enviado',
+                'verified' => true,
+                'payment_mode' => 'points',
+                'provider_flow' => 'account_sale',
+                'provider_status' => 'account_sale',
+                'win_points' => win_points_response_payload($mysqli, $sessionUserId, [
+                    'spent' => $requiredPoints,
+                ]),
+            ], $sentOrder), 200, static function () use ($mysqli, $sentOrder): void {
+                notify_account_sale_delivery($mysqli, $sentOrder, 'Canje por premios', '', '');
+            });
+        }
 
         if (!$usesCatalogApi) {
             $paidStatus = 'pagado';
@@ -5770,6 +6041,29 @@ if ($action === 'submit_payment') {
                         ],
                     ]);
                 }
+            }
+
+            if (order_is_account_sale($updatedOrder)) {
+                try {
+                    $sentOrder = mark_account_sale_as_sent($mysqli, $updatedOrder, 'pendiente', $verifiedReference, $phone);
+                } catch (Throwable $e) {
+                    json_error($e->getMessage(), 500);
+                }
+
+                win_points_handle_order_status_change($mysqli, $orderId, 'enviado');
+                recharge_notifications_emit_for_order($mysqli, $sentOrder);
+                json_response(append_account_sale_response(append_payment_difference_response([
+                    'ok' => true,
+                    'message' => 'Pago verificado y cuenta entregada correctamente para ' . order_purchase_quantity_text(order_purchase_quantity($sentOrder)) . '.',
+                    'order_id' => $orderId,
+                    'estado' => 'enviado',
+                    'verified' => true,
+                    'provider_flow' => 'account_sale',
+                    'provider_status' => 'account_sale',
+                ], $sentOrder, $overpaymentAmount), $sentOrder), 200, static function () use ($mysqli, $sentOrder, $paymentMethodName, $verifiedReference, $phone): void {
+                    register_influencer_coupon_sale($mysqli, $sentOrder);
+                    notify_account_sale_delivery($mysqli, $sentOrder, $paymentMethodName, $verifiedReference, $phone);
+                });
             }
 
             if (!$usesCatalogApi) {
@@ -6457,8 +6751,34 @@ if ($action === 'admin_retry_recharge') {
         json_error('Pedido no encontrado.', 404);
     }
 
-    if ((string) ($order['estado'] ?? '') !== 'pagado') {
+    $orderStatus = (string) ($order['estado'] ?? '');
+    $accountSaleResendAllowed = order_is_account_sale($order) && in_array($orderStatus, ['pagado', 'enviado'], true);
+    if (!$accountSaleResendAllowed && $orderStatus !== 'pagado') {
         json_error('Solo se pueden reenviar recargas de pedidos verificados.', 409);
+    }
+
+    if (order_is_account_sale($order)) {
+        $verifiedReference = (string) ($order['numero_referencia'] ?? '');
+        $phone = (string) ($order['telefono_contacto'] ?? '');
+
+        try {
+            $updatedOrder = mark_account_sale_as_sent($mysqli, $order, $orderStatus !== '' ? $orderStatus : 'enviado', $verifiedReference, $phone);
+        } catch (Throwable $e) {
+            json_error($e->getMessage(), 500);
+        }
+
+        win_points_handle_order_status_change($mysqli, $orderId, 'enviado');
+        recharge_notifications_emit_for_order($mysqli, $updatedOrder);
+        json_response(append_account_sale_response([
+            'ok' => true,
+            'message' => 'La cuenta fue reenviada correctamente al cliente.',
+            'order_id' => $orderId,
+            'estado' => 'enviado',
+            'provider_flow' => 'account_sale',
+            'provider_status' => 'account_sale',
+        ], $updatedOrder), 200, static function () use ($mysqli, $updatedOrder, $verifiedReference, $phone): void {
+            notify_account_sale_delivery($mysqli, $updatedOrder, 'Panel administrativo', $verifiedReference, $phone, true);
+        });
     }
 
     if (trim((string) ($order['recargas_api_pedido_id'] ?? '')) !== '') {
