@@ -653,6 +653,7 @@ $packageAccountGalleryByPackage = package_account_sales_fetch_gallery_map($mysql
 $packageFeatureIconOptionsHtml = admin_package_feature_icon_options_html($packageFeatureIconOptions);
 $activePackageCount = count(array_filter($paquetes, static fn (array $package): bool => !isset($package['activo']) || !empty($package['activo'])));
 $inactivePackageCount = count($paquetes) - $activePackageCount;
+$currentPackageTab = 'active';
 
 // Incluir header
 include '../includes/header.php';
@@ -840,8 +841,8 @@ include '../includes/header.php';
         <div class="alert alert-warning mb-4">No hay productos disponibles en la API para la categoría <?= htmlspecialchars($juegoCategoriaApi, ENT_QUOTES, 'UTF-8') ?>.</div>
     <?php endif; ?>
     <div class="d-flex flex-wrap gap-2 mb-3">
-        <button type="button" class="btn btn-info fw-bold js-package-tab-btn" data-package-tab="active">Activos <span data-package-tab-count="active"><?= $activePackageCount ?></span></button>
-        <button type="button" class="btn btn-outline-info fw-bold js-package-tab-btn" data-package-tab="inactive">Inactivos <span data-package-tab-count="inactive"><?= $inactivePackageCount ?></span></button>
+        <button type="button" class="btn <?= $currentPackageTab === 'active' ? 'btn-info' : 'btn-outline-info' ?> fw-bold js-package-tab-btn" data-package-tab="active" onclick="window.filterAdminPackagesByClass('activo'); return false;">Activos <span data-package-tab-count="active"><?= $activePackageCount ?></span></button>
+        <button type="button" class="btn <?= $currentPackageTab === 'inactive' ? 'btn-info' : 'btn-outline-info' ?> fw-bold js-package-tab-btn" data-package-tab="inactive" onclick="window.filterAdminPackagesByClass('inactivo'); return false;">Inactivos <span data-package-tab-count="inactive"><?= $inactivePackageCount ?></span></button>
     </div>
     <div class="table-responsive d-none d-md-block">
         <table class="table table-dark table-bordered align-middle" style="border:2px solid #22d3ee;">
@@ -868,7 +869,7 @@ include '../includes/header.php';
                 <?php $packageGalleryItems = $packageAccountGalleryByPackage[(int) ($p['id'] ?? 0)] ?? []; ?>
                 <?php $packageSellsAccount = (int) ($p['vender_cuenta'] ?? 0) === 1; ?>
                 <?php $packageIsActive = !isset($p['activo']) || !empty($p['activo']); ?>
-                <tr class="js-package-record" data-package-context="desktop" data-package-id="<?= (int) ($p['id'] ?? 0) ?>" data-package-status="<?= $packageIsActive ? 'active' : 'inactive' ?>" style="background:#181f2a; color:#fff;">
+                <tr class="js-package-record js-package-filterable <?= $packageIsActive ? 'activo' : 'inactivo' ?>" data-package-context="desktop" data-package-id="<?= (int) ($p['id'] ?? 0) ?>" style="background:#181f2a; color:#fff;<?= (($currentPackageTab === 'active' && !$packageIsActive) || ($currentPackageTab === 'inactive' && $packageIsActive)) ? 'display:none;' : '' ?>">
                     <td style="background:#181f2a;">
                         <?php if (!empty($p['imagen_icono'])): ?>
                             <img src="/<?= htmlspecialchars($p['imagen_icono']) ?>" alt="icono" class="rounded img-thumbnail" style="max-height:48px;max-width:48px;box-shadow:0 0 8px #22d3ee; border:2px solid #22d3ee; background:#222c3a;">
@@ -925,7 +926,6 @@ include '../includes/header.php';
             </tbody>
         </table>
     </div>
-    <div class="js-package-empty-state d-none d-md-block alert alert-secondary" data-package-empty-context="desktop" style="background:#181f2a;border:1px solid rgba(34,211,238,0.28);color:#b2f6ff;"></div>
     <!-- Cards móvil -->
     <div class="d-md-none">
         <div class="row gy-4">
@@ -934,7 +934,7 @@ include '../includes/header.php';
             <?php $packageGalleryItems = $packageAccountGalleryByPackage[(int) ($p['id'] ?? 0)] ?? []; ?>
             <?php $packageSellsAccount = (int) ($p['vender_cuenta'] ?? 0) === 1; ?>
             <?php $packageIsActive = !isset($p['activo']) || !empty($p['activo']); ?>
-            <div class="col-12 js-package-record" data-package-context="mobile" data-package-id="<?= (int) ($p['id'] ?? 0) ?>" data-package-status="<?= $packageIsActive ? 'active' : 'inactive' ?>">
+            <div class="col-12 js-package-record js-package-filterable <?= $packageIsActive ? 'activo' : 'inactivo' ?>" data-package-context="mobile" data-package-id="<?= (int) ($p['id'] ?? 0) ?>" style="<?= (($currentPackageTab === 'active' && !$packageIsActive) || ($currentPackageTab === 'inactive' && $packageIsActive)) ? 'display:none;' : '' ?>">
                 <div class="card neon-card p-3" style="background:#181f2a; border:2px solid #22d3ee; box-shadow:0 0 16px #22d3ee,0 0 4px #2dd4bf; color:#22d3ee;">
                     <div class="d-flex align-items-center mb-2">
                         <?php if (!empty($p['imagen_icono'])): ?>
@@ -991,7 +991,6 @@ include '../includes/header.php';
             </div>
             <?php endforeach; ?>
         </div>
-        <div class="js-package-empty-state d-none alert alert-secondary mt-3" data-package-empty-context="mobile" style="background:#181f2a;border:1px solid rgba(34,211,238,0.28);color:#b2f6ff;"></div>
     </div>
 
     <a href="<?= htmlspecialchars($adminGamesUrl, ENT_QUOTES, 'UTF-8') ?>" class="inline-block mt-4 text-neon">&larr; Volver a juegos</a>
@@ -1294,12 +1293,12 @@ async function submitAjaxAdminForm(form, requestData = null) {
     return payload;
 }
 
-window.adminPackageActiveTab = 'active';
+window.adminPackageActiveTab = '<?= $currentPackageTab ?>';
 
 window.adminPackageRefreshTabCounts = function() {
     const counts = { active: 0, inactive: 0 };
     document.querySelectorAll('.js-package-record[data-package-context="desktop"]').forEach((record) => {
-        const status = record.dataset.packageStatus === 'inactive' ? 'inactive' : 'active';
+        const status = record.classList.contains('inactivo') ? 'inactive' : 'active';
         counts[status] += 1;
     });
     document.querySelectorAll('[data-package-tab-count]').forEach((node) => {
@@ -1308,8 +1307,8 @@ window.adminPackageRefreshTabCounts = function() {
     });
 };
 
-window.applyAdminPackageTabFilter = function(nextTab) {
-    const activeTab = nextTab === 'inactive' ? 'inactive' : 'active';
+window.filterAdminPackagesByClass = function(filterClass) {
+    const activeTab = filterClass === 'inactivo' ? 'inactive' : 'active';
     window.adminPackageActiveTab = activeTab;
 
     document.querySelectorAll('.js-package-tab-btn').forEach((button) => {
@@ -1318,29 +1317,23 @@ window.applyAdminPackageTabFilter = function(nextTab) {
         button.classList.toggle('btn-outline-info', !isCurrent);
     });
 
-    document.querySelectorAll('.js-package-record').forEach((record) => {
-        const status = record.dataset.packageStatus === 'inactive' ? 'inactive' : 'active';
-        record.classList.toggle('d-none', status !== activeTab);
+    document.querySelectorAll('.js-package-filterable').forEach((record) => {
+        const matches = record.classList.contains(filterClass);
+        record.style.display = matches ? '' : 'none';
     });
 
-    document.querySelectorAll('.js-package-empty-state').forEach((emptyState) => {
-        const context = emptyState.getAttribute('data-package-empty-context') || '';
-        const visibleCount = Array.from(document.querySelectorAll('.js-package-record[data-package-context="' + context + '"]')).filter((record) => !record.classList.contains('d-none')).length;
-        emptyState.textContent = activeTab === 'inactive'
-            ? 'No hay paquetes inactivos en este juego.'
-            : 'No hay paquetes activos en este juego.';
-        emptyState.classList.toggle('d-none', visibleCount > 0);
-    });
 };
 
-document.querySelectorAll('.js-package-tab-btn').forEach((button) => {
-    button.addEventListener('click', () => {
-        window.applyAdminPackageTabFilter(button.getAttribute('data-package-tab') || 'active');
-    });
-});
+window.initAdminPackageTabs = function() {
+    window.adminPackageRefreshTabCounts();
+    window.filterAdminPackagesByClass(window.adminPackageActiveTab === 'inactive' ? 'inactivo' : 'activo');
+};
 
-window.adminPackageRefreshTabCounts();
-window.applyAdminPackageTabFilter(window.adminPackageActiveTab);
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', window.initAdminPackageTabs, { once: true });
+} else {
+    window.initAdminPackageTabs();
+}
 
 window.adminPackageToggle = async function(input) {
     if (!input || input.dataset.busy === '1' || !input.form) {
@@ -1372,11 +1365,12 @@ window.adminPackageToggle = async function(input) {
         const packageId = packageIdInput ? String(packageIdInput.value || '') : '';
         document.querySelectorAll('.js-package-record').forEach((record) => {
             if (String(record.getAttribute('data-package-id') || '') === packageId) {
-                record.dataset.packageStatus = input.checked ? 'active' : 'inactive';
+                record.classList.remove('activo', 'inactivo');
+                record.classList.add(input.checked ? 'activo' : 'inactivo');
             }
         });
         window.adminPackageRefreshTabCounts();
-        window.applyAdminPackageTabFilter(window.adminPackageActiveTab);
+        window.filterAdminPackagesByClass(window.adminPackageActiveTab === 'inactive' ? 'inactivo' : 'activo');
     } catch (error) {
         input.checked = !input.checked;
         if (valueInput) {
@@ -1422,6 +1416,162 @@ window.adminPackageOrderChange = async function(input) {
 ?>
 
 <script>
+if (typeof window.submitAjaxAdminForm !== 'function') {
+    window.submitAjaxAdminForm = async function(form, requestData = null) {
+        const method = (form.method || 'POST').toUpperCase();
+        const formData = requestData instanceof FormData ? requestData : new FormData(form);
+        const headers = {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json, text/plain, */*'
+        };
+        let response;
+        if (method === 'GET') {
+            const params = new URLSearchParams(formData);
+            const separator = (form.action || window.location.href).includes('?') ? '&' : '?';
+            response = await fetch((form.action || window.location.href) + separator + params.toString(), {
+                method,
+                headers,
+                cache: 'no-store'
+            });
+        } else {
+            response = await fetch(form.action || window.location.href, {
+                method,
+                headers,
+                body: formData
+            });
+        }
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload || payload.ok !== true) {
+            throw new Error(payload && payload.message ? payload.message : 'No se pudo guardar el cambio.');
+        }
+        return payload;
+    };
+}
+
+if (typeof window.adminPackageRefreshTabCounts !== 'function') {
+    window.adminPackageActiveTab = '<?= $currentPackageTab ?>';
+    window.adminPackageRefreshTabCounts = function() {
+        const counts = { active: 0, inactive: 0 };
+        document.querySelectorAll('.js-package-record[data-package-context="desktop"]').forEach((record) => {
+            const status = record.classList.contains('inactivo') ? 'inactive' : 'active';
+            counts[status] += 1;
+        });
+        document.querySelectorAll('[data-package-tab-count]').forEach((node) => {
+            const status = node.getAttribute('data-package-tab-count') === 'inactive' ? 'inactive' : 'active';
+            node.textContent = String(counts[status] || 0);
+        });
+    };
+
+    window.filterAdminPackagesByClass = function(filterClass) {
+        const activeTab = filterClass === 'inactivo' ? 'inactive' : 'active';
+        window.adminPackageActiveTab = activeTab;
+
+        document.querySelectorAll('.js-package-tab-btn').forEach((button) => {
+            const isCurrent = button.getAttribute('data-package-tab') === activeTab;
+            button.classList.toggle('btn-info', isCurrent);
+            button.classList.toggle('btn-outline-info', !isCurrent);
+        });
+
+        document.querySelectorAll('.js-package-filterable').forEach((record) => {
+            const matches = record.classList.contains(filterClass);
+            record.style.display = matches ? '' : 'none';
+        });
+
+    };
+
+    window.initAdminPackageTabs = function() {
+        window.adminPackageRefreshTabCounts();
+        window.filterAdminPackagesByClass(window.adminPackageActiveTab === 'inactive' ? 'inactivo' : 'activo');
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', window.initAdminPackageTabs, { once: true });
+    } else {
+        window.initAdminPackageTabs();
+    }
+}
+
+if (typeof window.adminPackageToggle !== 'function') {
+    window.adminPackageToggle = async function(input) {
+        if (!input || input.dataset.busy === '1' || !input.form) {
+            return;
+        }
+
+        const form = input.form;
+        const valueInput = form.querySelector('.js-ajax-toggle-value');
+        const label = form.querySelector('.js-ajax-toggle-label');
+
+        if (valueInput) {
+            valueInput.value = input.checked ? '1' : '0';
+        }
+
+        const requestData = new FormData(form);
+        input.dataset.busy = '1';
+        input.disabled = true;
+
+        try {
+            const payload = await window.submitAjaxAdminForm(form, requestData);
+            input.checked = String(payload.activo || 0) === '1';
+            if (valueInput) {
+                valueInput.value = input.checked ? '1' : '0';
+            }
+            if (label) {
+                label.textContent = input.checked ? 'Activo' : 'Inactivo';
+            }
+            const packageIdInput = form.querySelector('input[name="paquete_id"]');
+            const packageId = packageIdInput ? String(packageIdInput.value || '') : '';
+            document.querySelectorAll('.js-package-record').forEach((record) => {
+                if (String(record.getAttribute('data-package-id') || '') === packageId) {
+                    record.classList.remove('activo', 'inactivo');
+                    record.classList.add(input.checked ? 'activo' : 'inactivo');
+                }
+            });
+            window.adminPackageRefreshTabCounts();
+            window.filterAdminPackagesByClass(window.adminPackageActiveTab === 'inactive' ? 'inactivo' : 'activo');
+        } catch (error) {
+            input.checked = !input.checked;
+            if (valueInput) {
+                valueInput.value = input.checked ? '1' : '0';
+            }
+            window.alert(error.message);
+        } finally {
+            input.disabled = false;
+            input.dataset.busy = '0';
+        }
+    };
+}
+
+if (typeof window.adminPackageOrderChange !== 'function') {
+    window.adminPackageOrderChange = async function(input) {
+        if (!input || !input.form) {
+            return;
+        }
+
+        const form = input.form;
+        const normalized = String(Math.max(1, parseInt(input.value || '1', 10) || 1));
+        const lastValue = String(input.dataset.lastValue || input.defaultValue || '1');
+        if (normalized === lastValue) {
+            input.value = normalized;
+            return;
+        }
+
+        input.value = normalized;
+        const requestData = new FormData(form);
+        input.readOnly = true;
+
+        try {
+            const payload = await window.submitAjaxAdminForm(form, requestData);
+            input.dataset.lastValue = String(payload.orden || normalized);
+            input.value = input.dataset.lastValue;
+        } catch (error) {
+            input.value = lastValue;
+            window.alert(error.message);
+        } finally {
+            input.readOnly = false;
+        }
+    };
+}
+
 if (typeof window.previewNuevoPaqueteImg !== 'function') {
     window.previewNuevoPaqueteImg = function(event) {
         const input = event.target;
