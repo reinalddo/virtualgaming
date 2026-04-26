@@ -1079,10 +1079,33 @@ function admin_parse_bank_movement_datetime(?string $value): ?string {
     }
 
     $normalized = str_ireplace([' a. m.', ' p. m.', ' a.m.', ' p.m.', ' am', ' pm'], [' AM', ' PM', ' AM', ' PM', ' AM', ' PM'], $raw);
-    $date = DateTime::createFromFormat('d/m/Y h:i:s A', $normalized)
-        ?: DateTime::createFromFormat('d/m/Y h:i A', $normalized)
-        ?: DateTime::createFromFormat('d/m/Y H:i:s', $normalized)
-        ?: DateTime::createFromFormat('d/m/Y H:i', $normalized);
+    $normalized = preg_replace('/\s+/', ' ', $normalized) ?: $normalized;
+
+    $formats = [
+        'd/m/Y h:i:s A',
+        'd/m/Y h:i A',
+        'd/m/Y g:i:s A',
+        'd/m/Y g:i A',
+        'd/m/Y H:i:s',
+        'd/m/Y H:i',
+        'd-m-Y h:i:s A',
+        'd-m-Y h:i A',
+        'd-m-Y g:i:s A',
+        'd-m-Y g:i A',
+        'd-m-Y H:i:s',
+        'd-m-Y H:i',
+        'Y-m-d H:i:s',
+        'Y-m-d H:i',
+        'Y-m-d',
+    ];
+
+    $date = null;
+    foreach ($formats as $format) {
+        $date = DateTime::createFromFormat($format, $normalized);
+        if ($date instanceof DateTime) {
+            break;
+        }
+    }
 
     return $date ? $date->format('Y-m-d H:i:s') : null;
 }
@@ -1092,7 +1115,33 @@ function admin_normalize_bank_amount($value): float {
         return round((float) $value, 2);
     }
 
-    $clean = str_replace([',', ' '], '', (string) $value);
+    $raw = trim((string) $value);
+    if ($raw === '') {
+        return 0.0;
+    }
+
+    $clean = preg_replace('/[^0-9,.-]/', '', str_replace(' ', '', $raw));
+    if ($clean === null || $clean === '') {
+        return 0.0;
+    }
+
+    $lastComma = strrpos($clean, ',');
+    $lastDot = strrpos($clean, '.');
+
+    if ($lastComma !== false && $lastDot !== false) {
+        if ($lastComma > $lastDot) {
+            $clean = str_replace('.', '', $clean);
+            $clean = str_replace(',', '.', $clean);
+        } else {
+            $clean = str_replace(',', '', $clean);
+        }
+    } elseif ($lastComma !== false) {
+        $clean = str_replace('.', '', $clean);
+        $clean = str_replace(',', '.', $clean);
+    } else {
+        $clean = str_replace(',', '', $clean);
+    }
+
     return is_numeric($clean) ? round((float) $clean, 2) : 0.0;
 }
 
@@ -1263,8 +1312,12 @@ function admin_sync_bank_movements(PDO $pdo, array $movements): array {
             (string) ($movement['payload_json'] ?? ''),
         ]);
 
+        $affectedRows = (int) $syncStmt->rowCount();
+
         if ($wasExisting) {
-            $updated++;
+            if ($affectedRows > 0) {
+                $updated++;
+            }
         } else {
             $inserted++;
         }
@@ -2224,20 +2277,28 @@ switch ($seccion) {
                     $movements = admin_fetch_bank_movements_from_api($bankConfig);
                     $syncSummary = admin_sync_bank_movements($pdo, $movements);
                     $hasNewMovements = (int) ($syncSummary['inserted'] ?? 0) > 0;
+                    $hasUpdatedMovements = (int) ($syncSummary['updated'] ?? 0) > 0;
+                    $hasSyncChanges = $hasNewMovements || $hasUpdatedMovements;
+                    $syncMessage = $hasNewMovements && $hasUpdatedMovements
+                        ? 'Se registraron ' . (int) ($syncSummary['inserted'] ?? 0) . ' movimientos nuevos y se actualizaron ' . (int) ($syncSummary['updated'] ?? 0) . ' existentes.'
+                        : ($hasNewMovements
+                            ? 'Se encontraron ' . (int) ($syncSummary['inserted'] ?? 0) . ' movimientos nuevos y ya fueron registrados.'
+                            : ($hasUpdatedMovements
+                                ? 'Se actualizaron ' . (int) ($syncSummary['updated'] ?? 0) . ' movimientos existentes desde la API.'
+                                : 'No hay movimientos nuevos para actualizar.'));
 
                     if (admin_is_ajax_request()) {
                         header('Content-Type: application/json; charset=utf-8');
                         $availableDays = trim((string) store_config_get('ff_bank_dias_disponibles', ''));
                         echo json_encode([
                             'ok' => true,
+                            'has_sync_changes' => $hasSyncChanges,
                             'has_new_movements' => $hasNewMovements,
                             'inserted' => (int) ($syncSummary['inserted'] ?? 0),
                             'updated' => (int) ($syncSummary['updated'] ?? 0),
                             'processed' => (int) ($syncSummary['processed'] ?? 0),
                             'dias_disponibles' => $availableDays,
-                            'message' => $hasNewMovements
-                                ? 'Se encontraron ' . (int) ($syncSummary['inserted'] ?? 0) . ' movimientos nuevos y ya fueron registrados.'
-                                : 'No hay movimientos nuevos para actualizar.',
+                            'message' => $syncMessage,
                         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
                         exit();
                     }
@@ -2247,8 +2308,8 @@ switch ($seccion) {
                         ? ' La API bancaria reporta ' . $availableDays . ' dias disponibles.'
                         : '';
 
-                    if ($hasNewMovements) {
-                        admin_set_flash('success', 'Se registraron ' . (int) ($syncSummary['inserted'] ?? 0) . ' movimientos nuevos desde la API.' . $daysSuffix);
+                    if ($hasSyncChanges) {
+                        admin_set_flash('success', $syncMessage . $daysSuffix);
                     } else {
                         admin_set_flash('info', 'No hay movimientos nuevos para actualizar.' . $daysSuffix);
                     }
@@ -4175,8 +4236,9 @@ require_once __DIR__ . '/includes/header.php';
 
                 const availableDaysSuffix = data.dias_disponibles ? ` La API reporta ${data.dias_disponibles} días disponibles.` : '';
 
-                if (data.has_new_movements) {
-                    setSyncStatus('success', 'Nuevos movimientos disponibles', (data.message || 'Se registraron nuevos movimientos en la tabla.') + availableDaysSuffix, false);
+                if (data.has_sync_changes) {
+                    const successTitle = data.has_new_movements ? 'Nuevos movimientos disponibles' : 'Movimientos sincronizados';
+                    setSyncStatus('success', successTitle, (data.message || 'La tabla movimientos fue sincronizada con la API.') + availableDaysSuffix, false);
                     showMovementToast('Movimientos actualizados desde la API');
                     await wait(1500);
                     await refreshMovementsContent(`${window.location.pathname}${window.location.search}`, false);
