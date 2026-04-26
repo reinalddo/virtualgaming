@@ -3306,7 +3306,34 @@ function normalize_bank_amount($value): float {
     if (is_numeric($value)) {
         return round((float) $value, 2);
     }
-    $clean = str_replace([',', ' '], '', (string) $value);
+
+    $raw = trim((string) $value);
+    if ($raw === '') {
+        return 0.0;
+    }
+
+    $clean = preg_replace('/[^0-9,.-]/', '', str_replace(' ', '', $raw));
+    if ($clean === null || $clean === '') {
+        return 0.0;
+    }
+
+    $lastComma = strrpos($clean, ',');
+    $lastDot = strrpos($clean, '.');
+
+    if ($lastComma !== false && $lastDot !== false) {
+        if ($lastComma > $lastDot) {
+            $clean = str_replace('.', '', $clean);
+            $clean = str_replace(',', '.', $clean);
+        } else {
+            $clean = str_replace(',', '', $clean);
+        }
+    } elseif ($lastComma !== false) {
+        $clean = str_replace('.', '', $clean);
+        $clean = str_replace(',', '.', $clean);
+    } else {
+        $clean = str_replace(',', '', $clean);
+    }
+
     return is_numeric($clean) ? round((float) $clean, 2) : 0.0;
 }
 
@@ -3648,7 +3675,7 @@ function movement_is_available_for_order(mysqli $mysqli, string $reference, int 
 }
 
 function bank_amount_matches_order_total(float $movementAmount, float $orderAmount): bool {
-    return (int) $movementAmount === (int) $orderAmount;
+    return (int) floor($movementAmount) === (int) floor($orderAmount);
 }
 
 function bank_mismatch_failure_type(bool $referenceMatch, bool $amountMatch): string {
