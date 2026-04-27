@@ -19,7 +19,7 @@ function auth_sync_session_user(): ?array {
   }
 
   $userId = (int) $sessionUser['id'];
-  $stmt = $mysqli->prepare('SELECT id, username, nombre, email, telefono, rol FROM usuarios WHERE id = ? LIMIT 1');
+  $stmt = $mysqli->prepare('SELECT id, username, nombre, email, telefono, foto_perfil, rol FROM usuarios WHERE id = ? LIMIT 1');
   if (!$stmt) {
     return $sessionUser;
   }
@@ -43,6 +43,7 @@ function auth_sync_session_user(): ?array {
     'id' => (int) ($freshUser['id'] ?? $userId),
     'email' => (string) ($freshUser['email'] ?? ''),
     'telefono' => (string) ($freshUser['telefono'] ?? ''),
+    'foto_perfil' => (string) ($freshUser['foto_perfil'] ?? ''),
     'full_name' => (string) ($freshUser['nombre'] ?? ''),
     'username' => (string) ($freshUser['username'] ?? ''),
     'rol' => strtolower(trim((string) ($freshUser['rol'] ?? 'usuario'))),

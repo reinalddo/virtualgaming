@@ -82,8 +82,13 @@ $menuScript = <<<'SCRIPT'
   const userRewardsTransactionsValue = document.getElementById("user-rewards-transactions-value");
   const userProfileForm = document.getElementById("user-profile-form");
   const userProfileFeedback = document.getElementById("user-profile-feedback");
+  const userProfileImageInput = document.getElementById("user-profile-image");
+  const userProfilePreviewImage = document.getElementById("user-profile-preview-image");
+  const userProfilePreviewFallback = document.getElementById("user-profile-preview-fallback");
   const userTriggerName = document.getElementById("user-trigger-name");
   const userTriggerInitials = document.getElementById("user-trigger-initials");
+  const userTriggerInitialsText = document.getElementById("user-trigger-initials-text");
+  const userTriggerAvatar = document.getElementById("user-trigger-avatar");
   const userMenuName = document.getElementById("user-menu-name");
   const userMenuEmail = document.getElementById("user-menu-email");
   const userMenuRewardsName = document.getElementById("user-menu-rewards-name");
@@ -238,6 +243,34 @@ $menuScript = <<<'SCRIPT'
     const parts = source.split(/\s+/).filter(Boolean);
     const initials = parts.slice(0, 2).map((part) => part.charAt(0)).join("");
     return (initials || source.slice(0, 2) || "US").toUpperCase();
+  };
+
+  const setAvatarDisplay = (imageElement, fallbackElement, imageUrl, name, email) => {
+    const initials = getInitials(name || "", email || "");
+    if (fallbackElement) {
+      fallbackElement.textContent = initials;
+      fallbackElement.classList.toggle("d-none", Boolean(imageUrl));
+    }
+    if (imageElement) {
+      if (imageUrl) {
+        imageElement.src = imageUrl;
+        imageElement.classList.remove("d-none");
+      } else {
+        imageElement.removeAttribute("src");
+        imageElement.classList.add("d-none");
+      }
+    }
+    if (!imageElement && fallbackElement && userTriggerInitials) {
+      userTriggerInitials.setAttribute("aria-label", `Iniciales de ${name || email || "usuario"}`);
+    }
+  };
+
+  const applyPersistedUserAvatar = (imageUrl, name, email) => {
+    setAvatarDisplay(userTriggerAvatar, userTriggerInitialsText, imageUrl, name, email);
+    setAvatarDisplay(userProfilePreviewImage, userProfilePreviewFallback, imageUrl, name, email);
+    if (userProfileForm) {
+      userProfileForm.dataset.profileImageUrl = imageUrl || "";
+    }
   };
 
   const renderOrderCard = (order) => {
@@ -450,15 +483,13 @@ $menuScript = <<<'SCRIPT'
     if (userTriggerName) {
       userTriggerName.textContent = user.full_name || user.email || "Usuario";
     }
-    if (userTriggerInitials) {
-      userTriggerInitials.textContent = getInitials(user.full_name || "", user.email || "");
-    }
     if (userMenuName) {
       userMenuName.textContent = user.full_name || user.email || "Usuario";
     }
     if (userMenuEmail) {
       userMenuEmail.textContent = user.email || "";
     }
+    applyPersistedUserAvatar(user.profile_image_url || "", user.full_name || "", user.email || "");
     const orderEmailField = document.querySelector('#order-form input[name="email"]');
     if (orderEmailField) {
       orderEmailField.value = user.email || "";
@@ -586,7 +617,15 @@ $menuScript = <<<'SCRIPT'
       }
       if (target === "profile") {
         hideFeedback(userProfileFeedback);
+        setAvatarDisplay(
+          userProfilePreviewImage,
+          userProfilePreviewFallback,
+          (userProfileForm && userProfileForm.dataset.profileImageUrl) || "",
+          userProfileForm?.elements?.name?.value || userTriggerName?.textContent || "",
+          userProfileForm?.elements?.email?.value || userMenuEmail?.textContent || ""
+        );
         openUserModal(userProfileModal);
+        return;
       }
     });
   });
@@ -642,6 +681,7 @@ $menuScript = <<<'SCRIPT'
         userProfileForm.elements.name.value = (data.user && data.user.full_name) || "";
         userProfileForm.elements.email.value = (data.user && data.user.email) || "";
         userProfileForm.elements.phone.value = (data.user && data.user.phone) || "";
+        applyPersistedUserAvatar((data.user && data.user.profile_image_url) || "", (data.user && data.user.full_name) || "", (data.user && data.user.email) || "");
         showFeedback(userProfileFeedback, data.message || "Datos guardados.", "success");
       } catch (error) {
         showFeedback(userProfileFeedback, error.message || "No se pudieron guardar los cambios.", "danger");
@@ -650,6 +690,34 @@ $menuScript = <<<'SCRIPT'
           submitButton.disabled = false;
         }
       }
+    });
+  }
+
+  if (userProfileImageInput) {
+    userProfileImageInput.addEventListener("change", () => {
+      const file = userProfileImageInput.files && userProfileImageInput.files[0];
+      const currentImageUrl = (userProfileForm && userProfileForm.dataset.profileImageUrl) || "";
+      const currentName = userProfileForm?.elements?.name?.value || userTriggerName?.textContent || "";
+      const currentEmail = userProfileForm?.elements?.email?.value || userMenuEmail?.textContent || "";
+
+      if (!file) {
+        setAvatarDisplay(userProfilePreviewImage, userProfilePreviewFallback, currentImageUrl, currentName, currentEmail);
+        return;
+      }
+
+      if (String(file.type || "").indexOf("image/") !== 0) {
+        userProfileImageInput.value = "";
+        setAvatarDisplay(userProfilePreviewImage, userProfilePreviewFallback, currentImageUrl, currentName, currentEmail);
+        showFeedback(userProfileFeedback, "Debes seleccionar una imagen válida para el perfil.", "danger");
+        return;
+      }
+
+      hideFeedback(userProfileFeedback);
+      const reader = new FileReader();
+      reader.onload = () => {
+        setAvatarDisplay(userProfilePreviewImage, userProfilePreviewFallback, String(reader.result || ""), currentName, currentEmail);
+      };
+      reader.readAsDataURL(file);
     });
   }
 </script>

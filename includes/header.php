@@ -34,6 +34,19 @@ $authUser = auth_sync_session_user();
 $authUserName = trim((string) (($authUser['full_name'] ?? $authUser['nombre'] ?? $authUser['email'] ?? 'Usuario')));
 $authUserEmail = trim((string) ($authUser['email'] ?? ''));
 $authUserPhone = trim((string) ($authUser['telefono'] ?? ''));
+$authUserProfileImage = trim((string) ($authUser['foto_perfil'] ?? ''));
+$authUserProfileImageUrl = '';
+if ($authUserProfileImage !== '') {
+  if (preg_match('#^(?:https?:)?//#i', $authUserProfileImage) === 1 || str_starts_with($authUserProfileImage, 'data:')) {
+    $authUserProfileImageUrl = $authUserProfileImage;
+  } else {
+    $authUserProfileImageUrl = app_path($authUserProfileImage);
+    $authUserProfileImageAbsolutePath = tenant_resolve_public_path($authUserProfileImage);
+    if ($authUserProfileImageAbsolutePath !== null && is_file($authUserProfileImageAbsolutePath)) {
+      $authUserProfileImageUrl .= '?v=' . rawurlencode((string) filemtime($authUserProfileImageAbsolutePath));
+    }
+  }
+}
 $authUserRole = strtolower(trim((string) ($authUser['rol'] ?? '')));
 $winPointsProgramEnabled = win_points_enabled();
 $winPointsProgramConfig = $winPointsProgramEnabled ? win_points_config() : ['name' => 'Win Points', 'icon_url' => ''];
@@ -862,8 +875,9 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
             </div>
           <?php else: ?>
             <button id="user-trigger" type="button" class="btn btn-admin d-inline-flex align-items-center gap-3 rounded-pill px-3 py-2 shadow-sm border border-info" style="background:linear-gradient(90deg,var(--theme-button-primary) 0%,var(--theme-button-secondary) 100%);color:var(--theme-button-text);min-width:210px;box-shadow:0 0 16px rgba(var(--theme-button-primary-rgb),0.28);">
-              <span id="user-trigger-initials" class="d-inline-flex align-items-center justify-content-center rounded-circle fw-bold" style="width:38px;height:38px;background:rgba(var(--theme-bg-main-rgb),0.18);border:1px solid rgba(var(--theme-bg-main-rgb),0.2);font-family:'Oxanium',sans-serif;">
-                <?php echo htmlspecialchars($authUserInitials, ENT_QUOTES, 'UTF-8'); ?>
+              <span id="user-trigger-initials" class="d-inline-flex align-items-center justify-content-center rounded-circle fw-bold overflow-hidden" style="width:38px;height:38px;background:rgba(var(--theme-bg-main-rgb),0.18);border:1px solid rgba(var(--theme-bg-main-rgb),0.2);font-family:'Oxanium',sans-serif;">
+                <img id="user-trigger-avatar" src="<?php echo htmlspecialchars($authUserProfileImageUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="Foto de perfil" class="w-100 h-100 object-fit-cover<?php echo $authUserProfileImageUrl === '' ? ' d-none' : ''; ?>">
+                <span id="user-trigger-initials-text" class="<?php echo $authUserProfileImageUrl !== '' ? 'd-none' : ''; ?>"><?php echo htmlspecialchars($authUserInitials, ENT_QUOTES, 'UTF-8'); ?></span>
               </span>
               <span class="d-flex flex-column align-items-start text-start lh-sm flex-grow-1 overflow-hidden">
                 <span class="small text-uppercase fw-bold" style="letter-spacing:0.15em;opacity:0.7;">Mi cuenta</span>
@@ -1228,7 +1242,18 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
             </div>
             <div class="px-4 py-4">
               <div id="user-profile-feedback" class="d-none alert mb-3 py-2"></div>
-              <form id="user-profile-form" class="d-grid gap-3" novalidate>
+              <form id="user-profile-form" class="d-grid gap-3" novalidate data-profile-image-url="<?php echo htmlspecialchars($authUserProfileImageUrl, ENT_QUOTES, 'UTF-8'); ?>">
+                <div class="d-flex flex-column align-items-center gap-3 pb-2">
+                  <div class="d-inline-flex align-items-center justify-content-center rounded-circle overflow-hidden border border-info" style="width:88px;height:88px;background:rgba(var(--theme-bg-main-rgb),0.28);box-shadow:0 0 20px rgba(var(--theme-primary-rgb),0.14);">
+                    <img id="user-profile-preview-image" src="<?php echo htmlspecialchars($authUserProfileImageUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="Vista previa de foto de perfil" class="w-100 h-100 object-fit-cover<?php echo $authUserProfileImageUrl === '' ? ' d-none' : ''; ?>">
+                    <span id="user-profile-preview-fallback" class="fw-bold text-info<?php echo $authUserProfileImageUrl !== '' ? ' d-none' : ''; ?>"><?php echo htmlspecialchars($authUserInitials, ENT_QUOTES, 'UTF-8'); ?></span>
+                  </div>
+                  <div class="w-100">
+                    <label class="form-label small text-info">Imagen de perfil</label>
+                    <input type="file" id="user-profile-image" name="profile_image" class="form-control bg-dark text-info border-info" accept="image/png,image/jpeg,image/webp,image/gif">
+                    <div class="small text-secondary mt-2">La vista previa se actualiza al instante. Formatos permitidos: JPG, PNG, WEBP o GIF.</div>
+                  </div>
+                </div>
                 <div>
                   <label class="form-label small text-info">Nombre</label>
                   <input type="text" name="name" class="form-control bg-dark text-info border-info" value="<?php echo htmlspecialchars($authUserName, ENT_QUOTES, 'UTF-8'); ?>" required />

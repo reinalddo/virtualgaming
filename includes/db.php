@@ -41,6 +41,12 @@ try {
         $pdo->exec("ALTER TABLE usuarios ADD COLUMN telefono VARCHAR(50) NULL AFTER email");
     }
 
+    $profileImageColumnStmt = $pdo->query("SHOW COLUMNS FROM usuarios LIKE 'foto_perfil'");
+    $profileImageColumn = $profileImageColumnStmt ? $profileImageColumnStmt->fetch() : false;
+    if (!$profileImageColumn) {
+        $pdo->exec("ALTER TABLE usuarios ADD COLUMN foto_perfil VARCHAR(255) NULL AFTER telefono");
+    }
+
     $lastPurchaseIdentifierColumnStmt = $pdo->query("SHOW COLUMNS FROM usuarios LIKE 'last_purchase_user_identifier'");
     $lastPurchaseIdentifierColumn = $lastPurchaseIdentifierColumnStmt ? $lastPurchaseIdentifierColumnStmt->fetch() : false;
     if (!$lastPurchaseIdentifierColumn) {

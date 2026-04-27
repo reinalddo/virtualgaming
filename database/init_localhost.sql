@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   nombre VARCHAR(100),
   email VARCHAR(100),
   telefono VARCHAR(50) DEFAULT NULL,
+  foto_perfil VARCHAR(255) DEFAULT NULL,
   rol ENUM('admin','usuario','empleado','influencer','root') DEFAULT 'usuario',
   creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

@@ -43,6 +43,90 @@ function account_pedidos_has_purchase_quantity_column(mysqli $mysqli): bool {
     return $result && $result->num_rows > 0;
 }
 
+function account_profile_image_public_url(string $path): string {
+    $relativePath = trim($path);
+    if ($relativePath === '') {
+        return '';
+    }
+
+    if (preg_match('#^(?:https?:)?//#i', $relativePath) === 1 || str_starts_with($relativePath, 'data:')) {
+        return $relativePath;
+    }
+
+    $url = app_path($relativePath);
+    $absolutePath = tenant_resolve_public_path($relativePath);
+    if ($absolutePath !== null && is_file($absolutePath)) {
+        $url .= '?v=' . rawurlencode((string) filemtime($absolutePath));
+    }
+
+    return $url;
+}
+
+function account_delete_profile_image_file(string $relativePath): void {
+    $path = trim($relativePath);
+    if ($path === '' || !tenant_is_managed_path($path, 'users')) {
+        return;
+    }
+
+    $absolutePath = tenant_resolve_public_path($path);
+    if ($absolutePath !== null && is_file($absolutePath)) {
+        @unlink($absolutePath);
+    }
+}
+
+function account_store_profile_image_upload(array $file): array {
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        return ['success' => true, 'path' => ''];
+    }
+
+    if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+        return ['success' => false, 'message' => 'No se pudo cargar la imagen de perfil.'];
+    }
+
+    $tmpName = (string) ($file['tmp_name'] ?? '');
+    if ($tmpName === '' || !is_uploaded_file($tmpName)) {
+        return ['success' => false, 'message' => 'El archivo de perfil no es válido.'];
+    }
+
+    if (($file['size'] ?? 0) > 2 * 1024 * 1024) {
+        return ['success' => false, 'message' => 'La imagen de perfil no puede superar 2 MB.'];
+    }
+
+    $imageInfo = @getimagesize($tmpName);
+    if ($imageInfo === false) {
+        return ['success' => false, 'message' => 'Debes subir una imagen válida para el perfil.'];
+    }
+
+    $mime = (string) ($imageInfo['mime'] ?? '');
+    $extensions = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+        'image/gif' => 'gif',
+    ];
+    if (!isset($extensions[$mime])) {
+        return ['success' => false, 'message' => 'Formato no permitido. Usa JPG, PNG, WEBP o GIF.'];
+    }
+
+    $targetDir = tenant_upload_absolute_dir('users');
+    if (!is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
+        return ['success' => false, 'message' => 'No se pudo crear la carpeta de la imagen de perfil.'];
+    }
+
+    $fileName = 'profile-' . date('YmdHis') . '-' . bin2hex(random_bytes(4)) . '.' . $extensions[$mime];
+    $targetPath = $targetDir . DIRECTORY_SEPARATOR . $fileName;
+    if (!move_uploaded_file($tmpName, $targetPath)) {
+        return ['success' => false, 'message' => 'No se pudo guardar la imagen de perfil en el servidor.'];
+    }
+
+    $publicPath = tenant_upload_public_path('users', $fileName, true);
+    return [
+        'success' => true,
+        'path' => $publicPath,
+        'url' => account_profile_image_public_url($publicPath),
+    ];
+}
+
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 if ($action === '') {
     account_json_error('Acción no especificada.', 422);
@@ -147,6 +231,27 @@ if ($action === 'update_profile') {
         account_json_error('La confirmación de contraseña no coincide.');
     }
 
+    $currentProfileImage = '';
+    $currentStmt = $mysqli->prepare('SELECT foto_perfil FROM usuarios WHERE id = ? LIMIT 1');
+    if ($currentStmt) {
+        $currentStmt->bind_param('i', $authUserId);
+        if ($currentStmt->execute()) {
+            $currentResult = $currentStmt->get_result();
+            $currentRow = $currentResult ? $currentResult->fetch_assoc() : null;
+            $currentProfileImage = trim((string) ($currentRow['foto_perfil'] ?? ''));
+        }
+        $currentStmt->close();
+    }
+
+    $nextProfileImage = $currentProfileImage;
+    $uploadedProfileImage = isset($_FILES['profile_image']) ? account_store_profile_image_upload($_FILES['profile_image']) : ['success' => true, 'path' => ''];
+    if (empty($uploadedProfileImage['success'])) {
+        account_json_error((string) ($uploadedProfileImage['message'] ?? 'No se pudo cargar la imagen de perfil.'));
+    }
+    if (!empty($uploadedProfileImage['path'])) {
+        $nextProfileImage = (string) $uploadedProfileImage['path'];
+    }
+
     $dupStmt = $mysqli->prepare('SELECT id FROM usuarios WHERE email = ? AND id <> ? LIMIT 1');
     if (!$dupStmt) {
         account_json_error('No se pudo validar el correo.', 500);
@@ -162,29 +267,37 @@ if ($action === 'update_profile') {
 
     if ($password !== '') {
         $passwordHash = password_hash($password, PASSWORD_DEFAULT);
-        $stmt = $mysqli->prepare('UPDATE usuarios SET nombre = ?, email = ?, telefono = ?, username = ?, password = ? WHERE id = ? LIMIT 1');
+        $stmt = $mysqli->prepare('UPDATE usuarios SET nombre = ?, email = ?, telefono = ?, foto_perfil = ?, username = ?, password = ? WHERE id = ? LIMIT 1');
         if (!$stmt) {
             account_json_error('No se pudo actualizar el usuario.', 500);
         }
-        $stmt->bind_param('sssssi', $name, $email, $phone, $email, $passwordHash, $authUserId);
+        $stmt->bind_param('ssssssi', $name, $email, $phone, $nextProfileImage, $email, $passwordHash, $authUserId);
     } else {
-        $stmt = $mysqli->prepare('UPDATE usuarios SET nombre = ?, email = ?, telefono = ?, username = ? WHERE id = ? LIMIT 1');
+        $stmt = $mysqli->prepare('UPDATE usuarios SET nombre = ?, email = ?, telefono = ?, foto_perfil = ?, username = ? WHERE id = ? LIMIT 1');
         if (!$stmt) {
             account_json_error('No se pudo actualizar el usuario.', 500);
         }
-        $stmt->bind_param('ssssi', $name, $email, $phone, $email, $authUserId);
+        $stmt->bind_param('sssssi', $name, $email, $phone, $nextProfileImage, $email, $authUserId);
     }
 
     if (!$stmt->execute()) {
         $stmt->close();
+        if (!empty($uploadedProfileImage['path']) && $nextProfileImage !== $currentProfileImage) {
+            account_delete_profile_image_file($nextProfileImage);
+        }
         account_json_error('No se pudieron guardar los datos del usuario.', 500);
     }
     $stmt->close();
+
+    if (!empty($uploadedProfileImage['path']) && $currentProfileImage !== '' && $currentProfileImage !== $nextProfileImage) {
+        account_delete_profile_image_file($currentProfileImage);
+    }
 
     $_SESSION['auth_user']['email'] = $email;
     $_SESSION['auth_user']['telefono'] = $phone;
     $_SESSION['auth_user']['full_name'] = $name;
     $_SESSION['auth_user']['username'] = $email;
+    $_SESSION['auth_user']['foto_perfil'] = $nextProfileImage;
 
     account_json_ok([
         'message' => 'Datos de usuario actualizados correctamente.',
@@ -193,6 +306,8 @@ if ($action === 'update_profile') {
             'email' => $email,
             'phone' => $phone,
             'full_name' => $name,
+            'profile_image' => $nextProfileImage,
+            'profile_image_url' => account_profile_image_public_url($nextProfileImage),
             'rol' => (string) ($_SESSION['auth_user']['rol'] ?? 'usuario'),
         ],
     ]);

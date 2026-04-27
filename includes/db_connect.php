@@ -69,6 +69,15 @@ if ($phoneColumnResult instanceof mysqli_result) {
     }
 }
 
+$profileImageColumnResult = $mysqli->query("SHOW COLUMNS FROM usuarios LIKE 'foto_perfil'");
+if ($profileImageColumnResult instanceof mysqli_result) {
+    $profileImageColumnExists = $profileImageColumnResult->fetch_assoc();
+    $profileImageColumnResult->free();
+    if (!$profileImageColumnExists) {
+        $mysqli->query("ALTER TABLE usuarios ADD COLUMN foto_perfil VARCHAR(255) NULL AFTER telefono");
+    }
+}
+
 $lastPurchaseIdentifierColumnResult = $mysqli->query("SHOW COLUMNS FROM usuarios LIKE 'last_purchase_user_identifier'");
 if ($lastPurchaseIdentifierColumnResult instanceof mysqli_result) {
     $lastPurchaseIdentifierColumnExists = $lastPurchaseIdentifierColumnResult->fetch_assoc();

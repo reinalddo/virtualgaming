@@ -66,7 +66,7 @@ try {
         throw new RuntimeException('Google no devolvió un correo verificado para esta cuenta.');
     }
 
-    $stmt = $pdo->prepare('SELECT id, username, nombre, email, telefono, rol FROM usuarios WHERE email = ? LIMIT 1');
+    $stmt = $pdo->prepare('SELECT id, username, nombre, email, telefono, foto_perfil, rol FROM usuarios WHERE email = ? LIMIT 1');
     $stmt->execute([$email]);
     $user = $stmt->fetch();
 
@@ -74,6 +74,7 @@ try {
         $userId = (int) $user['id'];
         $username = trim((string) ($user['username'] ?? ''));
         $userPhone = (string) ($user['telefono'] ?? '');
+        $userProfileImage = (string) ($user['foto_perfil'] ?? '');
         if ($username === '') {
             $username = $email;
         }
@@ -86,6 +87,7 @@ try {
         $passwordHash = password_hash(bin2hex(random_bytes(32)), PASSWORD_DEFAULT);
         $role = 'usuario';
         $userPhone = '';
+        $userProfileImage = '';
 
         $insertStmt = $pdo->prepare('INSERT INTO usuarios (username, password, nombre, email, telefono, rol, creado_en) VALUES (?, ?, ?, ?, ?, ?, NOW())');
         $insertStmt->execute([$username, $passwordHash, $fullName, $email, null, $role]);
@@ -98,6 +100,7 @@ try {
         'id' => $userId,
         'email' => $email,
         'telefono' => $userPhone,
+        'foto_perfil' => $userProfileImage,
         'full_name' => $fullName,
         'username' => $username,
         'rol' => $role,
