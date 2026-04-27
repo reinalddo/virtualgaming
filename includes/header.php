@@ -260,13 +260,14 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
     }
     .site-header-topbar {
       position: fixed;
-      top: 0.55rem;
-      left: 50%;
-      transform: translateX(-50%);
-      width: calc(100vw - 1rem);
+      top: 0;
+      left: 0;
+      right: 0;
+      transform: none;
+      width: 100%;
       z-index: 1045;
-      padding: 0.9rem 1rem;
-      border-radius: 1.25rem;
+      padding: 0.9rem 1.25rem;
+      border-radius: 0;
       border: 1px solid rgba(var(--theme-topbar-search-border-rgb), 0.28);
       background: rgba(var(--theme-topbar-bg-rgb), var(--site-topbar-opacity, 0.96));
       backdrop-filter: blur(16px);
@@ -511,9 +512,8 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
         --site-topbar-height: 152px;
       }
       .site-header-topbar {
-        top: 0.3rem;
-        width: calc(100vw - 0.5rem);
-        border-radius: 1rem;
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
       }
       .site-topbar-enabled .site-brand-copy h1 {
         font-size: 1rem !important;
