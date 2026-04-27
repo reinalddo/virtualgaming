@@ -2549,27 +2549,28 @@ include __DIR__ . "/includes/header.php";
 
   .pack-account-preview-btn {
     appearance: none;
-    border: 1px solid rgba(34, 211, 238, 0.72);
+    border: 1px solid var(--theme-account-preview-button-border);
     border-radius: 999px;
     padding: 0.42rem 0.92rem;
-    background: linear-gradient(135deg, rgba(34, 211, 238, 0.24), rgba(6, 182, 212, 0.52));
-    color: #f0fdff;
+    background: var(--theme-account-preview-button-bg);
+    color: var(--theme-account-preview-button-text);
     font-size: 0.75rem;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     line-height: 1;
-    box-shadow: 0 10px 22px rgba(6, 182, 212, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    box-shadow: 0 10px 22px rgba(var(--theme-account-preview-button-shadow-rgb), 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.12);
     transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease, background 0.18s ease;
   }
 
   .pack-account-preview-btn:hover,
   .pack-account-preview-btn:focus-visible {
     transform: translateY(-1px);
-    border-color: rgba(103, 232, 249, 0.96);
-    background: linear-gradient(135deg, rgba(34, 211, 238, 0.4), rgba(8, 145, 178, 0.72));
-    box-shadow: 0 14px 28px rgba(6, 182, 212, 0.26), 0 0 0 3px rgba(34, 211, 238, 0.14);
-    color: #ffffff;
+    border-color: var(--theme-account-preview-button-border);
+    background: var(--theme-account-preview-button-bg);
+    box-shadow: 0 14px 28px rgba(var(--theme-account-preview-button-shadow-rgb), 0.3), 0 0 0 3px rgba(var(--theme-account-preview-button-shadow-rgb), 0.16);
+    color: var(--theme-account-preview-button-text);
+    filter: brightness(1.08);
   }
 
   .account-sale-note {

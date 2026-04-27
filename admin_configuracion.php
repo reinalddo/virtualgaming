@@ -71,6 +71,7 @@ $galleryForm = [
 $themeDefinitions = store_theme_definitions();
 $themeBaseValues = store_theme_base_values();
 $themeValues = store_theme_values();
+$accountSaleFeatureEnabled = trim((string) ($cfg['vender_cuentas'] ?? store_config_get('vender_cuentas', '0'))) === '1';
 $paymentHeaderMinimalEnabled = ($cfg['encabezado_pago'] ?? '0') === '1';
 $paymentDifferenceConfigEnabled = ($cfg['diferencia_pago'] ?? '0') === '1';
 $paymentWindowConfigEnabled = ($cfg['ventana_pago_config'] ?? '0') === '1';
@@ -174,6 +175,14 @@ $themeFieldGroups = [
   'Ventana inicial' => ['theme_startup_popup_surface', 'theme_startup_popup_border', 'theme_startup_popup_accent', 'theme_startup_popup_chip', 'theme_startup_popup_button_text'],
   'Ventana inicial con video' => ['theme_startup_video_popup_surface', 'theme_startup_video_popup_border', 'theme_startup_video_popup_accent', 'theme_startup_video_popup_button_bg', 'theme_startup_video_popup_button_text'],
 ];
+if ($accountSaleFeatureEnabled) {
+  $themeFieldGroups['Botón -Ver Más- para vender cuentas'] = [
+    'theme_account_preview_button_bg',
+    'theme_account_preview_button_border',
+    'theme_account_preview_button_text',
+    'theme_account_preview_button_shadow',
+  ];
+}
 if ($paymentHeaderMinimalEnabled) {
   $themeFieldGroups['Características de paquetes'] = ['theme_package_feature_bg', 'theme_package_feature_border', 'theme_package_feature_text'];
 }
@@ -1346,6 +1355,12 @@ $googleCallbackUrl = google_oauth_callback_url();
           <?php elseif ($activeTab === 'personalizar-colores'): ?>
             <form method="post">
               <input type="hidden" name="config_section" value="personalizar-colores">
+              <?php if (!$accountSaleFeatureEnabled): ?>
+                <input type="hidden" name="theme_account_preview_button_bg" value="<?= htmlspecialchars($themeValues['theme_account_preview_button_bg'], ENT_QUOTES, 'UTF-8') ?>">
+                <input type="hidden" name="theme_account_preview_button_border" value="<?= htmlspecialchars($themeValues['theme_account_preview_button_border'], ENT_QUOTES, 'UTF-8') ?>">
+                <input type="hidden" name="theme_account_preview_button_text" value="<?= htmlspecialchars($themeValues['theme_account_preview_button_text'], ENT_QUOTES, 'UTF-8') ?>">
+                <input type="hidden" name="theme_account_preview_button_shadow" value="<?= htmlspecialchars($themeValues['theme_account_preview_button_shadow'], ENT_QUOTES, 'UTF-8') ?>">
+              <?php endif; ?>
               <?php if (!$paymentHeaderMinimalEnabled): ?>
                 <input type="hidden" name="theme_package_feature_bg" value="<?= htmlspecialchars($themeValues['theme_package_feature_bg'], ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" name="theme_package_feature_border" value="<?= htmlspecialchars($themeValues['theme_package_feature_border'], ENT_QUOTES, 'UTF-8') ?>">

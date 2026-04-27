@@ -94,6 +94,26 @@ function store_theme_definitions(): array {
             'default' => '#0E1722',
             'description' => 'Color base para botones oscuros, menú y tarjetas seleccionables',
         ],
+        'theme_account_preview_button_bg' => [
+            'label' => 'Ver más fondo',
+            'default' => '#0C99B8',
+            'description' => 'Color de fondo del botón Ver más para vender cuentas',
+        ],
+        'theme_account_preview_button_border' => [
+            'label' => 'Ver más borde',
+            'default' => '#67E8F9',
+            'description' => 'Color del borde del botón Ver más para vender cuentas',
+        ],
+        'theme_account_preview_button_text' => [
+            'label' => 'Ver más texto',
+            'default' => '#F0FDFF',
+            'description' => 'Color del texto del botón Ver más para vender cuentas',
+        ],
+        'theme_account_preview_button_shadow' => [
+            'label' => 'Ver más sombreado',
+            'default' => '#06B6D4',
+            'description' => 'Color base del sombreado y brillo del botón Ver más para vender cuentas',
+        ],
         'theme_game_feature_bg' => [
             'label' => 'Etiqueta juego fondo',
             'default' => '#0E1722',
