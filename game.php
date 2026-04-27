@@ -361,7 +361,7 @@ include __DIR__ . "/includes/header.php";
         $packImageUrl = package_feature_public_asset_url($img_paquete);
     ?>
       <div class="col">
-        <button type="button" class="pack-card card border-info bg-dark text-start w-100 h-100 shadow-sm"
+        <article class="pack-card card border-info bg-dark text-start w-100 h-100 shadow-sm"
           data-package-id="<?= $packId ?>"
           data-base="<?= htmlspecialchars($precio_base) ?>"
           data-name="<?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?>"
@@ -376,7 +376,11 @@ include __DIR__ . "/includes/header.php";
           data-package-features="<?= htmlspecialchars(json_encode($packFeatures, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8') ?>"
           data-account-sale="<?= $packIsAccountSale ? '1' : '0' ?>"
           data-account-gallery="<?= htmlspecialchars(json_encode($packAccountGalleryPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8') ?>"
-          data-moneda="<?= htmlspecialchars($clave_moneda) ?>">
+          data-moneda="<?= htmlspecialchars($clave_moneda) ?>"
+          tabindex="0"
+          role="button"
+          aria-pressed="false"
+          aria-label="Seleccionar paquete <?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?>">
           <div class="card-body p-0 d-flex flex-column">
             <div class="pack-card-media">
               <?php if ($img_paquete): ?>
@@ -388,7 +392,10 @@ include __DIR__ . "/includes/header.php";
             <div class="pack-card-content">
               <p class="pack-card-name mb-0 fw-semibold"><?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?></p>
               <?php if ($packIsAccountSale): ?>
-                <span class="pack-account-sale-badge">Cuenta</span>
+                <div class="pack-account-sale-meta">
+                  <span class="pack-account-sale-badge">Cuenta</span>
+                  <button type="button" class="pack-account-preview-btn" data-pack-preview-trigger="1">Ver más</button>
+                </div>
               <?php endif; ?>
               <div class="pack-card-footer">
                 <span class="moneda-label"><?= htmlspecialchars($clave_moneda) ?></span>
@@ -406,7 +413,7 @@ include __DIR__ . "/includes/header.php";
               <?php endif; ?>
             </div>
           </div>
-        </button>
+        </article>
       </div>
     <?php endforeach; ?>
   </div>
@@ -473,10 +480,6 @@ include __DIR__ . "/includes/header.php";
               <div class="purchase-summary-pack-copy">
                 <p class="small text-secondary mb-1">Paquete seleccionado</p>
                 <p id="selected-pack" class="fw-bold text-white mb-0">Ninguno</p>
-                <div id="selected-pack-account-actions" class="selected-pack-account-actions d-none">
-                  <button type="button" id="selected-pack-preview-btn" class="btn btn-outline-info selected-pack-account-btn">Ver más</button>
-                  <button type="button" id="selected-pack-buy-btn" class="btn btn-info selected-pack-account-btn">Comprar</button>
-                </div>
               </div>
               <?php if ($packageQuantityPurchaseEnabled): ?>
               <div id="purchase-quantity-panel" class="purchase-quantity-panel">
@@ -622,7 +625,7 @@ include __DIR__ . "/includes/header.php";
     </div>
   </div>
   <div id="account-gallery-modal" class="modal fade app-overlay-modal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
       <div class="modal-content bg-dark border-info text-light p-0 account-gallery-modal-content">
         <div class="account-gallery-modal-header">
           <div>
@@ -2366,10 +2369,16 @@ include __DIR__ . "/includes/header.php";
     flex-direction: column;
   }
 
+  .pack-card {
+    cursor: pointer;
+  }
+
   .pack-card-media {
     width: 100%;
     margin: 0;
     min-height: 8.5rem;
+    aspect-ratio: 16 / 9;
+    padding: 0.45rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2383,9 +2392,10 @@ include __DIR__ . "/includes/header.php";
   .pack-card-image {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
     display: block;
-    transform: scale(1.02);
+    transform: none;
+    border-radius: calc(0.95rem - 1px);
   }
 
   .pack-card-glow {
@@ -2495,6 +2505,8 @@ include __DIR__ . "/includes/header.php";
 
     .pack-card-media {
       min-height: 7.3rem;
+      aspect-ratio: 16 / 10;
+      padding: 0.35rem;
     }
 
     .pack-card-content {
@@ -2512,6 +2524,14 @@ include __DIR__ . "/includes/header.php";
     }
   }
 
+  .pack-account-sale-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.7rem;
+  }
+
   .pack-account-sale-badge {
     display: inline-flex;
     align-items: center;
@@ -2527,18 +2547,29 @@ include __DIR__ . "/includes/header.php";
     text-transform: uppercase;
   }
 
-  .selected-pack-account-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    margin-top: 0.9rem;
+  .pack-account-preview-btn {
+    appearance: none;
+    border: 1px solid rgba(34, 211, 238, 0.72);
+    border-radius: 999px;
+    padding: 0.42rem 0.92rem;
+    background: linear-gradient(135deg, rgba(34, 211, 238, 0.24), rgba(6, 182, 212, 0.52));
+    color: #f0fdff;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    line-height: 1;
+    box-shadow: 0 10px 22px rgba(6, 182, 212, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease, background 0.18s ease;
   }
 
-  .selected-pack-account-btn {
-    min-width: 138px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+  .pack-account-preview-btn:hover,
+  .pack-account-preview-btn:focus-visible {
+    transform: translateY(-1px);
+    border-color: rgba(103, 232, 249, 0.96);
+    background: linear-gradient(135deg, rgba(34, 211, 238, 0.4), rgba(8, 145, 178, 0.72));
+    box-shadow: 0 14px 28px rgba(6, 182, 212, 0.26), 0 0 0 3px rgba(34, 211, 238, 0.14);
+    color: #ffffff;
   }
 
   .account-sale-note {
@@ -2551,6 +2582,12 @@ include __DIR__ . "/includes/header.php";
     border-radius: 24px;
     overflow: hidden;
     box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  }
+
+  #account-gallery-modal .modal-dialog {
+    width: min(96vw, 80rem);
+    max-width: 80rem;
+    margin: auto;
   }
 
   .account-gallery-modal-header,
@@ -2584,7 +2621,9 @@ include __DIR__ . "/includes/header.php";
   }
 
   .account-gallery-main-frame {
-    min-height: 420px;
+    min-height: clamp(320px, 52vh, 620px);
+    max-height: min(68vh, 620px);
+    padding: clamp(0.45rem, 1vw, 0.85rem);
     position: relative;
     border-radius: 22px;
     border: 1px solid rgba(34, 211, 238, 0.2);
@@ -2599,8 +2638,10 @@ include __DIR__ . "/includes/header.php";
     display: block;
     width: 100%;
     height: 100%;
-    min-height: 420px;
-    object-fit: cover;
+    min-height: 0;
+    max-height: min(66vh, 600px);
+    object-fit: contain;
+    border-radius: 18px;
   }
 
   .account-gallery-main-placeholder {
@@ -2645,19 +2686,17 @@ include __DIR__ . "/includes/header.php";
   }
 
   .account-gallery-thumbs {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
     gap: 0.7rem;
-    justify-content: flex-start;
   }
 
   .account-gallery-thumb {
-    width: 88px;
-    flex: 0 0 88px;
+    width: 100%;
     border: 1px solid rgba(34, 211, 238, 0.22);
     background: #081018;
     border-radius: 16px;
-    padding: 0;
+    padding: 0.3rem;
     overflow: hidden;
     cursor: pointer;
     transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
@@ -2672,8 +2711,10 @@ include __DIR__ . "/includes/header.php";
   .account-gallery-thumb img {
     display: block;
     width: 100%;
-    aspect-ratio: 1 / 1;
-    object-fit: cover;
+    aspect-ratio: 16 / 10;
+    object-fit: contain;
+    border-radius: 12px;
+    background: rgba(2, 6, 23, 0.82);
   }
 
   .account-sale-delivery-card {
@@ -2721,13 +2762,21 @@ include __DIR__ . "/includes/header.php";
   }
 
   @media (max-width: 767.98px) {
-    .account-gallery-main-frame,
-    .account-gallery-main-image {
-      min-height: 260px;
+    .account-gallery-main-frame {
+      min-height: 240px;
+      max-height: none;
     }
 
-    .selected-pack-account-btn {
-      flex: 1 1 100%;
+    .account-gallery-main-image {
+      max-height: 56vh;
+    }
+
+    .pack-account-sale-meta {
+      align-items: stretch;
+    }
+
+    .pack-account-preview-btn {
+      width: 100%;
     }
   }
 </style>
@@ -2761,9 +2810,6 @@ include __DIR__ . "/includes/header.php";
   const selectedPack = document.getElementById("selected-pack");
   const purchaseSummaryHead = document.getElementById('purchase-summary-head');
   const purchaseQuantityPanel = document.getElementById('purchase-quantity-panel');
-  const selectedPackAccountActions = document.getElementById('selected-pack-account-actions');
-  const selectedPackPreviewButton = document.getElementById('selected-pack-preview-btn');
-  const selectedPackBuyButton = document.getElementById('selected-pack-buy-btn');
   const orderQuantityDecreaseButton = document.getElementById('order-quantity-decrease');
   const orderQuantityIncreaseButton = document.getElementById('order-quantity-increase');
   const orderQuantityInput = document.getElementById('order-quantity');
@@ -5931,9 +5977,6 @@ include __DIR__ . "/includes/header.php";
           : '';
         selectedWinPointsTotal.classList.toggle('d-none', !hasWinPointsRedemption);
       }
-      if (selectedPackAccountActions) {
-        selectedPackAccountActions.classList.toggle('d-none', !isAccountSalePack(pack));
-      }
     } else {
       selectedTotalValue = 0;
       selectedPack.textContent = 'Ninguno';
@@ -5942,9 +5985,6 @@ include __DIR__ . "/includes/header.php";
       if (selectedWinPointsTotal) {
         selectedWinPointsTotal.textContent = '';
         selectedWinPointsTotal.classList.add('d-none');
-      }
-      if (selectedPackAccountActions) {
-        selectedPackAccountActions.classList.add('d-none');
       }
     }
   }
@@ -5960,8 +6000,10 @@ include __DIR__ . "/includes/header.php";
 
     packCards2.forEach((item) => {
       item.classList.remove('neon-selected');
+      item.setAttribute('aria-pressed', 'false');
     });
     card.classList.add('neon-selected');
+    card.setAttribute('aria-pressed', 'true');
     activePack = buildPackStateFromCard(card);
     updateResumenCompra(activePack);
     renderPlayerFields(activePack);
@@ -6074,19 +6116,25 @@ include __DIR__ . "/includes/header.php";
     card.addEventListener("click", () => {
       activatePackCard(card);
     });
-  });
-  if (selectedPackPreviewButton) {
-    selectedPackPreviewButton.addEventListener('click', () => {
-      if (activePack && isAccountSalePack(activePack)) {
-        openAccountGalleryModal(activePack);
+    card.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        activatePackCard(card);
       }
     });
-  }
-  if (selectedPackBuyButton) {
-    selectedPackBuyButton.addEventListener('click', () => {
-      triggerAccountSaleBuyFlow(selectedPackBuyButton);
+  });
+  packAccountPreviewButtons.forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const card = button.closest('.pack-card');
+      if (!card) {
+        return;
+      }
+      activatePackCard(card, { scroll: false });
+      openAccountGalleryModal(activePack);
     });
-  }
+  });
   if (packCards2.length) {
     // Ya no se selecciona automáticamente ningún paquete al cargar
   }
