@@ -128,6 +128,7 @@ $adminExtraFeaturesUrl = app_path('/admin/comprar-funciones-extra');
 $adminInfluencerInstructionsUrl = app_path('/admin/instrucciones-influencer');
 $influencerJoinUrl = app_path('/quiero-unirme');
 $topBarEnabled = trim((string) store_config_get('barra_superior', '0')) === '1';
+$showMenuToggle = !$topBarEnabled || !$authUser || in_array($authUserRole, ['admin', 'root'], true);
 $searchEndpointUrl = app_path('/api/search_catalog.php');
 $searchResultsUrl = app_path('/buscar');
 $influencerInstructionsEnabled = store_config_get('instrucciones_influencer', '0') === '1';
@@ -828,11 +829,15 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
 
     <div class="container-lg store-shell position-relative pb-5 pt-4" data-tenant="<?php echo htmlspecialchars($tenantSlugAttr, ENT_QUOTES, "UTF-8"); ?>">
       <header class="site-header d-flex align-items-center justify-content-between gap-3<?php echo $topBarEnabled ? ' site-header-topbar' : ''; ?>"<?php echo $topBarEnabled ? ' data-site-topbar="1"' : ''; ?>>
+        <?php if ($showMenuToggle): ?>
         <button id="menu-toggle" class="btn btn-outline-info rounded-circle d-flex align-items-center justify-content-center" style="width:44px;height:44px;" aria-label="Abrir menú">
           <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" class="bi bi-list" viewBox="0 0 16 16">
             <path fill-rule="evenodd" d="M2.5 12.5a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1h-10a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1h-10a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1h-10a.5.5 0 0 1-.5-.5z"/>
           </svg>
         </button>
+        <?php elseif ($topBarEnabled): ?>
+        <div aria-hidden="true" style="width:44px;height:44px;flex:0 0 44px;"></div>
+        <?php endif; ?>
         <a href="<?php echo htmlspecialchars($homeUrl, ENT_QUOTES, 'UTF-8'); ?>" class="site-brand d-flex align-items-center justify-content-center gap-3 flex-grow-1 flex-sm-grow-0">
           <?php if ($brandLogo !== ''): ?>
             <div class="site-brand-logo rounded-4 overflow-hidden border border-info glow-ring flex-shrink-0" style="width:52px;height:52px;background:rgba(var(--theme-bg-alt-rgb),0.82);">
