@@ -138,6 +138,7 @@ payment_methods_ensure_table();
 $paymentMethodsByCurrency = payment_methods_active_by_currency();
 $game = null;
 $requestedGame = isset($_GET['slug']) || isset($_GET['id']);
+$requestedPackageId = isset($_GET['package_id']) ? max(0, (int) $_GET['package_id']) : 0;
 $requestedSlugSegment = trim((string) ($_GET['requested_slug'] ?? ''));
 $requestedSlugSegment = $requestedSlugSegment !== '' ? slugify($requestedSlugSegment) : '';
 if ($requestedSlugSegment === 'n-a') {
@@ -193,7 +194,11 @@ if ($requestedGame) {
   $canonicalSlug = game_resolve_slug($game);
   $requiresCanonicalRedirect = isset($_GET['slug']) || $requestedSlugSegment !== $canonicalSlug;
   if ($requiresCanonicalRedirect) {
-    header('Location: ' . app_path(game_route_path($game)), true, 301);
+    $canonicalUrl = app_path(game_route_path($game));
+    if ($requestedPackageId > 0) {
+      $canonicalUrl .= '?package_id=' . rawurlencode((string) $requestedPackageId);
+    }
+    header('Location: ' . $canonicalUrl, true, 301);
     exit;
   }
 }
@@ -6137,7 +6142,11 @@ include __DIR__ . "/includes/header.php";
     });
   });
   if (packCards2.length) {
-    // Ya no se selecciona automáticamente ningún paquete al cargar
+    const requestedPackCard = findPackCardById(<?= $requestedPackageId ?>);
+    if (requestedPackCard) {
+      activatePackCard(requestedPackCard, { scroll: false });
+      requestedPackCard.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+    }
   }
   syncOrderQuantityInput(1);
   renderPlayerFields(null);

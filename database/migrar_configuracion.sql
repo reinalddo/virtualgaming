@@ -14,6 +14,10 @@ INSERT INTO configuracion_general (clave, valor, descripcion)
 SELECT 'ventana_inicio_juego', '0', 'Activa o desactiva la funcion de ventanas iniciales por juego.'
 FROM DUAL
 WHERE NOT EXISTS (SELECT 1 FROM configuracion_general WHERE clave = 'ventana_inicio_juego');
+INSERT INTO configuracion_general (clave, valor, descripcion)
+SELECT 'barra_superior', '0', 'Activa o desactiva la barra superior fija con buscador y reubicación del acceso principal del sitio público.'
+FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM configuracion_general WHERE clave = 'barra_superior');
 
 CREATE TABLE IF NOT EXISTS ventana_inicio_juego_configuracion (
 	id INT AUTO_INCREMENT PRIMARY KEY,

@@ -28,6 +28,7 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('filtros_influencer', '0', 'Activa o desactiva los filtros avanzados y tarjetas resumen del módulo Cupones de Influencers.'),
 ('guardar_ultimo_id', '0', 'Activa o desactiva el guardado y reutilización del último identificador de jugador usado por el cliente en sus compras.'),
 ('diferencia_pago', '0', 'Activa o desactiva el flujo de diferencia de pago para montos transferidos por encima o por debajo del total del pedido.'),
+('barra_superior', '0', 'Activa o desactiva la barra superior fija con buscador y reubicación del acceso principal del sitio público.'),
 ('ventana_inicio_juego', '0', 'Activa o desactiva la funcion de ventanas iniciales por juego.'),
 ('google_analytics_activo', '0', 'Activa o desactiva la inserción del script de Google Analytics o Google Tag en el footer público'),
 ('google_analytics_script', '', 'Código script completo de Google Analytics o Google Tag que se inserta en el footer público'),

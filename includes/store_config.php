@@ -114,6 +114,46 @@ function store_theme_definitions(): array {
             'default' => '#06B6D4',
             'description' => 'Color base del sombreado y brillo del botón Ver más para vender cuentas',
         ],
+        'theme_topbar_bg' => [
+            'label' => 'Barra superior fondo',
+            'default' => '#0D1722',
+            'description' => 'Color de fondo principal de la barra superior fija del sitio público',
+        ],
+        'theme_topbar_text' => [
+            'label' => 'Barra superior texto',
+            'default' => '#F8FAFC',
+            'description' => 'Color del prefijo, nombre de tienda y textos principales de la barra superior',
+        ],
+        'theme_topbar_search_border' => [
+            'label' => 'Barra superior buscador borde',
+            'default' => '#22D3EE',
+            'description' => 'Color del borde del buscador de la barra superior',
+        ],
+        'theme_topbar_search_bg' => [
+            'label' => 'Barra superior buscador fondo',
+            'default' => '#101D2A',
+            'description' => 'Color de fondo del buscador de la barra superior',
+        ],
+        'theme_topbar_search_text' => [
+            'label' => 'Barra superior buscador texto',
+            'default' => '#E2F7FF',
+            'description' => 'Color del texto y placeholder del buscador de la barra superior',
+        ],
+        'theme_topbar_login_bg' => [
+            'label' => 'Barra superior botón login fondo',
+            'default' => '#22D3EE',
+            'description' => 'Color de fondo del botón de acceso en la barra superior',
+        ],
+        'theme_topbar_login_border' => [
+            'label' => 'Barra superior botón login borde',
+            'default' => '#67E8F9',
+            'description' => 'Color del borde del botón de acceso en la barra superior',
+        ],
+        'theme_topbar_login_text' => [
+            'label' => 'Barra superior botón login texto',
+            'default' => '#062033',
+            'description' => 'Color del texto del botón de acceso en la barra superior',
+        ],
         'theme_game_feature_bg' => [
             'label' => 'Etiqueta juego fondo',
             'default' => '#0E1722',
@@ -572,6 +612,7 @@ function store_config_descriptions(): array {
         'ff_api_tipo' => 'Tipo para la API de Free Fire',
         'cantidad_paquetes' => 'Activa o desactiva la venta de paquetes por cantidad dentro del checkout público del tenant.',
         'vender_cuentas' => 'Activa o desactiva la venta de cuentas en lugar de recargas para los paquetes marcados con esa modalidad.',
+        'barra_superior' => 'Activa o desactiva la barra superior fija con buscador y reubicación del acceso principal del sitio público.',
         'api_binance' => 'Activa o desactiva la configuracion e integracion de Binance Pay via CoinPal para este tenant.',
         'api_binance_usuario' => 'Activa o desactiva el uso visible de Binance Pay para clientes y procesos automaticos de la tienda cuando el tenant ya tiene disponible api_binance.',
         'binance_pay_merchant_no' => 'Merchant No configurado para Binance Pay via CoinPal.',
@@ -655,6 +696,7 @@ function store_config_defaults(): array {
         'ff_api_tipo' => 'recargaFreefire',
         'cantidad_paquetes' => '0',
         'vender_cuentas' => '0',
+        'barra_superior' => '0',
         'api_binance' => '0',
         'api_binance_usuario' => '1',
         'binance_pay_merchant_no' => '',
@@ -1073,6 +1115,79 @@ function store_config_all(bool $refresh = false): array {
     return $cache;
 }
 
+function store_config_table_columns(): array {
+    static $columns = null;
+
+    if ($columns !== null) {
+        return $columns;
+    }
+
+    $columns = [];
+    $mysqli = store_config_db();
+    $result = $mysqli->query('SHOW COLUMNS FROM configuracion_general');
+    if ($result instanceof mysqli_result) {
+        while ($row = $result->fetch_assoc()) {
+            $field = strtolower((string) ($row['Field'] ?? ''));
+            if ($field !== '') {
+                $columns[$field] = true;
+            }
+        }
+        $result->free();
+    }
+
+    if ($columns === []) {
+        $columns = [
+            'clave' => true,
+            'valor' => true,
+            'descripcion' => true,
+        ];
+    }
+
+    return $columns;
+}
+
+function store_config_insert_missing_default(mysqli $mysqli, string $key, string $value, ?string $description = null, array $extraData = []): void {
+    $tableColumns = store_config_table_columns();
+    if (!isset($tableColumns['clave']) || !isset($tableColumns['valor'])) {
+        return;
+    }
+
+    $insertData = [
+        'clave' => $key,
+        'valor' => $value,
+    ];
+
+    if (isset($tableColumns['descripcion'])) {
+        $insertData['descripcion'] = $description;
+    }
+
+    foreach ($extraData as $column => $fieldValue) {
+        $normalizedColumn = strtolower((string) $column);
+        if (!isset($tableColumns[$normalizedColumn])) {
+            continue;
+        }
+
+        $insertData[$normalizedColumn] = $fieldValue;
+    }
+
+    $quotedColumns = [];
+    $quotedValues = [];
+    foreach ($insertData as $column => $fieldValue) {
+        $quotedColumns[] = '`' . $column . '`';
+        $quotedValues[] = $fieldValue === null
+            ? 'NULL'
+            : "'" . $mysqli->real_escape_string((string) $fieldValue) . "'";
+    }
+
+    $sql = 'INSERT IGNORE INTO configuracion_general ('
+        . implode(', ', $quotedColumns)
+        . ') VALUES ('
+        . implode(', ', $quotedValues)
+        . ')';
+
+    $mysqli->query($sql);
+}
+
 function store_config_ensure_defaults(): void {
     static $ensuring = false;
     static $done = false;
@@ -1094,41 +1209,40 @@ function store_config_ensure_defaults(): void {
     foreach (store_config_defaults() as $key => $value) {
         $description = $descriptions[$key] ?? null;
         if ($key === $quantityFeatureKey) {
-            $stmt = $mysqli->prepare(
-                'INSERT IGNORE INTO configuracion_general (clave, valor, descripcion, mostrar_a_cliente, funcion_venta, descripcion_venta, precio, comision_venta) VALUES (?, ?, ?, 1, ?, ?, 25, 5)'
+            store_config_insert_missing_default(
+                $mysqli,
+                $key,
+                $value,
+                $description,
+                [
+                    'mostrar_a_cliente' => '1',
+                    'funcion_venta' => $quantityFeatureName,
+                    'descripcion_venta' => $quantityFeatureDescription,
+                    'precio' => '25',
+                    'comision_venta' => '5',
+                ]
             );
-            if (!$stmt) {
-                continue;
-            }
-
-            $stmt->bind_param('sssss', $key, $value, $description, $quantityFeatureName, $quantityFeatureDescription);
-            $stmt->execute();
-            $stmt->close();
             continue;
         }
 
         if ($key === $accountSaleFeatureKey) {
-            $stmt = $mysqli->prepare(
-                'INSERT IGNORE INTO configuracion_general (clave, valor, descripcion, mostrar_a_cliente, funcion_venta, descripcion_venta, precio, comision_venta) VALUES (?, ?, ?, 1, ?, ?, 25, 5)'
+            store_config_insert_missing_default(
+                $mysqli,
+                $key,
+                $value,
+                $description,
+                [
+                    'mostrar_a_cliente' => '1',
+                    'funcion_venta' => $accountSaleFeatureName,
+                    'descripcion_venta' => $accountSaleFeatureDescription,
+                    'precio' => '25',
+                    'comision_venta' => '5',
+                ]
             );
-            if (!$stmt) {
-                continue;
-            }
-
-            $stmt->bind_param('sssss', $key, $value, $description, $accountSaleFeatureName, $accountSaleFeatureDescription);
-            $stmt->execute();
-            $stmt->close();
             continue;
         }
 
-        $stmt = $mysqli->prepare('INSERT IGNORE INTO configuracion_general (clave, valor, descripcion) VALUES (?, ?, ?)');
-        if (!$stmt) {
-            continue;
-        }
-
-        $stmt->bind_param('sss', $key, $value, $description);
-        $stmt->execute();
-        $stmt->close();
+        store_config_insert_missing_default($mysqli, $key, $value, $description);
     }
 
     $ensuring = false;

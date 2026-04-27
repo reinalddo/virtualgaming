@@ -114,6 +114,9 @@ $adminConfigUrl = app_path('/admin/configuracion');
 $adminExtraFeaturesUrl = app_path('/admin/comprar-funciones-extra');
 $adminInfluencerInstructionsUrl = app_path('/admin/instrucciones-influencer');
 $influencerJoinUrl = app_path('/quiero-unirme');
+$topBarEnabled = trim((string) store_config_get('barra_superior', '0')) === '1';
+$searchEndpointUrl = app_path('/api/search_catalog.php');
+$searchResultsUrl = app_path('/buscar');
 $influencerInstructionsEnabled = store_config_get('instrucciones_influencer', '0') === '1';
 $influencerInstructionsMenuLabel = 'Quiero Unirme';
 if ($influencerInstructionsEnabled) {
@@ -207,6 +210,9 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
       background: radial-gradient(circle at top, var(--theme-body-glow) 0%, var(--theme-bg-main) 48%, var(--theme-bg-deep) 100%);
       color: var(--theme-text);
     }
+    body.site-topbar-enabled {
+      --site-topbar-height: 92px;
+    }
     body.site-media-background-active {
       background: var(--theme-bg-main);
     }
@@ -242,6 +248,218 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
       border: 1px solid rgba(var(--theme-border-rgb), 0.64);
       box-shadow: 0 0 22px rgba(var(--theme-primary-rgb), 0.16);
     }
+    .site-brand,
+    .site-brand:hover,
+    .site-brand:focus,
+    .site-brand:active {
+      color: inherit;
+      text-decoration: none;
+    }
+    .site-topbar-enabled .store-shell {
+      padding-top: calc(var(--site-topbar-height) + 1.65rem) !important;
+    }
+    .site-header-topbar {
+      position: fixed;
+      top: 0.55rem;
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(100vw - 1rem);
+      z-index: 1045;
+      padding: 0.9rem 1rem;
+      border-radius: 1.25rem;
+      border: 1px solid rgba(var(--theme-topbar-search-border-rgb), 0.28);
+      background: rgba(var(--theme-topbar-bg-rgb), var(--site-topbar-opacity, 0.96));
+      backdrop-filter: blur(16px);
+      box-shadow: 0 16px 36px rgba(4, 10, 18, 0.28), 0 0 22px rgba(var(--theme-primary-rgb), 0.12);
+      transition: background-color 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.85rem;
+    }
+    .site-topbar-enabled .site-brand {
+      flex: 0 1 auto;
+      justify-content: flex-start;
+      min-width: 0;
+      text-decoration: none;
+    }
+    .site-topbar-enabled .site-brand:hover {
+      opacity: 0.96;
+    }
+    .site-topbar-enabled .site-brand-copy p,
+    .site-topbar-enabled .site-brand-copy h1 {
+      color: var(--theme-topbar-text) !important;
+    }
+    .site-topbar-enabled .site-brand-copy p {
+      opacity: 0.72;
+    }
+    .site-topbar-enabled .site-brand-logo {
+      width: 48px;
+      height: 48px;
+      border-color: rgba(var(--theme-topbar-search-border-rgb), 0.42) !important;
+      box-shadow: 0 0 18px rgba(var(--theme-primary-rgb), 0.16);
+    }
+    .site-topbar-search {
+      position: relative;
+      flex: 1 1 360px;
+      min-width: min(100%, 260px);
+      max-width: 560px;
+      margin-left: auto;
+    }
+    .site-topbar-search-form {
+      position: relative;
+    }
+    .site-topbar-search-input {
+      width: 100%;
+      min-height: 48px;
+      padding: 0.8rem 3rem 0.8rem 1rem;
+      border-radius: 999px;
+      border: 1px solid var(--theme-topbar-search-border);
+      background: rgba(var(--theme-topbar-search-bg-rgb), 0.94);
+      color: var(--theme-topbar-search-text);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 0 0 1px rgba(var(--theme-topbar-search-border-rgb), 0.08);
+      outline: none;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+    }
+    .site-topbar-search-input::placeholder {
+      color: rgba(var(--theme-topbar-search-text-rgb), 0.64);
+    }
+    .site-topbar-search-input:focus {
+      border-color: var(--theme-topbar-search-border);
+      box-shadow: 0 0 0 3px rgba(var(--theme-topbar-search-border-rgb), 0.14), 0 0 18px rgba(var(--theme-topbar-search-border-rgb), 0.1);
+    }
+    .site-topbar-search-icon {
+      position: absolute;
+      right: 0.95rem;
+      top: 50%;
+      transform: translateY(-50%);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--theme-topbar-search-text);
+      opacity: 0.75;
+      pointer-events: none;
+    }
+    .site-topbar-search-dropdown {
+      position: absolute;
+      top: calc(100% + 0.45rem);
+      left: 0;
+      right: 0;
+      display: none;
+      padding: 0.5rem;
+      border-radius: 1.1rem;
+      border: 1px solid rgba(var(--theme-topbar-search-border-rgb), 0.34);
+      background: rgba(var(--theme-topbar-bg-rgb), 0.98);
+      box-shadow: 0 18px 36px rgba(6, 12, 18, 0.32), 0 0 16px rgba(var(--theme-primary-rgb), 0.08);
+      backdrop-filter: blur(20px);
+    }
+    .site-topbar-search-dropdown.is-visible {
+      display: block;
+    }
+    .site-topbar-search-status {
+      padding: 0.8rem 0.9rem;
+      color: rgba(var(--theme-topbar-search-text-rgb), 0.74);
+      font-size: 0.9rem;
+    }
+    .site-topbar-search-list {
+      display: grid;
+      gap: 0.35rem;
+    }
+    .site-topbar-search-item {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      padding: 0.7rem 0.8rem;
+      border-radius: 0.95rem;
+      border: 1px solid transparent;
+      background: rgba(var(--theme-topbar-search-bg-rgb), 0.82);
+      color: var(--theme-topbar-search-text);
+      text-align: left;
+      text-decoration: none;
+      transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+    }
+    .site-topbar-search-item:hover,
+    .site-topbar-search-item.is-active {
+      border-color: rgba(var(--theme-topbar-search-border-rgb), 0.48);
+      background: rgba(var(--theme-topbar-search-bg-rgb), 0.98);
+      transform: translateY(-1px);
+    }
+    .site-topbar-search-thumb {
+      width: 52px;
+      height: 52px;
+      border-radius: 0.95rem;
+      overflow: hidden;
+      flex-shrink: 0;
+      background: rgba(var(--theme-bg-alt-rgb), 0.88);
+      border: 1px solid rgba(var(--theme-topbar-search-border-rgb), 0.22);
+    }
+    .site-topbar-search-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .site-topbar-search-meta {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+    .site-topbar-search-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.18rem 0.45rem;
+      border-radius: 999px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--theme-topbar-login-text);
+      background: var(--theme-topbar-login-bg);
+    }
+    .site-topbar-search-title {
+      display: block;
+      margin-top: 0.18rem;
+      font-weight: 700;
+      color: var(--theme-topbar-search-text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .site-topbar-search-subtitle,
+    .site-topbar-search-price {
+      display: block;
+      font-size: 0.82rem;
+      color: rgba(var(--theme-topbar-search-text-rgb), 0.72);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .site-topbar-enabled .site-auth-trigger,
+    .site-topbar-enabled #user-trigger {
+      min-width: 0;
+      border-color: var(--theme-topbar-login-border) !important;
+      background: var(--theme-topbar-login-bg) !important;
+      color: var(--theme-topbar-login-text) !important;
+      box-shadow: 0 0 18px rgba(var(--theme-topbar-login-border-rgb), 0.14);
+    }
+    .site-topbar-enabled .site-auth-label,
+    .site-topbar-enabled #user-trigger-name,
+    .site-topbar-enabled #user-trigger .small {
+      color: inherit !important;
+      text-shadow: none !important;
+    }
+    .site-topbar-enabled #user-trigger-initials {
+      background: rgba(var(--theme-topbar-text-rgb), 0.12) !important;
+      border-color: rgba(var(--theme-topbar-text-rgb), 0.16) !important;
+      color: var(--theme-topbar-login-text) !important;
+    }
+    .site-topbar-enabled #auth-menu,
+    .site-topbar-enabled #user-menu {
+      border-color: rgba(var(--theme-topbar-search-border-rgb), 0.44) !important;
+      box-shadow: 0 16px 34px rgba(6, 12, 18, 0.28), 0 0 16px rgba(var(--theme-primary-rgb), 0.08) !important;
+    }
+    .site-topbar-enabled #menu-panel {
+      top: calc(var(--site-topbar-height) + 0.45rem) !important;
+      max-height: calc(100vh - var(--site-topbar-height) - 1.2rem) !important;
+    }
     #menu-panel {
       scrollbar-width: thin;
       scrollbar-color: rgba(var(--theme-primary-rgb), 0.45) transparent;
@@ -271,11 +489,55 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
       from { opacity: 0; transform: translateY(14px); }
       to { opacity: 1; transform: translateY(0); }
     }
+    @media (max-width: 991.98px) {
+      .site-topbar-enabled {
+        --site-topbar-height: 138px;
+      }
+      .site-header-topbar {
+        padding: 0.85rem 0.9rem;
+      }
+      .site-topbar-search {
+        order: 3;
+        flex-basis: 100%;
+        max-width: none;
+        margin-left: 0;
+      }
+      .site-topbar-enabled .site-brand {
+        flex: 1 1 auto;
+      }
+    }
+    @media (max-width: 575.98px) {
+      .site-topbar-enabled {
+        --site-topbar-height: 152px;
+      }
+      .site-header-topbar {
+        top: 0.3rem;
+        width: calc(100vw - 0.5rem);
+        border-radius: 1rem;
+      }
+      .site-topbar-enabled .site-brand-copy h1 {
+        font-size: 1rem !important;
+      }
+      .site-topbar-enabled .site-brand-copy p {
+        font-size: 0.66rem !important;
+        letter-spacing: 0.18em !important;
+      }
+      .site-topbar-search-input {
+        min-height: 44px;
+        padding-right: 2.7rem;
+      }
+      .site-topbar-enabled .site-auth-trigger,
+      .site-topbar-enabled #user-trigger {
+        width: 100%;
+      }
+    }
   </style>
   <script>
     window.__TVG_BASE_PATH = <?php echo json_encode(app_base_path(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
     window.__TVG_API_PEDIDOS = <?php echo json_encode(app_path('/api/pedidos.php'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
     window.__TVG_API_ACCOUNT = <?php echo json_encode(app_path('/api/account.php'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
+    window.__TVG_SEARCH_ENDPOINT = <?php echo json_encode($searchEndpointUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
+    window.__TVG_SEARCH_RESULTS = <?php echo json_encode($searchResultsUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
     document.addEventListener('DOMContentLoaded', function() {
       var publicBackgroundVideo = document.querySelector('[data-site-background-video]');
       if (publicBackgroundVideo) {
@@ -325,10 +587,208 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
           menuOverlay.classList.add('d-none');
         });
       }
+
+      var siteTopbar = document.querySelector('[data-site-topbar="1"]');
+      if (siteTopbar) {
+        var updateTopbarOpacity = function() {
+          var scrollY = window.scrollY || window.pageYOffset || 0;
+          var progress = Math.min(1, scrollY / 260);
+          var opacity = (0.96 - (progress * 0.54)).toFixed(3);
+          siteTopbar.style.setProperty('--site-topbar-opacity', opacity);
+        };
+
+        updateTopbarOpacity();
+        window.addEventListener('scroll', updateTopbarOpacity, { passive: true });
+      }
+
+      var searchRoot = document.querySelector('[data-public-search]');
+      if (searchRoot) {
+        var searchForm = searchRoot.querySelector('[data-public-search-form]');
+        var searchInput = searchRoot.querySelector('[data-public-search-input]');
+        var searchDropdown = searchRoot.querySelector('[data-public-search-results]');
+        var searchList = searchRoot.querySelector('[data-public-search-list]');
+        var searchStatus = searchRoot.querySelector('[data-public-search-status]');
+        var fetchTimer = 0;
+        var activeIndex = -1;
+        var searchItems = [];
+        var searchController = null;
+
+        var searchEscapeHtml = function(value) {
+          return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+        };
+
+        var hideSearchDropdown = function() {
+          if (searchDropdown) {
+            searchDropdown.classList.remove('is-visible');
+          }
+          activeIndex = -1;
+        };
+
+        var setSearchStatus = function(message) {
+          if (searchStatus) {
+            searchStatus.textContent = message;
+          }
+        };
+
+        var navigateToSearchItem = function(index) {
+          var item = searchItems[index] || null;
+          if (!item || !item.url) {
+            return;
+          }
+          window.location.href = item.url;
+        };
+
+        var highlightSearchItem = function(index) {
+          activeIndex = index;
+          if (!searchList) {
+            return;
+          }
+          Array.prototype.forEach.call(searchList.querySelectorAll('[data-search-item-index]'), function(node) {
+            var itemIndex = Number(node.getAttribute('data-search-item-index') || '-1');
+            node.classList.toggle('is-active', itemIndex === activeIndex);
+          });
+        };
+
+        var renderSearchItems = function(items) {
+          searchItems = Array.isArray(items) ? items : [];
+          activeIndex = -1;
+          if (!searchList || !searchDropdown) {
+            return;
+          }
+          if (!searchItems.length) {
+            searchList.innerHTML = '';
+            setSearchStatus('No hay coincidencias con ese texto.');
+            searchDropdown.classList.add('is-visible');
+            return;
+          }
+
+          setSearchStatus('Selecciona un resultado o presiona Enter para ver la búsqueda completa.');
+          searchList.innerHTML = searchItems.map(function(item, index) {
+            var subtitle = item.type === 'package' && item.game_name
+              ? 'Paquete de ' + item.game_name
+              : 'Juego disponible';
+            var price = item.price_label ? '<span class="site-topbar-search-price">' + searchEscapeHtml(item.price_label) + '</span>' : '';
+            var image = item.image_url
+              ? '<img src="' + searchEscapeHtml(item.image_url) + '" alt="' + searchEscapeHtml(item.name || '') + '">'
+              : '<div class="w-100 h-100 d-flex align-items-center justify-content-center fw-bold text-info">' + (item.type === 'package' ? 'PK' : 'JG') + '</div>';
+            return '' +
+              '<button type="button" class="site-topbar-search-item" data-search-item-index="' + index + '" data-search-item-href="' + searchEscapeHtml(item.url || '') + '">' +
+                '<span class="site-topbar-search-thumb">' + image + '</span>' +
+                '<span class="site-topbar-search-meta">' +
+                  '<span class="site-topbar-search-badge">' + searchEscapeHtml(item.badge || '') + '</span>' +
+                  '<span class="site-topbar-search-title">' + searchEscapeHtml(item.name || '') + '</span>' +
+                  '<span class="site-topbar-search-subtitle">' + searchEscapeHtml(subtitle) + '</span>' +
+                  price +
+                '</span>' +
+              '</button>';
+          }).join('');
+
+          Array.prototype.forEach.call(searchList.querySelectorAll('[data-search-item-index]'), function(button) {
+            button.addEventListener('click', function() {
+              var index = Number(button.getAttribute('data-search-item-index') || '-1');
+              navigateToSearchItem(index);
+            });
+          });
+          searchDropdown.classList.add('is-visible');
+        };
+
+        var requestSearchItems = function(term) {
+          if (!searchList || !searchDropdown) {
+            return;
+          }
+          if (term.length < 2) {
+            searchList.innerHTML = '';
+            setSearchStatus('Escribe al menos 2 letras para buscar juegos o paquetes.');
+            hideSearchDropdown();
+            return;
+          }
+
+          if (searchController && typeof searchController.abort === 'function') {
+            searchController.abort();
+          }
+          searchController = typeof AbortController !== 'undefined' ? new AbortController() : null;
+          setSearchStatus('Buscando coincidencias...');
+          searchDropdown.classList.add('is-visible');
+
+          var endpointUrl = new URL(window.__TVG_SEARCH_ENDPOINT || '', window.location.origin);
+          endpointUrl.searchParams.set('q', term);
+          endpointUrl.searchParams.set('limit', '8');
+
+          fetch(endpointUrl.toString(), {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' },
+            signal: searchController ? searchController.signal : undefined
+          })
+            .then(function(response) { return response.json(); })
+            .then(function(payload) {
+              renderSearchItems(payload.items || []);
+            })
+            .catch(function(error) {
+              if (error && error.name === 'AbortError') {
+                return;
+              }
+              searchList.innerHTML = '';
+              setSearchStatus('No se pudo cargar la búsqueda en este momento.');
+              searchDropdown.classList.add('is-visible');
+            });
+        };
+
+        if (searchInput) {
+          searchInput.addEventListener('input', function() {
+            var term = searchInput.value.trim();
+            window.clearTimeout(fetchTimer);
+            fetchTimer = window.setTimeout(function() {
+              requestSearchItems(term);
+            }, 180);
+          });
+
+          searchInput.addEventListener('focus', function() {
+            if (searchInput.value.trim().length >= 2 && searchItems.length) {
+              searchDropdown.classList.add('is-visible');
+            }
+          });
+
+          searchInput.addEventListener('keydown', function(event) {
+            if (!searchItems.length) {
+              return;
+            }
+
+            if (event.key === 'ArrowDown') {
+              event.preventDefault();
+              highlightSearchItem((activeIndex + 1) % searchItems.length);
+            } else if (event.key === 'ArrowUp') {
+              event.preventDefault();
+              highlightSearchItem(activeIndex <= 0 ? searchItems.length - 1 : activeIndex - 1);
+            } else if (event.key === 'Enter' && activeIndex >= 0) {
+              event.preventDefault();
+              navigateToSearchItem(activeIndex);
+            } else if (event.key === 'Escape') {
+              hideSearchDropdown();
+            }
+          });
+        }
+
+        if (searchForm) {
+          searchForm.addEventListener('submit', function() {
+            hideSearchDropdown();
+          });
+        }
+
+        document.addEventListener('click', function(event) {
+          if (!searchRoot.contains(event.target)) {
+            hideSearchDropdown();
+          }
+        });
+      }
     });
   </script>
 </head>
-<body class="bg-dark text-light min-vh-100<?php echo $renderPublicMediaBackground ? ' site-media-background-active' : ''; ?>">
+<body class="bg-dark text-light min-vh-100<?php echo $renderPublicMediaBackground ? ' site-media-background-active' : ''; ?><?php echo $topBarEnabled ? ' site-topbar-enabled' : ''; ?>">
   <?php if ($renderPublicMediaBackground): ?>
   <div class="site-media-background" aria-hidden="true">
     <?php if ($publicBackgroundMediaType === 'video'): ?>
@@ -354,23 +814,39 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
     <div class="position-absolute bottom-0 end-0 rounded-circle" style="height:16rem;width:16rem;background:rgba(var(--theme-success-rgb),0.10);filter:blur(48px);pointer-events:none;"></div>
 
     <div class="container-lg store-shell position-relative pb-5 pt-4" data-tenant="<?php echo htmlspecialchars($tenantSlugAttr, ENT_QUOTES, "UTF-8"); ?>">
-      <header class="site-header d-flex align-items-center justify-content-between gap-3">
+      <header class="site-header d-flex align-items-center justify-content-between gap-3<?php echo $topBarEnabled ? ' site-header-topbar' : ''; ?>"<?php echo $topBarEnabled ? ' data-site-topbar="1"' : ''; ?>>
         <button id="menu-toggle" class="btn btn-outline-info rounded-circle d-flex align-items-center justify-content-center" style="width:44px;height:44px;" aria-label="Abrir menú">
           <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" class="bi bi-list" viewBox="0 0 16 16">
             <path fill-rule="evenodd" d="M2.5 12.5a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1h-10a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1h-10a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1h-10a.5.5 0 0 1-.5-.5z"/>
           </svg>
         </button>
-        <div class="site-brand d-flex align-items-center justify-content-center gap-3 flex-grow-1">
+        <a href="<?php echo htmlspecialchars($homeUrl, ENT_QUOTES, 'UTF-8'); ?>" class="site-brand d-flex align-items-center justify-content-center gap-3 flex-grow-1 flex-sm-grow-0">
           <?php if ($brandLogo !== ''): ?>
-            <div class="rounded-4 overflow-hidden border border-info glow-ring flex-shrink-0" style="width:52px;height:52px;background:rgba(var(--theme-bg-alt-rgb),0.82);">
+            <div class="site-brand-logo rounded-4 overflow-hidden border border-info glow-ring flex-shrink-0" style="width:52px;height:52px;background:rgba(var(--theme-bg-alt-rgb),0.82);">
               <img src="<?php echo htmlspecialchars($brandLogo, ENT_QUOTES, 'UTF-8'); ?>" alt="Logo de la tienda" class="w-100 h-100 object-fit-cover" />
             </div>
           <?php endif; ?>
-          <div class="text-center text-sm-start">
+          <div class="site-brand-copy text-center text-sm-start min-w-0">
             <p class="small text-uppercase text-info mb-0" style="letter-spacing:0.3em;"><?php echo htmlspecialchars($brandPrefix, ENT_QUOTES, 'UTF-8'); ?></p>
             <h1 class="fw-bold mb-0" style="font-family:'Oxanium', 'Space Grotesk', sans-serif;font-size:1.25rem;color:var(--theme-text);"><?php echo htmlspecialchars($brandName, ENT_QUOTES, "UTF-8"); ?></h1>
           </div>
-        </div>
+        </a>
+        <?php if ($topBarEnabled): ?>
+          <div class="site-topbar-search" data-public-search>
+            <form method="get" action="<?php echo htmlspecialchars($searchResultsUrl, ENT_QUOTES, 'UTF-8'); ?>" class="site-topbar-search-form" data-public-search-form>
+              <input type="search" name="q" class="site-topbar-search-input" data-public-search-input placeholder="Buscar juegos o paquetes" autocomplete="off">
+              <span class="site-topbar-search-icon" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
+                </svg>
+              </span>
+            </form>
+            <div class="site-topbar-search-dropdown" data-public-search-results>
+              <div class="site-topbar-search-status" data-public-search-status>Escribe al menos 2 letras para buscar juegos o paquetes.</div>
+              <div class="site-topbar-search-list" data-public-search-list></div>
+            </div>
+          </div>
+        <?php endif; ?>
         <div id="auth-container" class="site-auth-container position-relative">
           <?php if (!$authUser): ?>
             <button id="auth-trigger" type="button" class="site-auth-trigger d-flex align-items-center gap-2 neon-btn border border-info bg-dark px-2 py-1 text-uppercase fw-bold text-info shadow-sm" style="font-size:11px;box-shadow:0 0 8px rgba(var(--theme-primary-rgb),0.8), 0 0 2px rgba(var(--theme-secondary-rgb),0.8);transition:box-shadow 0.2s;min-width:120px;">
@@ -422,6 +898,13 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
                 </div>
               </div>
               <button type="button" class="btn btn-outline-info w-100 rounded-3 border mb-2 fw-semibold" data-user-open="rewards">Mis <?php echo htmlspecialchars((string) ($winPointsProgramConfig['name'] ?? 'Win Points'), ENT_QUOTES, 'UTF-8'); ?></button>
+              <?php endif; ?>
+              <?php if ($topBarEnabled): ?>
+                <a href="<?php echo htmlspecialchars($gamesUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-outline-info w-100 rounded-3 border mb-2 fw-semibold">Juegos</a>
+                <a href="<?php echo htmlspecialchars($influencerJoinUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-outline-warning w-100 rounded-3 border mb-2 fw-semibold"><?php echo htmlspecialchars($influencerInstructionsMenuLabel !== '' ? $influencerInstructionsMenuLabel : 'Quiero Unirme', ENT_QUOTES, 'UTF-8'); ?></a>
+                <?php if ($authUserCanAccessAdmin): ?>
+                  <a href="<?php echo htmlspecialchars($authUserAdminHome, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-outline-light w-100 rounded-3 border mb-2 fw-semibold">Dashboard</a>
+                <?php endif; ?>
               <?php endif; ?>
               <button type="button" class="btn btn-admin w-100 rounded-3 border mb-2 fw-semibold" data-user-open="orders">Ver Pedidos</button>
               <button type="button" class="btn btn-outline-info w-100 rounded-3 border mb-2 fw-semibold" data-user-open="profile">Datos Usuario</button>

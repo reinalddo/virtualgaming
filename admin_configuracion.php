@@ -72,6 +72,7 @@ $themeDefinitions = store_theme_definitions();
 $themeBaseValues = store_theme_base_values();
 $themeValues = store_theme_values();
 $accountSaleFeatureEnabled = trim((string) ($cfg['vender_cuentas'] ?? store_config_get('vender_cuentas', '0'))) === '1';
+$topBarFeatureEnabled = trim((string) ($cfg['barra_superior'] ?? store_config_get('barra_superior', '0'))) === '1';
 $paymentHeaderMinimalEnabled = ($cfg['encabezado_pago'] ?? '0') === '1';
 $paymentDifferenceConfigEnabled = ($cfg['diferencia_pago'] ?? '0') === '1';
 $paymentWindowConfigEnabled = ($cfg['ventana_pago_config'] ?? '0') === '1';
@@ -181,6 +182,18 @@ if ($accountSaleFeatureEnabled) {
     'theme_account_preview_button_border',
     'theme_account_preview_button_text',
     'theme_account_preview_button_shadow',
+  ];
+}
+if ($topBarFeatureEnabled) {
+  $themeFieldGroups['Barra superior'] = [
+    'theme_topbar_bg',
+    'theme_topbar_text',
+    'theme_topbar_search_border',
+    'theme_topbar_search_bg',
+    'theme_topbar_search_text',
+    'theme_topbar_login_bg',
+    'theme_topbar_login_border',
+    'theme_topbar_login_text',
   ];
 }
 if ($paymentHeaderMinimalEnabled) {
@@ -1355,6 +1368,16 @@ $googleCallbackUrl = google_oauth_callback_url();
           <?php elseif ($activeTab === 'personalizar-colores'): ?>
             <form method="post">
               <input type="hidden" name="config_section" value="personalizar-colores">
+              <?php if (!$topBarFeatureEnabled): ?>
+                <input type="hidden" name="theme_topbar_bg" value="<?= htmlspecialchars($themeValues['theme_topbar_bg'], ENT_QUOTES, 'UTF-8') ?>">
+                <input type="hidden" name="theme_topbar_text" value="<?= htmlspecialchars($themeValues['theme_topbar_text'], ENT_QUOTES, 'UTF-8') ?>">
+                <input type="hidden" name="theme_topbar_search_border" value="<?= htmlspecialchars($themeValues['theme_topbar_search_border'], ENT_QUOTES, 'UTF-8') ?>">
+                <input type="hidden" name="theme_topbar_search_bg" value="<?= htmlspecialchars($themeValues['theme_topbar_search_bg'], ENT_QUOTES, 'UTF-8') ?>">
+                <input type="hidden" name="theme_topbar_search_text" value="<?= htmlspecialchars($themeValues['theme_topbar_search_text'], ENT_QUOTES, 'UTF-8') ?>">
+                <input type="hidden" name="theme_topbar_login_bg" value="<?= htmlspecialchars($themeValues['theme_topbar_login_bg'], ENT_QUOTES, 'UTF-8') ?>">
+                <input type="hidden" name="theme_topbar_login_border" value="<?= htmlspecialchars($themeValues['theme_topbar_login_border'], ENT_QUOTES, 'UTF-8') ?>">
+                <input type="hidden" name="theme_topbar_login_text" value="<?= htmlspecialchars($themeValues['theme_topbar_login_text'], ENT_QUOTES, 'UTF-8') ?>">
+              <?php endif; ?>
               <?php if (!$accountSaleFeatureEnabled): ?>
                 <input type="hidden" name="theme_account_preview_button_bg" value="<?= htmlspecialchars($themeValues['theme_account_preview_button_bg'], ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" name="theme_account_preview_button_border" value="<?= htmlspecialchars($themeValues['theme_account_preview_button_border'], ENT_QUOTES, 'UTF-8') ?>">
