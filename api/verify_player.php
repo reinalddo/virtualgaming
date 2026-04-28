@@ -12,10 +12,6 @@ function verify_player_json(array $payload, int $status = 200): void {
     exit;
 }
 
-if (!player_verification_is_enabled()) {
-    verify_player_json(['ok' => false, 'message' => 'La verificación de nombre está desactivada para esta tienda.'], 403);
-}
-
 $gameId = (int) ($_POST['game_id'] ?? $_GET['game_id'] ?? 0);
 if ($gameId <= 0) {
     verify_player_json(['ok' => false, 'message' => 'Juego inválido.'], 422);

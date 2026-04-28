@@ -109,10 +109,6 @@ function player_verification_is_enabled(): bool {
 }
 
 function player_verification_frontend_config(array $game): ?array {
-    if (!player_verification_is_enabled()) {
-        return null;
-    }
-
     $definition = player_verification_definition_for_game($game);
     if (!$definition) {
         return null;
@@ -235,10 +231,6 @@ function player_verification_extract_zone_value(array $playerFields): string {
 }
 
 function player_verification_verify(array $game, string $userIdentifier, array $playerFields = []): array {
-    if (!player_verification_is_enabled()) {
-        return player_verification_result(false, 'disabled', 'La verificación de nombre está desactivada para esta tienda.', ['http_status' => 403]);
-    }
-
     $definition = player_verification_definition_for_game($game);
     if (!$definition) {
         return player_verification_result(false, 'unsupported', 'Este juego no tiene verificación automática de jugador.', ['http_status' => 422]);
