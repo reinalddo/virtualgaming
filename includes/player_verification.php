@@ -30,7 +30,11 @@ function player_verification_definition_for_game(array $game): ?array {
         return null;
     }
 
-    if (strpos($haystack, 'mobile legends') !== false) {
+    if (
+        strpos($haystack, 'mobile legends') !== false
+        || strpos($haystack, 'mobile legend') !== false
+        || strpos($haystack, 'mlbb') !== false
+    ) {
         return [
             'key' => 'mobile_legends',
             'button_label' => 'Verificar nombre del jugador',
