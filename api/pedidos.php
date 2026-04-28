@@ -1742,6 +1742,47 @@ function persist_order_binance_pay_snapshot(mysqli $mysqli, int $orderId, array 
     return $ok;
 }
 
+function order_provider_dispatch_lock_name(int $orderId): string {
+    return 'pedido_provider_dispatch_' . max(0, $orderId);
+}
+
+function acquire_order_provider_dispatch_lock(mysqli $mysqli, int $orderId, int $timeoutSeconds = 0): bool {
+    if ($orderId <= 0) {
+        return false;
+    }
+
+    $lockName = order_provider_dispatch_lock_name($orderId);
+    $timeoutSeconds = max(0, $timeoutSeconds);
+    $stmt = $mysqli->prepare('SELECT GET_LOCK(?, ?)');
+    if (!$stmt) {
+        return false;
+    }
+
+    $stmt->bind_param('si', $lockName, $timeoutSeconds);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result ? $result->fetch_row() : null;
+    $stmt->close();
+
+    return isset($row[0]) && (int) $row[0] === 1;
+}
+
+function release_order_provider_dispatch_lock(mysqli $mysqli, int $orderId): void {
+    if ($orderId <= 0) {
+        return;
+    }
+
+    $lockName = order_provider_dispatch_lock_name($orderId);
+    $stmt = $mysqli->prepare('SELECT RELEASE_LOCK(?)');
+    if (!$stmt) {
+        return;
+    }
+
+    $stmt->bind_param('s', $lockName);
+    $stmt->execute();
+    $stmt->close();
+}
+
 function clear_order_binance_pay_tracking(mysqli $mysqli, int $orderId): bool {
     $stmt = $mysqli->prepare("UPDATE pedidos SET binance_pay_request_id = NULL, binance_pay_order_no = NULL, binance_pay_reference = NULL, binance_pay_status = NULL, binance_pay_message = NULL, binance_pay_checkout_url = NULL, binance_pay_payload = NULL, binance_pay_paid_amount = NULL, binance_pay_paid_currency = NULL, binance_pay_ultimo_check = NULL, binance_pay_historial_json = NULL WHERE id = ? AND estado = 'pendiente' LIMIT 1");
     if (!$stmt) {
@@ -2033,187 +2074,236 @@ function sync_local_order_with_binance_payload(mysqli $mysqli, array $order, arr
         ];
     }
 
-    $packageApiId = (int) ($updatedOrder['paquete_api'] ?? 0);
-    $orderPlayerFields = order_player_fields_from_json((string) ($updatedOrder['player_fields_json'] ?? ''));
+    if (!acquire_order_provider_dispatch_lock($mysqli, $orderId, 0)) {
+        $lockedOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+        return [
+            'order' => $lockedOrder,
+            'local_status' => trim((string) ($lockedOrder['estado'] ?? $localStatus)),
+            'provider_flow' => order_provider_flow_from_row($lockedOrder),
+        ];
+    }
 
     try {
-        $providerResult = execute_catalog_api_purchase($packageApiId, (string) ($updatedOrder['user_identifier'] ?? ''), $orderPlayerFields, order_purchase_quantity($updatedOrder));
-    } catch (Throwable $e) {
-        $providerResult = [
-            'success' => false,
-            'accepted' => false,
-            'message' => $e->getMessage(),
-            'reference' => '',
-            'payload' => ['exception' => $e->getMessage()],
-        ];
-    }
-
-    $mysqli = ensure_mysqli_connection($mysqli);
-    $providerPayloadData = (array) ($providerResult['payload'] ?? []);
-    $providerReference = (string) ($providerResult['reference'] ?? '');
-    $providerMessage = provider_order_status_message($providerPayloadData, (string) ($providerResult['message'] ?? 'No se recibió mensaje del proveedor.'));
-    $providerPayload = json_encode($providerPayloadData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    $providerOrderId = recargas_api_extract_provider_order_id($providerPayloadData);
-    $providerState = strtolower(trim((string) (($providerPayloadData['estado'] ?? ''))));
-    $providerCode = provider_delivered_code_text($providerPayloadData);
-
-    if (!empty($providerResult['success'])) {
-        $verifiedStatus = 'enviado';
-        $providerHistoryJson = append_provider_history(
-            $updatedOrder['recargas_api_historial_json'] ?? null,
-            build_provider_history_entry(
-                'purchase',
-                $providerState,
-                $verifiedStatus,
-                $providerMessage,
-                $providerReference,
-                $providerOrderId,
-                $providerCode
-            )
-        );
-        $verifyStmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, ff_api_referencia = ?, ff_api_mensaje = ?, ff_api_payload = ?, recargas_api_pedido_id = ?, recargas_api_estado = ?, recargas_api_codigo_entregado = ?, recargas_api_ultimo_check = NOW(), recargas_api_historial_json = ?, estado = ? WHERE id = ? AND estado = 'pendiente'");
-        if ($verifyStmt) {
-            $verifyStmt->bind_param('sssssssssi', $verifiedReference, $providerReference, $providerMessage, $providerPayload, $providerOrderId, $providerState, $providerCode, $providerHistoryJson, $verifiedStatus, $orderId);
-            $verifyStmt->execute();
-            $verifyStmt->close();
-        }
-
-        $verifiedOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
-        if (trim((string) ($verifiedOrder['estado'] ?? '')) === 'enviado') {
-            win_points_handle_order_status_change($mysqli, $orderId, 'enviado');
-            recharge_notifications_emit_for_order($mysqli, $verifiedOrder);
-            ensure_provider_webhook_registration();
-            register_influencer_coupon_sale($mysqli, $verifiedOrder);
-            notify_free_fire_recharge_success($mysqli, $verifiedOrder, $paymentMethodName, $verifiedReference, $phone, $providerReference, $providerMessage);
-        }
-
-        return [
-            'order' => $verifiedOrder,
-            'local_status' => trim((string) ($verifiedOrder['estado'] ?? 'enviado')),
-            'provider_flow' => order_provider_flow_from_row($verifiedOrder),
-        ];
-    }
-
-    $inventoryShortage = recharge_availability_message_indicates_inventory_shortage($providerMessage);
-    if ($inventoryShortage) {
-        try {
-            $shortageResult = mark_order_inventory_shortage_review(
-                $mysqli,
-                $updatedOrder,
-                'pendiente',
-                $verifiedReference,
-                $phone,
-                $providerReference,
-                $providerMessage,
-                $providerPayload,
-                $providerOrderId,
-                $providerCode
-            );
-        } catch (Throwable $e) {
+        $updatedOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+        $latestLocalStatus = trim((string) ($updatedOrder['estado'] ?? $localStatus));
+        if ($latestLocalStatus === 'enviado' || $latestLocalStatus === 'cancelado') {
             return [
-                'order' => fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder,
-                'local_status' => trim((string) ($updatedOrder['estado'] ?? 'pendiente')),
+                'order' => $updatedOrder,
+                'local_status' => $latestLocalStatus,
                 'provider_flow' => order_provider_flow_from_row($updatedOrder),
-                'sync_error' => $e->getMessage(),
             ];
         }
 
-        $paidOrder = $shortageResult['order'];
-        recharge_notifications_emit_for_order($mysqli, $paidOrder);
-        register_influencer_coupon_sale($mysqli, $paidOrder);
-        notify_provider_inventory_shortage($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerMessage, $shortageResult['lock'] ?? []);
+        $hasProviderTracking = trim((string) ($updatedOrder['recargas_api_pedido_id'] ?? '')) !== ''
+            || trim((string) ($updatedOrder['ff_api_referencia'] ?? '')) !== '';
+        if ($latestLocalStatus === 'pagado' && $hasProviderTracking) {
+            return [
+                'order' => $updatedOrder,
+                'local_status' => $latestLocalStatus,
+                'provider_flow' => order_provider_flow_from_row($updatedOrder),
+            ];
+        }
 
-        return [
-            'order' => $paidOrder,
-            'local_status' => trim((string) ($paidOrder['estado'] ?? 'pagado')),
-            'provider_flow' => order_provider_flow_from_row($paidOrder),
-        ];
-    }
+        $claimStatus = 'pagado';
+        $claimStmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, telefono_contacto = ?, estado = ? WHERE id = ? AND estado = 'pendiente' LIMIT 1");
+        if ($claimStmt) {
+            $claimStmt->bind_param('sssi', $verifiedReference, $phone, $claimStatus, $orderId);
+            $claimStmt->execute();
+            $claimStmt->close();
+        }
 
-    $manualProcessing = !empty($providerResult['manual_processing']);
-    $acceptedLike = !empty($providerResult['accepted'])
-        || ($manualProcessing && provider_message_indicates_pending_lookup($providerMessage));
-    $trackingFollowUp = provider_message_indicates_transport_timeout($providerMessage);
+        $updatedOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+        if (trim((string) ($updatedOrder['estado'] ?? '')) !== 'pagado') {
+            return [
+                'order' => $updatedOrder,
+                'local_status' => trim((string) ($updatedOrder['estado'] ?? $latestLocalStatus)),
+                'provider_flow' => order_provider_flow_from_row($updatedOrder),
+            ];
+        }
 
-    if ($trackingFollowUp || $acceptedLike) {
-        $paidStatus = 'pagado';
-        $trackedState = $providerState !== '' ? $providerState : 'pending_confirmation';
-        $providerHistoryJson = append_provider_history(
+        $packageApiId = (int) ($updatedOrder['paquete_api'] ?? 0);
+        $orderPlayerFields = order_player_fields_from_json((string) ($updatedOrder['player_fields_json'] ?? ''));
+
+        try {
+            $providerResult = execute_catalog_api_purchase($packageApiId, (string) ($updatedOrder['user_identifier'] ?? ''), $orderPlayerFields, order_purchase_quantity($updatedOrder));
+        } catch (Throwable $e) {
+            $providerResult = [
+                'success' => false,
+                'accepted' => false,
+                'message' => $e->getMessage(),
+                'reference' => '',
+                'payload' => ['exception' => $e->getMessage()],
+            ];
+        }
+
+        $mysqli = ensure_mysqli_connection($mysqli);
+        $providerPayloadData = (array) ($providerResult['payload'] ?? []);
+        $providerReference = (string) ($providerResult['reference'] ?? '');
+        $providerMessage = provider_order_status_message($providerPayloadData, (string) ($providerResult['message'] ?? 'No se recibió mensaje del proveedor.'));
+        $providerPayload = json_encode($providerPayloadData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $providerOrderId = recargas_api_extract_provider_order_id($providerPayloadData);
+        $providerState = strtolower(trim((string) (($providerPayloadData['estado'] ?? ''))));
+        $providerCode = provider_delivered_code_text($providerPayloadData);
+
+        if (!empty($providerResult['success'])) {
+            $verifiedStatus = 'enviado';
+            $providerHistoryJson = append_provider_history(
+                $updatedOrder['recargas_api_historial_json'] ?? null,
+                build_provider_history_entry(
+                    'purchase',
+                    $providerState,
+                    $verifiedStatus,
+                    $providerMessage,
+                    $providerReference,
+                    $providerOrderId,
+                    $providerCode
+                )
+            );
+            $verifyStmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, ff_api_referencia = ?, ff_api_mensaje = ?, ff_api_payload = ?, recargas_api_pedido_id = ?, recargas_api_estado = ?, recargas_api_codigo_entregado = ?, recargas_api_ultimo_check = NOW(), recargas_api_historial_json = ?, estado = ? WHERE id = ? AND estado = 'pagado'");
+            if ($verifyStmt) {
+                $verifyStmt->bind_param('sssssssssi', $verifiedReference, $providerReference, $providerMessage, $providerPayload, $providerOrderId, $providerState, $providerCode, $providerHistoryJson, $verifiedStatus, $orderId);
+                $verifyStmt->execute();
+                $verifyStmt->close();
+            }
+
+            $verifiedOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+            if (trim((string) ($verifiedOrder['estado'] ?? '')) === 'enviado') {
+                win_points_handle_order_status_change($mysqli, $orderId, 'enviado');
+                recharge_notifications_emit_for_order($mysqli, $verifiedOrder);
+                ensure_provider_webhook_registration();
+                register_influencer_coupon_sale($mysqli, $verifiedOrder);
+                notify_free_fire_recharge_success($mysqli, $verifiedOrder, $paymentMethodName, $verifiedReference, $phone, $providerReference, $providerMessage);
+            }
+
+            return [
+                'order' => $verifiedOrder,
+                'local_status' => trim((string) ($verifiedOrder['estado'] ?? 'enviado')),
+                'provider_flow' => order_provider_flow_from_row($verifiedOrder),
+            ];
+        }
+
+        $inventoryShortage = recharge_availability_message_indicates_inventory_shortage($providerMessage);
+        if ($inventoryShortage) {
+            try {
+                $shortageResult = mark_order_inventory_shortage_review(
+                    $mysqli,
+                    $updatedOrder,
+                    'pagado',
+                    $verifiedReference,
+                    $phone,
+                    $providerReference,
+                    $providerMessage,
+                    $providerPayload,
+                    $providerOrderId,
+                    $providerCode
+                );
+            } catch (Throwable $e) {
+                return [
+                    'order' => fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder,
+                    'local_status' => trim((string) ($updatedOrder['estado'] ?? 'pagado')),
+                    'provider_flow' => order_provider_flow_from_row($updatedOrder),
+                    'sync_error' => $e->getMessage(),
+                ];
+            }
+
+            $paidOrder = $shortageResult['order'];
+            recharge_notifications_emit_for_order($mysqli, $paidOrder);
+            register_influencer_coupon_sale($mysqli, $paidOrder);
+            notify_provider_inventory_shortage($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerMessage, $shortageResult['lock'] ?? []);
+
+            return [
+                'order' => $paidOrder,
+                'local_status' => trim((string) ($paidOrder['estado'] ?? 'pagado')),
+                'provider_flow' => order_provider_flow_from_row($paidOrder),
+            ];
+        }
+
+        $manualProcessing = !empty($providerResult['manual_processing']);
+        $acceptedLike = !empty($providerResult['accepted'])
+            || ($manualProcessing && provider_message_indicates_pending_lookup($providerMessage));
+        $trackingFollowUp = provider_message_indicates_transport_timeout($providerMessage);
+
+        if ($trackingFollowUp || $acceptedLike) {
+            $paidStatus = 'pagado';
+            $trackedState = $providerState !== '' ? $providerState : 'pending_confirmation';
+            $providerHistoryJson = append_provider_history(
+                $updatedOrder['recargas_api_historial_json'] ?? null,
+                build_provider_history_entry(
+                    $trackingFollowUp ? 'purchase_timeout' : 'purchase',
+                    $trackedState,
+                    $paidStatus,
+                    $providerMessage,
+                    $providerReference,
+                    $providerOrderId,
+                    $providerCode
+                )
+            );
+            $paidStmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, ff_api_referencia = ?, ff_api_mensaje = ?, ff_api_payload = ?, recargas_api_pedido_id = ?, recargas_api_estado = ?, recargas_api_codigo_entregado = ?, recargas_api_ultimo_check = NOW(), recargas_api_historial_json = ?, estado = ? WHERE id = ? AND estado = 'pagado'");
+            if ($paidStmt) {
+                $paidStmt->bind_param('sssssssssi', $verifiedReference, $providerReference, $providerMessage, $providerPayload, $providerOrderId, $trackedState, $providerCode, $providerHistoryJson, $paidStatus, $orderId);
+                $paidStmt->execute();
+                $paidStmt->close();
+            }
+
+            $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+            recharge_notifications_emit_for_order($mysqli, $paidOrder);
+            ensure_provider_webhook_registration();
+            register_influencer_coupon_sale($mysqli, $paidOrder);
+            notify_catalog_purchase_pending($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerReference, $providerMessage);
+
+            if ($trackingFollowUp) {
+                continue_provider_follow_up_in_background($mysqli, (int) ($paidOrder['id'] ?? $orderId), 8, 8);
+            } elseif ($acceptedLike) {
+                $autoSyncAttempts = $manualProcessing ? 5 : 3;
+                $autoSyncDelaySeconds = $manualProcessing ? 4 : 2;
+                try {
+                    $autoSyncResult = try_auto_sync_provider_order($mysqli, $paidOrder, $autoSyncAttempts, $autoSyncDelaySeconds);
+                    if (is_array($autoSyncResult['order'] ?? null)) {
+                        $paidOrder = $autoSyncResult['order'];
+                    } else {
+                        $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $paidOrder;
+                    }
+                } catch (Throwable $e) {
+                    $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $paidOrder;
+                }
+            }
+
+            return [
+                'order' => $paidOrder,
+                'local_status' => trim((string) ($paidOrder['estado'] ?? 'pagado')),
+                'provider_flow' => order_provider_flow_from_row($paidOrder),
+            ];
+        }
+
+        $cancelStatus = 'cancelado';
+        $failedHistoryJson = append_provider_history(
             $updatedOrder['recargas_api_historial_json'] ?? null,
             build_provider_history_entry(
-                $trackingFollowUp ? 'purchase_timeout' : 'purchase',
-                $trackedState,
-                $paidStatus,
+                'purchase_failed',
+                $providerState,
+                $cancelStatus,
                 $providerMessage,
                 $providerReference,
                 $providerOrderId,
                 $providerCode
             )
         );
-        $paidStmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, ff_api_referencia = ?, ff_api_mensaje = ?, ff_api_payload = ?, recargas_api_pedido_id = ?, recargas_api_estado = ?, recargas_api_codigo_entregado = ?, recargas_api_ultimo_check = NOW(), recargas_api_historial_json = ?, estado = ? WHERE id = ? AND estado = 'pendiente'");
-        if ($paidStmt) {
-            $paidStmt->bind_param('sssssssssi', $verifiedReference, $providerReference, $providerMessage, $providerPayload, $providerOrderId, $trackedState, $providerCode, $providerHistoryJson, $paidStatus, $orderId);
-            $paidStmt->execute();
-            $paidStmt->close();
+        $cancelStmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, ff_api_referencia = ?, ff_api_mensaje = ?, ff_api_payload = ?, recargas_api_pedido_id = ?, recargas_api_estado = ?, recargas_api_codigo_entregado = ?, recargas_api_ultimo_check = NOW(), recargas_api_historial_json = ?, estado = ? WHERE id = ? AND estado = 'pagado'");
+        if ($cancelStmt) {
+            $cancelStmt->bind_param('sssssssssi', $verifiedReference, $providerReference, $providerMessage, $providerPayload, $providerOrderId, $providerState, $providerCode, $failedHistoryJson, $cancelStatus, $orderId);
+            $cancelStmt->execute();
+            $cancelStmt->close();
         }
 
-        $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
-        recharge_notifications_emit_for_order($mysqli, $paidOrder);
-        ensure_provider_webhook_registration();
-        register_influencer_coupon_sale($mysqli, $paidOrder);
-        notify_catalog_purchase_pending($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerReference, $providerMessage);
-
-        if ($trackingFollowUp) {
-            continue_provider_follow_up_in_background($mysqli, (int) ($paidOrder['id'] ?? $orderId), 8, 8);
-        } elseif ($acceptedLike) {
-            $autoSyncAttempts = $manualProcessing ? 5 : 3;
-            $autoSyncDelaySeconds = $manualProcessing ? 4 : 2;
-            try {
-                $autoSyncResult = try_auto_sync_provider_order($mysqli, $paidOrder, $autoSyncAttempts, $autoSyncDelaySeconds);
-                if (is_array($autoSyncResult['order'] ?? null)) {
-                    $paidOrder = $autoSyncResult['order'];
-                } else {
-                    $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $paidOrder;
-                }
-            } catch (Throwable $e) {
-                $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $paidOrder;
-            }
-        }
-
+        $cancelledOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
         return [
-            'order' => $paidOrder,
-            'local_status' => trim((string) ($paidOrder['estado'] ?? 'pagado')),
-            'provider_flow' => order_provider_flow_from_row($paidOrder),
+            'order' => $cancelledOrder,
+            'local_status' => trim((string) ($cancelledOrder['estado'] ?? 'cancelado')),
+            'provider_flow' => order_provider_flow_from_row($cancelledOrder),
         ];
+    } finally {
+        release_order_provider_dispatch_lock($mysqli, $orderId);
     }
-
-    $cancelStatus = 'cancelado';
-    $failedHistoryJson = append_provider_history(
-        $updatedOrder['recargas_api_historial_json'] ?? null,
-        build_provider_history_entry(
-            'purchase_failed',
-            $providerState,
-            $cancelStatus,
-            $providerMessage,
-            $providerReference,
-            $providerOrderId,
-            $providerCode
-        )
-    );
-    $cancelStmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, ff_api_referencia = ?, ff_api_mensaje = ?, ff_api_payload = ?, recargas_api_pedido_id = ?, recargas_api_estado = ?, recargas_api_codigo_entregado = ?, recargas_api_ultimo_check = NOW(), recargas_api_historial_json = ?, estado = ? WHERE id = ? AND estado = 'pendiente'");
-    if ($cancelStmt) {
-        $cancelStmt->bind_param('sssssssssi', $verifiedReference, $providerReference, $providerMessage, $providerPayload, $providerOrderId, $providerState, $providerCode, $failedHistoryJson, $cancelStatus, $orderId);
-        $cancelStmt->execute();
-        $cancelStmt->close();
-    }
-
-    $cancelledOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
-
-    return [
-        'order' => $cancelledOrder,
-        'local_status' => trim((string) ($cancelledOrder['estado'] ?? 'cancelado')),
-        'provider_flow' => order_provider_flow_from_row($cancelledOrder),
-    ];
 }
 
 function try_auto_sync_binance_order(mysqli $mysqli, array $order, string $source = 'sync'): array {
