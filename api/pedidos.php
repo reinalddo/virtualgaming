@@ -317,6 +317,59 @@ function coupon_ensure_points_column(mysqli $mysqli): void {
     }
 }
 
+function coupon_ensure_game_scope_column(mysqli $mysqli): void {
+    if (!coupon_table_exists($mysqli)) {
+        return;
+    }
+
+    $result = $mysqli->query("SHOW COLUMNS FROM cupones LIKE 'juegos_restringidos_json'");
+    if (!($result instanceof mysqli_result) || $result->num_rows === 0) {
+        $mysqli->query("ALTER TABLE cupones ADD COLUMN juegos_restringidos_json LONGTEXT NULL AFTER permitir_acumular_puntos");
+    }
+}
+
+function coupon_game_scope_enabled(): bool {
+    return trim((string) store_config_get('cupon_x_juegos', '0')) === '1';
+}
+
+function coupon_selected_game_ids(?string $json): array {
+    if (!is_string($json) || trim($json) === '') {
+        return [];
+    }
+
+    $decoded = json_decode($json, true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+
+    $gameIds = [];
+    foreach ($decoded as $gameId) {
+        $normalizedId = (int) $gameId;
+        if ($normalizedId > 0) {
+            $gameIds[$normalizedId] = true;
+        }
+    }
+
+    return array_map('intval', array_keys($gameIds));
+}
+
+function coupon_applies_to_game(?array $coupon, int $gameId): bool {
+    if (!$coupon) {
+        return false;
+    }
+
+    if (!coupon_game_scope_enabled()) {
+        return true;
+    }
+
+    $selectedGameIds = coupon_selected_game_ids($coupon['juegos_restringidos_json'] ?? null);
+    if (empty($selectedGameIds)) {
+        return true;
+    }
+
+    return $gameId > 0 && in_array($gameId, $selectedGameIds, true);
+}
+
 function coupon_allows_points_accumulation(?array $coupon): bool {
     if (!win_points_enabled()) {
         return false;
@@ -416,11 +469,12 @@ function resolve_admin_email(mysqli $mysqli): ?string {
     return null;
 }
 
-function fetch_valid_coupon(mysqli $mysqli, string $code): ?array {
+function fetch_valid_coupon(mysqli $mysqli, string $code, int $gameId = 0): ?array {
     if ($code === '' || !coupon_table_exists($mysqli)) {
         return null;
     }
     coupon_ensure_points_column($mysqli);
+    coupon_ensure_game_scope_column($mysqli);
     $stmt = $mysqli->prepare("SELECT * FROM cupones WHERE codigo = ? LIMIT 1");
     if (!$stmt) return null;
     $stmt->bind_param('s', $code);
@@ -431,6 +485,7 @@ function fetch_valid_coupon(mysqli $mysqli, string $code): ?array {
     if (empty($coupon['activo'])) return null;
     if (!empty($coupon['fecha_expiracion']) && strtotime($coupon['fecha_expiracion']) < time()) return null;
     if (!empty($coupon['limite_usos']) && isset($coupon['usos_actuales']) && $coupon['usos_actuales'] >= $coupon['limite_usos']) return null;
+    if (!coupon_applies_to_game($coupon, $gameId)) return null;
     return $coupon;
 }
 
@@ -440,6 +495,7 @@ function fetch_coupon_by_code(mysqli $mysqli, string $code): ?array {
     }
 
     coupon_ensure_points_column($mysqli);
+    coupon_ensure_game_scope_column($mysqli);
 
     $stmt = $mysqli->prepare('SELECT * FROM cupones WHERE codigo = ? LIMIT 1');
     if (!$stmt) {
@@ -5327,7 +5383,7 @@ if ($action === 'create') {
 
     // Validar y aplicar cupón si existe
     if ($cupon) {
-        $couponData = fetch_valid_coupon($mysqli, $cupon);
+        $couponData = fetch_valid_coupon($mysqli, $cupon, (int) $game_id);
         if (!$couponData) {
             json_error('Cupón inválido o vencido');
         }

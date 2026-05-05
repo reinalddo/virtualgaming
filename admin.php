@@ -83,6 +83,10 @@ function admin_coupons_win_points_enabled(): bool {
     return trim((string) store_config_get('win_points', '0')) === '1';
 }
 
+function admin_coupons_game_scope_enabled(): bool {
+    return trim((string) store_config_get('cupon_x_juegos', '0')) === '1';
+}
+
 function admin_coupon_ensure_points_column(PDO $pdo): void {
     try {
         $stmt = $pdo->query("SHOW COLUMNS FROM cupones LIKE 'permitir_acumular_puntos'");
@@ -92,6 +96,89 @@ function admin_coupon_ensure_points_column(PDO $pdo): void {
         }
     } catch (Throwable $exception) {
     }
+}
+
+function admin_coupon_ensure_game_scope_column(PDO $pdo): void {
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM cupones LIKE 'juegos_restringidos_json'");
+        $column = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : false;
+        if (!$column) {
+            $pdo->exec("ALTER TABLE cupones ADD COLUMN juegos_restringidos_json LONGTEXT NULL AFTER permitir_acumular_puntos");
+        }
+    } catch (Throwable $exception) {
+    }
+}
+
+function admin_coupon_game_ids_from_storage(?string $json): array {
+    if (!is_string($json) || trim($json) === '') {
+        return [];
+    }
+
+    $decoded = json_decode($json, true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+
+    $gameIds = [];
+    foreach ($decoded as $gameId) {
+        $normalizedId = (int) $gameId;
+        if ($normalizedId > 0) {
+            $gameIds[$normalizedId] = true;
+        }
+    }
+
+    return array_map('intval', array_keys($gameIds));
+}
+
+function admin_coupon_game_ids_from_input(array $input, bool $featureEnabled): array {
+    if (!$featureEnabled) {
+        return [];
+    }
+
+    $rawValues = $input['juegos_restringidos'] ?? [];
+    if (!is_array($rawValues)) {
+        $rawValues = [$rawValues];
+    }
+
+    $gameIds = [];
+    foreach ($rawValues as $rawValue) {
+        $gameId = (int) $rawValue;
+        if ($gameId > 0) {
+            $gameIds[$gameId] = true;
+        }
+    }
+
+    return array_map('intval', array_keys($gameIds));
+}
+
+function admin_coupon_game_ids_json(array $gameIds): ?string {
+    if (empty($gameIds)) {
+        return null;
+    }
+
+    $encoded = json_encode(array_values($gameIds), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    return is_string($encoded) ? $encoded : null;
+}
+
+function admin_fetch_coupon_game_options(PDO $pdo): array {
+    $stmt = $pdo->query('SELECT id, nombre FROM juegos ORDER BY nombre ASC, id ASC');
+    $games = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+    return is_array($games) ? $games : [];
+}
+
+function admin_coupon_game_ids_label(array $gameIds, array $gamesById): string {
+    if (empty($gameIds)) {
+        return 'Todos';
+    }
+
+    $labels = [];
+    foreach ($gameIds as $gameId) {
+        $labels[] = trim((string) ($gamesById[$gameId]['nombre'] ?? ('Juego #' . $gameId)));
+    }
+
+    return implode(', ', array_filter($labels, static function (string $label): bool {
+        return $label !== '';
+    }));
 }
 
 function admin_coupon_points_allowed_from_input(array $input, bool $featureEnabled, ?array $currentCoupon = null): int {
@@ -1546,6 +1633,8 @@ switch ($seccion) {
             $limite_usos = ($_POST['limite_usos'] ?? '') !== '' ? intval($_POST['limite_usos']) : null;
             $activo = isset($_POST['activo']) ? 1 : 0;
             $permitirAcumularPuntos = admin_coupon_points_allowed_from_input($_POST, admin_coupons_win_points_enabled());
+            $couponGameIds = admin_coupon_game_ids_from_input($_POST, admin_coupons_game_scope_enabled());
+            $couponGameIdsJson = admin_coupon_game_ids_json($couponGameIds);
             $influencerPayload = influencer_coupon_payload_from_input($_POST);
             $influencerErrors = influencer_coupon_validate_payload($influencerPayload);
 
@@ -1559,7 +1648,7 @@ switch ($seccion) {
                 if ($stmt_check->fetch()) {
                     admin_set_flash('error', 'Ya existe un cupón con ese código.');
                 } elseif ($codigo && $valor_descuento >= 0 && in_array($tipo_descuento, ['porcentaje', 'fijo'], true)) {
-                    $stmt = $pdo->prepare('INSERT INTO cupones (codigo, tipo_descuento, valor_descuento, fecha_expiracion, limite_usos, activo, permitir_acumular_puntos, nombre_influencer, telefono_influencer, email_influencer, comision_influencer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                    $stmt = $pdo->prepare('INSERT INTO cupones (codigo, tipo_descuento, valor_descuento, fecha_expiracion, limite_usos, activo, permitir_acumular_puntos, juegos_restringidos_json, nombre_influencer, telefono_influencer, email_influencer, comision_influencer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
                     $stmt->execute([
                         $codigo,
                         $tipo_descuento,
@@ -1568,6 +1657,7 @@ switch ($seccion) {
                         $limite_usos,
                         $activo,
                         $permitirAcumularPuntos,
+                        $couponGameIdsJson,
                         $influencerPayload['nombre_influencer'],
                         $influencerPayload['telefono_influencer'],
                         $influencerPayload['email_influencer'],
@@ -1598,6 +1688,8 @@ switch ($seccion) {
             $currentCouponStmt->execute([$id]);
             $currentCoupon = $currentCouponStmt->fetch(PDO::FETCH_ASSOC) ?: null;
             $permitirAcumularPuntos = admin_coupon_points_allowed_from_input($_POST, admin_coupons_win_points_enabled(), $currentCoupon);
+            $couponGameIds = admin_coupon_game_ids_from_input($_POST, admin_coupons_game_scope_enabled());
+            $couponGameIdsJson = admin_coupon_game_ids_json($couponGameIds);
             $influencerPayload = influencer_coupon_payload_from_input($_POST);
             $influencerErrors = influencer_coupon_validate_payload($influencerPayload);
 
@@ -1611,7 +1703,7 @@ switch ($seccion) {
                 if ($stmt_check->fetch()) {
                     admin_set_flash('error', 'Ya existe un cupón con ese código.');
                 } elseif ($id && $codigo && $valor_descuento >= 0 && in_array($tipo_descuento, ['porcentaje', 'fijo'], true)) {
-                    $stmt = $pdo->prepare('UPDATE cupones SET codigo=?, tipo_descuento=?, valor_descuento=?, fecha_expiracion=?, limite_usos=?, activo=?, permitir_acumular_puntos=?, nombre_influencer=?, telefono_influencer=?, email_influencer=?, comision_influencer=? WHERE id=?');
+                    $stmt = $pdo->prepare('UPDATE cupones SET codigo=?, tipo_descuento=?, valor_descuento=?, fecha_expiracion=?, limite_usos=?, activo=?, permitir_acumular_puntos=?, juegos_restringidos_json=?, nombre_influencer=?, telefono_influencer=?, email_influencer=?, comision_influencer=? WHERE id=?');
                     $stmt->execute([
                         $codigo,
                         $tipo_descuento,
@@ -1620,6 +1712,7 @@ switch ($seccion) {
                         $limite_usos,
                         $activo,
                         $permitirAcumularPuntos,
+                        $couponGameIdsJson,
                         $influencerPayload['nombre_influencer'],
                         $influencerPayload['telefono_influencer'],
                         $influencerPayload['email_influencer'],
@@ -2744,6 +2837,7 @@ require_once __DIR__ . '/includes/header.php';
             case 'cupones':
                 require_once __DIR__ . '/includes/db.php';
                 admin_coupon_ensure_points_column($pdo);
+                admin_coupon_ensure_game_scope_column($pdo);
                 influencer_coupon_ensure_sales_table_pdo($pdo);
                 sync_coupon_usage_counts_pdo($pdo);
                 backfill_influencer_sales_pdo($pdo);
@@ -2757,6 +2851,12 @@ require_once __DIR__ . '/includes/header.php';
                 }
                 $cupones = $pdo->query('SELECT * FROM cupones ORDER BY id DESC')->fetchAll(PDO::FETCH_ASSOC);
                 $influencerUsers = admin_fetch_influencer_users($pdo);
+                $couponGameScopeEnabled = admin_coupons_game_scope_enabled();
+                $couponGameOptions = admin_fetch_coupon_game_options($pdo);
+                $couponGameOptionsById = [];
+                foreach ($couponGameOptions as $couponGameOption) {
+                    $couponGameOptionsById[(int) ($couponGameOption['id'] ?? 0)] = $couponGameOption;
+                }
                 $influencerPaymentFilter = $influencerFiltersEnabled ? admin_normalize_influencer_payment_filter($_GET['filtro_estado_pago'] ?? 'pendiente') : 'todos';
                 $influencerDateFrom = $influencerFiltersEnabled ? admin_normalize_date_filter($_GET['fecha_desde'] ?? null) : null;
                 $influencerDateTo = $influencerFiltersEnabled ? admin_normalize_date_filter($_GET['fecha_hasta'] ?? null) : null;
@@ -2797,6 +2897,7 @@ require_once __DIR__ . '/includes/header.php';
                 $couponTabLink = '?seccion=cupones&tab=cupones';
                 $influencerTabLink = '?seccion=cupones&tab=influencers';
                 $selectedInfluencerUserId = admin_match_coupon_influencer_user_id($influencerUsers, $edit_cupon);
+                $selectedCouponGameIds = $edit_cupon ? admin_coupon_game_ids_from_storage($edit_cupon['juegos_restringidos_json'] ?? null) : [];
                 $currentInfluencerName = $edit_cupon ? trim((string) ($edit_cupon['nombre_influencer'] ?? '')) : '';
                 $currentInfluencerPhone = $edit_cupon ? trim((string) ($edit_cupon['telefono_influencer'] ?? '')) : '';
                 $currentInfluencerEmail = $edit_cupon ? trim((string) ($edit_cupon['email_influencer'] ?? '')) : '';
@@ -2874,6 +2975,189 @@ require_once __DIR__ . '/includes/header.php';
                                 <input type="checkbox" name="permitir_acumular_puntos" class="form-check-input" id="permitirAcumularPuntosCheck" <?= $edit_cupon ? (!empty($edit_cupon['permitir_acumular_puntos']) ? 'checked' : '') : 'checked' ?>>
                                 <label class="form-check-label" for="permitirAcumularPuntosCheck" style="color:#00fff7;">Permitir Acumular Puntos</label>
                             </div>
+                        </div>
+                        <?php endif; ?>
+                        <?php if ($couponGameScopeEnabled): ?>
+                        <div class="col-12">
+                            <label class="form-label" style="color:#00fff7;">Juegos permitidos</label>
+                            <div data-coupon-game-picker="1">
+                                <select name="juegos_restringidos[]" multiple data-coupon-game-native="1" style="display:none;">
+                                    <?php foreach ($couponGameOptions as $couponGameOption): ?>
+                                        <?php $couponGameOptionId = (int) ($couponGameOption['id'] ?? 0); ?>
+                                        <option value="<?= htmlspecialchars((string) $couponGameOptionId) ?>" <?= in_array($couponGameOptionId, $selectedCouponGameIds, true) ? 'selected' : '' ?>><?= htmlspecialchars((string) ($couponGameOption['nombre'] ?? ('Juego #' . $couponGameOptionId))) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <div data-coupon-game-control="1" class="form-control d-flex flex-wrap align-items-center gap-2" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7; min-height:58px; padding:0.6rem 0.75rem; cursor:text;">
+                                    <div data-coupon-game-tags="1" class="d-flex flex-wrap align-items-center gap-2" style="flex:1 1 auto;"></div>
+                                    <input type="text" data-coupon-game-input="1" autocomplete="off" placeholder="Escribe para buscar o haz clic para ver todos" style="flex:1 1 220px; min-width:220px; background:transparent; border:none; outline:none; box-shadow:none; color:#00fff7; padding:0;">
+                                    <button type="button" data-coupon-game-toggle="1" aria-label="Mostrar juegos" style="background:transparent; border:none; color:#00fff7; font-size:1.1rem; line-height:1; padding:0 0.15rem;">▾</button>
+                                </div>
+                                <div data-coupon-game-dropdown="1" style="display:none; margin-top:0.5rem; max-height:220px; overflow:auto; background:#1b2430; border:1px solid #00fff7; border-radius:12px; box-shadow:0 14px 30px rgba(0, 255, 247, 0.18);"></div>
+                            </div>
+                            <div class="mt-2" style="color:#7dd3fc; font-size:0.95rem;">Selecciona uno o varios juegos. Si no eliges ninguno, el cupón funcionará normalmente en todos los juegos.</div>
+                            <script>
+                            (() => {
+                                const widgets = document.querySelectorAll('[data-coupon-game-picker="1"]');
+                                widgets.forEach((root) => {
+                                    if (root.dataset.initialized === '1') {
+                                        return;
+                                    }
+                                    root.dataset.initialized = '1';
+
+                                    const nativeSelect = root.querySelector('[data-coupon-game-native="1"]');
+                                    const control = root.querySelector('[data-coupon-game-control="1"]');
+                                    const tagsContainer = root.querySelector('[data-coupon-game-tags="1"]');
+                                    const input = root.querySelector('[data-coupon-game-input="1"]');
+                                    const toggle = root.querySelector('[data-coupon-game-toggle="1"]');
+                                    const dropdown = root.querySelector('[data-coupon-game-dropdown="1"]');
+                                    if (!nativeSelect || !control || !tagsContainer || !input || !toggle || !dropdown) {
+                                        return;
+                                    }
+
+                                    const normalize = (value) => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                                    let isOpen = false;
+
+                                    const getOptions = () => Array.from(nativeSelect.options);
+
+                                    const renderTags = () => {
+                                        tagsContainer.innerHTML = '';
+                                        getOptions().filter((option) => option.selected).forEach((option) => {
+                                            const tag = document.createElement('span');
+                                            tag.style.cssText = 'display:inline-flex;align-items:center;gap:0.45rem;background:#00fff7;color:#0f172a;border-radius:999px;padding:0.32rem 0.72rem;font-size:0.92rem;font-weight:600;';
+                                            tag.textContent = option.text;
+
+                                            const removeButton = document.createElement('button');
+                                            removeButton.type = 'button';
+                                            removeButton.textContent = 'x';
+                                            removeButton.setAttribute('aria-label', 'Quitar ' + option.text);
+                                            removeButton.style.cssText = 'background:rgba(15,23,42,0.22);border:none;border-radius:999px;color:#0f172a;font-weight:700;line-height:1;padding:0.1rem 0.38rem;cursor:pointer;';
+                                            removeButton.addEventListener('click', (event) => {
+                                                event.preventDefault();
+                                                event.stopPropagation();
+                                                option.selected = false;
+                                                render();
+                                                openDropdown();
+                                                input.focus();
+                                            });
+
+                                            tag.appendChild(removeButton);
+                                            tagsContainer.appendChild(tag);
+                                        });
+                                    };
+
+                                    const renderDropdown = () => {
+                                        dropdown.innerHTML = '';
+                                        if (!isOpen) {
+                                            dropdown.style.display = 'none';
+                                            return;
+                                        }
+
+                                        const query = normalize(input.value.trim());
+                                        const visibleOptions = getOptions().filter((option) => !option.selected && (query === '' || normalize(option.text).includes(query)));
+
+                                        if (visibleOptions.length === 0) {
+                                            const emptyState = document.createElement('div');
+                                            emptyState.textContent = 'No hay juegos que coincidan con la búsqueda.';
+                                            emptyState.style.cssText = 'padding:0.8rem 1rem;color:#7dd3fc;';
+                                            dropdown.appendChild(emptyState);
+                                        } else {
+                                            visibleOptions.forEach((option) => {
+                                                const optionButton = document.createElement('button');
+                                                optionButton.type = 'button';
+                                                optionButton.textContent = option.text;
+                                                optionButton.style.cssText = 'display:block;width:100%;text-align:left;background:transparent;border:none;color:#00fff7;padding:0.72rem 0.95rem;cursor:pointer;';
+                                                optionButton.addEventListener('mouseenter', () => {
+                                                    optionButton.style.background = 'rgba(0,255,247,0.12)';
+                                                });
+                                                optionButton.addEventListener('mouseleave', () => {
+                                                    optionButton.style.background = 'transparent';
+                                                });
+                                                optionButton.addEventListener('click', () => {
+                                                    option.selected = true;
+                                                    input.value = '';
+                                                    render();
+                                                    openDropdown();
+                                                    input.focus();
+                                                });
+                                                dropdown.appendChild(optionButton);
+                                            });
+                                        }
+
+                                        dropdown.style.display = 'block';
+                                    };
+
+                                    const render = () => {
+                                        renderTags();
+                                        renderDropdown();
+                                    };
+
+                                    const openDropdown = () => {
+                                        isOpen = true;
+                                        renderDropdown();
+                                    };
+
+                                    const closeDropdown = () => {
+                                        isOpen = false;
+                                        renderDropdown();
+                                    };
+
+                                    control.addEventListener('click', () => {
+                                        input.focus();
+                                        openDropdown();
+                                    });
+
+                                    toggle.addEventListener('click', (event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        if (isOpen) {
+                                            closeDropdown();
+                                        } else {
+                                            input.focus();
+                                            openDropdown();
+                                        }
+                                    });
+
+                                    input.addEventListener('focus', openDropdown);
+                                    input.addEventListener('input', openDropdown);
+                                    input.addEventListener('keydown', (event) => {
+                                        if (event.key === 'Backspace' && input.value === '') {
+                                            const selectedOptions = getOptions().filter((option) => option.selected);
+                                            const lastSelected = selectedOptions[selectedOptions.length - 1];
+                                            if (lastSelected) {
+                                                lastSelected.selected = false;
+                                                render();
+                                            }
+                                            return;
+                                        }
+
+                                        if (event.key === 'Enter') {
+                                            const firstVisibleOption = getOptions().find((option) => {
+                                                return !option.selected && (input.value.trim() === '' || normalize(option.text).includes(normalize(input.value.trim())));
+                                            });
+                                            if (firstVisibleOption) {
+                                                event.preventDefault();
+                                                firstVisibleOption.selected = true;
+                                                input.value = '';
+                                                render();
+                                                openDropdown();
+                                            }
+                                        }
+
+                                        if (event.key === 'Escape') {
+                                            closeDropdown();
+                                        }
+                                    });
+
+                                    document.addEventListener('click', (event) => {
+                                        if (!root.contains(event.target)) {
+                                            closeDropdown();
+                                        }
+                                    });
+
+                                    render();
+                                });
+                            })();
+                            </script>
                         </div>
                         <?php endif; ?>
                         <div class="col-12 mt-2">
@@ -3018,6 +3302,9 @@ require_once __DIR__ . '/includes/header.php';
                                 <tr>
                                     <th style="color:#00fff7; background:#181f2a;">Código</th>
                                     <th style="color:#00fff7; background:#181f2a;">Descuento</th>
+                                    <?php if ($couponGameScopeEnabled): ?>
+                                    <th style="color:#00fff7; background:#181f2a;">Juegos</th>
+                                    <?php endif; ?>
                                     <th style="color:#00fff7; background:#181f2a;">Influencer</th>
                                     <th style="color:#00fff7; background:#181f2a;">Comisión</th>
                                     <?php if ($winPointsCouponToggleEnabled): ?>
@@ -3039,6 +3326,9 @@ require_once __DIR__ . '/includes/header.php';
                                             <div><?= htmlspecialchars((string) $c['tipo_descuento']) ?></div>
                                             <div><?= htmlspecialchars((string) $c['valor_descuento']) ?></div>
                                         </td>
+                                        <?php if ($couponGameScopeEnabled): ?>
+                                        <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars(admin_coupon_game_ids_label(admin_coupon_game_ids_from_storage($c['juegos_restringidos_json'] ?? null), $couponGameOptionsById)) ?></td>
+                                        <?php endif; ?>
                                         <td style="background:#181f2a; color:#b2f6ff;">
                                             <div><?= htmlspecialchars(admin_display_value($c['nombre_influencer'] ?? null)) ?></div>
                                             <div style="color:#8bd3ff; font-size:0.9em;"><?= htmlspecialchars(admin_display_value($c['email_influencer'] ?? null)) ?></div>
@@ -3065,6 +3355,9 @@ require_once __DIR__ . '/includes/header.php';
                             <div style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:1rem; color:#00fff7; margin-bottom:1.2rem;">
                                 <div style="font-weight:bold; font-size:1.15em; color:#00fff7;"><?= htmlspecialchars((string) $c['codigo']) ?></div>
                                 <div style="margin-top:0.45rem; color:#b2f6ff;">Tipo: <?= htmlspecialchars((string) $c['tipo_descuento']) ?> | Valor: <?= htmlspecialchars((string) $c['valor_descuento']) ?></div>
+                                <?php if ($couponGameScopeEnabled): ?>
+                                <div style="margin-top:0.45rem; color:#b2f6ff;">Juegos: <?= htmlspecialchars(admin_coupon_game_ids_label(admin_coupon_game_ids_from_storage($c['juegos_restringidos_json'] ?? null), $couponGameOptionsById)) ?></div>
+                                <?php endif; ?>
                                 <div style="margin-top:0.45rem; color:#b2f6ff;">
                                     <div>Influencer: <?= htmlspecialchars(admin_display_value($c['nombre_influencer'] ?? null)) ?></div>
                                     <div style="color:#8bd3ff; font-size:0.9em;"><?= htmlspecialchars(admin_display_value($c['email_influencer'] ?? null)) ?></div>

@@ -26,8 +26,72 @@ function is_valid_coupon_code(string $value): bool {
     return $value !== '' && preg_match('/^[A-Za-z0-9]+$/', $value) === 1;
 }
 
+function coupon_game_scope_enabled(mysqli $mysqli): bool {
+    $result = $mysqli->query("SHOW TABLES LIKE 'configuracion_general'");
+    if (!($result instanceof mysqli_result) || $result->num_rows === 0) {
+        return false;
+    }
+
+    $stmt = $mysqli->prepare('SELECT valor FROM configuracion_general WHERE clave = ? LIMIT 1');
+    if (!$stmt) {
+        return false;
+    }
+
+    $key = 'cupon_x_juegos';
+    $stmt->bind_param('s', $key);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result ? $result->fetch_assoc() : null;
+    $stmt->close();
+
+    return trim((string) ($row['valor'] ?? '0')) === '1';
+}
+
+function coupon_ensure_game_scope_column(mysqli $mysqli): void {
+    $result = $mysqli->query("SHOW COLUMNS FROM cupones LIKE 'juegos_restringidos_json'");
+    if (!($result instanceof mysqli_result) || $result->num_rows === 0) {
+        $mysqli->query("ALTER TABLE cupones ADD COLUMN juegos_restringidos_json LONGTEXT NULL AFTER permitir_acumular_puntos");
+    }
+}
+
+function coupon_selected_game_ids(?string $json): array {
+    if (!is_string($json) || trim($json) === '') {
+        return [];
+    }
+
+    $decoded = json_decode($json, true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+
+    $gameIds = [];
+    foreach ($decoded as $gameId) {
+        $normalizedId = (int) $gameId;
+        if ($normalizedId > 0) {
+            $gameIds[$normalizedId] = true;
+        }
+    }
+
+    return array_map('intval', array_keys($gameIds));
+}
+
+function coupon_applies_to_game(mysqli $mysqli, array $coupon, int $gameId): bool {
+    if (!coupon_game_scope_enabled($mysqli)) {
+        return true;
+    }
+
+    coupon_ensure_game_scope_column($mysqli);
+    $selectedGameIds = coupon_selected_game_ids($coupon['juegos_restringidos_json'] ?? null);
+    if (empty($selectedGameIds)) {
+        return true;
+    }
+
+    return $gameId > 0 && in_array($gameId, $selectedGameIds, true);
+}
+
 $codeInput = isset($_POST['code']) ? trim($_POST['code']) : '';
 $code = normalize_coupon_code($codeInput);
+$gameId = isset($_POST['game_id']) ? intval($_POST['game_id']) : 0;
 $pack_price = isset($_POST['pack_price']) ? floatval($_POST['pack_price']) : 0;
 $currencyCode = isset($_POST['currency']) ? trim((string) $_POST['currency']) : '';
 $currency = currency_find_by_code($currencyCode);
@@ -79,6 +143,12 @@ if (!is_null($cupon['limite_usos']) && $cupon['limite_usos'] > 0 && $cupon['usos
     $errorMsg = date('Y-m-d H:i:s') . " | ERROR: Cupón agotado.\n";
     file_put_contents(__DIR__ . '/log_cupon.txt', $errorMsg, FILE_APPEND);
     echo json_encode(['success' => false, 'message' => 'Cupón agotado.']);
+    exit;
+}
+if (!coupon_applies_to_game($mysqli, $cupon, $gameId)) {
+    $errorMsg = date('Y-m-d H:i:s') . " | ERROR: Cupón no disponible para el juego {$gameId}.\n";
+    file_put_contents(__DIR__ . '/log_cupon.txt', $errorMsg, FILE_APPEND);
+    echo json_encode(['success' => false, 'message' => 'Este cupón no está activo para este juego.']);
     exit;
 }
 
