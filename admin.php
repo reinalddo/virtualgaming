@@ -166,19 +166,24 @@ function admin_fetch_coupon_game_options(PDO $pdo): array {
     return is_array($games) ? $games : [];
 }
 
-function admin_coupon_game_ids_label(array $gameIds, array $gamesById): string {
+function admin_coupon_game_labels(array $gameIds, array $gamesById): array {
     if (empty($gameIds)) {
-        return 'Todos';
+        return ['Todos'];
     }
 
     $labels = [];
     foreach ($gameIds as $gameId) {
-        $labels[] = trim((string) ($gamesById[$gameId]['nombre'] ?? ('Juego #' . $gameId)));
+        $label = trim((string) ($gamesById[$gameId]['nombre'] ?? ('Juego #' . $gameId)));
+        if ($label !== '') {
+            $labels[] = $label;
+        }
     }
 
-    return implode(', ', array_filter($labels, static function (string $label): bool {
-        return $label !== '';
-    }));
+    return empty($labels) ? ['Todos'] : array_values($labels);
+}
+
+function admin_coupon_game_ids_label(array $gameIds, array $gamesById): string {
+    return implode(', ', admin_coupon_game_labels($gameIds, $gamesById));
 }
 
 function admin_coupon_points_allowed_from_input(array $input, bool $featureEnabled, ?array $currentCoupon = null): int {
@@ -3327,7 +3332,20 @@ require_once __DIR__ . '/includes/header.php';
                                             <div><?= htmlspecialchars((string) $c['valor_descuento']) ?></div>
                                         </td>
                                         <?php if ($couponGameScopeEnabled): ?>
-                                        <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars(admin_coupon_game_ids_label(admin_coupon_game_ids_from_storage($c['juegos_restringidos_json'] ?? null), $couponGameOptionsById)) ?></td>
+                                        <?php
+                                        $couponGameLabels = admin_coupon_game_labels(admin_coupon_game_ids_from_storage($c['juegos_restringidos_json'] ?? null), $couponGameOptionsById);
+                                        $couponGamePreview = array_slice($couponGameLabels, 0, 2);
+                                        $couponGameHasMore = count($couponGameLabels) > 2;
+                                        $couponGameLabelsJson = htmlspecialchars((string) json_encode($couponGameLabels, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8');
+                                        ?>
+                                        <td style="background:#181f2a; color:#b2f6ff; min-width:220px;">
+                                            <?php foreach ($couponGamePreview as $couponGameLabel): ?>
+                                            <div><?= htmlspecialchars($couponGameLabel) ?></div>
+                                            <?php endforeach; ?>
+                                            <?php if ($couponGameHasMore): ?>
+                                            <button type="button" class="btn btn-sm btn-outline-info mt-2" data-coupon-games-modal="1" data-coupon-games='<?= $couponGameLabelsJson ?>' style="border-color:#00fff7; color:#00fff7;">Ver más</button>
+                                            <?php endif; ?>
+                                        </td>
                                         <?php endif; ?>
                                         <td style="background:#181f2a; color:#b2f6ff;">
                                             <div><?= htmlspecialchars(admin_display_value($c['nombre_influencer'] ?? null)) ?></div>
@@ -3349,6 +3367,71 @@ require_once __DIR__ . '/includes/header.php';
                             </tbody>
                         </table>
                     </div>
+
+                    <?php if ($couponGameScopeEnabled): ?>
+                    <div id="coupon-games-modal" style="display:none; position:fixed; inset:0; background:rgba(2,6,23,0.78); z-index:1055; padding:1rem; align-items:center; justify-content:center;">
+                        <div style="width:min(100%, 520px); background:#181f2a; border:1px solid #00fff7; border-radius:18px; box-shadow:0 18px 50px rgba(0,255,247,0.2); overflow:hidden;">
+                            <div class="d-flex align-items-center justify-content-between" style="padding:1rem 1.25rem; border-bottom:1px solid rgba(0,255,247,0.2);">
+                                <h4 class="mb-0" style="color:#00fff7; font-size:1.1rem;">Juegos activos del cupón</h4>
+                                <button type="button" id="coupon-games-modal-close" style="background:transparent; border:none; color:#00fff7; font-size:1.4rem; line-height:1;">×</button>
+                            </div>
+                            <div id="coupon-games-modal-body" style="padding:1rem 1.25rem; max-height:60vh; overflow:auto; color:#b2f6ff;"></div>
+                        </div>
+                    </div>
+                    <script>
+                    (() => {
+                        const modal = document.getElementById('coupon-games-modal');
+                        const modalBody = document.getElementById('coupon-games-modal-body');
+                        const closeButton = document.getElementById('coupon-games-modal-close');
+                        if (!modal || !modalBody || !closeButton) {
+                            return;
+                        }
+
+                        const closeModal = () => {
+                            modal.style.display = 'none';
+                            modalBody.innerHTML = '';
+                        };
+
+                        document.querySelectorAll('[data-coupon-games-modal="1"]').forEach((button) => {
+                            button.addEventListener('click', () => {
+                                let labels = [];
+                                try {
+                                    labels = JSON.parse(button.getAttribute('data-coupon-games') || '[]');
+                                } catch (error) {
+                                    labels = [];
+                                }
+
+                                modalBody.innerHTML = '';
+                                const list = document.createElement('div');
+                                list.style.display = 'grid';
+                                list.style.gap = '0.6rem';
+
+                                labels.forEach((label) => {
+                                    const item = document.createElement('div');
+                                    item.textContent = label;
+                                    item.style.cssText = 'padding:0.7rem 0.85rem;border:1px solid rgba(0,255,247,0.2);border-radius:12px;background:#0f172a;';
+                                    list.appendChild(item);
+                                });
+
+                                modalBody.appendChild(list);
+                                modal.style.display = 'flex';
+                            });
+                        });
+
+                        closeButton.addEventListener('click', closeModal);
+                        modal.addEventListener('click', (event) => {
+                            if (event.target === modal) {
+                                closeModal();
+                            }
+                        });
+                        document.addEventListener('keydown', (event) => {
+                            if (event.key === 'Escape' && modal.style.display === 'flex') {
+                                closeModal();
+                            }
+                        });
+                    })();
+                    </script>
+                    <?php endif; ?>
 
                     <div class="d-block d-md-none">
                         <?php foreach ($cupones as $c): ?>
