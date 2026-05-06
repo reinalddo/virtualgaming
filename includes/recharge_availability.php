@@ -178,13 +178,10 @@ function recharge_availability_lock_package_for_inventory_shortage(mysqli $mysql
     $result['active_packages_remaining'] = recharge_availability_count_active_packages($mysqli, $gameId);
     $result['game_active'] = recharge_availability_is_game_active($mysqli, $gameId);
 
-    if ($result['game_active'] && $result['active_packages_remaining'] === 0) {
-        $result['game_updated'] = recharge_availability_set_game_active($mysqli, $gameId, false);
-        $result['game_deactivated'] = $result['game_updated'];
-        if ($result['game_deactivated']) {
-            $result['game_active'] = false;
-        }
-    }
+    // NOTE: Do not deactivate the whole game automatically when packages
+    // are locked due to inventory shortage. Only packages are marked inactive.
+    // This prevents games (p.ej. Free Fire) from being hidden/disabled
+    // automatically while staff reviews or replenishes stock.
 
     return $result;
 }

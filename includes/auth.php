@@ -5,6 +5,21 @@ function auth_normalize_email($email) {
   return strtolower(trim((string) $email));
 }
 
+function auth_ensure_profile_columns(mysqli $connection): void {
+  try {
+    $res = $connection->query("SHOW COLUMNS FROM usuarios LIKE 'foto_perfil'");
+    $has = $res instanceof mysqli_result && $res->num_rows > 0;
+    if ($res instanceof mysqli_result) {
+      $res->free();
+    }
+    if (!$has) {
+      $connection->query("ALTER TABLE usuarios ADD COLUMN foto_perfil VARCHAR(255) NULL AFTER email");
+    }
+  } catch (Throwable $ex) {
+    // ignore failures - best effort
+  }
+}
+
 function auth_sync_session_user(): ?array {
   tenant_start_session();
   $sessionUser = $_SESSION['auth_user'] ?? null;
@@ -17,6 +32,9 @@ function auth_sync_session_user(): ?array {
   if (!isset($mysqli) || !($mysqli instanceof mysqli)) {
     return $sessionUser;
   }
+
+  // Ensure profile columns exist (best-effort migration)
+  auth_ensure_profile_columns($mysqli);
 
   $userId = (int) $sessionUser['id'];
   $stmt = $mysqli->prepare('SELECT id, username, nombre, email, telefono, foto_perfil, rol FROM usuarios WHERE id = ? LIMIT 1');
