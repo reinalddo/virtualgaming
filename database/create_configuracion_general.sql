@@ -36,6 +36,13 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('verificacion_nombre_api', '0', 'Activa o desactiva por tenant la verificación de nombres de jugador mediante API'),
 ('api_binance', '0', 'Activa o desactiva la configuracion e integracion de Binance Pay via CoinPal para este tenant.'),
 ('api_binance_usuario', '1', 'Activa o desactiva el uso visible de Binance Pay para clientes y procesos automaticos de la tienda cuando el tenant ya tiene disponible api_binance.'),
+('api_discord', '0', 'Activa o desactiva la integración base de API Discord para enviar comandos de consulta y pruebas de recarga desde este tenant.'),
+('api_discord_webhook_url', '', 'Webhook de Discord usado para enviar mensajes de prueba y comandos controlados al canal configurado.'),
+('api_discord_timeout', '10', 'Tiempo máximo en segundos que la sonda webhook de API Discord esperará por la respuesta HTTP de Discord.'),
+('api_discord_username', 'VirtualGaming API Discord', 'Nombre visible opcional con el que se publicarán los mensajes enviados por el webhook de API Discord.'),
+('api_discord_avatar_url', '', 'Avatar opcional usado por el webhook de API Discord al publicar mensajes de prueba o sondeo.'),
+('api_discord_dry_run', '1', 'Activa el modo preventivo para usar primero comandos seguros de precio y pruebas antes de habilitar comandos de recarga reales.'),
+('api_discord_probe_command', 'mobile_legends_price', 'Clave del comando seguro por defecto usada para la prueba webhook de API Discord desde el panel administrativo.'),
 ('recarga_notificaciones_activas', '1', 'Activa o desactiva las notificaciones flotantes de recargas en el sitio público'),
 ('recarga_notificaciones_logo', '', 'Ruta del logo usado en la notificación flotante de recargas'),
 ('facebook', '', 'URL de Facebook de la tienda'),
@@ -159,3 +166,11 @@ SET mostrar_a_cliente = 1,
     precio = COALESCE(precio, 0),
     comision_venta = COALESCE(comision_venta, 0)
 WHERE clave = 'api_binance';
+
+UPDATE configuracion_general
+SET mostrar_a_cliente = 1,
+    funcion_venta = 'API Discord',
+    descripcion_venta = 'Automatiza pruebas webhook y futuras integraciones de comandos de Discord para consultas de precios y recargas controladas.',
+    precio = COALESCE(precio, 60),
+    comision_venta = COALESCE(comision_venta, 0)
+WHERE clave = 'api_discord';

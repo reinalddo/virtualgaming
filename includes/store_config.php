@@ -616,6 +616,13 @@ function store_config_descriptions(): array {
         'barra_superior' => 'Activa o desactiva la barra superior fija con buscador y reubicación del acceso principal del sitio público.',
         'api_binance' => 'Activa o desactiva la configuracion e integracion de Binance Pay via CoinPal para este tenant.',
         'api_binance_usuario' => 'Activa o desactiva el uso visible de Binance Pay para clientes y procesos automaticos de la tienda cuando el tenant ya tiene disponible api_binance.',
+        'api_discord' => 'Activa o desactiva la integración base de API Discord para enviar comandos de consulta y pruebas de recarga desde este tenant.',
+        'api_discord_webhook_url' => 'Webhook de Discord usado para enviar mensajes de prueba y comandos controlados al canal configurado.',
+        'api_discord_timeout' => 'Tiempo máximo en segundos que la sonda webhook de API Discord esperará por la respuesta HTTP de Discord.',
+        'api_discord_username' => 'Nombre visible opcional con el que se publicarán los mensajes enviados por el webhook de API Discord.',
+        'api_discord_avatar_url' => 'Avatar opcional usado por el webhook de API Discord al publicar mensajes de prueba o sondeo.',
+        'api_discord_dry_run' => 'Activa el modo preventivo para usar primero comandos seguros de precio y pruebas antes de habilitar comandos de recarga reales.',
+        'api_discord_probe_command' => 'Clave del comando seguro por defecto usada para la prueba webhook de API Discord desde el panel administrativo.',
         'binance_pay_merchant_no' => 'Merchant No configurado para Binance Pay via CoinPal.',
         'binance_pay_secret_key' => 'Secret Key configurada para Binance Pay via CoinPal.',
         'binance_pay_store_id' => 'Store ID registrado en CoinPal para esta tienda.',
@@ -701,6 +708,13 @@ function store_config_defaults(): array {
         'barra_superior' => '0',
         'api_binance' => '0',
         'api_binance_usuario' => '1',
+        'api_discord' => '0',
+        'api_discord_webhook_url' => '',
+        'api_discord_timeout' => '10',
+        'api_discord_username' => 'VirtualGaming API Discord',
+        'api_discord_avatar_url' => '',
+        'api_discord_dry_run' => '1',
+        'api_discord_probe_command' => 'mobile_legends_price',
         'binance_pay_merchant_no' => '',
         'binance_pay_secret_key' => '',
         'binance_pay_store_id' => '',
@@ -1207,6 +1221,9 @@ function store_config_ensure_defaults(): void {
     $accountSaleFeatureKey = 'vender_cuentas';
     $accountSaleFeatureName = 'Vender Cuentas';
     $accountSaleFeatureDescription = 'Entrega cuentas en lugar de recargas para los paquetes marcados con la opcion Vender Cuenta dentro del panel de paquetes';
+    $discordFeatureKey = 'api_discord';
+    $discordFeatureName = 'API Discord';
+    $discordFeatureDescription = 'Automatiza pruebas webhook y futuras integraciones de comandos de Discord para consultas de precios y recargas controladas.';
 
     foreach (store_config_defaults() as $key => $value) {
         $description = $descriptions[$key] ?? null;
@@ -1239,6 +1256,23 @@ function store_config_ensure_defaults(): void {
                     'descripcion_venta' => $accountSaleFeatureDescription,
                     'precio' => '25',
                     'comision_venta' => '5',
+                ]
+            );
+            continue;
+        }
+
+        if ($key === $discordFeatureKey) {
+            store_config_insert_missing_default(
+                $mysqli,
+                $key,
+                $value,
+                $description,
+                [
+                    'mostrar_a_cliente' => '1',
+                    'funcion_venta' => $discordFeatureName,
+                    'descripcion_venta' => $discordFeatureDescription,
+                    'precio' => '60',
+                    'comision_venta' => '0',
                 ]
             );
             continue;

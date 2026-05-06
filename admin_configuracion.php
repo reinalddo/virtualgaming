@@ -9,15 +9,20 @@ require_once __DIR__ . '/includes/home_gallery.php';
 require_once __DIR__ . '/includes/payment_methods.php';
 require_once __DIR__ . '/includes/google_oauth.php';
 require_once __DIR__ . '/includes/win_points.php';
+require_once __DIR__ . '/includes/api_discord.php';
 
 $cfg = store_config_all();
 $activeTab = defined('ADMIN_CONFIG_ACTIVE_TAB') ? ADMIN_CONFIG_ACTIVE_TAB : ($_GET['tab'] ?? 'correo');
 $startupPopupTabEnabled = store_config_get('inicio_popup_tab_habilitado', '1') === '1';
 $rechargeNotificationsTabEnabled = ($cfg['notificaciones_recargas'] ?? '0') === '1';
 $binanceApiTabEnabled = store_config_get('api_binance', '0') === '1';
+$discordApiTabEnabled = store_config_get('api_discord', '0') === '1';
 $allowedTabs = ['correo', 'cabecera', 'sociales', 'api-banco', 'api-free-fire', 'personalizar-colores', 'galeria', 'metodos-pago'];
 if ($binanceApiTabEnabled) {
   $allowedTabs[] = 'api-binance';
+}
+if ($discordApiTabEnabled) {
+  $allowedTabs[] = 'api-discord';
 }
 if ($rechargeNotificationsTabEnabled) {
   $allowedTabs[] = 'notificaciones-recargas';
@@ -220,6 +225,14 @@ $startupPopupVideoUrl = store_config_normalize_youtube_url((string) ($cfg['inici
 $startupPopupChannelUrl = store_config_normalize_social_url((string) ($cfg['whatsapp_channel'] ?? ''));
 $startupPopupChannelReady = store_config_is_valid_social_url($startupPopupChannelUrl);
 $googleCallbackUrl = google_oauth_callback_url();
+$apiDiscordPriceCommands = api_discord_price_commands();
+$apiDiscordSelectedProbeKey = trim((string) ($cfg['api_discord_probe_command'] ?? 'mobile_legends_price'));
+$apiDiscordSelectedProbe = api_discord_find_command($apiDiscordSelectedProbeKey);
+if (!$apiDiscordSelectedProbe && count($apiDiscordPriceCommands) > 0) {
+  $apiDiscordSelectedProbe = $apiDiscordPriceCommands[0];
+  $apiDiscordSelectedProbeKey = (string) ($apiDiscordSelectedProbe['key'] ?? '');
+}
+$apiDiscordSelectedProbeSample = $apiDiscordSelectedProbe ? api_discord_sample_command_text($apiDiscordSelectedProbe) : '';
 ?>
 <style>
   .neon-card {
@@ -884,6 +897,11 @@ $googleCallbackUrl = google_oauth_callback_url();
               <a href="/admin/configuracion?tab=api-binance" class="neon-tab-link <?= $activeTab === 'api-binance' ? 'active' : '' ?>">API Binance Pay</a>
             </div>
           <?php endif; ?>
+          <?php if ($discordApiTabEnabled): ?>
+            <div class="neon-tabs-item">
+              <a href="/admin/configuracion?tab=api-discord" class="neon-tab-link <?= $activeTab === 'api-discord' ? 'active' : '' ?>">API Discord</a>
+            </div>
+          <?php endif; ?>
           <div class="neon-tabs-item">
             <a href="/admin/configuracion?tab=personalizar-colores" class="neon-tab-link <?= $activeTab === 'personalizar-colores' ? 'active' : '' ?>">Personalizar Colores</a>
           </div>
@@ -904,7 +922,7 @@ $googleCallbackUrl = google_oauth_callback_url();
       <div class="card neon-card mb-4">
         <div class="card-header text-center py-4" style="background: linear-gradient(90deg, var(--theme-highlight) 0%, var(--theme-success) 100%); color: var(--theme-button-text-strong); border-radius: 16px 16px 0 0;">
           <h2 class="h4 fw-bold mb-0" style="font-family: 'Oxanium', 'Montserrat', 'Arial', sans-serif; letter-spacing: 0.08em;">
-            <?php if ($activeTab === 'correo'): ?>Configuración de correo corporativo<?php elseif ($activeTab === 'cabecera'): ?>Datos de cabecera<?php elseif ($activeTab === 'notificaciones-recargas'): ?>Notificaciones Recargas<?php elseif ($activeTab === 'sociales'): ?>Redes Sociales<?php elseif ($activeTab === 'api-banco'): ?>Datos conexión Banco<?php elseif ($activeTab === 'api-free-fire'): ?>Datos API<?php elseif ($activeTab === 'api-binance'): ?>API Binance Pay<?php elseif ($activeTab === 'personalizar-colores'): ?>Personalizar Colores<?php elseif ($activeTab === 'ventana-inicial'): ?>Ventana Inicial<?php elseif ($activeTab === 'galeria'): ?>Galería principal del index<?php else: ?>Métodos de Pago<?php endif; ?>
+            <?php if ($activeTab === 'correo'): ?>Configuración de correo corporativo<?php elseif ($activeTab === 'cabecera'): ?>Datos de cabecera<?php elseif ($activeTab === 'notificaciones-recargas'): ?>Notificaciones Recargas<?php elseif ($activeTab === 'sociales'): ?>Redes Sociales<?php elseif ($activeTab === 'api-banco'): ?>Datos conexión Banco<?php elseif ($activeTab === 'api-free-fire'): ?>Datos API<?php elseif ($activeTab === 'api-binance'): ?>API Binance Pay<?php elseif ($activeTab === 'api-discord'): ?>API Discord<?php elseif ($activeTab === 'personalizar-colores'): ?>Personalizar Colores<?php elseif ($activeTab === 'ventana-inicial'): ?>Ventana Inicial<?php elseif ($activeTab === 'galeria'): ?>Galería principal del index<?php else: ?>Métodos de Pago<?php endif; ?>
           </h2>
         </div>
         <div class="card-body p-4">
@@ -1365,6 +1383,94 @@ $googleCallbackUrl = google_oauth_callback_url();
 
               <button type="submit" class="neon-btn w-100 py-3 mt-4">Guardar configuración de Binance Pay</button>
             </form>
+          <?php elseif ($activeTab === 'api-discord'): ?>
+            <form method="post">
+              <input type="hidden" name="config_section" value="api-discord">
+              <div class="config-section-note mb-4">Aquí arranca la Fase 0 y Fase 1 de <strong>api_discord</strong>: guardar el webhook, mantener el catálogo de comandos y ejecutar una prueba segura usando comandos de precio. Luego, cada juego elegirá su propia API desde <strong>Juegos API TiendaGiftVen</strong> o <strong>Juegos API Discord</strong>.</div>
+
+              <div class="gallery-table-wrap mb-4">
+                <h3 class="h5 fw-bold text-info mb-3">Fase 0 · Requisitos y acceso</h3>
+                <div class="row g-3">
+                  <div class="col-12">
+                    <label class="form-label">Webhook de Discord</label>
+                    <input type="url" name="api_discord_webhook_url" value="<?= htmlspecialchars($cfg['api_discord_webhook_url'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="https://discord.com/api/webhooks/...">
+                    <div class="form-text mt-2">Debe ser el webhook que publica en el canal donde escucha Mobentas. Sin este dato no se puede hacer el PoC.</div>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Timeout HTTP (segundos)</label>
+                    <input type="number" min="3" max="30" step="1" name="api_discord_timeout" value="<?= htmlspecialchars($cfg['api_discord_timeout'] ?? '10', ENT_QUOTES, 'UTF-8') ?>" class="form-control">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Nombre visible del webhook</label>
+                    <input type="text" name="api_discord_username" value="<?= htmlspecialchars($cfg['api_discord_username'] ?? 'VirtualGaming API Discord', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="VirtualGaming API Discord">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Avatar URL opcional</label>
+                    <input type="url" name="api_discord_avatar_url" value="<?= htmlspecialchars($cfg['api_discord_avatar_url'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="https://.../avatar.png">
+                  </div>
+                  <div class="col-12">
+                    <div class="form-check form-switch">
+                      <input class="form-check-input" type="checkbox" role="switch" id="api-discord-dry-run" name="api_discord_dry_run" value="1" <?= ($cfg['api_discord_dry_run'] ?? '1') === '1' ? 'checked' : '' ?>>
+                      <label class="form-check-label fw-semibold" for="api-discord-dry-run">Mantener modo preventivo (solo comandos seguros de precio)</label>
+                    </div>
+                    <div class="form-text mt-2">Este switch deja documentado que el tenant sigue en etapa segura. Más adelante, cuando entremos a recargas reales, este modo nos ayuda a no disparar topups por accidente.</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="gallery-table-wrap mb-2">
+                <h3 class="h5 fw-bold text-info mb-3">Fase 1 · PoC webhook seguro</h3>
+                <div class="row g-3">
+                  <div class="col-md-6">
+                    <label class="form-label">Comando de prueba</label>
+                    <select class="form-select" name="api_discord_probe_command" id="api-discord-probe-command">
+                      <?php foreach ($apiDiscordPriceCommands as $priceCommand): ?>
+                        <?php $probeKey = (string) ($priceCommand['key'] ?? ''); ?>
+                        <?php $probeSample = api_discord_sample_command_text($priceCommand); ?>
+                        <option value="<?= htmlspecialchars($probeKey, ENT_QUOTES, 'UTF-8') ?>" data-sample="<?= htmlspecialchars($probeSample, ENT_QUOTES, 'UTF-8') ?>" <?= $apiDiscordSelectedProbeKey === $probeKey ? 'selected' : '' ?>>
+                          <?= htmlspecialchars((string) ($priceCommand['label'] ?? $probeKey), ENT_QUOTES, 'UTF-8') ?>
+                        </option>
+                      <?php endforeach; ?>
+                    </select>
+                    <div class="form-text mt-2">Solo se listan comandos de precio. Así validamos si Mobentas responde a mensajes enviados por webhook sin hacer recargas reales.</div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Vista previa del comando</label>
+                    <input type="text" id="api-discord-probe-preview" class="form-control" value="<?= htmlspecialchars($apiDiscordSelectedProbeSample, ENT_QUOTES, 'UTF-8') ?>" readonly>
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label">Catálogo detectado</label>
+                    <input type="text" class="form-control" value="<?= count(api_discord_load_commands()) ?> comandos cargados desde includes/api_discord_commands.json" readonly>
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label">Comandos de juego Discord disponibles</label>
+                    <input type="text" class="form-control" value="<?= count(api_discord_topup_commands()) ?> comandos de juego listos para el select Juegos API Discord" readonly>
+                  </div>
+                </div>
+              </div>
+
+              <div class="d-flex flex-column flex-md-row gap-3 mt-4">
+                <button type="submit" class="neon-btn flex-fill py-3">Guardar configuración API Discord</button>
+                <button type="submit" name="api_discord_probe_submit" value="1" class="neon-btn flex-fill py-3" style="background:linear-gradient(90deg,#34d399 0%,#22d3ee 100%);">Guardar y enviar prueba webhook</button>
+              </div>
+            </form>
+            <script>
+              (function() {
+                const select = document.getElementById('api-discord-probe-command');
+                const preview = document.getElementById('api-discord-probe-preview');
+                if (!select || !preview) {
+                  return;
+                }
+
+                const updatePreview = function() {
+                  const option = select.options[select.selectedIndex];
+                  preview.value = option ? (option.getAttribute('data-sample') || '') : '';
+                };
+
+                select.addEventListener('change', updatePreview);
+                updatePreview();
+              })();
+            </script>
           <?php elseif ($activeTab === 'personalizar-colores'): ?>
             <form method="post">
               <input type="hidden" name="config_section" value="personalizar-colores">

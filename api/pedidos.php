@@ -300,6 +300,12 @@ function ensure_juegos_categoria_api_column(mysqli $mysqli): void {
         $mysqli->query("ALTER TABLE juegos ADD COLUMN categoria_api VARCHAR(100) NULL AFTER api_free_fire");
     }
 }
+function ensure_juegos_categoria_api_discord_column(mysqli $mysqli): void {
+    $result = $mysqli->query("SHOW COLUMNS FROM juegos LIKE 'categoria_api_discord'");
+    if (!($result instanceof mysqli_result) || $result->num_rows === 0) {
+        $mysqli->query("ALTER TABLE juegos ADD COLUMN categoria_api_discord VARCHAR(120) NULL AFTER categoria_api");
+    }
+}
 
 function coupon_table_exists(mysqli $mysqli): bool {
     $res = $mysqli->query("SHOW TABLES LIKE 'cupones'");
@@ -2476,6 +2482,28 @@ function game_api_category(mysqli $mysqli, int $gameId): string {
 
 function game_uses_catalog_api(mysqli $mysqli, int $gameId): bool {
     return game_api_category($mysqli, $gameId) !== '';
+}
+function game_discord_api_command(mysqli $mysqli, int $gameId): string {
+    if ($gameId <= 0) {
+        return '';
+    }
+
+    $stmt = $mysqli->prepare('SELECT categoria_api_discord FROM juegos WHERE id = ? LIMIT 1');
+    if (!$stmt) {
+        return '';
+    }
+
+    $stmt->bind_param('i', $gameId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $row = $res ? $res->fetch_assoc() : null;
+    $stmt->close();
+
+    return trim((string) ($row['categoria_api_discord'] ?? ''));
+}
+
+function game_uses_discord_api(mysqli $mysqli, int $gameId): bool {
+    return game_discord_api_command($mysqli, $gameId) !== '';
 }
 
 function fetch_game_package(mysqli $mysqli, int $packageId, int $gameId): ?array {
@@ -5221,6 +5249,7 @@ ensure_pedidos_table($mysqli);
 ensure_movimientos_table($mysqli);
 ensure_juegos_api_free_fire_column($mysqli);
 ensure_juegos_categoria_api_column($mysqli);
+ensure_juegos_categoria_api_discord_column($mysqli);
 ensure_juego_paquetes_monto_ff_column($mysqli);
 ensure_juego_paquetes_paquete_api_column($mysqli);
 influencer_coupon_ensure_sales_table_mysqli($mysqli);

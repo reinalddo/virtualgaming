@@ -370,6 +370,24 @@ function admin_extra_features_ensure_schema(): void {
         $stmt->close();
     }
 
+    store_config_upsert('api_discord', store_config_get('api_discord', '0') === '1' ? '1' : '0', $configDescriptions['api_discord'] ?? 'Activa o desactiva la integración base de API Discord para enviar comandos de consulta y pruebas de recarga desde este tenant.');
+    $discordFeatureName = 'API Discord';
+    $discordFeatureDescription = 'Automatiza pruebas webhook y futuras integraciones de comandos de Discord para consultas de precios y recargas controladas.';
+    $discordStmt = $mysqli->prepare(
+        "UPDATE configuracion_general
+         SET mostrar_a_cliente = 1,
+             funcion_venta = COALESCE(NULLIF(funcion_venta, ''), ?),
+             descripcion_venta = COALESCE(NULLIF(descripcion_venta, ''), ?),
+             precio = COALESCE(precio, 60),
+             comision_venta = COALESCE(comision_venta, 0)
+         WHERE clave = 'api_discord'"
+    );
+    if ($discordStmt) {
+        $discordStmt->bind_param('ss', $discordFeatureName, $discordFeatureDescription);
+        $discordStmt->execute();
+        $discordStmt->close();
+    }
+
     $ensured = true;
 }
 
@@ -1790,12 +1808,17 @@ switch ($seccion) {
         require_once __DIR__ . '/includes/store_config.php';
         require_once __DIR__ . '/includes/home_gallery.php';
         require_once __DIR__ . '/includes/payment_methods.php';
+        require_once __DIR__ . '/includes/api_discord.php';
         $startupPopupTabEnabled = store_config_get('inicio_popup_tab_habilitado', '1') === '1';
         $binanceApiTabEnabled = store_config_get('api_binance', '0') === '1';
+        $discordApiTabEnabled = store_config_get('api_discord', '0') === '1';
         $activeTab = $_GET['tab'] ?? 'correo';
         $allowedTabs = ['correo', 'cabecera', 'notificaciones-recargas', 'sociales', 'api-banco', 'api-free-fire', 'personalizar-colores', 'galeria', 'metodos-pago'];
         if ($binanceApiTabEnabled) {
             $allowedTabs[] = 'api-binance';
+        }
+        if ($discordApiTabEnabled) {
+            $allowedTabs[] = 'api-discord';
         }
         if ($startupPopupTabEnabled) {
             $allowedTabs[] = 'ventana-inicial';
@@ -2157,6 +2180,43 @@ switch ($seccion) {
                 store_config_upsert('binance_pay_access_token', $accessToken);
                 store_config_upsert('binance_pay_store_url', $storeUrl);
                 admin_set_flash('success', 'Configuración de Binance Pay actualizada.');
+            }
+
+            if ($activeTab === 'api-discord') {
+                $webhookUrl = trim((string) ($_POST['api_discord_webhook_url'] ?? ''));
+                $timeout = (string) api_discord_normalize_timeout($_POST['api_discord_timeout'] ?? '10');
+                $username = trim((string) ($_POST['api_discord_username'] ?? ''));
+                $avatarUrl = trim((string) ($_POST['api_discord_avatar_url'] ?? ''));
+                $dryRun = isset($_POST['api_discord_dry_run']) ? '1' : '0';
+                $probeCommandKey = trim((string) ($_POST['api_discord_probe_command'] ?? 'mobile_legends_price'));
+
+                if ($webhookUrl !== '' && !api_discord_validate_webhook_url($webhookUrl)) {
+                    admin_set_flash('error', 'El webhook de Discord no tiene un formato válido. Debe ser una URL https://discord.com/api/webhooks/...');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'api-discord']);
+                }
+
+                if ($avatarUrl !== '' && !store_config_is_valid_social_url($avatarUrl)) {
+                    admin_set_flash('error', 'El avatar opcional de API Discord debe ser una URL válida con http:// o https://');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'api-discord']);
+                }
+
+                store_config_upsert('api_discord_webhook_url', $webhookUrl);
+                store_config_upsert('api_discord_timeout', $timeout);
+                store_config_upsert('api_discord_username', $username);
+                store_config_upsert('api_discord_avatar_url', $avatarUrl);
+                store_config_upsert('api_discord_dry_run', $dryRun);
+                store_config_upsert('api_discord_probe_command', $probeCommandKey);
+
+                if (isset($_POST['api_discord_probe_submit']) && (string) $_POST['api_discord_probe_submit'] === '1') {
+                    $probe = api_discord_run_probe($probeCommandKey);
+                    admin_set_flash($probe['ok'] ? 'success' : 'error', (string) ($probe['message'] ?? 'No se pudo ejecutar la prueba de API Discord.'));
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'api-discord']);
+                }
+
+                admin_set_flash('success', 'Configuración de API Discord actualizada.');
             }
 
             if ($activeTab === 'personalizar-colores') {
