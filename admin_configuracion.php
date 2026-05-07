@@ -1401,6 +1401,7 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
                     <label class="form-label">Webhook de Discord</label>
                     <input type="url" name="api_discord_webhook_url" value="<?= htmlspecialchars($cfg['api_discord_webhook_url'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="https://discord.com/api/webhooks/...">
                     <div class="form-text mt-2">Coloca aquí el webhook del canal donde escucha Mobentas. Sin esta URL no se pueden enviar mensajes de prueba ni futuros comandos automáticos.</div>
+                    <div class="form-text mt-2">Si abres ese enlace en el navegador, Discord devuelve metadatos como <strong>id</strong>, <strong>channel_id</strong>, <strong>guild_id</strong>, <strong>name</strong>, <strong>type</strong>, <strong>application_id</strong>, <strong>avatar</strong>, <strong>token</strong> y <strong>url</strong>. La tienda no necesita esos valores por separado: con la URL completa del webhook es suficiente para enviar mensajes.</div>
                   </div>
                   <div class="col-md-4">
                     <label class="form-label">Timeout HTTP (segundos)</label>
@@ -1409,11 +1410,12 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
                   <div class="col-md-4">
                     <label class="form-label">Nombre visible del mensaje</label>
                     <input type="text" name="api_discord_username" value="<?= htmlspecialchars($cfg['api_discord_username'] ?? 'VirtualGaming API', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="VirtualGaming API">
-                    <div class="form-text mt-2">Opcional. Discord no permite usar la palabra Discord dentro de este nombre.</div>
+                    <div class="form-text mt-2">Opcional. Este valor no sale del JSON del webhook: se envía en cada POST como <code>username</code> para cambiar el nombre visible del mensaje. Discord no permite usar la palabra Discord dentro de este nombre.</div>
                   </div>
                   <div class="col-md-4">
                     <label class="form-label">Avatar del mensaje (opcional)</label>
                     <input type="url" name="api_discord_avatar_url" value="<?= htmlspecialchars($cfg['api_discord_avatar_url'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="https://.../avatar.png">
+                    <div class="form-text mt-2">Opcional. Este valor tampoco viene del JSON del webhook: se envía en cada POST como <code>avatar_url</code> para personalizar la imagen del mensaje.</div>
                   </div>
                   <div class="col-12">
                     <div class="form-check form-switch">
@@ -1483,6 +1485,34 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
                   </div>
                   <div class="modal-body">
                     <div class="row g-4">
+                      <div class="col-12">
+                        <div class="gallery-table-wrap">
+                          <h4 class="h5 fw-bold text-info mb-3">0. Qué significa el JSON del webhook</h4>
+                          <div class="table-responsive">
+                            <table class="table table-dark table-sm align-middle mb-0">
+                              <thead>
+                                <tr>
+                                  <th>Campo</th>
+                                  <th>Qué representa</th>
+                                  <th>Se usa en la tienda</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr><td>id</td><td>ID interno del webhook en Discord.</td><td>No se guarda por separado; ya viene dentro de la URL completa.</td></tr>
+                                <tr><td>token</td><td>Secreto del webhook que autoriza publicar mensajes.</td><td>No se separa en otro campo; ya forma parte de la URL. Trátalo como credencial sensible.</td></tr>
+                                <tr><td>url</td><td>URL completa lista para enviar <code>POST</code>.</td><td>Sí. Este es el valor que debes pegar en <strong>Webhook de Discord</strong>.</td></tr>
+                                <tr><td>channel_id</td><td>ID del canal de Discord al que publica el webhook.</td><td>No. Solo sirve como dato descriptivo.</td></tr>
+                                <tr><td>guild_id</td><td>ID del servidor de Discord donde vive el canal.</td><td>No. Solo sirve como dato descriptivo.</td></tr>
+                                <tr><td>name</td><td>Nombre actual del webhook creado en Discord.</td><td>No. La tienda puede sobrescribir el nombre visible de cada mensaje con <code>username</code>.</td></tr>
+                                <tr><td>avatar</td><td>Avatar base configurado en el webhook dentro de Discord.</td><td>No. La tienda puede sobrescribir la imagen del mensaje con <code>avatar_url</code>.</td></tr>
+                                <tr><td>type</td><td>Tipo de webhook que devuelve Discord.</td><td>No.</td></tr>
+                                <tr><td>application_id</td><td>ID de aplicación asociada si el webhook pertenece a una app o integración.</td><td>No. Puede venir <code>null</code> en webhooks normales.</td></tr>
+                              </tbody>
+                            </table>
+                          </div>
+                          <div class="form-text mt-3">Resumen práctico: para esta integración solo hace falta la <strong>URL completa del webhook</strong>. Luego la tienda envía JSON tipo <code>{"content":"...","username":"...","avatar_url":"..."}</code> cuando publica mensajes.</div>
+                        </div>
+                      </div>
                       <div class="col-12 col-lg-6">
                         <div class="gallery-table-wrap h-100">
                           <h4 class="h5 fw-bold text-info mb-3">1. Endpoint y autenticación</h4>
