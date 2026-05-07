@@ -14,6 +14,7 @@ require_once __DIR__ . '/../includes/influencer_coupons.php';
 require_once __DIR__ . '/../includes/store_config.php';
 require_once __DIR__ . '/../includes/payment_methods.php';
 require_once __DIR__ . '/../includes/binance_pay.php';
+require_once __DIR__ . '/../includes/api_discord.php';
 require_once __DIR__ . '/../includes/package_account_sales.php';
 require_once __DIR__ . '/../includes/recargas_api.php';
 require_once __DIR__ . '/../includes/recharge_availability.php';
@@ -96,6 +97,16 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         cuenta_galeria_json LONGTEXT DEFAULT NULL,
         win_points_awarded INT NOT NULL DEFAULT 0,
         win_points_payment_mode VARCHAR(20) DEFAULT NULL,
+        api_discord_command_key VARCHAR(120) DEFAULT NULL,
+        api_discord_command_template VARCHAR(255) DEFAULT NULL,
+        api_discord_status VARCHAR(40) DEFAULT NULL,
+        api_discord_message_id VARCHAR(120) DEFAULT NULL,
+        api_discord_http_status INT DEFAULT NULL,
+        api_discord_response_body LONGTEXT DEFAULT NULL,
+        api_discord_attempts INT NOT NULL DEFAULT 0,
+        api_discord_requires_review TINYINT(1) NOT NULL DEFAULT 0,
+        api_discord_last_attempt_at DATETIME DEFAULT NULL,
+        api_discord_sent_at DATETIME DEFAULT NULL,
         ff_api_referencia VARCHAR(120) DEFAULT NULL,
         ff_api_mensaje VARCHAR(255) DEFAULT NULL,
         ff_api_payload LONGTEXT DEFAULT NULL,
@@ -123,6 +134,8 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         INDEX idx_estado (estado),
         INDEX idx_email (email),
         INDEX idx_cliente_usuario_id (cliente_usuario_id),
+        INDEX idx_api_discord_status (api_discord_status),
+        INDEX idx_api_discord_message_id (api_discord_message_id),
         INDEX idx_binance_pay_reference (binance_pay_reference),
         INDEX idx_binance_pay_order_no (binance_pay_order_no),
         INDEX idx_binance_pay_status (binance_pay_status)
@@ -159,6 +172,16 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         'cuenta_galeria_json' => "ALTER TABLE pedidos ADD COLUMN cuenta_galeria_json LONGTEXT NULL AFTER cuenta_entrega_texto",
         'win_points_awarded' => "ALTER TABLE pedidos ADD COLUMN win_points_awarded INT NOT NULL DEFAULT 0 AFTER cuenta_galeria_json",
         'win_points_payment_mode' => "ALTER TABLE pedidos ADD COLUMN win_points_payment_mode VARCHAR(20) NULL AFTER win_points_awarded",
+        'api_discord_command_key' => "ALTER TABLE pedidos ADD COLUMN api_discord_command_key VARCHAR(120) NULL AFTER win_points_payment_mode",
+        'api_discord_command_template' => "ALTER TABLE pedidos ADD COLUMN api_discord_command_template VARCHAR(255) NULL AFTER api_discord_command_key",
+        'api_discord_status' => "ALTER TABLE pedidos ADD COLUMN api_discord_status VARCHAR(40) NULL AFTER api_discord_command_template",
+        'api_discord_message_id' => "ALTER TABLE pedidos ADD COLUMN api_discord_message_id VARCHAR(120) NULL AFTER api_discord_status",
+        'api_discord_http_status' => "ALTER TABLE pedidos ADD COLUMN api_discord_http_status INT NULL AFTER api_discord_message_id",
+        'api_discord_response_body' => "ALTER TABLE pedidos ADD COLUMN api_discord_response_body LONGTEXT NULL AFTER api_discord_http_status",
+        'api_discord_attempts' => "ALTER TABLE pedidos ADD COLUMN api_discord_attempts INT NOT NULL DEFAULT 0 AFTER api_discord_response_body",
+        'api_discord_requires_review' => "ALTER TABLE pedidos ADD COLUMN api_discord_requires_review TINYINT(1) NOT NULL DEFAULT 0 AFTER api_discord_attempts",
+        'api_discord_last_attempt_at' => "ALTER TABLE pedidos ADD COLUMN api_discord_last_attempt_at DATETIME NULL AFTER api_discord_requires_review",
+        'api_discord_sent_at' => "ALTER TABLE pedidos ADD COLUMN api_discord_sent_at DATETIME NULL AFTER api_discord_last_attempt_at",
         'ff_api_referencia' => "ALTER TABLE pedidos ADD COLUMN ff_api_referencia VARCHAR(120) NULL AFTER cupon",
         'ff_api_mensaje' => "ALTER TABLE pedidos ADD COLUMN ff_api_mensaje VARCHAR(255) NULL AFTER ff_api_referencia",
         'ff_api_payload' => "ALTER TABLE pedidos ADD COLUMN ff_api_payload LONGTEXT NULL AFTER ff_api_mensaje",
@@ -202,6 +225,8 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         'idx_estado' => 'ALTER TABLE pedidos ADD INDEX idx_estado (estado)',
         'idx_email' => 'ALTER TABLE pedidos ADD INDEX idx_email (email)',
         'idx_cliente_usuario_id' => 'ALTER TABLE pedidos ADD INDEX idx_cliente_usuario_id (cliente_usuario_id)',
+        'idx_api_discord_status' => 'ALTER TABLE pedidos ADD INDEX idx_api_discord_status (api_discord_status)',
+        'idx_api_discord_message_id' => 'ALTER TABLE pedidos ADD INDEX idx_api_discord_message_id (api_discord_message_id)',
         'idx_binance_pay_reference' => 'ALTER TABLE pedidos ADD INDEX idx_binance_pay_reference (binance_pay_reference)',
         'idx_binance_pay_order_no' => 'ALTER TABLE pedidos ADD INDEX idx_binance_pay_order_no (binance_pay_order_no)',
         'idx_binance_pay_status' => 'ALTER TABLE pedidos ADD INDEX idx_binance_pay_status (binance_pay_status)',
@@ -731,6 +756,84 @@ function order_purchase_quantity(array $order): int {
 function order_purchase_quantity_text(int $quantity): string {
     $safeQuantity = max(1, $quantity);
     return $safeQuantity === 1 ? '1 recarga' : $safeQuantity . ' recargas';
+}
+
+function api_discord_orders_enabled(): bool {
+    return trim((string) store_config_get('api_discord', '0')) === '1';
+}
+
+function normalize_api_discord_order_status(?string $status): string {
+    $normalized = strtolower(trim((string) $status));
+    $allowed = ['ready', 'queued', 'sent', 'processing', 'confirmed', 'failed', 'review'];
+    return in_array($normalized, $allowed, true) ? $normalized : '';
+}
+
+function api_discord_order_status_default_message(string $status): string {
+    switch (normalize_api_discord_order_status($status)) {
+        case 'ready':
+            return 'La orden quedó preparada para usar el flujo de Discord cuando se implemente el envío automático.';
+        case 'queued':
+            return 'La orden quedó en cola para enviarse al canal de Discord.';
+        case 'sent':
+            return 'El comando fue enviado al canal de Discord y está pendiente de respuesta.';
+        case 'processing':
+            return 'El flujo de Discord reporta que la orden sigue en proceso.';
+        case 'confirmed':
+            return 'El flujo de Discord confirmó la orden.';
+        case 'failed':
+            return 'El flujo de Discord reportó un fallo al procesar la orden.';
+        case 'review':
+            return 'La orden requiere revisión manual en el flujo de Discord.';
+        default:
+            return '';
+    }
+}
+
+function build_api_discord_order_insert_data(mysqli $mysqli, int $gameId): array {
+    if ($gameId <= 0 || !api_discord_orders_enabled()) {
+        return [];
+    }
+
+    $commandKey = game_discord_api_command($mysqli, $gameId);
+    if ($commandKey === '') {
+        return [];
+    }
+
+    $commandDefinition = api_discord_find_command($commandKey);
+    if (!is_array($commandDefinition) || trim((string) ($commandDefinition['kind'] ?? '')) !== 'topup') {
+        return [];
+    }
+
+    return [
+        'api_discord_command_key' => $commandKey,
+        'api_discord_command_template' => trim((string) ($commandDefinition['template'] ?? '')),
+        'api_discord_status' => 'ready',
+        'api_discord_attempts' => 0,
+        'api_discord_requires_review' => 0,
+    ];
+}
+
+function order_uses_api_discord(array $order): bool {
+    return trim((string) ($order['api_discord_command_key'] ?? '')) !== '';
+}
+
+function build_api_discord_order_payload(array $order): ?array {
+    if (!order_uses_api_discord($order)) {
+        return null;
+    }
+
+    return [
+        'enabled' => true,
+        'command_key' => trim((string) ($order['api_discord_command_key'] ?? '')),
+        'command_template' => trim((string) ($order['api_discord_command_template'] ?? '')),
+        'status' => normalize_api_discord_order_status($order['api_discord_status'] ?? '') ?: 'ready',
+        'message_id' => trim((string) ($order['api_discord_message_id'] ?? '')),
+        'http_status' => isset($order['api_discord_http_status']) ? (int) $order['api_discord_http_status'] : 0,
+        'attempts' => max(0, (int) ($order['api_discord_attempts'] ?? 0)),
+        'requires_review' => (int) ($order['api_discord_requires_review'] ?? 0) === 1,
+        'last_attempt_at' => trim((string) ($order['api_discord_last_attempt_at'] ?? '')),
+        'sent_at' => trim((string) ($order['api_discord_sent_at'] ?? '')),
+    ];
 }
 
 function json_error(string $message, int $code = 400): void {
@@ -2072,15 +2175,24 @@ function build_order_status_response_payload(array $order, int $orderId): array 
     if ($providerReference === '') {
         $providerReference = trim((string) ($order['binance_pay_reference'] ?? ''));
     }
+    if ($providerReference === '' && order_uses_api_discord($order)) {
+        $providerReference = trim((string) ($order['api_discord_message_id'] ?? ''));
+    }
 
     $providerMessage = trim((string) ($order['ff_api_mensaje'] ?? ''));
     if ($providerMessage === '') {
         $providerMessage = trim((string) ($order['binance_pay_message'] ?? ''));
     }
+    if ($providerMessage === '' && order_uses_api_discord($order)) {
+        $providerMessage = api_discord_order_status_default_message((string) ($order['api_discord_status'] ?? ''));
+    }
 
     $providerStatus = trim((string) ($order['recargas_api_estado'] ?? ''));
     if ($providerStatus === '') {
         $providerStatus = trim((string) ($order['binance_pay_status'] ?? ''));
+    }
+    if ($providerStatus === '' && order_uses_api_discord($order)) {
+        $providerStatus = normalize_api_discord_order_status((string) ($order['api_discord_status'] ?? ''));
     }
 
     $paymentGateway = '';
@@ -2092,7 +2204,7 @@ function build_order_status_response_payload(array $order, int $orderId): array 
         $paymentGateway = 'binance_pay';
     }
 
-    return append_account_sale_response(array_merge([
+    $payload = array_merge([
         'ok' => true,
         'order_id' => $orderId,
         'estado' => (string) ($order['estado'] ?? ''),
@@ -2104,7 +2216,14 @@ function build_order_status_response_payload(array $order, int $orderId): array 
         'checkout_url' => trim((string) ($order['binance_pay_checkout_url'] ?? '')),
         'payment_gateway' => $paymentGateway,
         'remaining_seconds' => max(0, order_expiration_timestamp($order) - time()),
-    ], $paymentGateway === 'binance_pay' ? build_binance_checkout_money_payload($order) : []), $order);
+    ], $paymentGateway === 'binance_pay' ? build_binance_checkout_money_payload($order) : []);
+
+    $discordPayload = build_api_discord_order_payload($order);
+    if ($discordPayload !== null) {
+        $payload['discord'] = $discordPayload;
+    }
+
+    return append_account_sale_response($payload, $order);
 }
 
 function sync_local_order_with_binance_payload(mysqli $mysqli, array $order, array $payload, string $source = 'sync'): array {
@@ -3033,6 +3152,10 @@ function order_provider_flow_from_row(array $order): string {
     }
     if ($localStatus === 'cancelado') {
         return 'cancelled';
+    }
+
+    if (order_uses_api_discord($order) && $localStatus === 'pagado') {
+        return 'discord';
     }
 
     if (trim((string) ($order['recargas_api_codigo_entregado'] ?? '')) !== '') {
@@ -5617,8 +5740,9 @@ if ($action === 'create') {
     }
 
     $winPointsPaymentMode = 'money';
+    $apiDiscordOrderData = build_api_discord_order_insert_data($mysqli, (int) $game_id);
     try {
-        $order_id = pedidos_insert_order($mysqli, [
+        $order_id = pedidos_insert_order($mysqli, array_merge([
             'tenant_slug' => $tenant_slug,
             'juego_id' => $game_id,
             'paquete_id' => $package_id,
@@ -5645,7 +5769,7 @@ if ($action === 'create') {
             'win_points_awarded' => $winPointsAward,
             'win_points_payment_mode' => $winPointsPaymentMode,
             'estado' => 'pendiente',
-        ]);
+        ], $apiDiscordOrderData));
     } catch (Throwable $e) {
         error_log('TVG pedidos_insert_order failed: ' . $e->getMessage());
         json_error('No se pudo guardar el pedido', 500);
@@ -5705,10 +5829,11 @@ if ($action === 'create') {
         send_app_mail($adminEmail, "Nuevo pedido #{$order_id}", $adminHtml, null, $brandingImages);
     }
 
-    json_response([
+    $createOrderPayload = [
         'ok' => true,
         'message' => 'Pedido registrado',
         'order_id' => $order_id,
+        'provider_flow' => order_provider_flow_from_row($storedOrder),
         'total_text' => format_order_price_value((float) ($storedOrder['precio'] ?? $price), (string) ($storedOrder['moneda'] ?? $currency)),
         'estado' => 'pendiente',
         'created_at' => date(DATE_ATOM, isset($storedOrder['creado_en_ts']) ? (int) $storedOrder['creado_en_ts'] : time()),
@@ -5727,7 +5852,14 @@ if ($action === 'create') {
             'eligible' => $winPointsAllowedForOrder,
             'award' => $winPointsAward,
         ])
-    ]);
+    ];
+
+    $discordPayload = build_api_discord_order_payload($storedOrder);
+    if ($discordPayload !== null) {
+        $createOrderPayload['discord'] = $discordPayload;
+    }
+
+    json_response($createOrderPayload);
 }
 
 if ($action === 'submit_payment') {

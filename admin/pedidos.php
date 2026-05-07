@@ -10,6 +10,7 @@ if (!isset($_SESSION['auth_user']) || !in_array($adminRole, ['admin', 'empleado'
 require_once __DIR__ . '/../includes/db_connect.php';
 require_once __DIR__ . '/../includes/recargas_api.php';
 require_once __DIR__ . '/../includes/binance_pay.php';
+require_once __DIR__ . '/../includes/api_discord.php';
 require_once __DIR__ . '/../includes/header.php';
 
 $ordersApiUrl = app_path('/api/pedidos.php');
@@ -28,6 +29,27 @@ function format_money($amount): string {
 function order_meta_value($value): string {
   $text = trim((string) $value);
   return $text !== '' ? $text : '—';
+}
+
+function order_preview_text_admin(?string $text, int $limit = 180): string {
+  if (!is_string($text) || trim($text) === '') {
+    return '';
+  }
+
+  $preview = preg_replace('/\s+/u', ' ', $text) ?? $text;
+  $preview = trim($preview);
+  if ($preview === '') {
+    return '';
+  }
+
+  $wasTrimmed = function_exists('mb_strlen') ? mb_strlen($preview) > $limit : strlen($preview) > $limit;
+  if (function_exists('mb_substr')) {
+    $preview = mb_substr($preview, 0, $limit);
+  } else {
+    $preview = substr($preview, 0, $limit);
+  }
+
+  return $preview . ($wasTrimmed ? '...' : '');
 }
 
 function order_purchase_quantity_admin(array $order): int {
@@ -305,6 +327,93 @@ function order_binance_history_lines(array $order, int $limit = 3): array {
   return $lines;
 }
 
+function order_has_api_discord_tracking(array $order): bool {
+  return trim((string) ($order['api_discord_command_key'] ?? '')) !== ''
+    || trim((string) ($order['api_discord_status'] ?? '')) !== ''
+    || trim((string) ($order['api_discord_message_id'] ?? '')) !== ''
+    || (int) ($order['api_discord_attempts'] ?? 0) > 0
+    || (int) ($order['api_discord_requires_review'] ?? 0) === 1;
+}
+
+function order_discord_command_label(array $order): string {
+  $commandKey = trim((string) ($order['api_discord_command_key'] ?? ''));
+  if ($commandKey === '') {
+    return '';
+  }
+
+  $definition = api_discord_find_command($commandKey);
+  $label = trim((string) ($definition['label'] ?? ''));
+  return $label !== '' ? $label : $commandKey;
+}
+
+function order_discord_status_label(array $order): string {
+  if (!order_has_api_discord_tracking($order)) {
+    return '';
+  }
+
+  $status = trim((string) ($order['api_discord_status'] ?? ''));
+  $parts = ['Discord: ' . ($status !== '' ? $status : 'sin estado')];
+  $commandLabel = order_discord_command_label($order);
+  if ($commandLabel !== '') {
+    $parts[] = 'Comando: ' . $commandLabel;
+  }
+
+  return implode(' | ', $parts);
+}
+
+function order_discord_detail_lines(array $order): array {
+  if (!order_has_api_discord_tracking($order)) {
+    return [];
+  }
+
+  $lines = [];
+  $commandKey = trim((string) ($order['api_discord_command_key'] ?? ''));
+  if ($commandKey !== '') {
+    $lines[] = 'Clave Discord: ' . $commandKey;
+  }
+
+  $templatePreview = order_preview_text_admin($order['api_discord_command_template'] ?? null, 140);
+  if ($templatePreview !== '') {
+    $lines[] = 'Template Discord: ' . $templatePreview;
+  }
+
+  $attempts = max(0, (int) ($order['api_discord_attempts'] ?? 0));
+  $httpStatus = (int) ($order['api_discord_http_status'] ?? 0);
+  if ($attempts > 0 || $httpStatus > 0) {
+    $attemptLabel = 'Intentos Discord: ' . $attempts;
+    if ($httpStatus > 0) {
+      $attemptLabel .= ' | HTTP: ' . $httpStatus;
+    }
+    $lines[] = $attemptLabel;
+  }
+
+  $messageId = trim((string) ($order['api_discord_message_id'] ?? ''));
+  if ($messageId !== '') {
+    $lines[] = 'Message ID Discord: ' . $messageId;
+  }
+
+  $sentAt = trim((string) ($order['api_discord_sent_at'] ?? ''));
+  if ($sentAt !== '') {
+    $lines[] = 'Enviado a Discord: ' . $sentAt;
+  }
+
+  $lastAttemptAt = trim((string) ($order['api_discord_last_attempt_at'] ?? ''));
+  if ($lastAttemptAt !== '') {
+    $lines[] = 'Ultimo intento Discord: ' . $lastAttemptAt;
+  }
+
+  if ((int) ($order['api_discord_requires_review'] ?? 0) === 1) {
+    $lines[] = 'Discord requiere revision manual';
+  }
+
+  $responsePreview = order_preview_text_admin($order['api_discord_response_body'] ?? null, 200);
+  if ($responsePreview !== '') {
+    $lines[] = 'Respuesta Discord: ' . $responsePreview;
+  }
+
+  return $lines;
+}
+
 function order_can_sync_gateway(array $order): bool {
   if (($order['estado'] ?? '') === 'enviado') {
     return false;
@@ -455,6 +564,11 @@ function orders_admin_filter_parts(?string $status, string $search, string $date
       'binance_pay_order_no',
       'binance_pay_request_id',
       'binance_pay_status',
+      'api_discord_command_key',
+      'api_discord_command_template',
+      'api_discord_status',
+      'api_discord_message_id',
+      'api_discord_response_body',
       'recargas_api_pedido_id',
       'recargas_api_estado',
       'ff_api_mensaje',
@@ -575,6 +689,7 @@ function orders_admin_render_pagination(string $status, int $currentPage, int $t
 function order_search_index(array $order): string {
   $playerFieldLines = order_player_fields_lines($order);
   $accountSaleDetailLines = order_account_sale_detail_lines($order);
+  $discordDetailLines = order_discord_detail_lines($order);
   $binanceDetailLines = order_binance_detail_lines($order);
   $binanceHistoryLines = order_binance_history_lines($order);
   $parts = [
@@ -598,6 +713,8 @@ function order_search_index(array $order): string {
     $order['estado'] ?? '',
     implode(' ', $playerFieldLines),
     implode(' ', $accountSaleDetailLines),
+    order_discord_status_label($order),
+    implode(' ', $discordDetailLines),
     implode(' ', order_provider_detail_lines($order)),
     implode(' ', order_provider_history_lines($order)),
     implode(' ', $binanceDetailLines),
@@ -916,6 +1033,8 @@ foreach ($statuses as $statusKey) {
                 <?php foreach ($list as $order): ?>
                   <?php $playerFieldLines = order_player_fields_lines($order); ?>
                   <?php $accountSaleDetailLines = order_account_sale_detail_lines($order); ?>
+                  <?php $discordStatusLine = order_discord_status_label($order); ?>
+                  <?php $discordDetailLines = order_discord_detail_lines($order); ?>
                   <?php $providerStatusLine = order_provider_status_label($order); ?>
                   <?php $providerDetailLines = order_provider_detail_lines($order); ?>
                   <?php $providerHistoryLines = order_provider_history_lines($order); ?>
@@ -936,12 +1055,18 @@ foreach ($statuses as $statusKey) {
                       <?php foreach ($accountSaleDetailLines as $accountSaleDetailLine): ?>
                         <div style="color:#67e8f9; margin-top:0.2rem; font-size:0.85em;"><?= htmlspecialchars($accountSaleDetailLine) ?></div>
                       <?php endforeach; ?>
+                      <?php if ($discordStatusLine !== ''): ?>
+                        <div style="color:#f9a8d4; margin-top:0.2rem; font-size:0.85em;"><?= htmlspecialchars($discordStatusLine) ?></div>
+                      <?php endif; ?>
                       <?php if ($providerStatusLine !== ''): ?>
                         <div style="color:#fbbf24; margin-top:0.2rem; font-size:0.85em;"><?= htmlspecialchars($providerStatusLine) ?></div>
                       <?php endif; ?>
                       <?php if ($binanceStatusLine !== ''): ?>
                         <div style="color:#86efac; margin-top:0.2rem; font-size:0.85em;"><?= htmlspecialchars($binanceStatusLine) ?></div>
                       <?php endif; ?>
+                      <?php foreach ($discordDetailLines as $discordDetailLine): ?>
+                        <div style="color:#f5d0fe; margin-top:0.2rem; font-size:0.85em;"><?= htmlspecialchars($discordDetailLine) ?></div>
+                      <?php endforeach; ?>
                       <?php foreach ($providerDetailLines as $providerDetailLine): ?>
                         <div style="color:#fca5a5; margin-top:0.2rem; font-size:0.85em;"><?= htmlspecialchars($providerDetailLine) ?></div>
                       <?php endforeach; ?>
@@ -1004,6 +1129,8 @@ foreach ($statuses as $statusKey) {
             <?php foreach ($list as $order): ?>
               <?php $playerFieldLines = order_player_fields_lines($order); ?>
               <?php $accountSaleDetailLines = order_account_sale_detail_lines($order); ?>
+              <?php $discordStatusLine = order_discord_status_label($order); ?>
+              <?php $discordDetailLines = order_discord_detail_lines($order); ?>
               <?php $providerStatusLine = order_provider_status_label($order); ?>
               <?php $providerDetailLines = order_provider_detail_lines($order); ?>
               <?php $providerHistoryLines = order_provider_history_lines($order); ?>
@@ -1023,12 +1150,18 @@ foreach ($statuses as $statusKey) {
                 <?php foreach ($accountSaleDetailLines as $accountSaleDetailLine): ?>
                   <div style="color:#67e8f9; font-size:0.9em;"><?= htmlspecialchars($accountSaleDetailLine) ?></div>
                 <?php endforeach; ?>
+                <?php if ($discordStatusLine !== ''): ?>
+                  <div style="color:#f9a8d4; font-size:0.9em;"><?= htmlspecialchars($discordStatusLine) ?></div>
+                <?php endif; ?>
                 <?php if ($providerStatusLine !== ''): ?>
                   <div style="color:#fbbf24; font-size:0.9em;"><?= htmlspecialchars($providerStatusLine) ?></div>
                 <?php endif; ?>
                 <?php if ($binanceStatusLine !== ''): ?>
                   <div style="color:#86efac; font-size:0.9em;"><?= htmlspecialchars($binanceStatusLine) ?></div>
                 <?php endif; ?>
+                <?php foreach ($discordDetailLines as $discordDetailLine): ?>
+                  <div style="color:#f5d0fe; font-size:0.9em;"><?= htmlspecialchars($discordDetailLine) ?></div>
+                <?php endforeach; ?>
                 <?php foreach ($providerDetailLines as $providerDetailLine): ?>
                   <div style="color:#fca5a5; font-size:0.9em;"><?= htmlspecialchars($providerDetailLine) ?></div>
                 <?php endforeach; ?>
