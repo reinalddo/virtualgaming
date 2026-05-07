@@ -1420,9 +1420,9 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
                   <div class="col-12">
                     <div class="form-check form-switch">
                       <input class="form-check-input" type="checkbox" role="switch" id="api-discord-dry-run" name="api_discord_dry_run" value="1" <?= ($cfg['api_discord_dry_run'] ?? '1') === '1' ? 'checked' : '' ?>>
-                      <label class="form-check-label fw-semibold" for="api-discord-dry-run">Mantener modo preventivo (solo comandos seguros de precio)</label>
+                      <label class="form-check-label fw-semibold" for="api-discord-dry-run">Mantener modo preventivo (bloquea recargas reales y solo permite pruebas seguras de precio)</label>
                     </div>
-                    <div class="form-text mt-2">Déjalo activo mientras estés validando conexión y respuestas del canal. Así la tienda solo enviará comandos de consulta de precios y evitarás disparar recargas reales por accidente.</div>
+                    <div class="form-text mt-2">Dejalo activo mientras estes validando conexion y respuestas del canal. Asi la tienda solo enviara comandos de consulta de precios y evitara disparar recargas reales por accidente. Para que las recargas Discord salgan automaticas, desactivalo y vuelve a guardar.</div>
                   </div>
                   <div class="col-md-6">
                     <label class="form-label">URL del listener de Discord</label>
@@ -1603,9 +1603,11 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
                         <div class="gallery-table-wrap h-100">
                           <h4 class="h5 fw-bold text-info mb-3">5. Reglas operativas y seguridad</h4>
                           <ul class="mb-0" style="color:#d9faff; line-height:1.7;">
+                            <li><strong>Para enviar recargas automaticamente</strong> basta con webhook valido, comando/template correcto por juego y <strong>modo preventivo desactivado</strong>.</li>
                             <li><strong>confirmed</strong> mueve la orden a <strong>enviado</strong> y dispara notificaciones de éxito si la orden no había sido cerrada aún.</li>
                             <li><strong>cancelled</strong> mueve la orden a <strong>cancelado</strong> y dispara la notificación de cancelación sólo en la primera transición.</li>
                             <li><strong>review</strong> y <strong>failed</strong> dejan la orden pagada con revisión manual activa.</li>
+                            <li><strong>Para cerrar la orden automaticamente como TiendaGiftVen</strong>, el bot o relay externo debe avisar a este listener con estados como <strong>confirmed</strong>, <strong>review</strong>, <strong>failed</strong> o <strong>cancelled</strong>.</li>
                             <li>Guarda y comparte el token sólo con el relay. Si se expone, genera uno nuevo desde este panel y vuelve a desplegar el bot.</li>
                             <li>Usa siempre HTTPS y headers para el token. Evita enviarlo en el body salvo compatibilidad temporal.</li>
                             <li>Si el relay no responde, el admin puede actualizar manualmente el estado Discord desde el módulo de pedidos.</li>

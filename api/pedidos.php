@@ -1066,10 +1066,11 @@ function execute_api_discord_order_dispatch(array $order): array {
     }
 
     if (!empty($config['dry_run'])) {
+        $dryRunMessage = 'Modo preventivo activo: el comando Discord fue generado pero no se envio. Desactiva "Mantener modo preventivo" en Configuracion > API Discord para permitir recargas automaticas reales.';
         $payload = [
             'ok' => true,
             'dry_run' => true,
-            'message' => 'Modo preventivo activo: el comando Discord fue generado pero no se envió.',
+            'message' => $dryRunMessage,
             'command_key' => $commandKey,
             'command_text' => $commandText,
             'quantity' => $purchaseQuantity,
@@ -1080,7 +1081,7 @@ function execute_api_discord_order_dispatch(array $order): array {
             'provider_flow' => 'manual_review',
             'provider_status' => 'review',
             'provider_reference' => '',
-            'provider_message' => 'Modo preventivo activo: el comando Discord fue generado pero no se envió.',
+            'provider_message' => $dryRunMessage,
             'http_status' => 0,
             'message_id' => '',
             'requires_review' => 1,
