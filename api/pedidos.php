@@ -11,8 +11,8 @@ error_reporting(E_ALL);
 require_once __DIR__ . '/../includes/db_connect.php';
 require_once __DIR__ . '/../includes/currency.php';
 require_once __DIR__ . '/../includes/influencer_coupons.php';
-require_once __DIR__ . '/../includes/payment_methods.php';
 require_once __DIR__ . '/../includes/store_config.php';
+require_once __DIR__ . '/../includes/payment_methods.php';
 require_once __DIR__ . '/../includes/binance_pay.php';
 require_once __DIR__ . '/../includes/package_account_sales.php';
 require_once __DIR__ . '/../includes/recargas_api.php';
@@ -396,6 +396,106 @@ function table_exists(mysqli $mysqli, string $tableName): bool {
     $safeName = $mysqli->real_escape_string($tableName);
     $res = $mysqli->query("SHOW TABLES LIKE '{$safeName}'");
     return $res && $res->num_rows > 0;
+}
+
+function table_has_column(mysqli $mysqli, string $tableName, string $columnName): bool {
+    static $cache = [];
+
+    $cacheKey = $tableName . '.' . $columnName;
+    if (array_key_exists($cacheKey, $cache)) {
+        return $cache[$cacheKey];
+    }
+
+    if (!table_exists($mysqli, $tableName)) {
+        $cache[$cacheKey] = false;
+        return false;
+    }
+
+    try {
+        $safeTable = $mysqli->real_escape_string($tableName);
+        $safeColumn = $mysqli->real_escape_string($columnName);
+        $result = $mysqli->query("SHOW COLUMNS FROM `{$safeTable}` LIKE '{$safeColumn}'");
+        $cache[$cacheKey] = $result instanceof mysqli_result && $result->num_rows > 0;
+    } catch (Throwable $e) {
+        error_log('TVG table_has_column failed for ' . $cacheKey . ': ' . $e->getMessage());
+        $cache[$cacheKey] = false;
+    }
+
+    return $cache[$cacheKey];
+}
+
+function pedidos_existing_columns(mysqli $mysqli): array {
+    static $cache = null;
+
+    if (is_array($cache)) {
+        return $cache;
+    }
+
+    $cache = [];
+    if (!table_exists($mysqli, 'pedidos')) {
+        return $cache;
+    }
+
+    try {
+        $result = $mysqli->query('SHOW COLUMNS FROM pedidos');
+        if ($result instanceof mysqli_result) {
+            while ($row = $result->fetch_assoc()) {
+                $field = (string) ($row['Field'] ?? '');
+                if ($field !== '') {
+                    $cache[$field] = true;
+                }
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('TVG pedidos_existing_columns failed: ' . $e->getMessage());
+    }
+
+    return $cache;
+}
+
+function pedidos_sql_value(mysqli $mysqli, $value): string {
+    if ($value === null) {
+        return 'NULL';
+    }
+
+    if (is_bool($value)) {
+        return $value ? '1' : '0';
+    }
+
+    if (is_int($value)) {
+        return (string) $value;
+    }
+
+    if (is_float($value)) {
+        $normalized = rtrim(rtrim(sprintf('%.10F', $value), '0'), '.');
+        return $normalized !== '' ? $normalized : '0';
+    }
+
+    return "'" . $mysqli->real_escape_string((string) $value) . "'";
+}
+
+function pedidos_insert_order(mysqli $mysqli, array $data): int {
+    $availableColumns = pedidos_existing_columns($mysqli);
+    $columns = [];
+    $values = [];
+
+    foreach ($data as $column => $value) {
+        if (!isset($availableColumns[$column])) {
+            continue;
+        }
+
+        $columns[] = $column;
+        $values[] = pedidos_sql_value($mysqli, $value);
+    }
+
+    if (empty($columns)) {
+        throw new RuntimeException('La tabla pedidos no tiene columnas compatibles para registrar la orden.');
+    }
+
+    $sql = 'INSERT INTO pedidos (' . implode(', ', $columns) . ') VALUES (' . implode(', ', $values) . ')';
+    $mysqli->query($sql);
+
+    return (int) $mysqli->insert_id;
 }
 
 function sync_coupon_usage_counts_safe(mysqli $mysqli): void {
@@ -2451,16 +2551,29 @@ function game_uses_free_fire_api(mysqli $mysqli, int $gameId): bool {
         return false;
     }
 
+    if (!table_has_column($mysqli, 'juegos', 'api_free_fire')) {
+        return false;
+    }
+
     $stmt = $mysqli->prepare('SELECT api_free_fire FROM juegos WHERE id = ? LIMIT 1');
     if (!$stmt) {
         return false;
     }
 
-    $stmt->bind_param('i', $gameId);
-    $stmt->execute();
-    $res = $stmt->get_result();
-    $row = $res ? $res->fetch_assoc() : null;
-    $stmt->close();
+    try {
+        $stmt->bind_param('i', $gameId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+    } catch (Throwable $e) {
+        error_log('TVG game_uses_free_fire_api failed: ' . $e->getMessage());
+        try {
+            $stmt->close();
+        } catch (Throwable $closeError) {
+        }
+        return false;
+    }
 
     return !empty($row['api_free_fire']);
 }
@@ -2470,16 +2583,29 @@ function game_api_category(mysqli $mysqli, int $gameId): string {
         return '';
     }
 
+    if (!table_has_column($mysqli, 'juegos', 'categoria_api')) {
+        return '';
+    }
+
     $stmt = $mysqli->prepare('SELECT categoria_api FROM juegos WHERE id = ? LIMIT 1');
     if (!$stmt) {
         return '';
     }
 
-    $stmt->bind_param('i', $gameId);
-    $stmt->execute();
-    $res = $stmt->get_result();
-    $row = $res ? $res->fetch_assoc() : null;
-    $stmt->close();
+    try {
+        $stmt->bind_param('i', $gameId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        $row = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+    } catch (Throwable $e) {
+        error_log('TVG game_api_category failed: ' . $e->getMessage());
+        try {
+            $stmt->close();
+        } catch (Throwable $closeError) {
+        }
+        return '';
+    }
 
     return trim((string) ($row['categoria_api'] ?? ''));
 }
@@ -5249,16 +5375,52 @@ if (!$action) {
     json_error('Acción no especificada', 422);
 }
 
-ensure_pedidos_table($mysqli);
-ensure_movimientos_table($mysqli);
-ensure_juegos_api_free_fire_column($mysqli);
-ensure_juegos_categoria_api_column($mysqli);
-ensure_juegos_categoria_api_discord_column($mysqli);
-ensure_juego_paquetes_monto_ff_column($mysqli);
-ensure_juego_paquetes_paquete_api_column($mysqli);
-influencer_coupon_ensure_sales_table_mysqli($mysqli);
+try {
+    ensure_pedidos_table($mysqli);
+} catch (Throwable $e) {
+    error_log('TVG ensure_pedidos_table skipped: ' . $e->getMessage());
+}
+try {
+    ensure_movimientos_table($mysqli);
+} catch (Throwable $e) {
+    error_log('TVG ensure_movimientos_table skipped: ' . $e->getMessage());
+}
+try {
+    ensure_juegos_api_free_fire_column($mysqli);
+} catch (Throwable $e) {
+    error_log('TVG ensure_juegos_api_free_fire_column skipped: ' . $e->getMessage());
+}
+try {
+    ensure_juegos_categoria_api_column($mysqli);
+} catch (Throwable $e) {
+    error_log('TVG ensure_juegos_categoria_api_column skipped: ' . $e->getMessage());
+}
+try {
+    ensure_juegos_categoria_api_discord_column($mysqli);
+} catch (Throwable $e) {
+    error_log('TVG ensure_juegos_categoria_api_discord_column skipped: ' . $e->getMessage());
+}
+try {
+    ensure_juego_paquetes_monto_ff_column($mysqli);
+} catch (Throwable $e) {
+    error_log('TVG ensure_juego_paquetes_monto_ff_column skipped: ' . $e->getMessage());
+}
+try {
+    ensure_juego_paquetes_paquete_api_column($mysqli);
+} catch (Throwable $e) {
+    error_log('TVG ensure_juego_paquetes_paquete_api_column skipped: ' . $e->getMessage());
+}
+try {
+    influencer_coupon_ensure_sales_table_mysqli($mysqli);
+} catch (Throwable $e) {
+    error_log('TVG influencer_coupon_ensure_sales_table_mysqli skipped: ' . $e->getMessage());
+}
 sync_coupon_usage_counts_safe($mysqli);
-win_points_ensure_schema();
+try {
+    win_points_ensure_schema();
+} catch (Throwable $e) {
+    error_log('TVG win_points_ensure_schema skipped: ' . $e->getMessage());
+}
 
 if ($action === 'create') {
     $game_id = isset($_POST['game_id']) ? intval($_POST['game_id']) : null;
@@ -5454,17 +5616,40 @@ if ($action === 'create') {
         $price = payment_difference_normalize_amount($priceBeforeDifferenceCredit - $paymentDifferenceCreditApplied);
     }
 
-    $stmt = $mysqli->prepare("INSERT INTO pedidos (tenant_slug, juego_id, paquete_id, juego_nombre, paquete_nombre, paquete_cantidad, monto_ff, paquete_api, moneda, precio, precio_original, diferencia_pago_credito_aplicado, diferencia_pago_credito_origen_pedido_id, user_identifier, player_fields_json, email, cliente_usuario_id, cupon, cantidad_compra, cantidad, vender_cuenta, cuenta_entrega_texto, cuenta_galeria_json, win_points_awarded, win_points_payment_mode, estado) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'pendiente')");
-    if (!$stmt) {
-        json_error('No se pudo preparar el pedido');
-    }
     $winPointsPaymentMode = 'money';
-    $stmt->bind_param('siissssisdddisssisiiissis', $tenant_slug, $game_id, $package_id, $game_name, $pack_name, $pack_amount_text, $monto_ff, $paquete_api, $currency, $price, $priceBeforeDifferenceCredit, $paymentDifferenceCreditApplied, $paymentDifferenceCreditSourceOrderId, $user_identifier, $player_fields_json, $email, $cliente_usuario_id, $cupon, $purchaseQuantity, $pack_amount_num, $selectedPackageIsAccountSale, $accountSaleTextSnapshot, $accountSaleGalleryJson, $winPointsAward, $winPointsPaymentMode);
-    if (!$stmt->execute()) {
-        json_error('No se pudo guardar el pedido');
+    try {
+        $order_id = pedidos_insert_order($mysqli, [
+            'tenant_slug' => $tenant_slug,
+            'juego_id' => $game_id,
+            'paquete_id' => $package_id,
+            'juego_nombre' => $game_name,
+            'paquete_nombre' => $pack_name,
+            'paquete_cantidad' => $pack_amount_text,
+            'monto_ff' => $monto_ff,
+            'paquete_api' => $paquete_api,
+            'moneda' => $currency,
+            'precio' => $price,
+            'precio_original' => $priceBeforeDifferenceCredit,
+            'diferencia_pago_credito_aplicado' => $paymentDifferenceCreditApplied,
+            'diferencia_pago_credito_origen_pedido_id' => $paymentDifferenceCreditSourceOrderId > 0 ? $paymentDifferenceCreditSourceOrderId : null,
+            'user_identifier' => $user_identifier,
+            'player_fields_json' => $player_fields_json,
+            'email' => $email,
+            'cliente_usuario_id' => $cliente_usuario_id,
+            'cupon' => $cupon,
+            'cantidad_compra' => $purchaseQuantity,
+            'cantidad' => $pack_amount_num,
+            'vender_cuenta' => $selectedPackageIsAccountSale ? 1 : 0,
+            'cuenta_entrega_texto' => $accountSaleTextSnapshot,
+            'cuenta_galeria_json' => $accountSaleGalleryJson,
+            'win_points_awarded' => $winPointsAward,
+            'win_points_payment_mode' => $winPointsPaymentMode,
+            'estado' => 'pendiente',
+        ]);
+    } catch (Throwable $e) {
+        error_log('TVG pedidos_insert_order failed: ' . $e->getMessage());
+        json_error('No se pudo guardar el pedido', 500);
     }
-    $order_id = $mysqli->insert_id;
-    $stmt->close();
     if ($paymentDifferenceCreditApplied > 0) {
         payment_difference_consume_credit();
     }
