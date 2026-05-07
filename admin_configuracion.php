@@ -233,6 +233,8 @@ if (!$apiDiscordSelectedProbe && count($apiDiscordPriceCommands) > 0) {
   $apiDiscordSelectedProbeKey = (string) ($apiDiscordSelectedProbe['key'] ?? '');
 }
 $apiDiscordSelectedProbeSample = $apiDiscordSelectedProbe ? api_discord_sample_command_text($apiDiscordSelectedProbe) : '';
+$apiDiscordListenerToken = api_discord_normalize_listener_token((string) ($cfg['api_discord_listener_token'] ?? ''));
+$apiDiscordListenerUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=discord_listener';
 ?>
 <style>
   .neon-card {
@@ -1415,6 +1417,16 @@ $apiDiscordSelectedProbeSample = $apiDiscordSelectedProbe ? api_discord_sample_c
                       <label class="form-check-label fw-semibold" for="api-discord-dry-run">Mantener modo preventivo (solo comandos seguros de precio)</label>
                     </div>
                     <div class="form-text mt-2">Déjalo activo mientras estés validando conexión y respuestas del canal. Así la tienda solo enviará comandos de consulta de precios y evitarás disparar recargas reales por accidente.</div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">URL del listener de Discord</label>
+                    <input type="text" class="form-control" value="<?= htmlspecialchars($apiDiscordListenerUrl, ENT_QUOTES, 'UTF-8') ?>" readonly>
+                    <div class="form-text mt-2">Este endpoint queda listo para que un relay o bot externo envíe correlaciones de Discord usando el token secreto.</div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Token secreto del listener</label>
+                    <input type="text" name="api_discord_listener_token" value="<?= htmlspecialchars($apiDiscordListenerToken, ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="Se genera automáticamente al guardar si está vacío">
+                    <div class="form-text mt-2">Compártelo solo con el servicio que vaya a reportar confirmaciones del canal. Si lo dejas vacío al guardar por primera vez, el sistema generará uno automáticamente.</div>
                   </div>
                 </div>
               </div>

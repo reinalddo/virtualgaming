@@ -764,7 +764,7 @@ function api_discord_orders_enabled(): bool {
 
 function normalize_api_discord_order_status(?string $status): string {
     $normalized = strtolower(trim((string) $status));
-    $allowed = ['ready', 'queued', 'sent', 'processing', 'confirmed', 'failed', 'review'];
+    $allowed = ['ready', 'queued', 'sent', 'processing', 'confirmed', 'failed', 'review', 'cancelled'];
     return in_array($normalized, $allowed, true) ? $normalized : '';
 }
 
@@ -784,6 +784,8 @@ function api_discord_order_status_default_message(string $status): string {
             return 'El flujo de Discord reportó un fallo al procesar la orden.';
         case 'review':
             return 'La orden requiere revisión manual en el flujo de Discord.';
+        case 'cancelled':
+            return 'El flujo de Discord reportó que la orden fue cancelada.';
         default:
             return '';
     }
@@ -1222,6 +1224,170 @@ function persist_api_discord_dispatch_result(mysqli $mysqli, array $order, array
     $stmt->close();
 
     return $ok;
+}
+
+function api_discord_listener_payload_from_request(): array {
+    $payload = [];
+    $rawInput = file_get_contents('php://input');
+    if (is_string($rawInput) && trim($rawInput) !== '') {
+        $decoded = json_decode($rawInput, true);
+        if (is_array($decoded)) {
+            $payload = $decoded;
+        }
+    }
+
+    if (!empty($_POST)) {
+        $payload = array_merge($payload, $_POST);
+    }
+
+    return is_array($payload) ? $payload : [];
+}
+
+function api_discord_listener_token_from_request(array $payload): string {
+    $authorization = trim((string) ($_SERVER['HTTP_AUTHORIZATION'] ?? ''));
+    $bearerToken = '';
+    if ($authorization !== '' && preg_match('/^Bearer\s+(.+)$/i', $authorization, $matches)) {
+        $bearerToken = trim((string) ($matches[1] ?? ''));
+    }
+
+    $candidates = [
+        trim((string) ($_SERVER['HTTP_X_DISCORD_LISTENER_TOKEN'] ?? '')),
+        trim((string) ($_SERVER['HTTP_X_API_DISCORD_TOKEN'] ?? '')),
+        $bearerToken,
+        trim((string) ($payload['listener_token'] ?? '')),
+        trim((string) ($payload['token'] ?? '')),
+    ];
+
+    foreach ($candidates as $candidate) {
+        $normalized = api_discord_normalize_listener_token($candidate);
+        if ($normalized !== '') {
+            return $normalized;
+        }
+    }
+
+    return '';
+}
+
+function api_discord_listener_bool($value): int {
+    if (is_bool($value)) {
+        return $value ? 1 : 0;
+    }
+
+    $normalized = strtolower(trim((string) $value));
+    return in_array($normalized, ['1', 'true', 'yes', 'si', 'on'], true) ? 1 : 0;
+}
+
+function resolve_api_discord_listener_order(mysqli $mysqli, int $orderId, string $messageId): ?array {
+    if ($orderId > 0) {
+        $order = fetch_order_by_id($mysqli, $orderId);
+        return is_array($order) && order_uses_api_discord($order) ? $order : null;
+    }
+
+    if ($messageId === '') {
+        return null;
+    }
+
+    $stmt = $mysqli->prepare("SELECT * FROM pedidos WHERE api_discord_message_id = ? ORDER BY id DESC LIMIT 1");
+    if (!$stmt) {
+        return null;
+    }
+
+    $stmt->bind_param('s', $messageId);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        return null;
+    }
+
+    $result = $stmt->get_result();
+    $order = $result ? $result->fetch_assoc() : null;
+    $stmt->close();
+
+    return is_array($order) && order_uses_api_discord($order) ? $order : null;
+}
+
+function api_discord_listener_resolve_local_status(string $discordStatus, string $requestedStatus, array $order): string {
+    $normalizedRequested = strtolower(trim($requestedStatus));
+    if (in_array($normalizedRequested, ['pendiente', 'pagado', 'enviado', 'cancelado'], true)) {
+        return $normalizedRequested;
+    }
+
+    switch ($discordStatus) {
+        case 'confirmed':
+            return 'enviado';
+        case 'cancelled':
+            return 'cancelado';
+        default:
+            $current = strtolower(trim((string) ($order['estado'] ?? 'pagado')));
+            return in_array($current, ['pendiente', 'pagado', 'enviado', 'cancelado'], true) ? $current : 'pagado';
+    }
+}
+
+function persist_api_discord_listener_update(mysqli $mysqli, array $order, array $payload): array {
+    $orderId = (int) ($order['id'] ?? 0);
+    if ($orderId <= 0) {
+        throw new RuntimeException('Pedido inválido para la correlación de Discord.');
+    }
+
+    $discordStatus = normalize_api_discord_order_status((string) ($payload['status'] ?? $payload['api_discord_status'] ?? ''));
+    if ($discordStatus === '') {
+        throw new RuntimeException('El listener de Discord requiere un estado válido.');
+    }
+
+    $currentMessageId = trim((string) ($order['api_discord_message_id'] ?? ''));
+    $messageId = trim((string) ($payload['source_message_id'] ?? $payload['message_id'] ?? $payload['discord_message_id'] ?? ''));
+    if ($messageId === '') {
+        $messageId = $currentMessageId;
+    }
+
+    $providerMessage = trim((string) ($payload['provider_message'] ?? $payload['message'] ?? $payload['detail'] ?? ''));
+    if ($providerMessage === '') {
+        $providerMessage = api_discord_order_status_default_message($discordStatus);
+    }
+
+    $httpStatus = (int) ($payload['http_status'] ?? $payload['status_code'] ?? ($order['api_discord_http_status'] ?? 0));
+    $requiresReview = array_key_exists('requires_review', $payload)
+        ? api_discord_listener_bool($payload['requires_review'])
+        : (in_array($discordStatus, ['failed', 'review'], true) ? 1 : 0);
+    $targetLocalStatus = api_discord_listener_resolve_local_status($discordStatus, (string) ($payload['local_status'] ?? ''), $order);
+    $sentAt = trim((string) ($order['api_discord_sent_at'] ?? ''));
+    if ($sentAt === '' && in_array($discordStatus, ['sent', 'processing', 'confirmed'], true)) {
+        $sentAt = date('Y-m-d H:i:s');
+    }
+
+    $listenerSnapshot = [
+        'source' => 'discord_listener',
+        'received_at' => date('Y-m-d H:i:s'),
+        'status' => $discordStatus,
+        'message' => $providerMessage,
+        'payload' => $payload,
+    ];
+    $previousResponse = trim((string) ($order['api_discord_response_body'] ?? ''));
+    if ($previousResponse !== '') {
+        $decodedPrevious = json_decode($previousResponse, true);
+        $listenerSnapshot['previous'] = is_array($decodedPrevious) ? $decodedPrevious : $previousResponse;
+    }
+    $responseBody = json_encode($listenerSnapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}';
+
+    $lastAttemptAt = date('Y-m-d H:i:s');
+    $stmt = $mysqli->prepare("UPDATE pedidos SET estado = ?, api_discord_status = ?, api_discord_message_id = ?, api_discord_http_status = ?, api_discord_response_body = ?, api_discord_requires_review = ?, api_discord_last_attempt_at = ?, api_discord_sent_at = ?, ff_api_mensaje = ? WHERE id = ? LIMIT 1");
+    if (!$stmt) {
+        throw new RuntimeException('No se pudo preparar la actualización del listener de Discord.');
+    }
+
+    $stmt->bind_param('sssisssssi', $targetLocalStatus, $discordStatus, $messageId, $httpStatus, $responseBody, $requiresReview, $lastAttemptAt, $sentAt, $providerMessage, $orderId);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        throw new RuntimeException('No se pudo guardar la correlación de Discord en la orden.');
+    }
+    $stmt->close();
+
+    return [
+        'local_status' => $targetLocalStatus,
+        'provider_status' => $discordStatus,
+        'provider_message' => $providerMessage,
+        'provider_reference' => $messageId,
+        'requires_review' => $requiresReview,
+    ];
 }
 
 function json_error(string $message, int $code = 400): void {
@@ -3561,7 +3727,21 @@ function order_provider_flow_from_row(array $order): string {
     }
 
     if (order_uses_api_discord($order) && $localStatus === 'pagado') {
-        return 'discord';
+        $discordStatus = normalize_api_discord_order_status((string) ($order['api_discord_status'] ?? ''));
+        if ($discordStatus === 'processing' || $discordStatus === 'queued') {
+            return 'tracking';
+        }
+        if ($discordStatus === 'sent') {
+            return 'accepted';
+        }
+        if (in_array($discordStatus, ['failed', 'review', 'ready'], true)) {
+            return 'manual_review';
+        }
+        if ($discordStatus === 'cancelled') {
+            return 'cancelled';
+        }
+
+        return 'accepted';
     }
 
     if (trim((string) ($order['recargas_api_codigo_entregado'] ?? '')) !== '') {
@@ -7544,6 +7724,60 @@ if ($action === 'cancel_order') {
         'estado' => 'cancelado',
         'order_id' => $orderId,
     ]);
+}
+
+if ($action === 'discord_listener') {
+    if (strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST') {
+        json_error('Método no permitido.', 405);
+    }
+
+    $payload = api_discord_listener_payload_from_request();
+    $configuredListenerToken = api_discord_normalize_listener_token((string) store_config_get('api_discord_listener_token', ''));
+    if ($configuredListenerToken === '') {
+        json_error('El listener de API Discord no está configurado en esta tienda.', 409);
+    }
+
+    $providedToken = api_discord_listener_token_from_request($payload);
+    if ($providedToken === '' || !hash_equals($configuredListenerToken, $providedToken)) {
+        json_error('Token de listener inválido.', 403);
+    }
+
+    $orderId = (int) ($payload['order_id'] ?? 0);
+    $messageId = trim((string) ($payload['source_message_id'] ?? $payload['message_id'] ?? $payload['discord_message_id'] ?? ''));
+    $order = resolve_api_discord_listener_order($mysqli, $orderId, $messageId);
+    if (!$order) {
+        json_error('No se encontró una orden API Discord que coincida con la correlación recibida.', 404);
+    }
+
+    $previousLocalStatus = strtolower(trim((string) ($order['estado'] ?? '')));
+
+    try {
+        $listenerResult = persist_api_discord_listener_update($mysqli, $order, $payload);
+    } catch (Throwable $e) {
+        json_error($e->getMessage(), 500);
+    }
+
+    $updatedOrder = fetch_order_by_id($mysqli, (int) ($order['id'] ?? 0)) ?: $order;
+    $updatedLocalStatus = strtolower(trim((string) ($updatedOrder['estado'] ?? ($listenerResult['local_status'] ?? ''))));
+    $providerReference = trim((string) ($listenerResult['provider_reference'] ?? ''));
+    $providerMessage = trim((string) ($listenerResult['provider_message'] ?? ''));
+
+    if ($updatedLocalStatus === 'enviado' && $previousLocalStatus !== 'enviado') {
+        $paymentMethodName = trim((string) ($updatedOrder['metodo_pago'] ?? 'Pago'));
+        $referenceNumber = trim((string) ($updatedOrder['numero_referencia'] ?? ''));
+        $phone = trim((string) ($updatedOrder['telefono_contacto'] ?? ''));
+        win_points_handle_order_status_change($mysqli, (int) ($updatedOrder['id'] ?? 0), 'enviado');
+        recharge_notifications_emit_for_order($mysqli, $updatedOrder);
+        notify_free_fire_recharge_success($mysqli, $updatedOrder, $paymentMethodName, $referenceNumber, $phone, $providerReference, $providerMessage);
+    } elseif ($updatedLocalStatus === 'cancelado' && $previousLocalStatus !== 'cancelado') {
+        recharge_notifications_emit_for_order($mysqli, $updatedOrder);
+        notify_catalog_purchase_cancelled($mysqli, $updatedOrder, $providerReference, $providerMessage, null);
+    }
+
+    json_response(array_merge([
+        'ok' => true,
+        'message' => 'Correlación de Discord aplicada correctamente.',
+    ], build_order_status_response_payload($updatedOrder, (int) ($updatedOrder['id'] ?? 0))));
 }
 
 if ($action === 'order_status') {

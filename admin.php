@@ -2189,6 +2189,11 @@ switch ($seccion) {
                 $avatarUrl = trim((string) ($_POST['api_discord_avatar_url'] ?? ''));
                 $dryRun = isset($_POST['api_discord_dry_run']) ? '1' : '0';
                 $probeCommandKey = trim((string) ($_POST['api_discord_probe_command'] ?? 'mobile_legends_price'));
+                $existingListenerToken = api_discord_normalize_listener_token((string) store_config_get('api_discord_listener_token', ''));
+                $listenerToken = api_discord_normalize_listener_token((string) ($_POST['api_discord_listener_token'] ?? $existingListenerToken));
+                if ($listenerToken === '') {
+                    $listenerToken = $existingListenerToken !== '' ? $existingListenerToken : api_discord_generate_listener_token();
+                }
 
                 if ($webhookUrl !== '' && !api_discord_validate_webhook_url($webhookUrl)) {
                     admin_set_flash('error', 'El webhook de Discord no tiene un formato válido. Debe ser una URL https://discord.com/api/webhooks/...');
@@ -2208,6 +2213,7 @@ switch ($seccion) {
                 store_config_upsert('api_discord_avatar_url', $avatarUrl);
                 store_config_upsert('api_discord_dry_run', $dryRun);
                 store_config_upsert('api_discord_probe_command', $probeCommandKey);
+                store_config_upsert('api_discord_listener_token', $listenerToken);
 
                 if (isset($_POST['api_discord_probe_submit']) && (string) $_POST['api_discord_probe_submit'] === '1') {
                     $probe = api_discord_run_probe($probeCommandKey);

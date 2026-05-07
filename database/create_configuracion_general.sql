@@ -43,6 +43,7 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('api_discord_avatar_url', '', 'Avatar opcional usado por el webhook de API Discord al publicar mensajes de prueba o sondeo.'),
 ('api_discord_dry_run', '1', 'Activa el modo preventivo para usar primero comandos seguros de precio y pruebas antes de habilitar comandos de recarga reales.'),
 ('api_discord_probe_command', 'mobile_legends_price', 'Clave del comando seguro por defecto usada para la prueba webhook de API Discord desde el panel administrativo.'),
+('api_discord_listener_token', '', 'Token secreto usado por el listener de API Discord para aceptar correlaciones externas de mensajes y actualizar el estado de las ordenes.'),
 ('recarga_notificaciones_activas', '1', 'Activa o desactiva las notificaciones flotantes de recargas en el sitio público'),
 ('recarga_notificaciones_logo', '', 'Ruta del logo usado en la notificación flotante de recargas'),
 ('facebook', '', 'URL de Facebook de la tienda'),

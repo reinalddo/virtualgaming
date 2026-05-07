@@ -208,6 +208,32 @@ function api_discord_normalize_username(string $username): string {
     return $normalized;
 }
 
+function api_discord_normalize_listener_token(string $token): string {
+    $normalized = trim($token);
+    if ($normalized === '') {
+        return '';
+    }
+
+    $normalized = preg_replace('/[^A-Za-z0-9_\-]+/', '', $normalized) ?? '';
+    if ($normalized === '') {
+        return '';
+    }
+
+    if (strlen($normalized) < 12) {
+        return '';
+    }
+
+    return substr($normalized, 0, 80);
+}
+
+function api_discord_generate_listener_token(): string {
+    try {
+        return bin2hex(random_bytes(16));
+    } catch (Throwable $e) {
+        return substr(sha1(uniqid('api_discord_listener_', true)), 0, 32);
+    }
+}
+
 function api_discord_config(): array {
     return [
         'enabled' => trim((string) store_config_get('api_discord', '0')) === '1',
@@ -217,6 +243,7 @@ function api_discord_config(): array {
         'avatar_url' => trim((string) store_config_get('api_discord_avatar_url', '')),
         'dry_run' => trim((string) store_config_get('api_discord_dry_run', '1')) === '1',
         'probe_command' => trim((string) store_config_get('api_discord_probe_command', 'mobile_legends_price')),
+        'listener_token' => api_discord_normalize_listener_token((string) store_config_get('api_discord_listener_token', '')),
     ];
 }
 
