@@ -4,6 +4,7 @@
 require_once '../includes/db_connect.php';
 require_once '../includes/tenant.php';
 require_once '../includes/recargas_api.php';
+require_once '../includes/api_discord.php';
 require_once '../includes/store_config.php';
 require_once '../includes/package_features.php';
 require_once '../includes/package_account_sales.php';
@@ -25,6 +26,16 @@ function admin_packages_json_response(array $payload, int $statusCode = 200): vo
     http_response_code($statusCode);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+function admin_packages_redirect(string $baseUrl, array $params = []): void {
+    $target = $baseUrl;
+    if ($params !== []) {
+        $target .= '?' . http_build_query($params);
+    }
+
+    header('Location: ' . $target);
     exit;
 }
 
@@ -186,6 +197,61 @@ function ensure_juego_paquetes_orden_column(mysqli $mysqli): void {
     }
 }
 
+function ensure_juegos_api_discord_catalog_columns(mysqli $mysqli): void {
+    $columns = [
+        'api_discord_catalog_json' => "ALTER TABLE juegos ADD COLUMN api_discord_catalog_json LONGTEXT NULL AFTER categoria_api_discord",
+        'api_discord_catalog_raw' => "ALTER TABLE juegos ADD COLUMN api_discord_catalog_raw LONGTEXT NULL AFTER api_discord_catalog_json",
+        'api_discord_catalog_status' => "ALTER TABLE juegos ADD COLUMN api_discord_catalog_status VARCHAR(40) NULL AFTER api_discord_catalog_raw",
+        'api_discord_catalog_message_id' => "ALTER TABLE juegos ADD COLUMN api_discord_catalog_message_id VARCHAR(120) NULL AFTER api_discord_catalog_status",
+        'api_discord_catalog_updated_at' => "ALTER TABLE juegos ADD COLUMN api_discord_catalog_updated_at DATETIME NULL AFTER api_discord_catalog_message_id",
+    ];
+
+    foreach ($columns as $columnName => $statement) {
+        $result = $mysqli->query("SHOW COLUMNS FROM juegos LIKE '" . $mysqli->real_escape_string($columnName) . "'");
+        if (!($result instanceof mysqli_result) || $result->num_rows === 0) {
+            $mysqli->query($statement);
+        }
+    }
+}
+
+function admin_package_save_discord_catalog(mysqli $mysqli, int $gameId, array $items, string $rawText, string $status = 'ready'): bool {
+    if ($gameId <= 0 || $items === []) {
+        return false;
+    }
+
+    $catalogJson = json_encode(api_discord_normalize_catalog_items($items), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (!is_string($catalogJson) || $catalogJson === '') {
+        return false;
+    }
+
+    $normalizedRawText = trim($rawText);
+    $normalizedStatus = trim($status) !== '' ? trim($status) : 'ready';
+    $stmt = $mysqli->prepare("UPDATE juegos SET api_discord_catalog_json = ?, api_discord_catalog_raw = ?, api_discord_catalog_status = ?, api_discord_catalog_updated_at = NOW() WHERE id = ? LIMIT 1");
+    if (!$stmt) {
+        return false;
+    }
+
+    $stmt->bind_param('sssi', $catalogJson, $normalizedRawText, $normalizedStatus, $gameId);
+    $ok = $stmt->execute();
+    $stmt->close();
+
+    return $ok;
+}
+
+function admin_package_format_catalog_quantity(array $item): string {
+    $quantity = trim((string) ($item['quantity'] ?? ''));
+    if ($quantity !== '') {
+        return $quantity;
+    }
+
+    $name = trim((string) ($item['name'] ?? ''));
+    if (preg_match('/^([0-9]+(?:\s*\+\s*[0-9]+)?)/u', $name, $matches) === 1) {
+        return trim((string) ($matches[1] ?? ''));
+    }
+
+    return '-';
+}
+
 function admin_package_next_order(mysqli $mysqli, int $juegoId): int {
     $stmt = $mysqli->prepare("SELECT COALESCE(MAX(orden), 0) + 1 AS next_order FROM juego_paquetes WHERE juego_id = ?");
     $stmt->bind_param('i', $juegoId);
@@ -215,6 +281,26 @@ function free_fire_api_amount_label(string $amount): string {
 
     $option = $options[$amount];
     return $amount . ' - ' . $option['suggested_name'] . ' - ' . $option['diamonds'];
+}
+
+function admin_package_find_api_discord_price_command(string $topupCommandKey): ?array {
+    $topupCommand = api_discord_find_command($topupCommandKey);
+    if (!$topupCommand || trim((string) ($topupCommand['kind'] ?? '')) !== 'topup') {
+        return null;
+    }
+
+    $gameKey = trim((string) ($topupCommand['game'] ?? ''));
+    if ($gameKey === '') {
+        return null;
+    }
+
+    foreach (api_discord_price_commands() as $priceCommand) {
+        if (trim((string) ($priceCommand['game'] ?? '')) === $gameKey) {
+            return $priceCommand;
+        }
+    }
+
+    return null;
 }
 
 function admin_package_feature_icon_options_html(array $iconOptions, string $selected = 'sparkles'): string {
@@ -365,6 +451,7 @@ ensure_juego_paquetes_monto_ff_column($mysqli);
 ensure_juego_paquetes_activo_column($mysqli);
 ensure_juego_paquetes_paquete_api_column($mysqli);
 ensure_juego_paquetes_orden_column($mysqli);
+ensure_juegos_api_discord_catalog_columns($mysqli);
 package_account_sales_ensure_schema($mysqli);
 package_features_ensure_schema($mysqli);
 win_points_ensure_schema();
@@ -392,13 +479,33 @@ $res_juego->execute();
 $juego = $res_juego->get_result()->fetch_assoc();
 $freeFireApiOptions = free_fire_api_amount_options();
 $juegoCategoriaApi = trim((string) ($juego['categoria_api'] ?? ''));
+$juegoCategoriaApiDiscord = trim((string) ($juego['categoria_api_discord'] ?? ''));
 $usesApiCatalog = $juegoCategoriaApi !== '';
+$usesDiscordCatalog = !$usesApiCatalog && $juegoCategoriaApiDiscord !== '' && trim((string) store_config_get('api_discord', '0')) === '1';
 $usesLegacyFreeFire = !$usesApiCatalog && !empty($juego['api_free_fire']);
 $winPointsName = win_points_program_name();
 $defaultWinPointsReward = 0;
 $apiProducts = [];
 $apiProductsById = [];
 $apiProductsError = null;
+$discordTopupCommand = $usesDiscordCatalog ? api_discord_find_command($juegoCategoriaApiDiscord) : null;
+$discordPriceCommand = $usesDiscordCatalog ? admin_package_find_api_discord_price_command($juegoCategoriaApiDiscord) : null;
+$discordTopupCommandText = $discordTopupCommand ? api_discord_sample_command_text($discordTopupCommand) : '';
+$discordPriceCommandText = $discordPriceCommand ? api_discord_sample_command_text($discordPriceCommand) : '';
+$discordCatalogStatus = strtolower(trim((string) ($juego['api_discord_catalog_status'] ?? '')));
+$discordCatalogRaw = trim((string) ($juego['api_discord_catalog_raw'] ?? ''));
+$discordCatalogMessageId = trim((string) ($juego['api_discord_catalog_message_id'] ?? ''));
+$discordCatalogUpdatedAt = trim((string) ($juego['api_discord_catalog_updated_at'] ?? ''));
+$discordCatalogJson = trim((string) ($juego['api_discord_catalog_json'] ?? ''));
+$discordCatalogItems = [];
+if ($discordCatalogJson !== '') {
+    $decodedDiscordCatalog = json_decode($discordCatalogJson, true);
+    if (is_array($decodedDiscordCatalog)) {
+        $discordCatalogItems = api_discord_normalize_catalog_items($decodedDiscordCatalog);
+    }
+}
+$discordCatalogNotice = trim((string) ($_GET['discord_catalog_notice'] ?? ''));
+$discordCatalogError = trim((string) ($_GET['discord_catalog_error'] ?? ''));
 
 if ($usesApiCatalog) {
     try {
@@ -409,6 +516,77 @@ if ($usesApiCatalog) {
     } catch (Throwable $e) {
         $apiProductsError = $e->getMessage();
     }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['sync_discord_catalog'])) {
+    if (!$usesDiscordCatalog) {
+        admin_packages_redirect($adminPackageBaseUrl . '/' . $juego_id, ['discord_catalog_error' => 'Este juego no usa el flujo de precios por API Discord.']);
+    }
+
+    if (!$discordPriceCommand || $discordPriceCommandText === '') {
+        admin_packages_redirect($adminPackageBaseUrl . '/' . $juego_id, ['discord_catalog_error' => 'No existe un comando de precios vinculado para este juego Discord.']);
+    }
+
+    $discordConfig = api_discord_config();
+    if (!$discordConfig['enabled']) {
+        admin_packages_redirect($adminPackageBaseUrl . '/' . $juego_id, ['discord_catalog_error' => 'API Discord está desactivada en la configuración general.']);
+    }
+
+    if ($discordConfig['webhook_url'] === '' || !api_discord_validate_webhook_url($discordConfig['webhook_url'])) {
+        admin_packages_redirect($adminPackageBaseUrl . '/' . $juego_id, ['discord_catalog_error' => 'El webhook de API Discord no está configurado correctamente.']);
+    }
+
+    $response = api_discord_send_webhook_message($discordConfig['webhook_url'], $discordPriceCommandText, [
+        'timeout' => $discordConfig['timeout'],
+        'username' => $discordConfig['username'],
+        'avatar_url' => $discordConfig['avatar_url'],
+        'wait' => true,
+    ]);
+
+    if (empty($response['ok'])) {
+        $detail = trim((string) ($response['error'] ?? $response['body'] ?? ''));
+        if ($detail === '') {
+            $detail = 'Sin detalle adicional.';
+        }
+        admin_packages_redirect($adminPackageBaseUrl . '/' . $juego_id, ['discord_catalog_error' => 'No se pudo consultar el comando de precios. ' . $detail]);
+    }
+
+    $messageId = api_discord_extract_message_id($response);
+    if ($messageId === '') {
+        admin_packages_redirect($adminPackageBaseUrl . '/' . $juego_id, ['discord_catalog_error' => 'Discord aceptó el comando, pero no devolvió un message_id para correlacionar la respuesta.']);
+    }
+
+    $stmtCatalog = $mysqli->prepare("UPDATE juegos SET api_discord_catalog_status = ?, api_discord_catalog_message_id = ?, api_discord_catalog_updated_at = NOW() WHERE id = ? LIMIT 1");
+    if ($stmtCatalog) {
+        $pendingStatus = 'pending';
+        $stmtCatalog->bind_param('ssi', $pendingStatus, $messageId, $juego_id);
+        $stmtCatalog->execute();
+        $stmtCatalog->close();
+    }
+
+    admin_packages_redirect($adminPackageBaseUrl . '/' . $juego_id, ['discord_catalog_notice' => 'Se envió ' . $discordPriceCommandText . '. Cuando el relay devuelva la respuesta al listener de catálogo, los precios quedarán disponibles aquí.']);
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['import_discord_catalog_text'])) {
+    if (!$usesDiscordCatalog) {
+        admin_packages_redirect($adminPackageBaseUrl . '/' . $juego_id, ['discord_catalog_error' => 'Este juego no usa catálogo Discord.']);
+    }
+
+    $catalogText = trim((string) ($_POST['discord_catalog_text'] ?? ''));
+    if ($catalogText === '') {
+        admin_packages_redirect($adminPackageBaseUrl . '/' . $juego_id, ['discord_catalog_error' => 'Pega primero el texto de respuesta de Discord para importar el catálogo.']);
+    }
+
+    $parsedCatalogItems = api_discord_parse_catalog_text($catalogText);
+    if ($parsedCatalogItems === []) {
+        admin_packages_redirect($adminPackageBaseUrl . '/' . $juego_id, ['discord_catalog_error' => 'No se encontraron paquetes ni precios válidos en el texto pegado.']);
+    }
+
+    if (!admin_package_save_discord_catalog($mysqli, $juego_id, $parsedCatalogItems, $catalogText, 'ready')) {
+        admin_packages_redirect($adminPackageBaseUrl . '/' . $juego_id, ['discord_catalog_error' => 'No se pudo guardar el catálogo Discord para este juego.']);
+    }
+
+    admin_packages_redirect($adminPackageBaseUrl . '/' . $juego_id, ['discord_catalog_notice' => 'Se importaron ' . count($parsedCatalogItems) . ' paquetes desde el texto de Discord.']);
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['package_feature_catalog_action'])) {
@@ -514,7 +692,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_paquete_id'])) {
     $edit_cuenta_texto = $accountSaleFeatureEnabled
         ? package_account_sales_normalize_text((string) ($_POST['edit_cuenta_texto'] ?? ''))
         : '';
-    $edit_cantidad = intval($_POST['edit_cantidad'] ?? 0);
+    $edit_cantidad = $usesDiscordCatalog ? max(1, intval($_POST['edit_cantidad'] ?? 0)) : intval($_POST['edit_cantidad'] ?? 0);
     $edit_precio = floatval($_POST['edit_precio'] ?? 0);
     $edit_win_points_reward = max(0, (int) ($_POST['edit_win_points_reward'] ?? 0));
     $edit_activo = isset($_POST['edit_activo']) ? 1 : 0;
@@ -597,7 +775,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['cla
     $cuenta_texto = $accountSaleFeatureEnabled
         ? package_account_sales_normalize_text((string) ($_POST['cuenta_texto'] ?? ''))
         : '';
-    $cantidad = intval($_POST['cantidad']);
+    $cantidad = $usesDiscordCatalog ? max(1, intval($_POST['cantidad'] ?? 0)) : intval($_POST['cantidad']);
     $precio = floatval($_POST['precio']);
     $win_points_reward = max(0, (int) ($_POST['win_points_reward'] ?? $defaultWinPointsReward));
     $activo = isset($_POST['activo']) ? 1 : 0;
@@ -660,14 +838,92 @@ include '../includes/header.php';
 ?>
 <main class="container py-4">
     <h2 class="mb-4 text-neon">Paquetes de <?= htmlspecialchars($juego['nombre'] ?? 'Juego') ?></h2>
+    <?php if ($usesDiscordCatalog): ?>
+        <div class="rounded-4 p-3 mb-4" style="background:#101826;border:1px solid rgba(34,211,238,0.18);">
+            <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
+                <div>
+                    <div class="text-neon fw-semibold">Sincronización de catálogo Discord</div>
+                    <div class="small" style="color:#8be9fd;">
+                        <?php if ($discordPriceCommandText !== ''): ?>
+                            Comando de precios: <?= htmlspecialchars($discordPriceCommandText, ENT_QUOTES, 'UTF-8') ?>.
+                        <?php else: ?>
+                            Este juego no tiene un comando de precios vinculado en el catálogo Discord.
+                        <?php endif; ?>
+                    </div>
+                    <?php if ($discordCatalogUpdatedAt !== ''): ?>
+                        <div class="small mt-1" style="color:#8be9fd;">Última sincronización: <?= htmlspecialchars($discordCatalogUpdatedAt, ENT_QUOTES, 'UTF-8') ?></div>
+                    <?php endif; ?>
+                    <?php if ($discordCatalogMessageId !== ''): ?>
+                        <div class="small mt-1" style="color:#8be9fd;">Message ID correlacionado: <?= htmlspecialchars($discordCatalogMessageId, ENT_QUOTES, 'UTF-8') ?></div>
+                    <?php endif; ?>
+                </div>
+                <form method="post" class="d-flex flex-column flex-sm-row gap-2 align-items-stretch align-items-sm-center mb-0">
+                    <input type="hidden" name="sync_discord_catalog" value="1">
+                    <button type="submit" class="btn btn-info fw-bold" <?= $discordPriceCommandText === '' ? 'disabled' : '' ?>>Consultar precios en Discord</button>
+                </form>
+            </div>
+            <?php if (!empty($discordCatalogItems)): ?>
+                <div class="small mt-2" style="color:#8be9fd;">Hay <?= count($discordCatalogItems) ?> paquetes disponibles para reutilizar en el formulario.</div>
+            <?php elseif ($discordCatalogStatus === 'pending'): ?>
+                <div class="small mt-2" style="color:#fbbf24;">La consulta ya fue enviada. Falta que el relay publique la respuesta en el listener de catálogo.</div>
+            <?php endif; ?>
+
+            <div class="row g-3 mt-1">
+                <div class="col-lg-7">
+                    <div class="rounded-4 p-3 h-100" style="background:#0f172a;border:1px solid rgba(34,211,238,0.16);">
+                        <div class="text-neon fw-semibold mb-2">Listado de paquetes y precios del juego</div>
+                        <?php if (!empty($discordCatalogItems)): ?>
+                            <div class="table-responsive">
+                                <table class="table table-dark table-sm align-middle mb-0" style="--bs-table-bg:transparent;">
+                                    <thead>
+                                        <tr>
+                                            <th style="color:#67e8f9;">Paquete</th>
+                                            <th style="color:#67e8f9;">Cantidad</th>
+                                            <th style="color:#67e8f9;">Precio USD</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($discordCatalogItems as $catalogItem): ?>
+                                            <tr>
+                                                <td style="color:#d8fbff;"><?= htmlspecialchars((string) ($catalogItem['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                                                <td style="color:#d8fbff;"><?= htmlspecialchars(admin_package_format_catalog_quantity($catalogItem), ENT_QUOTES, 'UTF-8') ?></td>
+                                                <td style="color:#d8fbff;">$<?= htmlspecialchars((string) ($catalogItem['price_usd'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php else: ?>
+                            <div class="small" style="color:#8be9fd;">Aún no hay paquetes guardados para este juego. Puedes importarlos pegando el texto de respuesta de Discord en el bloque de la derecha.</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <div class="col-lg-5">
+                    <form method="post" class="rounded-4 p-3 h-100" style="background:#0f172a;border:1px solid rgba(34,211,238,0.16);">
+                        <input type="hidden" name="import_discord_catalog_text" value="1">
+                        <div class="text-neon fw-semibold mb-2">Importar catálogo desde texto</div>
+                        <div class="small mb-2" style="color:#8be9fd;">Pega aquí la respuesta completa del bot en Discord para este juego. Se guardará como catálogo del juego seleccionado.</div>
+                        <textarea name="discord_catalog_text" rows="10" class="form-control mb-3" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;" placeholder="Ejemplo:
+110 💎
+$0.92
+341 💎
+$2.90
+Semanal Básica 💎
+$0.41"><?= htmlspecialchars($discordCatalogRaw, ENT_QUOTES, 'UTF-8') ?></textarea>
+                        <button type="submit" class="btn btn-outline-info w-100 fw-bold">Guardar listado para este juego</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
     <form method="post" enctype="multipart/form-data" class="row g-3 mb-4" style="background:#181f2a; border-radius:16px; border:2px solid #22d3ee; box-shadow:0 0 24px #22d3ee33; padding:2rem;">
         <div class="col-md-6">
             <label class="form-label text-neon">Nombre del paquete</label>
-            <input type="text" name="nombre" placeholder="Nombre del paquete" required class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;">
+            <input type="text" name="nombre" placeholder="Nombre del paquete" required class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;" data-discord-catalog-field="name">
         </div>
         <div class="col-md-6">
             <label class="form-label text-neon">Clave interna</label>
-            <input type="text" name="clave" placeholder="Clave" required class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;">
+            <input type="text" name="clave" placeholder="Clave" required class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;" data-discord-catalog-field="key">
         </div>
         <?php if ($usesApiCatalog): ?>
             <div class="col-md-6">
@@ -680,6 +936,50 @@ include '../includes/header.php';
                 </select>
                 <div class="form-text mt-2" style="color:#8be9fd;">Categoría API vinculada: <?= htmlspecialchars($juegoCategoriaApi, ENT_QUOTES, 'UTF-8') ?></div>
             </div>
+        <?php elseif ($usesDiscordCatalog): ?>
+            <div class="col-md-6">
+                <label class="form-label text-neon">Cantidad / paquete Discord</label>
+                <input type="number" min="1" name="cantidad" placeholder="Cantidad" required class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;" value="1" data-discord-catalog-field="quantity">
+                <div class="form-text mt-2" style="color:#8be9fd;">Registra aquí la cantidad exacta que usará el comando de recarga del juego en Discord.</div>
+            </div>
+            <div class="col-md-6">
+                <?php if (!empty($discordCatalogItems)): ?>
+                    <label class="form-label text-neon">Paquete a recargar</label>
+                    <select class="form-select mb-3" data-discord-catalog-select style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;">
+                        <option value="">Selecciona un paquete del juego</option>
+                        <?php foreach ($discordCatalogItems as $catalogItem): ?>
+                            <option
+                                value="<?= htmlspecialchars((string) ($catalogItem['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                data-name="<?= htmlspecialchars((string) ($catalogItem['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                data-key="<?= htmlspecialchars((string) ($catalogItem['quantity'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                data-quantity="<?= htmlspecialchars((string) ($catalogItem['quantity'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                data-price="<?= htmlspecialchars((string) ($catalogItem['price_usd'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                            ><?= htmlspecialchars(api_discord_catalog_item_label($catalogItem), ENT_QUOTES, 'UTF-8') ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                <?php else: ?>
+                    <label class="form-label text-neon">Comando de precio de referencia</label>
+                    <input type="text" class="form-control" value="<?= htmlspecialchars($discordPriceCommandText !== '' ? $discordPriceCommandText : 'Sin comando de precio vinculado', ENT_QUOTES, 'UTF-8') ?>" readonly style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;">
+                <?php endif; ?>
+                <div class="form-text mt-2" style="color:#8be9fd;">
+                    <?php if (!empty($discordCatalogItems)): ?>
+                        Selecciona aquí el paquete del juego que quieres registrar. Esa selección llenará nombre, cantidad y precio para que la recarga use exactamente ese paquete.
+                    <?php elseif ($discordPriceCommandText !== ''): ?>
+                        Puedes disparar la consulta desde el bloque superior y luego cargar aquí el listado del juego para seleccionar un paquete concreto.
+                    <?php else: ?>
+                        Este juego usa Discord, pero no tiene un comando de precio vinculado en el catálogo actual.
+                    <?php endif; ?>
+                </div>
+                <?php if ($discordPriceCommandText !== ''): ?>
+                    <div class="form-text mt-2" style="color:#8be9fd;">Comando usado para consultar precios: <?= htmlspecialchars($discordPriceCommandText, ENT_QUOTES, 'UTF-8') ?></div>
+                <?php endif; ?>
+                <?php if ($discordTopupCommandText !== ''): ?>
+                    <div class="form-text mt-2" style="color:#8be9fd;">Comando de recarga configurado: <?= htmlspecialchars($discordTopupCommandText, ENT_QUOTES, 'UTF-8') ?></div>
+                <?php endif; ?>
+                <?php if ($discordCatalogRaw !== ''): ?>
+                    <div class="form-text mt-2" style="color:#8be9fd;">Último texto crudo recibido: <?= htmlspecialchars(mb_strimwidth($discordCatalogRaw, 0, 220, '...'), ENT_QUOTES, 'UTF-8') ?></div>
+                <?php endif; ?>
+            </div>
         <?php elseif ($usesLegacyFreeFire): ?>
             <div class="col-md-6">
                 <label class="form-label text-neon">Montos (API)</label>
@@ -691,14 +991,16 @@ include '../includes/header.php';
                 </select>
             </div>
         <?php endif; ?>
+        <?php if (!$usesDiscordCatalog): ?>
         <div class="col-md-4" style="display:none;">
             <label class="form-label text-neon">Cantidad</label>
             <input type="number" name="cantidad_visible" min="0" placeholder="Cantidad" class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;" value="1">
         </div>
         <input type="hidden" name="cantidad" value="1">
+        <?php endif; ?>
         <div class="col-md-4">
             <label class="form-label text-neon">Precio USD</label>
-            <input type="number" step="0.01" min="0" name="precio" placeholder="Precio" required class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;">
+            <input type="number" step="0.01" min="0" name="precio" placeholder="Precio" required class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;" data-discord-catalog-field="price">
         </div>
         <div class="col-md-4">
             <label class="form-label text-neon"><?= htmlspecialchars($winPointsName, ENT_QUOTES, 'UTF-8') ?> a ganar</label>
@@ -839,6 +1141,15 @@ include '../includes/header.php';
         <div class="alert alert-warning mb-4">No se pudieron cargar los productos de la categoría API: <?= htmlspecialchars($apiProductsError, ENT_QUOTES, 'UTF-8') ?></div>
     <?php elseif ($usesApiCatalog && empty($apiProducts)): ?>
         <div class="alert alert-warning mb-4">No hay productos disponibles en la API para la categoría <?= htmlspecialchars($juegoCategoriaApi, ENT_QUOTES, 'UTF-8') ?>.</div>
+    <?php endif; ?>
+    <?php if ($discordCatalogError !== ''): ?>
+        <div class="alert alert-danger mb-4"><?= htmlspecialchars($discordCatalogError, ENT_QUOTES, 'UTF-8') ?></div>
+    <?php endif; ?>
+    <?php if ($discordCatalogNotice !== ''): ?>
+        <div class="alert alert-info mb-4"><?= htmlspecialchars($discordCatalogNotice, ENT_QUOTES, 'UTF-8') ?></div>
+    <?php endif; ?>
+    <?php if ($usesDiscordCatalog && $discordCatalogStatus === 'pending' && $discordCatalogNotice === ''): ?>
+        <div class="alert alert-warning mb-4">La consulta de precios sigue pendiente. Cuando el relay llame a <code>action=discord_catalog_listener</code>, el catálogo se actualizará aquí.</div>
     <?php endif; ?>
     <div class="d-flex flex-wrap gap-2 mb-3">
         <button type="button" class="btn <?= $currentPackageTab === 'active' ? 'btn-info' : 'btn-outline-info' ?> fw-bold js-package-tab-btn" data-package-tab="active" onclick="window.filterAdminPackagesByClass('activo'); return false;">Activos <span data-package-tab-count="active"><?= $activePackageCount ?></span></button>
@@ -1031,11 +1342,11 @@ if (isset($_GET['editar'])) {
         <input type="hidden" name="edit_paquete_id" value="<?= $paq_edit['id'] ?>">
         <div class="mb-3">
             <label class="form-label text-neon">Nombre</label>
-            <input type="text" name="edit_nombre" value="<?= htmlspecialchars($paq_edit['nombre']) ?>" required class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
+            <input type="text" name="edit_nombre" value="<?= htmlspecialchars($paq_edit['nombre']) ?>" required class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;" data-discord-catalog-field="name">
         </div>
         <div class="mb-3">
             <label class="form-label text-neon">Clave interna</label>
-            <input type="text" name="edit_clave" value="<?= htmlspecialchars($paq_edit['clave']) ?>" required class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
+            <input type="text" name="edit_clave" value="<?= htmlspecialchars($paq_edit['clave']) ?>" required class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;" data-discord-catalog-field="key">
         </div>
         <?php if ($usesApiCatalog): ?>
             <div class="mb-3">
@@ -1046,6 +1357,42 @@ if (isset($_GET['editar'])) {
                         <option value="<?= (int) ($apiProduct['id'] ?? 0) ?>" <?= (int) ($paq_edit['paquete_api'] ?? 0) === (int) ($apiProduct['id'] ?? 0) ? 'selected' : '' ?>><?= htmlspecialchars(recargas_api_product_label($apiProduct), ENT_QUOTES, 'UTF-8') ?></option>
                     <?php endforeach; ?>
                 </select>
+            </div>
+        <?php elseif ($usesDiscordCatalog): ?>
+            <div class="mb-3">
+                <?php if (!empty($discordCatalogItems)): ?>
+                    <label class="form-label text-neon">Paquete a recargar</label>
+                    <select class="form-select mb-3" data-discord-catalog-select style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
+                        <option value="">Selecciona un paquete del juego</option>
+                        <?php foreach ($discordCatalogItems as $catalogItem): ?>
+                            <option
+                                value="<?= htmlspecialchars((string) ($catalogItem['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                data-name="<?= htmlspecialchars((string) ($catalogItem['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                data-key="<?= htmlspecialchars((string) ($catalogItem['quantity'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                data-quantity="<?= htmlspecialchars((string) ($catalogItem['quantity'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                data-price="<?= htmlspecialchars((string) ($catalogItem['price_usd'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                            ><?= htmlspecialchars(api_discord_catalog_item_label($catalogItem), ENT_QUOTES, 'UTF-8') ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                <?php else: ?>
+                    <label class="form-label text-neon">Comando de precio de referencia</label>
+                    <input type="text" class="form-control" value="<?= htmlspecialchars($discordPriceCommandText !== '' ? $discordPriceCommandText : 'Sin comando de precio vinculado', ENT_QUOTES, 'UTF-8') ?>" readonly style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
+                <?php endif; ?>
+                <div class="form-text mt-2" style="color:#8be9fd;">
+                    <?php if (!empty($discordCatalogItems)): ?>
+                        Selecciona el paquete del juego que corresponde a esta recarga para actualizar abajo la cantidad y el precio USD.
+                    <?php elseif ($discordPriceCommandText !== ''): ?>
+                        Usa la sincronización superior y luego carga aquí el listado del juego para seleccionar un paquete detectado.
+                    <?php else: ?>
+                        Este juego usa Discord, pero no tiene un comando de precio vinculado en el catálogo actual.
+                    <?php endif; ?>
+                </div>
+                <?php if ($discordPriceCommandText !== ''): ?>
+                    <div class="form-text mt-2" style="color:#8be9fd;">Comando usado para consultar precios: <?= htmlspecialchars($discordPriceCommandText, ENT_QUOTES, 'UTF-8') ?></div>
+                <?php endif; ?>
+                <?php if ($discordTopupCommandText !== ''): ?>
+                    <div class="form-text mt-2" style="color:#8be9fd;">Comando de recarga configurado: <?= htmlspecialchars($discordTopupCommandText, ENT_QUOTES, 'UTF-8') ?></div>
+                <?php endif; ?>
             </div>
         <?php elseif ($usesLegacyFreeFire): ?>
             <div class="mb-3">
@@ -1059,12 +1406,15 @@ if (isset($_GET['editar'])) {
             </div>
         <?php endif; ?>
         <div class="mb-3">
-            <label class="form-label text-neon">Cantidad</label>
-            <input type="number" name="edit_cantidad" value="<?= htmlspecialchars($paq_edit['cantidad']) ?>" required class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
+            <label class="form-label text-neon"><?= $usesDiscordCatalog ? 'Cantidad / paquete Discord' : 'Cantidad' ?></label>
+            <input type="number" name="edit_cantidad" value="<?= htmlspecialchars($paq_edit['cantidad']) ?>" min="<?= $usesDiscordCatalog ? '1' : '0' ?>" required class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;" data-discord-catalog-field="quantity">
+            <?php if ($usesDiscordCatalog): ?>
+                <div class="form-text mt-2" style="color:#8be9fd;">Este valor es el que se insertará en el parámetro <code>{cantidad}</code> del comando Discord del juego.</div>
+            <?php endif; ?>
         </div>
         <div class="mb-3">
             <label class="form-label text-neon">Precio USD</label>
-            <input type="number" step="0.01" name="edit_precio" value="<?= htmlspecialchars($paq_edit['precio']) ?>" required class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
+            <input type="number" step="0.01" name="edit_precio" value="<?= htmlspecialchars($paq_edit['precio']) ?>" required class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;" data-discord-catalog-field="price">
         </div>
         <div class="mb-3">
             <label class="form-label text-neon"><?= htmlspecialchars($winPointsName, ENT_QUOTES, 'UTF-8') ?> a ganar</label>
@@ -1879,9 +2229,73 @@ if (typeof window.bindPackageFeatureApplyButtons !== 'function') {
     };
 }
 
+if (typeof window.slugifyDiscordCatalogKey !== 'function') {
+    window.slugifyDiscordCatalogKey = function(value) {
+        return String(value || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '_')
+            .replace(/^_+|_+$/g, '')
+            .slice(0, 80);
+    };
+}
+
+if (typeof window.applyDiscordCatalogSelection !== 'function') {
+    window.applyDiscordCatalogSelection = function(select) {
+        if (!select) {
+            return;
+        }
+
+        const option = select.options[select.selectedIndex];
+        const form = select.closest('form');
+        if (!option || !form) {
+            return;
+        }
+
+        const name = String(option.dataset.name || '').trim();
+        const quantity = String(option.dataset.quantity || '').trim();
+        const price = String(option.dataset.price || '').trim();
+        const key = window.slugifyDiscordCatalogKey(name || option.dataset.key || quantity || 'discord_paquete');
+
+        const nameInput = form.querySelector('[data-discord-catalog-field="name"]');
+        const keyInput = form.querySelector('[data-discord-catalog-field="key"]');
+        const quantityInput = form.querySelector('[data-discord-catalog-field="quantity"]');
+        const priceInput = form.querySelector('[data-discord-catalog-field="price"]');
+
+        if (nameInput && name !== '') {
+            nameInput.value = name;
+        }
+        if (keyInput && key !== '') {
+            keyInput.value = key;
+        }
+        if (quantityInput && quantity !== '') {
+            quantityInput.value = quantity;
+        }
+        if (priceInput && price !== '') {
+            priceInput.value = price;
+        }
+    };
+}
+
+if (typeof window.bindDiscordCatalogSelects !== 'function') {
+    window.bindDiscordCatalogSelects = function(root = document) {
+        root.querySelectorAll('[data-discord-catalog-select]').forEach((select) => {
+            if (select.dataset.boundDiscordCatalog === '1') {
+                return;
+            }
+            select.dataset.boundDiscordCatalog = '1';
+            select.addEventListener('change', function() {
+                window.applyDiscordCatalogSelection(select);
+            });
+        });
+    };
+}
+
 window.bindPackageFeatureIconPreview();
 window.bindPackageFeatureApplyButtons();
 window.bindPackageAccountSaleScopes();
+window.bindDiscordCatalogSelects();
 
 const packageFeatureApplyReplaceButton = document.getElementById('package-feature-apply-replace');
 const packageFeatureApplyAddButton = document.getElementById('package-feature-apply-add');

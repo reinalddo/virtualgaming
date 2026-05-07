@@ -78,6 +78,184 @@ function api_discord_topup_commands(): array {
     }));
 }
 
+function api_discord_normalize_catalog_price($value): string {
+    $normalized = trim((string) $value);
+    if ($normalized === '') {
+        return '';
+    }
+
+    $normalized = preg_replace('/[^0-9,\.\-]+/', '', $normalized) ?? '';
+    if ($normalized === '') {
+        return '';
+    }
+
+    if (str_contains($normalized, ',') && !str_contains($normalized, '.')) {
+        $normalized = str_replace(',', '.', $normalized);
+    } elseif (str_contains($normalized, ',') && str_contains($normalized, '.')) {
+        $normalized = str_replace(',', '', $normalized);
+    }
+
+    if (!is_numeric($normalized)) {
+        return '';
+    }
+
+    return number_format((float) $normalized, 4, '.', '');
+}
+
+function api_discord_normalize_catalog_quantity($value): string {
+    $normalized = trim((string) $value);
+    if ($normalized === '') {
+        return '';
+    }
+
+    $normalized = preg_replace('/\s+/u', '', $normalized) ?? $normalized;
+    return substr($normalized, 0, 80);
+}
+
+function api_discord_normalize_catalog_items(array $items): array {
+    $normalizedItems = [];
+    $seen = [];
+
+    foreach ($items as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $name = trim((string) ($item['name'] ?? $item['label'] ?? $item['title'] ?? $item['product_name'] ?? ''));
+        $priceUsd = api_discord_normalize_catalog_price($item['price_usd'] ?? $item['price'] ?? $item['usd'] ?? '');
+        $quantity = api_discord_normalize_catalog_quantity($item['quantity'] ?? $item['cantidad'] ?? $item['amount'] ?? $item['code'] ?? '');
+
+        if ($name === '' || $priceUsd === '') {
+            continue;
+        }
+
+        $entry = [
+            'name' => substr($name, 0, 180),
+            'price_usd' => $priceUsd,
+            'quantity' => $quantity,
+        ];
+
+        $signature = mb_strtolower($entry['name'], 'UTF-8') . '|' . $entry['quantity'] . '|' . $entry['price_usd'];
+        if (isset($seen[$signature])) {
+            continue;
+        }
+
+        $seen[$signature] = true;
+        $normalizedItems[] = $entry;
+    }
+
+    return $normalizedItems;
+}
+
+function api_discord_parse_catalog_text(string $text): array {
+    $normalizedText = html_entity_decode(trim($text), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    if ($normalizedText === '') {
+        return [];
+    }
+
+    $rawLines = preg_split('/\R+/u', $normalizedText) ?: [];
+    $lines = [];
+    foreach ($rawLines as $line) {
+        $candidate = trim((string) $line);
+        if ($candidate === '') {
+            continue;
+        }
+
+        $candidate = preg_replace('/^[\s>*\-•\x{2022}]+/u', '', $candidate) ?? $candidate;
+        $candidate = preg_replace('/^\d+[\)\.\-:]\s*/u', '', $candidate) ?? $candidate;
+        $candidate = trim($candidate);
+        if ($candidate !== '') {
+            $lines[] = $candidate;
+        }
+    }
+
+    $extractPrice = static function (string $candidate): array {
+        $priceMatch = [];
+        $priceToken = '';
+        $priceValue = '';
+
+        if (preg_match('/(?:USDT|USD|\$)\s*([0-9]+(?:[\.,][0-9]+)?)/iu', $candidate, $priceMatch) === 1) {
+            $priceToken = (string) ($priceMatch[0] ?? '');
+            $priceValue = api_discord_normalize_catalog_price($priceMatch[1] ?? '');
+        } elseif (preg_match('/([0-9]+(?:[\.,][0-9]+)?)\s*(?:USDT|USD|\$)/iu', $candidate, $priceMatch) === 1) {
+            $priceToken = (string) ($priceMatch[0] ?? '');
+            $priceValue = api_discord_normalize_catalog_price($priceMatch[1] ?? '');
+        }
+
+        return [$priceToken, $priceValue];
+    };
+
+    $items = [];
+
+    $lineCount = count($lines);
+    for ($index = 0; $index < $lineCount; $index++) {
+        $candidate = $lines[$index];
+        [$priceToken, $priceValue] = $extractPrice($candidate);
+
+        if ($priceValue === '' && isset($lines[$index + 1])) {
+            [$nextPriceToken, $nextPriceValue] = $extractPrice($lines[$index + 1]);
+            if ($nextPriceValue !== '') {
+                $pairQuantity = '';
+                if (preg_match('/^([0-9]+(?:\s*\+\s*[0-9]+)?)/u', $candidate, $quantityMatch) === 1) {
+                    $pairQuantity = api_discord_normalize_catalog_quantity($quantityMatch[1] ?? '');
+                } elseif (preg_match('/\b([0-9]+(?:\s*\+\s*[0-9]+)?)\b/u', $candidate, $quantityMatch) === 1) {
+                    $pairQuantity = api_discord_normalize_catalog_quantity($quantityMatch[1] ?? '');
+                }
+
+                $items[] = [
+                    'name' => trim($candidate, " \t\n\r\0\x0B-:|;"),
+                    'price_usd' => $nextPriceValue,
+                    'quantity' => $pairQuantity,
+                ];
+                $index++;
+                continue;
+            }
+        }
+
+        if ($priceValue === '') {
+            continue;
+        }
+
+        $name = trim(str_replace($priceToken, '', $candidate));
+        $name = preg_replace('/\s{2,}/u', ' ', $name) ?? $name;
+        $name = trim($name, " \t\n\r\0\x0B-:|;");
+        if ($name === '') {
+            continue;
+        }
+
+        $quantity = '';
+        if (preg_match('/^([0-9]+(?:\s*\+\s*[0-9]+)?)/u', $name, $quantityMatch) === 1) {
+            $quantity = api_discord_normalize_catalog_quantity($quantityMatch[1] ?? '');
+        } elseif (preg_match('/\b([0-9]+(?:\s*\+\s*[0-9]+)?)\b/u', $name, $quantityMatch) === 1) {
+            $quantity = api_discord_normalize_catalog_quantity($quantityMatch[1] ?? '');
+        }
+
+        $items[] = [
+            'name' => $name,
+            'price_usd' => $priceValue,
+            'quantity' => $quantity,
+        ];
+    }
+
+    return api_discord_normalize_catalog_items($items);
+}
+
+function api_discord_catalog_item_label(array $item): string {
+    $name = trim((string) ($item['name'] ?? 'Paquete Discord'));
+    $priceUsd = api_discord_normalize_catalog_price($item['price_usd'] ?? $item['price'] ?? '');
+    $quantity = api_discord_normalize_catalog_quantity($item['quantity'] ?? $item['cantidad'] ?? '');
+
+    $label = $name;
+    if ($quantity !== '') {
+        $label .= ' - Cantidad ' . $quantity;
+    }
+    if ($priceUsd !== '') {
+        $label .= ' - $' . $priceUsd;
+    }
+
+    return $label;
+}
+
 function api_discord_sample_command_text(array $command): string {
     $sample = trim((string) ($command['sample'] ?? ''));
     if ($sample !== '') {

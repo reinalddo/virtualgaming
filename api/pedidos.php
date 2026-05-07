@@ -336,6 +336,23 @@ function ensure_juegos_categoria_api_discord_column(mysqli $mysqli): void {
     }
 }
 
+function ensure_juegos_api_discord_catalog_columns(mysqli $mysqli): void {
+    $columns = [
+        'api_discord_catalog_json' => "ALTER TABLE juegos ADD COLUMN api_discord_catalog_json LONGTEXT NULL AFTER categoria_api_discord",
+        'api_discord_catalog_raw' => "ALTER TABLE juegos ADD COLUMN api_discord_catalog_raw LONGTEXT NULL AFTER api_discord_catalog_json",
+        'api_discord_catalog_status' => "ALTER TABLE juegos ADD COLUMN api_discord_catalog_status VARCHAR(40) NULL AFTER api_discord_catalog_raw",
+        'api_discord_catalog_message_id' => "ALTER TABLE juegos ADD COLUMN api_discord_catalog_message_id VARCHAR(120) NULL AFTER api_discord_catalog_status",
+        'api_discord_catalog_updated_at' => "ALTER TABLE juegos ADD COLUMN api_discord_catalog_updated_at DATETIME NULL AFTER api_discord_catalog_message_id",
+    ];
+
+    foreach ($columns as $columnName => $statement) {
+        $result = $mysqli->query("SHOW COLUMNS FROM juegos LIKE '" . $mysqli->real_escape_string($columnName) . "'");
+        if (!($result instanceof mysqli_result) || $result->num_rows === 0) {
+            $mysqli->query($statement);
+        }
+    }
+}
+
 function coupon_table_exists(mysqli $mysqli): bool {
     $res = $mysqli->query("SHOW TABLES LIKE 'cupones'");
     return $res && $res->num_rows > 0;
@@ -1275,6 +1292,155 @@ function api_discord_listener_bool($value): int {
 
     $normalized = strtolower(trim((string) $value));
     return in_array($normalized, ['1', 'true', 'yes', 'si', 'on'], true) ? 1 : 0;
+}
+
+function fetch_game_by_id(mysqli $mysqli, int $gameId): ?array {
+    if ($gameId <= 0) {
+        return null;
+    }
+
+    $stmt = $mysqli->prepare("SELECT * FROM juegos WHERE id = ? LIMIT 1");
+    if (!$stmt) {
+        return null;
+    }
+
+    $stmt->bind_param('i', $gameId);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        return null;
+    }
+
+    $result = $stmt->get_result();
+    $game = $result ? $result->fetch_assoc() : null;
+    $stmt->close();
+
+    return is_array($game) ? $game : null;
+}
+
+function find_game_by_discord_catalog_message_id(mysqli $mysqli, string $messageId): ?array {
+    $normalizedMessageId = trim($messageId);
+    if ($normalizedMessageId === '') {
+        return null;
+    }
+
+    $stmt = $mysqli->prepare("SELECT * FROM juegos WHERE api_discord_catalog_message_id = ? ORDER BY id DESC LIMIT 1");
+    if (!$stmt) {
+        return null;
+    }
+
+    $stmt->bind_param('s', $normalizedMessageId);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        return null;
+    }
+
+    $result = $stmt->get_result();
+    $game = $result ? $result->fetch_assoc() : null;
+    $stmt->close();
+
+    return is_array($game) ? $game : null;
+}
+
+function api_discord_catalog_text_from_payload(array $payload): string {
+    foreach (['catalog_text', 'provider_message', 'message', 'detail', 'content', 'raw_text'] as $key) {
+        $value = trim((string) ($payload[$key] ?? ''));
+        if ($value !== '') {
+            return $value;
+        }
+    }
+
+    $embedTexts = [];
+    $embeds = $payload['embeds'] ?? $payload['embed'] ?? [];
+    if (is_array($embeds)) {
+        $embedList = array_keys($embeds) === range(0, count($embeds) - 1) ? $embeds : [$embeds];
+        foreach ($embedList as $embed) {
+            if (!is_array($embed)) {
+                continue;
+            }
+
+            foreach (['title', 'description'] as $fieldKey) {
+                $value = trim((string) ($embed[$fieldKey] ?? ''));
+                if ($value !== '') {
+                    $embedTexts[] = $value;
+                }
+            }
+
+            foreach ((array) ($embed['fields'] ?? []) as $field) {
+                if (!is_array($field)) {
+                    continue;
+                }
+
+                $value = trim((string) ($field['value'] ?? ''));
+                if ($value !== '') {
+                    $embedTexts[] = $value;
+                }
+            }
+        }
+    }
+
+    return trim(implode("\n", $embedTexts));
+}
+
+function api_discord_catalog_items_from_payload(array $payload): array {
+    $rawItems = $payload['catalog_items'] ?? $payload['items'] ?? [];
+    if (is_string($rawItems) && trim($rawItems) !== '') {
+        $decodedItems = json_decode($rawItems, true);
+        if (is_array($decodedItems)) {
+            $rawItems = $decodedItems;
+        }
+    }
+
+    if (is_array($rawItems) && $rawItems !== []) {
+        $normalizedItems = api_discord_normalize_catalog_items($rawItems);
+        if ($normalizedItems !== []) {
+            return $normalizedItems;
+        }
+    }
+
+    $rawText = api_discord_catalog_text_from_payload($payload);
+    if ($rawText === '') {
+        return [];
+    }
+
+    return api_discord_parse_catalog_text($rawText);
+}
+
+function persist_api_discord_game_catalog(mysqli $mysqli, array $game, array $payload): array {
+    $gameId = (int) ($game['id'] ?? 0);
+    if ($gameId <= 0) {
+        throw new RuntimeException('Juego inválido para sincronizar catálogo Discord.');
+    }
+
+    $catalogItems = api_discord_catalog_items_from_payload($payload);
+    if ($catalogItems === []) {
+        throw new RuntimeException('No se encontraron paquetes válidos en la respuesta de precios de Discord.');
+    }
+
+    $rawText = api_discord_catalog_text_from_payload($payload);
+    $messageId = trim((string) ($payload['source_message_id'] ?? $payload['message_id'] ?? $payload['discord_message_id'] ?? $game['api_discord_catalog_message_id'] ?? ''));
+    $catalogStatus = trim((string) ($payload['catalog_status'] ?? 'ready')) ?: 'ready';
+    $catalogJson = json_encode($catalogItems, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (!is_string($catalogJson) || $catalogJson === '') {
+        throw new RuntimeException('No se pudo serializar el catálogo de precios de Discord.');
+    }
+
+    $stmt = $mysqli->prepare("UPDATE juegos SET api_discord_catalog_json = ?, api_discord_catalog_raw = ?, api_discord_catalog_status = ?, api_discord_catalog_message_id = ?, api_discord_catalog_updated_at = NOW() WHERE id = ? LIMIT 1");
+    if (!$stmt) {
+        throw new RuntimeException('No se pudo preparar la actualización del catálogo de Discord.');
+    }
+
+    $stmt->bind_param('ssssi', $catalogJson, $rawText, $catalogStatus, $messageId, $gameId);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        throw new RuntimeException('No se pudo guardar el catálogo de precios de Discord.');
+    }
+    $stmt->close();
+
+    return [
+        'items' => $catalogItems,
+        'message_id' => $messageId,
+        'status' => $catalogStatus,
+    ];
 }
 
 function resolve_api_discord_listener_order(mysqli $mysqli, int $orderId, string $messageId): ?array {
@@ -6131,6 +6297,11 @@ try {
     error_log('TVG ensure_juegos_categoria_api_discord_column skipped: ' . $e->getMessage());
 }
 try {
+    ensure_juegos_api_discord_catalog_columns($mysqli);
+} catch (Throwable $e) {
+    error_log('TVG ensure_juegos_api_discord_catalog_columns skipped: ' . $e->getMessage());
+}
+try {
     ensure_juego_paquetes_monto_ff_column($mysqli);
 } catch (Throwable $e) {
     error_log('TVG ensure_juego_paquetes_monto_ff_column skipped: ' . $e->getMessage());
@@ -7785,6 +7956,49 @@ if ($action === 'discord_listener') {
         'ok' => true,
         'message' => 'Correlación de Discord aplicada correctamente.',
     ], build_order_status_response_payload($updatedOrder, (int) ($updatedOrder['id'] ?? 0))));
+}
+
+if ($action === 'discord_catalog_listener') {
+    if (strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST') {
+        json_error('Método no permitido.', 405);
+    }
+
+    $payload = api_discord_listener_payload_from_request();
+    $configuredListenerToken = api_discord_normalize_listener_token((string) store_config_get('api_discord_listener_token', ''));
+    if ($configuredListenerToken === '') {
+        json_error('El listener de API Discord no está configurado en esta tienda.', 409);
+    }
+
+    $providedToken = api_discord_listener_token_from_request($payload);
+    if ($providedToken === '' || !hash_equals($configuredListenerToken, $providedToken)) {
+        json_error('Token de listener inválido.', 403);
+    }
+
+    $gameId = (int) ($payload['game_id'] ?? 0);
+    $messageId = trim((string) ($payload['source_message_id'] ?? $payload['message_id'] ?? $payload['discord_message_id'] ?? ''));
+    $game = $gameId > 0 ? fetch_game_by_id($mysqli, $gameId) : find_game_by_discord_catalog_message_id($mysqli, $messageId);
+    if (!$game) {
+        json_error('No se encontró un juego Discord que coincida con la correlación recibida.', 404);
+    }
+
+    if (trim((string) ($game['categoria_api_discord'] ?? '')) === '') {
+        json_error('El juego encontrado no usa catálogo de Discord.', 409);
+    }
+
+    try {
+        $catalogResult = persist_api_discord_game_catalog($mysqli, $game, $payload);
+    } catch (Throwable $e) {
+        json_error($e->getMessage(), 500);
+    }
+
+    json_response([
+        'ok' => true,
+        'message' => 'Catálogo de precios de Discord sincronizado correctamente.',
+        'game_id' => (int) ($game['id'] ?? 0),
+        'items_count' => count((array) ($catalogResult['items'] ?? [])),
+        'message_id' => trim((string) ($catalogResult['message_id'] ?? '')),
+        'status' => trim((string) ($catalogResult['status'] ?? 'ready')),
+    ]);
 }
 
 if ($action === 'admin_update_discord_status') {
