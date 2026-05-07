@@ -7296,10 +7296,11 @@ if ($action === 'submit_payment') {
     );
 
     $updatedOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
+    $gameId = (int) ($updatedOrder['juego_id'] ?? 0);
     $adminEmail = resolve_admin_email($mysqli);
     $paymentMethodName = (string) ($method['nombre'] ?? 'Método de pago');
     $brandingImages = email_branding_embedded_images();
-    $usesCatalogApi = game_uses_catalog_api($mysqli, (int) ($updatedOrder['juego_id'] ?? 0));
+    $usesCatalogApi = game_uses_catalog_api($mysqli, $gameId);
 
     if ($usesBankValidation) {
         $matchingMovement = $preselectedMatchingMovement;
