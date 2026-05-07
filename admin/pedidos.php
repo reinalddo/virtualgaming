@@ -468,6 +468,27 @@ function order_can_retry_recharge(array $order): bool {
   return $packageApiId > 0 || $legacyMonto !== '';
 }
 
+function order_can_manage_discord_status(array $order): bool {
+  if (trim((string) ($order['api_discord_command_key'] ?? '')) === '') {
+    return false;
+  }
+
+  $status = trim((string) ($order['estado'] ?? ''));
+  return in_array($status, ['pagado', 'enviado', 'cancelado'], true);
+}
+
+function order_discord_admin_status_options(): array {
+  return [
+    'queued' => 'Discord en cola',
+    'sent' => 'Discord aceptado',
+    'processing' => 'Discord en proceso',
+    'confirmed' => 'Discord confirmado',
+    'review' => 'Discord en revisión',
+    'failed' => 'Discord fallido',
+    'cancelled' => 'Discord cancelado',
+  ];
+}
+
 function order_normalize_date_query($value): string {
   $date = trim((string) $value);
   return preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) === 1 ? $date : '';
@@ -1130,6 +1151,15 @@ foreach ($statuses as $statusKey) {
                       <?php if (order_can_sync_gateway($order)): ?>
                         <button type="button" class="btn btn-outline-warning btn-sm mt-2 js-sync-provider" data-order-id="<?= (int) $order['id'] ?>" data-sync-label="<?= htmlspecialchars(order_sync_button_label($order)) ?>"><?= htmlspecialchars(order_sync_button_label($order)) ?></button>
                       <?php endif; ?>
+                      <?php if (order_can_manage_discord_status($order)): ?>
+                        <select class="form-select form-select-sm mt-2 js-discord-status-select" data-order-id="<?= (int) $order['id'] ?>" style="border-radius:8px; border:1px solid #f9a8d4; background:#222c3a; color:#f9a8d4; font-weight:bold; padding:0.25em 0.5em;">
+                          <option value="">Aplicar estado Discord...</option>
+                          <?php foreach (order_discord_admin_status_options() as $discordStatusValue => $discordStatusLabel): ?>
+                            <?php if ($discordStatusValue === trim((string) ($order['api_discord_status'] ?? ''))) { continue; } ?>
+                            <option value="<?= htmlspecialchars($discordStatusValue, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($discordStatusLabel) ?></option>
+                          <?php endforeach; ?>
+                        </select>
+                      <?php endif; ?>
                     </td>
                   </tr>
                 <?php endforeach; ?>
@@ -1221,6 +1251,15 @@ foreach ($statuses as $statusKey) {
                 <?php endif; ?>
                 <?php if (order_can_sync_gateway($order)): ?>
                   <button type="button" class="btn btn-outline-warning btn-sm mt-3 js-sync-provider" data-order-id="<?= (int) $order['id'] ?>" data-sync-label="<?= htmlspecialchars(order_sync_button_label($order)) ?>"><?= htmlspecialchars(order_sync_button_label($order)) ?></button>
+                <?php endif; ?>
+                <?php if (order_can_manage_discord_status($order)): ?>
+                  <select class="form-select form-select-sm mt-3 js-discord-status-select" data-order-id="<?= (int) $order['id'] ?>" style="border-radius:8px; border:1px solid #f9a8d4; background:#222c3a; color:#f9a8d4; font-weight:bold; padding:0.45em 0.6em;">
+                    <option value="">Aplicar estado Discord...</option>
+                    <?php foreach (order_discord_admin_status_options() as $discordStatusValue => $discordStatusLabel): ?>
+                      <?php if ($discordStatusValue === trim((string) ($order['api_discord_status'] ?? ''))) { continue; } ?>
+                      <option value="<?= htmlspecialchars($discordStatusValue, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($discordStatusLabel) ?></option>
+                    <?php endforeach; ?>
+                  </select>
                 <?php endif; ?>
               </div>
             <?php endforeach; ?>
@@ -1655,6 +1694,73 @@ foreach ($statuses as $statusKey) {
           alert(err.message || 'No se pudo enviar nuevamente la recarga.');
         } finally {
           button.disabled = false;
+          setAdminLoadingVisible(false);
+        }
+      });
+    });
+
+    const discordStatusLabels = {
+      queued: 'Discord en cola',
+      sent: 'Discord aceptado',
+      processing: 'Discord en proceso',
+      confirmed: 'Discord confirmado',
+      review: 'Discord en revisión',
+      failed: 'Discord fallido',
+      cancelled: 'Discord cancelado'
+    };
+
+    document.querySelectorAll('.js-discord-status-select').forEach(select => {
+      select.addEventListener('change', async () => {
+        const orderId = select.dataset.orderId;
+        const discordStatus = String(select.value || '').trim();
+        if (!orderId || !discordStatus) {
+          return;
+        }
+
+        const statusLabel = discordStatusLabels[discordStatus] || discordStatus;
+        const confirmed = window.confirm(`Se aplicará manualmente el estado ${statusLabel} a este pedido Discord.`);
+        if (!confirmed) {
+          select.value = '';
+          return;
+        }
+
+        const providerMessage = window.prompt('Detalle opcional para registrar en el historial de Discord:', '');
+        if (providerMessage === null) {
+          select.value = '';
+          return;
+        }
+
+        select.disabled = true;
+        setAdminLoadingVisible(true);
+        try {
+          const fd = new FormData();
+          fd.append('action', 'admin_update_discord_status');
+          fd.append('order_id', orderId);
+          fd.append('discord_status', discordStatus);
+          if (String(providerMessage).trim() !== '') {
+            fd.append('provider_message', String(providerMessage).trim());
+          }
+
+          const res = await fetch(window.__TVG_API_PEDIDOS || <?php echo json_encode($ordersApiUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>, { method: 'POST', body: fd });
+          const data = await res.json();
+          if (!res.ok || !data.ok) {
+            throw new Error((data && data.message) ? data.message : 'No se pudo actualizar el estado Discord.');
+          }
+
+          const notes = [data.message || 'Estado Discord actualizado correctamente.'];
+          if (data.provider_status) {
+            notes.push(`Estado Discord: ${data.provider_status}`);
+          }
+          if (data.provider_message) {
+            notes.push(`Detalle Discord: ${data.provider_message}`);
+          }
+          alert(notes.join('\n'));
+          window.location.reload();
+        } catch (err) {
+          alert(err.message || 'No se pudo actualizar el estado Discord.');
+          select.value = '';
+        } finally {
+          select.disabled = false;
           setAdminLoadingVisible(false);
         }
       });

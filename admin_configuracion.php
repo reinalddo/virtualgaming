@@ -235,6 +235,7 @@ if (!$apiDiscordSelectedProbe && count($apiDiscordPriceCommands) > 0) {
 $apiDiscordSelectedProbeSample = $apiDiscordSelectedProbe ? api_discord_sample_command_text($apiDiscordSelectedProbe) : '';
 $apiDiscordListenerToken = api_discord_normalize_listener_token((string) ($cfg['api_discord_listener_token'] ?? ''));
 $apiDiscordListenerUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=discord_listener';
+$apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
 ?>
 <style>
   .neon-card {
@@ -1388,7 +1389,10 @@ $apiDiscordListenerUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?actio
           <?php elseif ($activeTab === 'api-discord'): ?>
             <form method="post">
               <input type="hidden" name="config_section" value="api-discord">
-              <div class="config-section-note mb-4">Aquí configuras la conexión general con Discord para esta tienda: guardas el webhook, defines cómo se enviarán los mensajes de prueba y verificas que el canal reciba comandos seguros de precio. Después, en la sección de juegos, cada juego decidirá si usa <strong>Juegos API TiendaGiftVen</strong> o <strong>Juegos API Discord</strong>.</div>
+              <div class="config-section-note mb-4 d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between gap-3">
+                <div>Aquí configuras la conexión general con Discord para esta tienda: guardas el webhook, defines cómo se enviarán los mensajes de prueba y verificas que el canal reciba comandos seguros de precio. Después, en la sección de juegos, cada juego decidirá si usa <strong>Juegos API TiendaGiftVen</strong> o <strong>Juegos API Discord</strong>.</div>
+                <button type="button" class="btn btn-outline-info btn-sm px-4 py-2 align-self-start align-self-lg-center" data-bs-toggle="modal" data-bs-target="#api-discord-docs-modal">Documentación</button>
+              </div>
 
               <div class="gallery-table-wrap mb-4">
                 <h3 class="h5 fw-bold text-info mb-3">Conexión general del webhook</h3>
@@ -1467,6 +1471,122 @@ $apiDiscordListenerUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?actio
                 <button type="submit" name="api_discord_probe_submit" value="1" class="neon-btn flex-fill py-3" style="background:linear-gradient(90deg,#34d399 0%,#22d3ee 100%);">Guardar y enviar prueba webhook</button>
               </div>
             </form>
+            <div class="modal fade" id="api-discord-docs-modal" tabindex="-1" aria-hidden="true">
+              <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content" style="background:#181f2a; border:2px solid #00fff7; color:#e6fbff; box-shadow:0 0 24px #00fff733;">
+                  <div class="modal-header" style="border-bottom:1px solid rgba(0,255,247,0.25);">
+                    <div>
+                      <h3 class="modal-title h4 fw-bold text-info mb-1">Documentación API Discord</h3>
+                      <p class="mb-0" style="color:#b2f6ff;">Contrato operativo para el relay o bot externo que reporta el resultado de Discord a la tienda.</p>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                  </div>
+                  <div class="modal-body">
+                    <div class="row g-4">
+                      <div class="col-12 col-lg-6">
+                        <div class="gallery-table-wrap h-100">
+                          <h4 class="h5 fw-bold text-info mb-3">1. Endpoint y autenticación</h4>
+                          <div class="mb-3">
+                            <label class="form-label">URL del listener</label>
+                            <input type="text" class="form-control" value="<?= htmlspecialchars($apiDiscordListenerUrl, ENT_QUOTES, 'UTF-8') ?>" readonly>
+                          </div>
+                          <div class="mb-3">
+                            <label class="form-label">Método</label>
+                            <input type="text" class="form-control" value="POST" readonly>
+                          </div>
+                          <div class="mb-3">
+                            <label class="form-label">Header recomendado</label>
+                            <input type="text" class="form-control" value="Authorization: Bearer <?= htmlspecialchars($apiDiscordListenerExampleToken, ENT_QUOTES, 'UTF-8') ?>" readonly>
+                          </div>
+                          <div class="form-text mt-2">Headers aceptados: <strong>Authorization: Bearer TOKEN</strong>, <strong>X-Discord-Listener-Token: TOKEN</strong> o <strong>X-API-Discord-Token: TOKEN</strong>. El token en body se admite por compatibilidad, pero no es la vía recomendada.</div>
+                        </div>
+                      </div>
+                      <div class="col-12 col-lg-6">
+                        <div class="gallery-table-wrap h-100">
+                          <h4 class="h5 fw-bold text-info mb-3">2. Campos del payload</h4>
+                          <div class="table-responsive">
+                            <table class="table table-dark table-sm align-middle mb-0">
+                              <thead>
+                                <tr>
+                                  <th>Campo</th>
+                                  <th>Obligatorio</th>
+                                  <th>Uso</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr><td>status</td><td>Sí</td><td>Estado Discord: <code>queued</code>, <code>sent</code>, <code>processing</code>, <code>confirmed</code>, <code>review</code>, <code>failed</code> o <code>cancelled</code>.</td></tr>
+                                <tr><td>order_id</td><td>Sí, si lo conoces</td><td>ID local del pedido. Si no lo tienes, usa <code>source_message_id</code> o <code>message_id</code>.</td></tr>
+                                <tr><td>source_message_id</td><td>Sí, si no envías <code>order_id</code></td><td>Message ID de Discord guardado por la tienda para correlacionar la orden.</td></tr>
+                                <tr><td>provider_message</td><td>No</td><td>Detalle legible para admin y cliente. Si no se envía, la tienda usa el mensaje por defecto del estado.</td></tr>
+                                <tr><td>requires_review</td><td>No</td><td>Fuerza bandera de revisión manual. Si se omite, la tienda la infiere para <code>review</code> y <code>failed</code>.</td></tr>
+                                <tr><td>http_status</td><td>No</td><td>Código HTTP o estado técnico del relay si deseas guardarlo en el tracking.</td></tr>
+                                <tr><td>local_status</td><td>No</td><td>Sobrescribe el estado local sólo si necesitas forzarlo. Por defecto, <code>confirmed</code> pasa a <code>enviado</code> y <code>cancelled</code> a <code>cancelado</code>.</td></tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="col-12">
+                        <div class="gallery-table-wrap">
+                          <h4 class="h5 fw-bold text-info mb-3">3. Ejemplos JSON</h4>
+                          <div class="row g-3">
+                            <div class="col-12 col-lg-6">
+                              <label class="form-label">Confirmación exitosa</label>
+                              <pre class="form-control" style="height:auto; min-height:220px; white-space:pre-wrap; background:#0f172a; color:#e2f8ff;">{
+  "order_id": 1234,
+  "status": "confirmed",
+  "source_message_id": "1369458123456789012",
+  "provider_message": "Recarga confirmada por el bot",
+  "requires_review": 0,
+  "http_status": 200
+}</pre>
+                            </div>
+                            <div class="col-12 col-lg-6">
+                              <label class="form-label">Caso de revisión manual</label>
+                              <pre class="form-control" style="height:auto; min-height:220px; white-space:pre-wrap; background:#0f172a; color:#e2f8ff;">{
+  "source_message_id": "1369458123456789012",
+  "status": "review",
+  "provider_message": "El bot pide validación manual",
+  "requires_review": 1,
+  "http_status": 202
+}</pre>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="col-12 col-lg-6">
+                        <div class="gallery-table-wrap h-100">
+                          <h4 class="h5 fw-bold text-info mb-3">4. Ejemplo cURL</h4>
+                          <pre class="form-control" style="height:auto; min-height:240px; white-space:pre-wrap; background:#0f172a; color:#e2f8ff;">curl -X POST "<?= htmlspecialchars($apiDiscordListenerUrl, ENT_QUOTES, 'UTF-8') ?>" \
+  -H "Authorization: Bearer <?= htmlspecialchars($apiDiscordListenerExampleToken, ENT_QUOTES, 'UTF-8') ?>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "order_id": 1234,
+    "status": "confirmed",
+    "source_message_id": "1369458123456789012",
+    "provider_message": "Recarga confirmada por el bot"
+  }'</pre>
+                          <div class="form-text mt-2">El relay puede usar también <strong>message_id</strong> o <strong>discord_message_id</strong> como alias de correlación.</div>
+                        </div>
+                      </div>
+                      <div class="col-12 col-lg-6">
+                        <div class="gallery-table-wrap h-100">
+                          <h4 class="h5 fw-bold text-info mb-3">5. Reglas operativas y seguridad</h4>
+                          <ul class="mb-0" style="color:#d9faff; line-height:1.7;">
+                            <li><strong>confirmed</strong> mueve la orden a <strong>enviado</strong> y dispara notificaciones de éxito si la orden no había sido cerrada aún.</li>
+                            <li><strong>cancelled</strong> mueve la orden a <strong>cancelado</strong> y dispara la notificación de cancelación sólo en la primera transición.</li>
+                            <li><strong>review</strong> y <strong>failed</strong> dejan la orden pagada con revisión manual activa.</li>
+                            <li>Guarda y comparte el token sólo con el relay. Si se expone, genera uno nuevo desde este panel y vuelve a desplegar el bot.</li>
+                            <li>Usa siempre HTTPS y headers para el token. Evita enviarlo en el body salvo compatibilidad temporal.</li>
+                            <li>Si el relay no responde, el admin puede actualizar manualmente el estado Discord desde el módulo de pedidos.</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
             <script>
               (function() {
                 const select = document.getElementById('api-discord-probe-command');

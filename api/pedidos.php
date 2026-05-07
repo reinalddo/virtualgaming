@@ -1322,7 +1322,7 @@ function api_discord_listener_resolve_local_status(string $discordStatus, string
     }
 }
 
-function persist_api_discord_listener_update(mysqli $mysqli, array $order, array $payload): array {
+function persist_api_discord_listener_update(mysqli $mysqli, array $order, array $payload, string $source = 'discord_listener'): array {
     $orderId = (int) ($order['id'] ?? 0);
     if ($orderId <= 0) {
         throw new RuntimeException('Pedido inválido para la correlación de Discord.');
@@ -1355,7 +1355,7 @@ function persist_api_discord_listener_update(mysqli $mysqli, array $order, array
     }
 
     $listenerSnapshot = [
-        'source' => 'discord_listener',
+        'source' => trim($source) !== '' ? trim($source) : 'discord_listener',
         'received_at' => date('Y-m-d H:i:s'),
         'status' => $discordStatus,
         'message' => $providerMessage,
@@ -1388,6 +1388,27 @@ function persist_api_discord_listener_update(mysqli $mysqli, array $order, array
         'provider_reference' => $messageId,
         'requires_review' => $requiresReview,
     ];
+}
+
+function handle_api_discord_order_status_side_effects(mysqli $mysqli, string $previousLocalStatus, array $updatedOrder, array $statusResult): void {
+    $updatedLocalStatus = strtolower(trim((string) ($updatedOrder['estado'] ?? ($statusResult['local_status'] ?? ''))));
+    $providerReference = trim((string) ($statusResult['provider_reference'] ?? ''));
+    $providerMessage = trim((string) ($statusResult['provider_message'] ?? ''));
+
+    if ($updatedLocalStatus === 'enviado' && $previousLocalStatus !== 'enviado') {
+        $paymentMethodName = trim((string) ($updatedOrder['metodo_pago'] ?? 'Pago'));
+        $referenceNumber = trim((string) ($updatedOrder['numero_referencia'] ?? ''));
+        $phone = trim((string) ($updatedOrder['telefono_contacto'] ?? ''));
+        win_points_handle_order_status_change($mysqli, (int) ($updatedOrder['id'] ?? 0), 'enviado');
+        recharge_notifications_emit_for_order($mysqli, $updatedOrder);
+        notify_free_fire_recharge_success($mysqli, $updatedOrder, $paymentMethodName, $referenceNumber, $phone, $providerReference, $providerMessage);
+        return;
+    }
+
+    if ($updatedLocalStatus === 'cancelado' && $previousLocalStatus !== 'cancelado') {
+        recharge_notifications_emit_for_order($mysqli, $updatedOrder);
+        notify_catalog_purchase_cancelled($mysqli, $updatedOrder, $providerReference, $providerMessage, null);
+    }
 }
 
 function json_error(string $message, int $code = 400): void {
@@ -7758,26 +7779,67 @@ if ($action === 'discord_listener') {
     }
 
     $updatedOrder = fetch_order_by_id($mysqli, (int) ($order['id'] ?? 0)) ?: $order;
-    $updatedLocalStatus = strtolower(trim((string) ($updatedOrder['estado'] ?? ($listenerResult['local_status'] ?? ''))));
-    $providerReference = trim((string) ($listenerResult['provider_reference'] ?? ''));
-    $providerMessage = trim((string) ($listenerResult['provider_message'] ?? ''));
-
-    if ($updatedLocalStatus === 'enviado' && $previousLocalStatus !== 'enviado') {
-        $paymentMethodName = trim((string) ($updatedOrder['metodo_pago'] ?? 'Pago'));
-        $referenceNumber = trim((string) ($updatedOrder['numero_referencia'] ?? ''));
-        $phone = trim((string) ($updatedOrder['telefono_contacto'] ?? ''));
-        win_points_handle_order_status_change($mysqli, (int) ($updatedOrder['id'] ?? 0), 'enviado');
-        recharge_notifications_emit_for_order($mysqli, $updatedOrder);
-        notify_free_fire_recharge_success($mysqli, $updatedOrder, $paymentMethodName, $referenceNumber, $phone, $providerReference, $providerMessage);
-    } elseif ($updatedLocalStatus === 'cancelado' && $previousLocalStatus !== 'cancelado') {
-        recharge_notifications_emit_for_order($mysqli, $updatedOrder);
-        notify_catalog_purchase_cancelled($mysqli, $updatedOrder, $providerReference, $providerMessage, null);
-    }
+    handle_api_discord_order_status_side_effects($mysqli, $previousLocalStatus, $updatedOrder, $listenerResult);
 
     json_response(array_merge([
         'ok' => true,
         'message' => 'Correlación de Discord aplicada correctamente.',
     ], build_order_status_response_payload($updatedOrder, (int) ($updatedOrder['id'] ?? 0))));
+}
+
+if ($action === 'admin_update_discord_status') {
+    $adminRole = trim((string) ($_SESSION['auth_user']['rol'] ?? ''));
+    if (!isset($_SESSION['auth_user']) || !in_array($adminRole, ['admin', 'empleado'], true)) {
+        json_error('No autorizado', 403);
+    }
+
+    $orderId = intval($_POST['order_id'] ?? $_GET['order_id'] ?? 0);
+    if ($orderId <= 0) {
+        json_error('Pedido inválido.');
+    }
+
+    $order = fetch_order_by_id($mysqli, $orderId);
+    if (!$order) {
+        json_error('Pedido no encontrado.', 404);
+    }
+
+    if (!order_uses_api_discord($order)) {
+        json_error('Este pedido no usa el flujo de API Discord.', 409);
+    }
+
+    $localStatus = strtolower(trim((string) ($order['estado'] ?? '')));
+    if ($localStatus === 'pendiente') {
+        json_error('La orden aún no está pagada. No se puede actualizar su estado Discord desde admin.', 409);
+    }
+
+    $discordStatus = normalize_api_discord_order_status((string) ($_POST['discord_status'] ?? $_GET['discord_status'] ?? ''));
+    $allowedAdminStatuses = ['queued', 'sent', 'processing', 'confirmed', 'review', 'failed', 'cancelled'];
+    if (!in_array($discordStatus, $allowedAdminStatuses, true)) {
+        json_error('Estado Discord inválido para actualización manual.', 422);
+    }
+
+    $providerMessage = sanitize_str($_POST['provider_message'] ?? $_GET['provider_message'] ?? null, 500);
+    $payload = [
+        'status' => $discordStatus,
+        'provider_message' => trim((string) ($providerMessage ?? '')),
+    ];
+    if (trim((string) ($order['api_discord_message_id'] ?? '')) !== '') {
+        $payload['message_id'] = trim((string) ($order['api_discord_message_id'] ?? ''));
+    }
+
+    try {
+        $statusResult = persist_api_discord_listener_update($mysqli, $order, $payload, 'admin_panel');
+    } catch (Throwable $e) {
+        json_error($e->getMessage(), 500);
+    }
+
+    $updatedOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
+    handle_api_discord_order_status_side_effects($mysqli, $localStatus, $updatedOrder, $statusResult);
+
+    json_response(array_merge([
+        'ok' => true,
+        'message' => 'Estado Discord actualizado manualmente desde el panel.',
+    ], build_order_status_response_payload($updatedOrder, $orderId)));
 }
 
 if ($action === 'order_status') {
