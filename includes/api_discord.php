@@ -78,6 +78,48 @@ function api_discord_topup_commands(): array {
     }));
 }
 
+function api_discord_checkout_required_fields(string $commandKey): array {
+    $normalizedKey = trim($commandKey);
+    if ($normalizedKey === '') {
+        return [];
+    }
+
+    $numericField = static function (string $name, string $label, string $placeholder): array {
+        return [
+            'name' => $name,
+            'label' => $label,
+            'placeholder' => $placeholder,
+            'inputMode' => 'numeric',
+            'pattern' => '[0-9]+',
+            'title' => 'Solo números.',
+            'validationMessage' => 'Este campo solo admite números.',
+            'maxLength' => 40,
+        ];
+    };
+
+    switch ($normalizedKey) {
+        case 'mobile_legends_topup':
+            return [
+                $numericField('id', 'ID de usuario', 'Ej: 123456789'),
+                $numericField('sv', 'Zone ID / Server ID', 'Ej: 1234'),
+            ];
+
+        case 'wuvaup_topup':
+        case 'genshiup_topup':
+        case 'genshiupusa_topup':
+        case 'honkaiup_topup':
+        case 'zzzup_topup':
+        case 'chessup_topup':
+            return [
+                $numericField('uid', 'UID', 'Ej: 123456789'),
+                $numericField('sv', 'Zone ID / Server ID', 'Ej: 1001'),
+            ];
+
+        default:
+            return [];
+    }
+}
+
 function api_discord_normalize_catalog_price($value): string {
     $normalized = trim((string) $value);
     if ($normalized === '') {

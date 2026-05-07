@@ -6364,6 +6364,9 @@ if ($action === 'create') {
     }
     $tenant_slug = resolve_tenant_slug();
     $usesCatalogApi = game_uses_catalog_api($mysqli, (int) $game_id);
+    $usesDiscordApi = game_uses_discord_api($mysqli, (int) $game_id);
+    $discordCommandKey = $usesDiscordApi ? game_discord_api_command($mysqli, (int) $game_id) : '';
+    $discordCheckoutRequiredFields = $discordCommandKey !== '' ? api_discord_checkout_required_fields($discordCommandKey) : [];
     $catalogProduct = null;
     $selectedPackageIsAccountSale = false;
     $accountSaleTextSnapshot = null;
@@ -6464,6 +6467,48 @@ if ($action === 'create') {
         $player_fields_json = json_encode($player_fields, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         if (!is_string($player_fields_json)) {
             $player_fields_json = null;
+        }
+    }
+
+    if (!$selectedPackageIsAccountSale && !$usesCatalogApi && $discordCheckoutRequiredFields !== []) {
+        $discordMissingFields = [];
+        foreach ($discordCheckoutRequiredFields as $fieldConfig) {
+            if (!is_array($fieldConfig)) {
+                continue;
+            }
+
+            $fieldName = normalize_player_field_key((string) ($fieldConfig['name'] ?? ''));
+            if ($fieldName === '') {
+                continue;
+            }
+
+            $fieldValue = '';
+            switch ($fieldName) {
+                case 'uid':
+                case 'id':
+                    $fieldValue = api_discord_order_player_value($player_fields, ['uid', 'id', 'player_id', 'playerid', 'user_id', 'userid', 'id_juego', 'input1']);
+                    if ($fieldValue === '') {
+                        $fieldValue = trim((string) $user_identifier);
+                    }
+                    break;
+
+                case 'sv':
+                    $fieldValue = api_discord_order_player_value($player_fields, ['sv', 'server', 'server_id', 'serverid', 'zone', 'zone_id', 'zoneid', 'zona', 'input2']);
+                    break;
+
+                default:
+                    $fieldValue = trim((string) ($player_fields[$fieldName] ?? ''));
+                    break;
+            }
+
+            $pattern = trim((string) ($fieldConfig['pattern'] ?? ''));
+            if ($fieldValue === '' || ($pattern !== '' && preg_match('/^' . $pattern . '$/u', $fieldValue) !== 1)) {
+                $discordMissingFields[] = trim((string) ($fieldConfig['label'] ?? $fieldName));
+            }
+        }
+
+        if ($discordMissingFields !== []) {
+            json_error('Faltan datos obligatorios para la recarga por API Discord: ' . implode(', ', $discordMissingFields));
         }
     }
 

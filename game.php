@@ -5,6 +5,7 @@ require_once __DIR__ . "/includes/store_config.php";
 require_once __DIR__ . "/includes/currency.php";
 require_once __DIR__ . "/includes/payment_methods.php";
 require_once __DIR__ . "/includes/recargas_api.php";
+require_once __DIR__ . "/includes/api_discord.php";
 require_once __DIR__ . "/includes/slugify.php";
 require_once __DIR__ . "/includes/player_verification.php";
 require_once __DIR__ . "/includes/package_features.php";
@@ -312,6 +313,7 @@ include __DIR__ . "/includes/header.php";
   <?php endif; ?>
   <?php
     $usesCatalogApi = trim((string) ($game['categoria_api'] ?? '')) !== '';
+    $discordCheckoutRequiredFields = api_discord_checkout_required_fields((string) ($game['categoria_api_discord'] ?? ''));
     $apiProductsById = [];
     if ($usesCatalogApi && recargas_api_is_configured()) {
       try {
@@ -361,6 +363,8 @@ include __DIR__ . "/includes/header.php";
         })));
         if ($usesCatalogApi && $packApiId > 0 && isset($apiProductsById[$packApiId])) {
           $apiRequiredFields = recargas_api_describe_required_fields($apiProductsById[$packApiId]);
+        } elseif (!$usesCatalogApi && !empty($discordCheckoutRequiredFields)) {
+          $apiRequiredFields = $discordCheckoutRequiredFields;
         }
         $img_paquete = !empty($pack['imagen_icono']) ? $pack['imagen_icono'] : (!empty($game['imagen_paquete']) ? $game['imagen_paquete'] : null);
         $packImageUrl = package_feature_public_asset_url($img_paquete);
@@ -4358,6 +4362,15 @@ include __DIR__ . "/includes/header.php";
       control.placeholder = sanitizeFieldPlaceholder(fieldConfig.placeholder, 'Ingresa el dato');
       control.inputMode = fieldConfig.inputMode || 'text';
       control.maxLength = Number(fieldConfig.maxLength || 180);
+      if (fieldConfig.pattern) {
+        control.pattern = String(fieldConfig.pattern);
+      }
+      if (fieldConfig.title) {
+        control.title = String(fieldConfig.title);
+      }
+      if (fieldConfig.validationMessage) {
+        control.dataset.validationMessage = String(fieldConfig.validationMessage);
+      }
     }
 
     control.name = controlName;
@@ -4396,7 +4409,45 @@ include __DIR__ . "/includes/header.php";
       playerPrimaryInput.placeholder = sanitizeFieldPlaceholder(normalizedConfig.placeholder, defaultPrimaryField.placeholder);
       playerPrimaryInput.inputMode = normalizedConfig.inputMode || 'text';
       playerPrimaryInput.maxLength = Number(normalizedConfig.maxLength || defaultPrimaryField.maxLength);
+      if (normalizedConfig.pattern) {
+        playerPrimaryInput.pattern = String(normalizedConfig.pattern);
+      } else {
+        playerPrimaryInput.removeAttribute('pattern');
+      }
+      if (normalizedConfig.title) {
+        playerPrimaryInput.title = String(normalizedConfig.title);
+      } else {
+        playerPrimaryInput.removeAttribute('title');
+      }
+      if (normalizedConfig.validationMessage) {
+        playerPrimaryInput.dataset.validationMessage = String(normalizedConfig.validationMessage);
+      } else {
+        delete playerPrimaryInput.dataset.validationMessage;
+      }
     }
+  }
+
+  function isCheckoutFieldValid(field) {
+    if (!field) {
+      return true;
+    }
+
+    const hasEnhancedValidation = Boolean(
+      (field.dataset && field.dataset.validationMessage)
+      || field.getAttribute('pattern')
+    );
+    if (!hasEnhancedValidation) {
+      return true;
+    }
+
+    if (typeof field.setCustomValidity === 'function') {
+      field.setCustomValidity('');
+      if (field.dataset && field.dataset.validationMessage && field.value.trim() !== '' && !field.checkValidity()) {
+        field.setCustomValidity(String(field.dataset.validationMessage));
+      }
+    }
+
+    return typeof field.checkValidity === 'function' ? field.checkValidity() : field.value.trim() !== '';
   }
 
   function renderPlayerFields(pack) {
@@ -4417,7 +4468,12 @@ include __DIR__ . "/includes/header.php";
       const primaryFieldName = String(primaryConfig.name || defaultPrimaryField.name);
       if (shouldShowPrimaryField && existingValues[primaryFieldName] && playerPrimaryInput.value.trim() === '') {
         playerPrimaryInput.value = existingValues[primaryFieldName];
-      } else if (shouldShowPrimaryField && primaryFieldName === String(defaultPrimaryField.name) && defaultOrderUserIdentifier !== '' && playerPrimaryInput.value.trim() === '') {
+      } else if (
+        shouldShowPrimaryField
+        && ['id_juego', 'id', 'uid'].includes(primaryFieldName)
+        && defaultOrderUserIdentifier !== ''
+        && playerPrimaryInput.value.trim() === ''
+      ) {
         playerPrimaryInput.value = defaultOrderUserIdentifier;
       }
 
@@ -5944,7 +6000,7 @@ include __DIR__ . "/includes/header.php";
     const requiredFields = Array.from(orderForm.querySelectorAll("[required]"));
     let requiredFilled = true;
     requiredFields.forEach(field => {
-      if (field.value.trim() === "") {
+      if (field.value.trim() === "" || !isCheckoutFieldValid(field)) {
         requiredFilled = false;
       }
     });
@@ -6642,15 +6698,23 @@ include __DIR__ . "/includes/header.php";
                 requiredFields.forEach(field => {
                   const errorId = `${field.name}-error`;
                   let errorElem = document.getElementById(errorId);
-                  if (field.value.trim() === '') {
+                  const missingValue = field.value.trim() === '';
+                  const invalidValue = !missingValue && !isCheckoutFieldValid(field);
+                  if (missingValue || invalidValue) {
                     requiredFilled = false;
                     if (!errorElem) {
                       errorElem = document.createElement('div');
                       errorElem.id = errorId;
                       errorElem.style.color = '#f87171';
                       errorElem.style.fontSize = '12px';
-                      errorElem.textContent = 'Este campo es obligatorio.';
+                      errorElem.textContent = missingValue
+                        ? 'Este campo es obligatorio.'
+                        : (field.validationMessage || field.dataset.validationMessage || 'El valor ingresado no es válido.');
                       field.parentNode.appendChild(errorElem);
+                    } else {
+                      errorElem.textContent = missingValue
+                        ? 'Este campo es obligatorio.'
+                        : (field.validationMessage || field.dataset.validationMessage || 'El valor ingresado no es válido.');
                     }
                   } else if (errorElem) {
                     errorElem.remove();
