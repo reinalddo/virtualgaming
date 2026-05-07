@@ -87,6 +87,82 @@ function api_discord_sample_command_text(array $command): string {
     return trim((string) ($command['template'] ?? ''));
 }
 
+function api_discord_command_placeholders(array $command): array {
+    $template = trim((string) ($command['template'] ?? ''));
+    if ($template === '') {
+        return [];
+    }
+
+    if (preg_match_all('/\{([a-zA-Z0-9_]+)\}/', $template, $matches) !== 1) {
+        return [];
+    }
+
+    $placeholders = [];
+    foreach ($matches[1] as $placeholder) {
+        $normalized = strtolower(trim((string) $placeholder));
+        if ($normalized !== '') {
+            $placeholders[$normalized] = true;
+        }
+    }
+
+    return array_keys($placeholders);
+}
+
+function api_discord_render_command_text(array $command, array $values): array {
+    $template = trim((string) ($command['template'] ?? ''));
+    if ($template === '') {
+        return [
+            'ok' => false,
+            'command_text' => '',
+            'missing_params' => [],
+            'message' => 'El comando Discord no tiene un template configurado.',
+        ];
+    }
+
+    $normalizedValues = [];
+    foreach ($values as $key => $value) {
+        $normalizedKey = strtolower(trim((string) $key));
+        if ($normalizedKey === '') {
+            continue;
+        }
+
+        $normalizedValues[$normalizedKey] = trim((string) $value);
+    }
+
+    $commandText = $template;
+    $missingParams = [];
+    if (preg_match_all('/\{([a-zA-Z0-9_]+)\}/', $template, $matches) === 1) {
+        foreach ($matches[1] as $index => $placeholder) {
+            $token = (string) ($matches[0][$index] ?? '');
+            $normalizedPlaceholder = strtolower(trim((string) $placeholder));
+            $replacement = trim((string) ($normalizedValues[$normalizedPlaceholder] ?? ''));
+            if ($replacement === '') {
+                $missingParams[$normalizedPlaceholder] = true;
+                continue;
+            }
+
+            $commandText = str_replace($token, $replacement, $commandText);
+        }
+    }
+
+    $commandText = trim((string) (preg_replace('/\s+/u', ' ', $commandText) ?? $commandText));
+    if (!empty($missingParams)) {
+        return [
+            'ok' => false,
+            'command_text' => $commandText,
+            'missing_params' => array_keys($missingParams),
+            'message' => 'Faltan parámetros para construir el comando Discord: ' . implode(', ', array_keys($missingParams)) . '.',
+        ];
+    }
+
+    return [
+        'ok' => $commandText !== '',
+        'command_text' => $commandText,
+        'missing_params' => [],
+        'message' => $commandText !== '' ? '' : 'No se pudo construir el comando Discord.',
+    ];
+}
+
 function api_discord_validate_webhook_url(string $url): bool {
     $normalized = trim($url);
     if ($normalized === '') {
@@ -144,6 +220,28 @@ function api_discord_config(): array {
     ];
 }
 
+function api_discord_webhook_request_url(string $webhookUrl, bool $wait = false): string {
+    if (!$wait) {
+        return $webhookUrl;
+    }
+
+    return $webhookUrl . (strpos($webhookUrl, '?') === false ? '?' : '&') . 'wait=true';
+}
+
+function api_discord_extract_message_id(array $response): string {
+    $body = trim((string) ($response['body'] ?? ''));
+    if ($body === '') {
+        return '';
+    }
+
+    $decoded = json_decode($body, true);
+    if (!is_array($decoded)) {
+        return '';
+    }
+
+    return trim((string) ($decoded['id'] ?? ''));
+}
+
 function api_discord_send_webhook_message(string $webhookUrl, string $content, array $options = []): array {
     $payload = [
         'content' => $content,
@@ -170,10 +268,11 @@ function api_discord_send_webhook_message(string $webhookUrl, string $content, a
     }
 
     $timeout = api_discord_normalize_timeout($options['timeout'] ?? 10);
+    $requestUrl = api_discord_webhook_request_url($webhookUrl, !empty($options['wait']));
 
-    $sendRequest = static function (bool $verifySsl) use ($webhookUrl, $jsonPayload, $timeout): array {
+    $sendRequest = static function (bool $verifySsl) use ($requestUrl, $jsonPayload, $timeout): array {
         if (function_exists('curl_init')) {
-            $ch = curl_init($webhookUrl);
+            $ch = curl_init($requestUrl);
             curl_setopt($ch, CURLOPT_POST, true);
             curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonPayload);
             curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json; charset=utf-8']);
@@ -211,7 +310,7 @@ function api_discord_send_webhook_message(string $webhookUrl, string $content, a
             ],
         ]);
 
-        $body = @file_get_contents($webhookUrl, false, $context);
+        $body = @file_get_contents($requestUrl, false, $context);
         $status = 0;
         foreach ($http_response_header ?? [] as $headerLine) {
             if (preg_match('~^HTTP/\S+\s+(\d{3})~', (string) $headerLine, $matches) === 1) {

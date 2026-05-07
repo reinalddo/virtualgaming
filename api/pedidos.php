@@ -771,7 +771,7 @@ function normalize_api_discord_order_status(?string $status): string {
 function api_discord_order_status_default_message(string $status): string {
     switch (normalize_api_discord_order_status($status)) {
         case 'ready':
-            return 'La orden quedó preparada para usar el flujo de Discord cuando se implemente el envío automático.';
+            return 'La orden quedó preparada para enviarse al flujo de Discord.';
         case 'queued':
             return 'La orden quedó en cola para enviarse al canal de Discord.';
         case 'sent':
@@ -834,6 +834,394 @@ function build_api_discord_order_payload(array $order): ?array {
         'last_attempt_at' => trim((string) ($order['api_discord_last_attempt_at'] ?? '')),
         'sent_at' => trim((string) ($order['api_discord_sent_at'] ?? '')),
     ];
+}
+
+function append_api_discord_response(array $payload, array $order): array {
+    $discordPayload = build_api_discord_order_payload($order);
+    if ($discordPayload !== null) {
+        $payload['discord'] = $discordPayload;
+    }
+
+    return $payload;
+}
+
+function api_discord_order_player_value(array $playerFields, array $aliases): string {
+    foreach ($aliases as $alias) {
+        $normalizedAlias = normalize_player_field_key($alias);
+        if ($normalizedAlias === '') {
+            continue;
+        }
+
+        $value = trim((string) ($playerFields[$normalizedAlias] ?? ''));
+        if ($value !== '') {
+            return $value;
+        }
+    }
+
+    return '';
+}
+
+function resolve_api_discord_order_param_value(array $order, array $playerFields, string $param): string {
+    $normalizedParam = normalize_player_field_key($param);
+    if ($normalizedParam === '') {
+        return '';
+    }
+
+    $directValue = trim((string) ($playerFields[$normalizedParam] ?? ''));
+    if ($directValue !== '') {
+        return $directValue;
+    }
+
+    switch ($normalizedParam) {
+        case 'cantidad':
+        case 'amount':
+            $packageAmount = trim((string) ($order['paquete_cantidad'] ?? ''));
+            if ($packageAmount !== '') {
+                return $packageAmount;
+            }
+
+            $legacyAmount = trim((string) ($order['monto_ff'] ?? ''));
+            if ($legacyAmount !== '') {
+                return $legacyAmount;
+            }
+
+            return trim((string) ($order['cantidad'] ?? ''));
+
+        case 'correo':
+        case 'email':
+        case 'mail':
+            return trim((string) ($order['email'] ?? ''));
+
+        case 'uid':
+        case 'id':
+        case 'userid':
+        case 'playerid':
+        case 'user':
+            $identifier = api_discord_order_player_value($playerFields, ['uid', 'id', 'player_id', 'playerid', 'user_id', 'userid', 'id_juego', 'input1']);
+            if ($identifier !== '') {
+                return $identifier;
+            }
+
+            return trim((string) ($order['user_identifier'] ?? ''));
+
+        case 'sv':
+        case 'server':
+        case 'servidor':
+        case 'zone':
+        case 'zona':
+            return api_discord_order_player_value($playerFields, ['sv', 'server', 'server_id', 'serverid', 'zone', 'zone_id', 'zoneid', 'zona', 'input2']);
+    }
+
+    $orderValue = trim((string) ($order[$normalizedParam] ?? ''));
+    if ($orderValue !== '') {
+        return $orderValue;
+    }
+
+    return api_discord_order_player_value($playerFields, [$normalizedParam]);
+}
+
+function build_api_discord_order_command_values(array $order): array {
+    $playerFields = order_player_fields_from_json((string) ($order['player_fields_json'] ?? ''));
+    $command = api_discord_find_command((string) ($order['api_discord_command_key'] ?? ''));
+    $params = is_array($command['params'] ?? null) ? array_values($command['params']) : [];
+    $values = [];
+
+    foreach ($params as $param) {
+        $normalizedParam = normalize_player_field_key((string) $param);
+        if ($normalizedParam === '') {
+            continue;
+        }
+
+        $values[$normalizedParam] = resolve_api_discord_order_param_value($order, $playerFields, $normalizedParam);
+    }
+
+    return $values;
+}
+
+function api_discord_dispatch_response_preview(?string $body): string {
+    if (!is_string($body) || trim($body) === '') {
+        return '';
+    }
+
+    $decoded = json_decode($body, true);
+    if (!is_array($decoded)) {
+        return trim($body);
+    }
+
+    $message = trim((string) ($decoded['message'] ?? ''));
+    if ($message !== '') {
+        return $message;
+    }
+
+    return trim($body);
+}
+
+function execute_api_discord_order_dispatch(array $order): array {
+    $config = api_discord_config();
+    $commandKey = trim((string) ($order['api_discord_command_key'] ?? ''));
+    $command = api_discord_find_command($commandKey);
+    $purchaseQuantity = order_purchase_quantity($order);
+    $dispatchTimestamp = date('Y-m-d H:i:s');
+
+    if (!$config['enabled']) {
+        $payload = ['ok' => false, 'message' => 'API Discord no está activa para esta tienda.', 'command_key' => $commandKey];
+        return [
+            'ok' => true,
+            'sent' => false,
+            'provider_flow' => 'manual_review',
+            'provider_status' => 'review',
+            'provider_reference' => '',
+            'provider_message' => 'API Discord no está activa para esta tienda.',
+            'http_status' => 0,
+            'message_id' => '',
+            'requires_review' => 1,
+            'attempts_delta' => 0,
+            'last_attempt_at' => $dispatchTimestamp,
+            'sent_at' => '',
+            'response_body' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}',
+        ];
+    }
+
+    if ($config['webhook_url'] === '' || !api_discord_validate_webhook_url($config['webhook_url'])) {
+        $payload = ['ok' => false, 'message' => 'El webhook de API Discord no está configurado correctamente.', 'command_key' => $commandKey];
+        return [
+            'ok' => true,
+            'sent' => false,
+            'provider_flow' => 'manual_review',
+            'provider_status' => 'review',
+            'provider_reference' => '',
+            'provider_message' => 'El webhook de API Discord no está configurado correctamente.',
+            'http_status' => 0,
+            'message_id' => '',
+            'requires_review' => 1,
+            'attempts_delta' => 0,
+            'last_attempt_at' => $dispatchTimestamp,
+            'sent_at' => '',
+            'response_body' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}',
+        ];
+    }
+
+    if (!is_array($command) || trim((string) ($command['kind'] ?? '')) !== 'topup') {
+        $payload = ['ok' => false, 'message' => 'La orden no tiene un comando Discord de recarga válido.', 'command_key' => $commandKey];
+        return [
+            'ok' => true,
+            'sent' => false,
+            'provider_flow' => 'manual_review',
+            'provider_status' => 'review',
+            'provider_reference' => '',
+            'provider_message' => 'La orden no tiene un comando Discord de recarga válido.',
+            'http_status' => 0,
+            'message_id' => '',
+            'requires_review' => 1,
+            'attempts_delta' => 0,
+            'last_attempt_at' => $dispatchTimestamp,
+            'sent_at' => '',
+            'response_body' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}',
+        ];
+    }
+
+    $renderedCommand = api_discord_render_command_text($command, build_api_discord_order_command_values($order));
+    $commandText = trim((string) ($renderedCommand['command_text'] ?? ''));
+    if (empty($renderedCommand['ok']) || $commandText === '') {
+        $payload = [
+            'ok' => false,
+            'message' => trim((string) ($renderedCommand['message'] ?? 'No se pudo construir el comando Discord.')),
+            'command_key' => $commandKey,
+            'missing_params' => array_values((array) ($renderedCommand['missing_params'] ?? [])),
+        ];
+        return [
+            'ok' => true,
+            'sent' => false,
+            'provider_flow' => 'manual_review',
+            'provider_status' => 'review',
+            'provider_reference' => '',
+            'provider_message' => trim((string) ($renderedCommand['message'] ?? 'No se pudo construir el comando Discord.')),
+            'http_status' => 0,
+            'message_id' => '',
+            'requires_review' => 1,
+            'attempts_delta' => 0,
+            'last_attempt_at' => $dispatchTimestamp,
+            'sent_at' => '',
+            'response_body' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}',
+        ];
+    }
+
+    if (!empty($config['dry_run'])) {
+        $payload = [
+            'ok' => true,
+            'dry_run' => true,
+            'message' => 'Modo preventivo activo: el comando Discord fue generado pero no se envió.',
+            'command_key' => $commandKey,
+            'command_text' => $commandText,
+            'quantity' => $purchaseQuantity,
+        ];
+        return [
+            'ok' => true,
+            'sent' => false,
+            'provider_flow' => 'manual_review',
+            'provider_status' => 'review',
+            'provider_reference' => '',
+            'provider_message' => 'Modo preventivo activo: el comando Discord fue generado pero no se envió.',
+            'http_status' => 0,
+            'message_id' => '',
+            'requires_review' => 1,
+            'attempts_delta' => 0,
+            'last_attempt_at' => $dispatchTimestamp,
+            'sent_at' => '',
+            'response_body' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}',
+        ];
+    }
+
+    $attemptResults = [];
+    $attemptsDelta = 0;
+    $successCount = 0;
+    $lastHttpStatus = 0;
+    $lastMessageId = '';
+    $sentAt = '';
+
+    for ($index = 1; $index <= $purchaseQuantity; $index++) {
+        $response = api_discord_send_webhook_message($config['webhook_url'], $commandText, [
+            'timeout' => $config['timeout'],
+            'username' => $config['username'],
+            'avatar_url' => $config['avatar_url'],
+            'wait' => true,
+        ]);
+        $attemptsDelta++;
+        $lastHttpStatus = (int) ($response['status'] ?? 0);
+        $responseMessageId = api_discord_extract_message_id($response);
+        if ($responseMessageId !== '') {
+            $lastMessageId = $responseMessageId;
+        }
+
+        $attemptResults[] = [
+            'index' => $index,
+            'ok' => !empty($response['ok']),
+            'http_status' => $lastHttpStatus,
+            'message_id' => $responseMessageId,
+            'body' => trim((string) ($response['body'] ?? '')),
+            'error' => trim((string) ($response['error'] ?? '')),
+            'ssl_fallback_used' => !empty($response['ssl_fallback_used']),
+        ];
+
+        if (!empty($response['ok'])) {
+            $successCount++;
+            if ($sentAt === '') {
+                $sentAt = $dispatchTimestamp;
+            }
+        }
+    }
+
+    $responsePayload = [
+        'ok' => $successCount > 0,
+        'dry_run' => false,
+        'command_key' => $commandKey,
+        'command_text' => $commandText,
+        'quantity' => $purchaseQuantity,
+        'attempts' => $attemptResults,
+    ];
+
+    if ($successCount === $purchaseQuantity) {
+        $responsePayload['message'] = 'Comando Discord enviado correctamente para ' . order_purchase_quantity_text($purchaseQuantity) . '.';
+        return [
+            'ok' => true,
+            'sent' => true,
+            'provider_flow' => 'accepted',
+            'provider_status' => 'sent',
+            'provider_reference' => $lastMessageId,
+            'provider_message' => $responsePayload['message'],
+            'http_status' => $lastHttpStatus,
+            'message_id' => $lastMessageId,
+            'requires_review' => 0,
+            'attempts_delta' => $attemptsDelta,
+            'last_attempt_at' => $dispatchTimestamp,
+            'sent_at' => $sentAt,
+            'response_body' => json_encode($responsePayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}',
+        ];
+    }
+
+    if ($successCount > 0) {
+        $responsePayload['message'] = 'Discord aceptó ' . $successCount . ' de ' . $purchaseQuantity . ' envíos. La orden quedó para revisión manual.';
+        return [
+            'ok' => true,
+            'sent' => true,
+            'provider_flow' => 'manual_review',
+            'provider_status' => 'review',
+            'provider_reference' => $lastMessageId,
+            'provider_message' => $responsePayload['message'],
+            'http_status' => $lastHttpStatus,
+            'message_id' => $lastMessageId,
+            'requires_review' => 1,
+            'attempts_delta' => $attemptsDelta,
+            'last_attempt_at' => $dispatchTimestamp,
+            'sent_at' => $sentAt,
+            'response_body' => json_encode($responsePayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}',
+        ];
+    }
+
+    $lastAttempt = $attemptResults[count($attemptResults) - 1] ?? [];
+    $errorDetail = trim((string) ($lastAttempt['error'] ?? ''));
+    if ($errorDetail === '') {
+        $errorDetail = trim((string) ($lastAttempt['body'] ?? ''));
+    }
+    $responsePayload['message'] = 'No se pudo enviar el comando Discord.' . ($errorDetail !== '' ? ' ' . $errorDetail : '');
+
+    return [
+        'ok' => true,
+        'sent' => false,
+        'provider_flow' => 'manual_review',
+        'provider_status' => 'failed',
+        'provider_reference' => '',
+        'provider_message' => $responsePayload['message'],
+        'http_status' => $lastHttpStatus,
+        'message_id' => '',
+        'requires_review' => 1,
+        'attempts_delta' => $attemptsDelta,
+        'last_attempt_at' => $dispatchTimestamp,
+        'sent_at' => '',
+        'response_body' => json_encode($responsePayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}',
+    ];
+}
+
+function persist_api_discord_dispatch_result(mysqli $mysqli, array $order, array $dispatch, string $expectedState, ?string $targetState = null, ?string $reference = null, ?string $phone = null): bool {
+    $orderId = (int) ($order['id'] ?? 0);
+    if ($orderId <= 0) {
+        return false;
+    }
+
+    $targetState = $targetState ?? trim((string) ($order['estado'] ?? $expectedState));
+    $referenceToStore = trim((string) ($reference ?? ($order['numero_referencia'] ?? '')));
+    $phoneToStore = trim((string) ($phone ?? ($order['telefono_contacto'] ?? '')));
+    $messageId = trim((string) ($dispatch['message_id'] ?? ''));
+    if ($messageId === '') {
+        $messageId = trim((string) ($order['api_discord_message_id'] ?? ''));
+    }
+
+    $sentAt = trim((string) ($dispatch['sent_at'] ?? ''));
+    if ($sentAt === '') {
+        $sentAt = trim((string) ($order['api_discord_sent_at'] ?? ''));
+    }
+
+    $lastAttemptAt = trim((string) ($dispatch['last_attempt_at'] ?? ''));
+    if ($lastAttemptAt === '') {
+        $lastAttemptAt = trim((string) ($order['api_discord_last_attempt_at'] ?? ''));
+    }
+
+    $attemptsTotal = max(0, (int) ($order['api_discord_attempts'] ?? 0) + (int) ($dispatch['attempts_delta'] ?? 0));
+    $status = normalize_api_discord_order_status((string) ($dispatch['provider_status'] ?? '')) ?: 'review';
+    $httpStatus = (int) ($dispatch['http_status'] ?? 0);
+    $responseBody = trim((string) ($dispatch['response_body'] ?? ''));
+    $requiresReview = !empty($dispatch['requires_review']) ? 1 : 0;
+
+    $stmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, telefono_contacto = ?, api_discord_status = ?, api_discord_message_id = ?, api_discord_http_status = ?, api_discord_response_body = ?, api_discord_attempts = ?, api_discord_requires_review = ?, api_discord_last_attempt_at = ?, api_discord_sent_at = ?, estado = ? WHERE id = ? AND estado = ? LIMIT 1");
+    if (!$stmt) {
+        return false;
+    }
+
+    $stmt->bind_param('ssssisiisssis', $referenceToStore, $phoneToStore, $status, $messageId, $httpStatus, $responseBody, $attemptsTotal, $requiresReview, $lastAttemptAt, $sentAt, $targetState, $orderId, $expectedState);
+    $ok = $stmt->execute();
+    $stmt->close();
+
+    return $ok;
 }
 
 function json_error(string $message, int $code = 400): void {
@@ -2184,6 +2572,9 @@ function build_order_status_response_payload(array $order, int $orderId): array 
         $providerMessage = trim((string) ($order['binance_pay_message'] ?? ''));
     }
     if ($providerMessage === '' && order_uses_api_discord($order)) {
+        $providerMessage = api_discord_dispatch_response_preview($order['api_discord_response_body'] ?? null);
+    }
+    if ($providerMessage === '' && order_uses_api_discord($order)) {
         $providerMessage = api_discord_order_status_default_message((string) ($order['api_discord_status'] ?? ''));
     }
 
@@ -2218,12 +2609,7 @@ function build_order_status_response_payload(array $order, int $orderId): array 
         'remaining_seconds' => max(0, order_expiration_timestamp($order) - time()),
     ], $paymentGateway === 'binance_pay' ? build_binance_checkout_money_payload($order) : []);
 
-    $discordPayload = build_api_discord_order_payload($order);
-    if ($discordPayload !== null) {
-        $payload['discord'] = $discordPayload;
-    }
-
-    return append_account_sale_response($payload, $order);
+    return append_account_sale_response(append_api_discord_response($payload, $order), $order);
 }
 
 function sync_local_order_with_binance_payload(mysqli $mysqli, array $order, array $payload, string $source = 'sync'): array {
@@ -2333,6 +2719,26 @@ function sync_local_order_with_binance_payload(mysqli $mysqli, array $order, arr
             'order' => $sentOrder,
             'local_status' => trim((string) ($sentOrder['estado'] ?? 'enviado')),
             'provider_flow' => order_provider_flow_from_row($sentOrder),
+        ];
+    }
+
+    if (game_uses_discord_api($mysqli, (int) ($updatedOrder['juego_id'] ?? 0))) {
+        $dispatchResult = execute_api_discord_order_dispatch($updatedOrder);
+        persist_api_discord_dispatch_result($mysqli, $updatedOrder, $dispatchResult, 'pagado', 'pagado', $verifiedReference, $phone);
+
+        $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+        recharge_notifications_emit_for_order($mysqli, $paidOrder);
+        register_influencer_coupon_sale($mysqli, $paidOrder);
+        if (!empty($dispatchResult['sent'])) {
+            notify_catalog_purchase_pending($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, trim((string) ($dispatchResult['provider_reference'] ?? '')), trim((string) ($dispatchResult['provider_message'] ?? '')));
+        } else {
+            notify_bank_payment_verified_paid($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone);
+        }
+
+        return [
+            'order' => $paidOrder,
+            'local_status' => trim((string) ($paidOrder['estado'] ?? 'pagado')),
+            'provider_flow' => order_provider_flow_from_row($paidOrder),
         ];
     }
 
@@ -6599,6 +7005,35 @@ if ($action === 'submit_payment') {
                 });
             }
 
+            if (game_uses_discord_api($mysqli, $gameId)) {
+                $dispatchResult = execute_api_discord_order_dispatch($updatedOrder);
+                if (!persist_api_discord_dispatch_result($mysqli, $updatedOrder, $dispatchResult, 'pendiente', 'pagado', $verifiedReference, $phone)) {
+                    json_error('No se pudo guardar el resultado del envío Discord.', 500);
+                }
+
+                $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+                recharge_notifications_emit_for_order($mysqli, $paidOrder);
+                json_response(append_api_discord_response(append_payment_difference_response([
+                    'ok' => true,
+                    'message' => trim((string) ($dispatchResult['provider_message'] ?? 'El pago fue verificado y la orden quedó registrada para Discord.')),
+                    'order_id' => $orderId,
+                    'estado' => trim((string) ($paidOrder['estado'] ?? 'pagado')),
+                    'verified' => true,
+                    'provider_flow' => trim((string) ($dispatchResult['provider_flow'] ?? 'manual_review')),
+                    'provider_status' => trim((string) ($dispatchResult['provider_status'] ?? 'review')),
+                    'provider_reference' => trim((string) ($dispatchResult['provider_reference'] ?? '')),
+                    'provider_message' => trim((string) ($dispatchResult['provider_message'] ?? '')),
+                ], $paidOrder, $overpaymentAmount), $paidOrder), 200, static function () use ($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $dispatchResult): void {
+                    register_influencer_coupon_sale($mysqli, $paidOrder);
+                    if (!empty($dispatchResult['sent'])) {
+                        notify_catalog_purchase_pending($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, trim((string) ($dispatchResult['provider_reference'] ?? '')), trim((string) ($dispatchResult['provider_message'] ?? '')));
+                        return;
+                    }
+
+                    notify_bank_payment_verified_paid($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone);
+                });
+            }
+
             if (!$usesCatalogApi) {
                 $paidStatus = 'pagado';
                 $paidStmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, telefono_contacto = ?, estado = ? WHERE id = ? AND estado = 'pendiente'");
@@ -7322,6 +7757,29 @@ if ($action === 'admin_retry_recharge') {
     $verifiedReference = (string) ($order['numero_referencia'] ?? '');
     $phone = (string) ($order['telefono_contacto'] ?? '');
     $paymentMethodName = 'Panel administrativo';
+
+    if (game_uses_discord_api($mysqli, $gameId)) {
+        $dispatchResult = execute_api_discord_order_dispatch($order);
+        if (!persist_api_discord_dispatch_result($mysqli, $order, $dispatchResult, 'pagado', 'pagado', $verifiedReference, $phone)) {
+            json_error('No se pudo guardar el resultado del envío Discord.', 500);
+        }
+
+        $updatedOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
+        json_response(append_api_discord_response([
+            'ok' => true,
+            'message' => trim((string) ($dispatchResult['provider_message'] ?? 'La orden quedó actualizada para Discord.')),
+            'order_id' => $orderId,
+            'estado' => trim((string) ($updatedOrder['estado'] ?? 'pagado')),
+            'provider_flow' => trim((string) ($dispatchResult['provider_flow'] ?? 'manual_review')),
+            'provider_status' => trim((string) ($dispatchResult['provider_status'] ?? 'review')),
+            'provider_reference' => trim((string) ($dispatchResult['provider_reference'] ?? '')),
+            'provider_message' => trim((string) ($dispatchResult['provider_message'] ?? '')),
+        ], $updatedOrder), 200, static function () use ($mysqli, $updatedOrder, $paymentMethodName, $verifiedReference, $phone, $dispatchResult): void {
+            if (!empty($dispatchResult['sent'])) {
+                notify_catalog_purchase_pending($mysqli, $updatedOrder, $paymentMethodName, $verifiedReference, $phone, trim((string) ($dispatchResult['provider_reference'] ?? '')), trim((string) ($dispatchResult['provider_message'] ?? '')));
+            }
+        });
+    }
 
     if (game_uses_catalog_api($mysqli, $gameId)) {
         $packageApiId = (int) ($order['paquete_api'] ?? 0);

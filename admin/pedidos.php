@@ -125,10 +125,18 @@ function order_account_sale_detail_lines(array $order): array {
 }
 
 function order_retry_button_label(array $order): string {
+  if (trim((string) ($order['api_discord_command_key'] ?? '')) !== '') {
+    return 'Enviar Discord';
+  }
+
   return order_is_account_sale_admin($order) ? 'Enviar cuenta' : 'Enviar recarga';
 }
 
 function order_retry_confirm_message(array $order): string {
+  if (trim((string) ($order['api_discord_command_key'] ?? '')) !== '') {
+    return 'Se enviará el comando configurado de Discord para este pedido verificado. Usa esta acción solo cuando necesites disparar o repetir la prueba real por webhook.';
+  }
+
   return order_is_account_sale_admin($order)
     ? 'Se enviará nuevamente la cuenta para este pedido. Usa esta acción solo si necesitas reenviar la entrega al cliente.'
     : 'Se enviara nuevamente la recarga para este pedido verificado. Usa esta accion solo si la recarga anterior no se proceso realmente.';
@@ -442,6 +450,11 @@ function order_can_retry_recharge(array $order): bool {
 
   if ($status !== 'pagado') {
     return false;
+  }
+
+  if (trim((string) ($order['api_discord_command_key'] ?? '')) !== '') {
+    $discordStatus = trim((string) ($order['api_discord_status'] ?? ''));
+    return !in_array($discordStatus, ['sent', 'processing', 'confirmed'], true);
   }
 
   $providerOrderId = trim((string) ($order['recargas_api_pedido_id'] ?? ''));
