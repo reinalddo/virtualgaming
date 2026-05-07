@@ -1386,26 +1386,27 @@ $apiDiscordSelectedProbeSample = $apiDiscordSelectedProbe ? api_discord_sample_c
           <?php elseif ($activeTab === 'api-discord'): ?>
             <form method="post">
               <input type="hidden" name="config_section" value="api-discord">
-              <div class="config-section-note mb-4">Aquí arranca la Fase 0 y Fase 1 de <strong>api_discord</strong>: guardar el webhook, mantener el catálogo de comandos y ejecutar una prueba segura usando comandos de precio. Luego, cada juego elegirá su propia API desde <strong>Juegos API TiendaGiftVen</strong> o <strong>Juegos API Discord</strong>.</div>
+              <div class="config-section-note mb-4">Aquí configuras la conexión general con Discord para esta tienda: guardas el webhook, defines cómo se enviarán los mensajes de prueba y verificas que el canal reciba comandos seguros de precio. Después, en la sección de juegos, cada juego decidirá si usa <strong>Juegos API TiendaGiftVen</strong> o <strong>Juegos API Discord</strong>.</div>
 
               <div class="gallery-table-wrap mb-4">
-                <h3 class="h5 fw-bold text-info mb-3">Fase 0 · Requisitos y acceso</h3>
+                <h3 class="h5 fw-bold text-info mb-3">Conexión general del webhook</h3>
                 <div class="row g-3">
                   <div class="col-12">
                     <label class="form-label">Webhook de Discord</label>
                     <input type="url" name="api_discord_webhook_url" value="<?= htmlspecialchars($cfg['api_discord_webhook_url'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="https://discord.com/api/webhooks/...">
-                    <div class="form-text mt-2">Debe ser el webhook que publica en el canal donde escucha Mobentas. Sin este dato no se puede hacer el PoC.</div>
+                    <div class="form-text mt-2">Coloca aquí el webhook del canal donde escucha Mobentas. Sin esta URL no se pueden enviar mensajes de prueba ni futuros comandos automáticos.</div>
                   </div>
                   <div class="col-md-4">
                     <label class="form-label">Timeout HTTP (segundos)</label>
                     <input type="number" min="3" max="30" step="1" name="api_discord_timeout" value="<?= htmlspecialchars($cfg['api_discord_timeout'] ?? '10', ENT_QUOTES, 'UTF-8') ?>" class="form-control">
                   </div>
                   <div class="col-md-4">
-                    <label class="form-label">Nombre visible del webhook</label>
-                    <input type="text" name="api_discord_username" value="<?= htmlspecialchars($cfg['api_discord_username'] ?? 'VirtualGaming API Discord', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="VirtualGaming API Discord">
+                    <label class="form-label">Nombre visible del mensaje</label>
+                    <input type="text" name="api_discord_username" value="<?= htmlspecialchars($cfg['api_discord_username'] ?? 'VirtualGaming API', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="VirtualGaming API">
+                    <div class="form-text mt-2">Opcional. Discord no permite usar la palabra Discord dentro de este nombre.</div>
                   </div>
                   <div class="col-md-4">
-                    <label class="form-label">Avatar URL opcional</label>
+                    <label class="form-label">Avatar del mensaje (opcional)</label>
                     <input type="url" name="api_discord_avatar_url" value="<?= htmlspecialchars($cfg['api_discord_avatar_url'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="https://.../avatar.png">
                   </div>
                   <div class="col-12">
@@ -1413,13 +1414,13 @@ $apiDiscordSelectedProbeSample = $apiDiscordSelectedProbe ? api_discord_sample_c
                       <input class="form-check-input" type="checkbox" role="switch" id="api-discord-dry-run" name="api_discord_dry_run" value="1" <?= ($cfg['api_discord_dry_run'] ?? '1') === '1' ? 'checked' : '' ?>>
                       <label class="form-check-label fw-semibold" for="api-discord-dry-run">Mantener modo preventivo (solo comandos seguros de precio)</label>
                     </div>
-                    <div class="form-text mt-2">Este switch deja documentado que el tenant sigue en etapa segura. Más adelante, cuando entremos a recargas reales, este modo nos ayuda a no disparar topups por accidente.</div>
+                    <div class="form-text mt-2">Déjalo activo mientras estés validando conexión y respuestas del canal. Así la tienda solo enviará comandos de consulta de precios y evitarás disparar recargas reales por accidente.</div>
                   </div>
                 </div>
               </div>
 
               <div class="gallery-table-wrap mb-2">
-                <h3 class="h5 fw-bold text-info mb-3">Fase 1 · PoC webhook seguro</h3>
+                <h3 class="h5 fw-bold text-info mb-3">Prueba segura del webhook</h3>
                 <div class="row g-3">
                   <div class="col-md-6">
                     <label class="form-label">Comando de prueba</label>
@@ -1432,18 +1433,18 @@ $apiDiscordSelectedProbeSample = $apiDiscordSelectedProbe ? api_discord_sample_c
                         </option>
                       <?php endforeach; ?>
                     </select>
-                    <div class="form-text mt-2">Solo se listan comandos de precio. Así validamos si Mobentas responde a mensajes enviados por webhook sin hacer recargas reales.</div>
+                    <div class="form-text mt-2">Aquí solo aparecen comandos de precio. Sirven para comprobar que el webhook publica en el canal correcto y que Mobentas puede responder sin ejecutar recargas reales.</div>
                   </div>
                   <div class="col-md-6">
                     <label class="form-label">Vista previa del comando</label>
                     <input type="text" id="api-discord-probe-preview" class="form-control" value="<?= htmlspecialchars($apiDiscordSelectedProbeSample, ENT_QUOTES, 'UTF-8') ?>" readonly>
                   </div>
                   <div class="col-12">
-                    <label class="form-label">Catálogo detectado</label>
+                    <label class="form-label">Catálogo de comandos detectado</label>
                     <input type="text" class="form-control" value="<?= count(api_discord_load_commands()) ?> comandos cargados desde includes/api_discord_commands.json" readonly>
                   </div>
                   <div class="col-12">
-                    <label class="form-label">Comandos de juego Discord disponibles</label>
+                    <label class="form-label">Comandos listos para asignar a juegos</label>
                     <input type="text" class="form-control" value="<?= count(api_discord_topup_commands()) ?> comandos de juego listos para el select Juegos API Discord" readonly>
                   </div>
                 </div>

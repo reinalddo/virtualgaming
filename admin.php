@@ -2185,7 +2185,7 @@ switch ($seccion) {
             if ($activeTab === 'api-discord') {
                 $webhookUrl = trim((string) ($_POST['api_discord_webhook_url'] ?? ''));
                 $timeout = (string) api_discord_normalize_timeout($_POST['api_discord_timeout'] ?? '10');
-                $username = trim((string) ($_POST['api_discord_username'] ?? ''));
+                $username = api_discord_normalize_username((string) ($_POST['api_discord_username'] ?? ''));
                 $avatarUrl = trim((string) ($_POST['api_discord_avatar_url'] ?? ''));
                 $dryRun = isset($_POST['api_discord_dry_run']) ? '1' : '0';
                 $probeCommandKey = trim((string) ($_POST['api_discord_probe_command'] ?? 'mobile_legends_price'));

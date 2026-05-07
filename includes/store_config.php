@@ -711,7 +711,7 @@ function store_config_defaults(): array {
         'api_discord' => '0',
         'api_discord_webhook_url' => '',
         'api_discord_timeout' => '10',
-        'api_discord_username' => 'VirtualGaming API Discord',
+        'api_discord_username' => 'VirtualGaming API',
         'api_discord_avatar_url' => '',
         'api_discord_dry_run' => '1',
         'api_discord_probe_command' => 'mobile_legends_price',

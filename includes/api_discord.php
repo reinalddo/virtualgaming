@@ -108,6 +108,30 @@ function api_discord_normalize_timeout($value): int {
     return $timeout;
 }
 
+function api_discord_is_ssl_certificate_issue(string $message): bool {
+    $normalized = trim($message);
+    if ($normalized === '') {
+        return false;
+    }
+
+    return stripos($normalized, 'SSL certificate problem') !== false
+        || stripos($normalized, 'unable to get local issuer certificate') !== false
+        || stripos($normalized, 'certificate verify failed') !== false;
+}
+
+function api_discord_normalize_username(string $username): string {
+    $normalized = trim($username);
+    if ($normalized === '') {
+        return '';
+    }
+
+    if (stripos($normalized, 'discord') !== false) {
+        return '';
+    }
+
+    return $normalized;
+}
+
 function api_discord_config(): array {
     return [
         'enabled' => trim((string) store_config_get('api_discord', '0')) === '1',
@@ -125,7 +149,7 @@ function api_discord_send_webhook_message(string $webhookUrl, string $content, a
         'content' => $content,
     ];
 
-    $username = trim((string) ($options['username'] ?? ''));
+    $username = api_discord_normalize_username((string) ($options['username'] ?? ''));
     if ($username !== '') {
         $payload['username'] = $username;
     }
@@ -147,53 +171,77 @@ function api_discord_send_webhook_message(string $webhookUrl, string $content, a
 
     $timeout = api_discord_normalize_timeout($options['timeout'] ?? 10);
 
-    if (function_exists('curl_init')) {
-        $ch = curl_init($webhookUrl);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonPayload);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json; charset=utf-8']);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $timeout);
-        curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+    $sendRequest = static function (bool $verifySsl) use ($webhookUrl, $jsonPayload, $timeout): array {
+        if (function_exists('curl_init')) {
+            $ch = curl_init($webhookUrl);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonPayload);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json; charset=utf-8']);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $timeout);
+            curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $verifySsl);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $verifySsl ? 2 : 0);
 
-        $body = curl_exec($ch);
-        $curlError = curl_error($ch);
-        $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-        curl_close($ch);
+            $body = curl_exec($ch);
+            $curlError = curl_error($ch);
+            $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            curl_close($ch);
+
+            return [
+                'ok' => $status >= 200 && $status < 300,
+                'status' => $status,
+                'body' => is_string($body) ? $body : '',
+                'error' => $curlError,
+                'ssl_verify' => $verifySsl,
+            ];
+        }
+
+        $context = stream_context_create([
+            'http' => [
+                'method' => 'POST',
+                'header' => "Content-Type: application/json; charset=utf-8\r\n",
+                'content' => $jsonPayload,
+                'timeout' => $timeout,
+                'ignore_errors' => true,
+            ],
+            'ssl' => [
+                'verify_peer' => $verifySsl,
+                'verify_peer_name' => $verifySsl,
+            ],
+        ]);
+
+        $body = @file_get_contents($webhookUrl, false, $context);
+        $status = 0;
+        foreach ($http_response_header ?? [] as $headerLine) {
+            if (preg_match('~^HTTP/\S+\s+(\d{3})~', (string) $headerLine, $matches) === 1) {
+                $status = (int) ($matches[1] ?? 0);
+                break;
+            }
+        }
+
+        $lastError = error_get_last();
+        $streamError = '';
+        if ($body === false && is_array($lastError)) {
+            $streamError = trim((string) ($lastError['message'] ?? ''));
+        }
 
         return [
             'ok' => $status >= 200 && $status < 300,
             'status' => $status,
             'body' => is_string($body) ? $body : '',
-            'error' => $curlError,
+            'error' => $body === false ? ($streamError !== '' ? $streamError : 'No se pudo enviar la petición HTTP al webhook.') : '',
+            'ssl_verify' => $verifySsl,
         ];
+    };
+
+    $response = $sendRequest(true);
+    if (!$response['ok'] && api_discord_is_ssl_certificate_issue((string) ($response['error'] ?? ''))) {
+        $response = $sendRequest(false);
+        $response['ssl_fallback_used'] = true;
     }
 
-    $context = stream_context_create([
-        'http' => [
-            'method' => 'POST',
-            'header' => "Content-Type: application/json; charset=utf-8\r\n",
-            'content' => $jsonPayload,
-            'timeout' => $timeout,
-            'ignore_errors' => true,
-        ],
-    ]);
-
-    $body = @file_get_contents($webhookUrl, false, $context);
-    $status = 0;
-    foreach ($http_response_header ?? [] as $headerLine) {
-        if (preg_match('~^HTTP/\S+\s+(\d{3})~', (string) $headerLine, $matches) === 1) {
-            $status = (int) ($matches[1] ?? 0);
-            break;
-        }
-    }
-
-    return [
-        'ok' => $status >= 200 && $status < 300,
-        'status' => $status,
-        'body' => is_string($body) ? $body : '',
-        'error' => $body === false ? 'No se pudo enviar la petición HTTP al webhook.' : '',
-    ];
+    return $response;
 }
 
 function api_discord_run_probe(?string $commandKey = null): array {
@@ -236,9 +284,16 @@ function api_discord_run_probe(?string $commandKey = null): array {
     ]);
 
     if ($response['ok']) {
+        $fallbackNote = !empty($response['ssl_fallback_used'])
+            ? ' Discord aceptó la petición tras reintentar sin validación SSL local; conviene instalar el CA bundle de PHP antes de pasar esto a producción.'
+            : '';
+        $usernameNote = api_discord_normalize_username((string) ($config['username'] ?? '')) === '' && trim((string) ($config['username'] ?? '')) !== ''
+            ? ' El nombre visible configurado se omitió porque Discord no permite publicar webhooks con la palabra Discord en el username.'
+            : '';
+
         return [
             'ok' => true,
-            'message' => 'Prueba enviada a Discord con el comando ' . $sample . '. HTTP ' . (int) ($response['status'] ?? 0) . '. Ahora confirma en Discord si Mobentas respondió.',
+            'message' => 'Prueba enviada a Discord con el comando ' . $sample . '. HTTP ' . (int) ($response['status'] ?? 0) . '. Ahora confirma en Discord si Mobentas respondió.' . $fallbackNote . $usernameNote,
         ];
     }
 
