@@ -935,6 +935,69 @@ function api_discord_order_package_amount_from_name(array $order): string {
     return '';
 }
 
+function api_discord_normalize_package_token(string $value): string {
+    $normalized = function_exists('mb_strtolower')
+        ? mb_strtolower(trim($value), 'UTF-8')
+        : strtolower(trim($value));
+
+    $normalized = strtr($normalized, [
+        'á' => 'a',
+        'é' => 'e',
+        'í' => 'i',
+        'ó' => 'o',
+        'ú' => 'u',
+        'ü' => 'u',
+        'ñ' => 'n',
+    ]);
+    $normalized = preg_replace('/\s*\+\s*/u', '+', $normalized) ?? $normalized;
+
+    return preg_replace('/[^a-z0-9\+]+/u', '', $normalized) ?? '';
+}
+
+function api_discord_mobile_legends_amount_token(array $order): string {
+    $candidates = [
+        trim((string) ($order['paquete_cantidad'] ?? '')),
+        trim((string) ($order['paquete_nombre'] ?? '')),
+    ];
+
+    foreach ($candidates as $candidate) {
+        $normalized = api_discord_normalize_package_token($candidate);
+        if ($normalized === '') {
+            continue;
+        }
+
+        if ($normalized === '172+pase' || (str_contains($normalized, '172') && str_contains($normalized, 'pase'))) {
+            return '172+pase';
+        }
+        if ($normalized === '86+doble' || (str_contains($normalized, '86') && str_contains($normalized, 'doble'))) {
+            return '86+doble';
+        }
+        if (str_contains($normalized, 'semanalelite')) {
+            return 'semanalelite';
+        }
+        if (str_contains($normalized, 'mensualelite')) {
+            return 'mensualelite';
+        }
+        if (str_contains($normalized, 'triple')) {
+            return 'triple';
+        }
+        if (str_contains($normalized, 'doble')) {
+            return 'doble';
+        }
+        if (str_contains($normalized, 'crep')) {
+            return 'crep';
+        }
+        if (str_contains($normalized, 'pase')) {
+            return 'pase';
+        }
+        if (preg_match('/^\d+(?:\+\d+)?$/', $normalized) === 1) {
+            return $normalized;
+        }
+    }
+
+    return '';
+}
+
 function resolve_api_discord_order_param_value(array $order, array $playerFields, string $param): string {
     $normalizedParam = normalize_player_field_key($param);
     if ($normalizedParam === '') {
@@ -949,6 +1012,13 @@ function resolve_api_discord_order_param_value(array $order, array $playerFields
     switch ($normalizedParam) {
         case 'cantidad':
         case 'amount':
+            if (trim((string) ($order['api_discord_command_key'] ?? '')) === 'mobile_legends_topup') {
+                $mobileLegendsAmount = api_discord_mobile_legends_amount_token($order);
+                if ($mobileLegendsAmount !== '') {
+                    return $mobileLegendsAmount;
+                }
+            }
+
             $packageAmount = trim((string) ($order['paquete_cantidad'] ?? ''));
 
             if (api_discord_order_package_uses_named_amount($order)) {
@@ -1217,7 +1287,7 @@ function execute_api_discord_order_dispatch(array $order): array {
     ];
 
     if ($successCount === $purchaseQuantity) {
-        $responsePayload['message'] = 'Tu pago fue verificado y la recarga se envió correctamente para ' . order_purchase_quantity_text($purchaseQuantity) . '. Estamos esperando la confirmación automática final del proveedor.';
+        $responsePayload['message'] = 'Tu pago fue verificado y la orden fue enviada al proveedor para ' . order_purchase_quantity_text($purchaseQuantity) . '. Estamos esperando la confirmación final automática.';
         return [
             'ok' => true,
             'sent' => true,

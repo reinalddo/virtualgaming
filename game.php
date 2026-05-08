@@ -5187,9 +5187,9 @@ include __DIR__ . "/includes/header.php";
           showPaymentStatusModal('Pago pendiente en Binance Pay', 'El checkout sigue pendiente. Puedes dejar esta ventana abierta mientras completas el pago.', 'info');
         } else {
           const successPresentation = successfulProviderPendingPresentation(providerFlow);
-          setPaymentAlert(successPresentation.message, 'success');
+          setPaymentAlert(successPresentation.message, 'info');
           renderProviderPaymentDetails(data, reference, totalText);
-          showPaymentStatusModal(successPresentation.title, successPresentation.message, 'success');
+          showPaymentStatusModal(successPresentation.title, successPresentation.message, 'info');
         }
         return;
       }
@@ -5602,38 +5602,38 @@ include __DIR__ . "/includes/header.php";
     const normalizedFlow = String(providerFlow || '').toLowerCase();
     if (normalizedFlow === 'tracking') {
       return {
-        title: 'Recarga enviada con éxito',
-        summary: 'Tu pago fue verificado y la solicitud de recarga ya fue enviada correctamente. Ahora estamos esperando la confirmación automática final del proveedor.',
-        message: 'Tu pago fue verificado y la recarga ya fue enviada correctamente. Estamos esperando la confirmación automática final del proveedor.',
+        title: 'Pago verificado, esperando confirmación',
+        summary: 'Tu pago ya fue verificado y la orden fue enviada al proveedor. Ahora estamos esperando la confirmación automática final antes de marcar la recarga como completada.',
+        message: 'Tu pago ya fue verificado y la orden fue enviada al proveedor. Estamos esperando la confirmación final automática antes de mostrarla como completada.',
         steps: [
-          'La solicitud de recarga ya fue aceptada y sigue activa en el sistema.',
-          'Puedes esperar unos instantes mientras continuamos la confirmación automática.',
+          'La orden sigue activa en el sistema y continúa en validación automática.',
+          'Puedes esperar unos instantes mientras continuamos consultando la confirmación final.',
           'Si la confirmación tarda más de lo habitual, podrás contactar al administrador con tu número de orden.'
         ],
         reasons: [
           'Tu pago ya fue verificado correctamente.',
-          'La recarga ya fue enviada al proveedor.',
-          'El sistema continuará el seguimiento automático hasta confirmar el resultado final.'
+          'La orden ya fue enviada al proveedor.',
+          'La recarga sólo se marcará como completada cuando exista confirmación final del proveedor.'
         ],
-        reasonCaption: '¿Por qué este mensaje es exitoso?'
+        reasonCaption: '¿Qué significa este estado?'
       };
     }
 
     return {
-      title: 'Recarga enviada con éxito',
-      summary: 'Tu pago fue verificado y la solicitud de recarga ya fue enviada correctamente al proveedor.',
-      message: 'Tu pago fue verificado y la recarga ya fue enviada correctamente. Estamos esperando la confirmación automática final del proveedor.',
+      title: 'Pago verificado, esperando confirmación',
+      summary: 'Tu pago ya fue verificado y la orden fue enviada al proveedor. Ahora estamos esperando la confirmación automática final antes de marcar la recarga como completada.',
+      message: 'Tu pago ya fue verificado y la orden fue enviada al proveedor. Estamos esperando la confirmación final automática antes de mostrarla como completada.',
       steps: [
-        'La recarga ya fue solicitada correctamente al proveedor.',
+        'La orden ya fue enviada al proveedor y quedó registrada para seguimiento.',
         'Puedes esperar unos instantes mientras confirmamos el resultado final de forma automática.',
         'Si la confirmación tarda más de lo habitual, podrás contactar al administrador con tu número de orden.'
       ],
       reasons: [
         'Tu pago ya fue verificado correctamente.',
-        'El comando de recarga fue enviado correctamente al proveedor.',
-        'La orden quedó registrada para seguimiento automático hasta su confirmación final.'
+        'La orden ya fue enviada al proveedor.',
+        'La recarga sólo se marcará como completada cuando exista confirmación final del proveedor.'
       ],
-      reasonCaption: '¿Por qué este mensaje es exitoso?'
+      reasonCaption: '¿Qué significa este estado?'
     };
   }
 
@@ -6554,7 +6554,7 @@ include __DIR__ . "/includes/header.php";
 
                       setPaymentAlert(
                         successPresentation ? successPresentation.message : paidMessage,
-                        requiresManualReview ? 'warning' : 'success'
+                        requiresManualReview ? 'warning' : (successPresentation ? 'info' : 'success')
                       );
                       if (hasProviderDetails || providerFlow === 'accepted') {
                         renderProviderPaymentDetails(data, reference, getConfirmedPaymentTotalText());
@@ -6568,7 +6568,7 @@ include __DIR__ . "/includes/header.php";
                       showPaymentStatusModal(
                         requiresManualReview ? 'Revisión requerida' : (successPresentation ? successPresentation.title : 'Operación exitosa'),
                         successPresentation ? successPresentation.message : paidMessage,
-                        requiresManualReview ? 'danger' : 'success'
+                        requiresManualReview ? 'danger' : (successPresentation ? 'info' : 'success')
                       );
                       if (providerFlow === 'accepted' || providerFlow === 'tracking') {
                         setPaymentStatusWaiting(true);
