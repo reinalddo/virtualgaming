@@ -880,6 +880,44 @@ function api_discord_order_player_value(array $playerFields, array $aliases): st
     return '';
 }
 
+function api_discord_order_package_uses_named_amount(array $order): bool {
+    $packageName = trim((string) ($order['paquete_nombre'] ?? ''));
+    if ($packageName === '') {
+        return false;
+    }
+
+    $normalizedName = function_exists('mb_strtolower')
+        ? mb_strtolower($packageName, 'UTF-8')
+        : strtolower($packageName);
+
+    foreach ([
+        'pase',
+        'pass',
+        'weekly',
+        'semanal',
+        'monthly',
+        'mensual',
+        'starlight',
+        'blessing',
+        'membership',
+        'member',
+        'membres',
+        'tarjeta',
+        'card',
+        'supply',
+        'privilege',
+        'prime',
+        'suscripcion',
+        'subscription',
+    ] as $keyword) {
+        if (str_contains($normalizedName, $keyword)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function resolve_api_discord_order_param_value(array $order, array $playerFields, string $param): string {
     $normalizedParam = normalize_player_field_key($param);
     if ($normalizedParam === '') {
@@ -894,6 +932,13 @@ function resolve_api_discord_order_param_value(array $order, array $playerFields
     switch ($normalizedParam) {
         case 'cantidad':
         case 'amount':
+            if (api_discord_order_package_uses_named_amount($order)) {
+                $packageName = trim((string) ($order['paquete_nombre'] ?? ''));
+                if ($packageName !== '') {
+                    return $packageName;
+                }
+            }
+
             $packageAmount = trim((string) ($order['paquete_cantidad'] ?? ''));
             if ($packageAmount !== '') {
                 return $packageAmount;
