@@ -6513,6 +6513,13 @@ if ($action === 'create') {
         }
     }
 
+    if ($player_fields_json === null && $player_fields !== []) {
+        $player_fields_json = json_encode($player_fields, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (!is_string($player_fields_json)) {
+            $player_fields_json = null;
+        }
+    }
+
     if (!$game_name) $missing[] = 'game_name';
     if ($package_id <= 0) $missing[] = 'package_id';
     if (!$pack_name) $missing[] = 'pack_name';
