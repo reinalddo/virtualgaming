@@ -321,7 +321,7 @@ CREATE TABLE IF NOT EXISTS juego_paquetes (
     nombre VARCHAR(180) NOT NULL,
     clave VARCHAR(80) NOT NULL,
     monto_ff VARCHAR(20) DEFAULT NULL,
-    cantidad INT NOT NULL DEFAULT 1,
+    cantidad VARCHAR(80) NOT NULL DEFAULT '1',
     precio DECIMAL(12,2) NOT NULL DEFAULT 0,
     imagen_icono VARCHAR(255) DEFAULT NULL,
     activo TINYINT(1) NOT NULL DEFAULT 1,

@@ -190,6 +190,20 @@ function ensure_juego_paquetes_paquete_api_column(mysqli $mysqli): void {
     }
 }
 
+function ensure_juego_paquetes_cantidad_text_column(mysqli $mysqli): void {
+    $result = $mysqli->query("SHOW COLUMNS FROM juego_paquetes LIKE 'cantidad'");
+    if (!($result instanceof mysqli_result) || $result->num_rows === 0) {
+        return;
+    }
+
+    $column = $result->fetch_assoc();
+    $result->free();
+    $columnType = strtolower(trim((string) ($column['Type'] ?? '')));
+    if ($columnType !== '' && !str_contains($columnType, 'char') && !str_contains($columnType, 'text')) {
+        $mysqli->query("ALTER TABLE juego_paquetes MODIFY cantidad VARCHAR(80) NOT NULL DEFAULT '1'");
+    }
+}
+
 function ensure_juego_paquetes_orden_column(mysqli $mysqli): void {
     $result = $mysqli->query("SHOW COLUMNS FROM juego_paquetes LIKE 'orden'");
     if (!($result instanceof mysqli_result) || $result->num_rows === 0) {
@@ -450,6 +464,7 @@ function admin_package_apply_bulk_feature_actions(mysqli $mysqli, int $gameId, i
 ensure_juego_paquetes_monto_ff_column($mysqli);
 ensure_juego_paquetes_activo_column($mysqli);
 ensure_juego_paquetes_paquete_api_column($mysqli);
+ensure_juego_paquetes_cantidad_text_column($mysqli);
 ensure_juego_paquetes_orden_column($mysqli);
 ensure_juegos_api_discord_catalog_columns($mysqli);
 package_account_sales_ensure_schema($mysqli);
@@ -692,7 +707,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_paquete_id'])) {
     $edit_cuenta_texto = $accountSaleFeatureEnabled
         ? package_account_sales_normalize_text((string) ($_POST['edit_cuenta_texto'] ?? ''))
         : '';
-    $edit_cantidad = $usesDiscordCatalog ? max(1, intval($_POST['edit_cantidad'] ?? 0)) : intval($_POST['edit_cantidad'] ?? 0);
+    $edit_cantidad = $usesDiscordCatalog
+        ? api_discord_normalize_catalog_quantity($_POST['edit_cantidad'] ?? '')
+        : (string) intval($_POST['edit_cantidad'] ?? 0);
+    if ($edit_cantidad === '') {
+        $edit_cantidad = '1';
+    }
     $edit_precio = floatval($_POST['edit_precio'] ?? 0);
     $edit_win_points_reward = max(0, (int) ($_POST['edit_win_points_reward'] ?? 0));
     $edit_activo = isset($_POST['edit_activo']) ? 1 : 0;
@@ -711,10 +731,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_paquete_id'])) {
         : ['items' => [], 'delete_paths' => []];
     if ($edit_imagen_icono) {
         $stmt = $mysqli->prepare("UPDATE juego_paquetes SET nombre=?, clave=?, monto_ff=NULLIF(?, ''), paquete_api=NULLIF(?, ''), vender_cuenta=?, cuenta_texto=NULLIF(?, ''), cantidad=?, precio=?, win_points_reward=?, imagen_icono=?, activo=? WHERE id=?");
-        $stmt->bind_param('ssssisidisii', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_paquete_api, $edit_vender_cuenta, $edit_cuenta_texto, $edit_cantidad, $edit_precio, $edit_win_points_reward, $edit_imagen_icono, $edit_activo, $edit_id);
+        $stmt->bind_param('ssssissdisii', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_paquete_api, $edit_vender_cuenta, $edit_cuenta_texto, $edit_cantidad, $edit_precio, $edit_win_points_reward, $edit_imagen_icono, $edit_activo, $edit_id);
     } else {
         $stmt = $mysqli->prepare("UPDATE juego_paquetes SET nombre=?, clave=?, monto_ff=NULLIF(?, ''), paquete_api=NULLIF(?, ''), vender_cuenta=?, cuenta_texto=NULLIF(?, ''), cantidad=?, precio=?, win_points_reward=?, activo=? WHERE id=?");
-        $stmt->bind_param('ssssisidiii', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_paquete_api, $edit_vender_cuenta, $edit_cuenta_texto, $edit_cantidad, $edit_precio, $edit_win_points_reward, $edit_activo, $edit_id);
+        $stmt->bind_param('ssssissdiii', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_paquete_api, $edit_vender_cuenta, $edit_cuenta_texto, $edit_cantidad, $edit_precio, $edit_win_points_reward, $edit_activo, $edit_id);
     }
     $stmt->execute();
     $stmt->close();
@@ -775,7 +795,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['cla
     $cuenta_texto = $accountSaleFeatureEnabled
         ? package_account_sales_normalize_text((string) ($_POST['cuenta_texto'] ?? ''))
         : '';
-    $cantidad = $usesDiscordCatalog ? max(1, intval($_POST['cantidad'] ?? 0)) : intval($_POST['cantidad']);
+    $cantidad = $usesDiscordCatalog
+        ? api_discord_normalize_catalog_quantity($_POST['cantidad'] ?? '')
+        : (string) intval($_POST['cantidad']);
+    if ($cantidad === '') {
+        $cantidad = '1';
+    }
     $precio = floatval($_POST['precio']);
     $win_points_reward = max(0, (int) ($_POST['win_points_reward'] ?? $defaultWinPointsReward));
     $activo = isset($_POST['activo']) ? 1 : 0;
@@ -786,7 +811,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['cla
         ? admin_package_build_account_gallery_payload([], [], [], [], $_POST['new_account_gallery_description'] ?? [], $newGalleryFiles)
         : ['items' => [], 'delete_paths' => []];
     $stmt = $mysqli->prepare("INSERT INTO juego_paquetes (juego_id, nombre, clave, monto_ff, paquete_api, vender_cuenta, cuenta_texto, cantidad, precio, win_points_reward, imagen_icono, activo, orden) VALUES (?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param('issssisidisii', $juego_id, $nombre, $clave, $monto_ff, $paquete_api, $vender_cuenta, $cuenta_texto, $cantidad, $precio, $win_points_reward, $imagen_icono, $activo, $orden);
+    $stmt->bind_param('issssissdisii', $juego_id, $nombre, $clave, $monto_ff, $paquete_api, $vender_cuenta, $cuenta_texto, $cantidad, $precio, $win_points_reward, $imagen_icono, $activo, $orden);
     $stmt->execute();
     $newPackageId = (int) $mysqli->insert_id;
     $stmt->close();
@@ -939,8 +964,8 @@ $0.41"><?= htmlspecialchars($discordCatalogRaw, ENT_QUOTES, 'UTF-8') ?></textare
         <?php elseif ($usesDiscordCatalog): ?>
             <div class="col-md-6">
                 <label class="form-label text-neon">Cantidad / paquete Discord</label>
-                <input type="number" min="1" name="cantidad" placeholder="Cantidad" required class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;" value="1" data-discord-catalog-field="quantity">
-                <div class="form-text mt-2" style="color:#8be9fd;">Registra aquí la cantidad exacta que usará el comando de recarga del juego en Discord.</div>
+                <input type="text" name="cantidad" placeholder="Ej: 86, 257+40 o Pase semanal" required class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;" value="1" maxlength="80" data-discord-catalog-field="quantity">
+                <div class="form-text mt-2" style="color:#8be9fd;">Registra aquí el valor exacto que debe reemplazar <code>{cantidad}</code> en el comando de recarga de Discord.</div>
             </div>
             <div class="col-md-6">
                 <?php if (!empty($discordCatalogItems)): ?>
@@ -1407,9 +1432,9 @@ if (isset($_GET['editar'])) {
         <?php endif; ?>
         <div class="mb-3">
             <label class="form-label text-neon"><?= $usesDiscordCatalog ? 'Cantidad / paquete Discord' : 'Cantidad' ?></label>
-            <input type="number" name="edit_cantidad" value="<?= htmlspecialchars($paq_edit['cantidad']) ?>" min="<?= $usesDiscordCatalog ? '1' : '0' ?>" required class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;" data-discord-catalog-field="quantity">
+            <input type="<?= $usesDiscordCatalog ? 'text' : 'number' ?>" name="edit_cantidad" value="<?= htmlspecialchars($paq_edit['cantidad']) ?>" <?= $usesDiscordCatalog ? 'maxlength="80"' : 'min="0"' ?> required class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;" data-discord-catalog-field="quantity">
             <?php if ($usesDiscordCatalog): ?>
-                <div class="form-text mt-2" style="color:#8be9fd;">Este valor es el que se insertará en el parámetro <code>{cantidad}</code> del comando Discord del juego.</div>
+                <div class="form-text mt-2" style="color:#8be9fd;">Este valor es el que se insertará exactamente en el parámetro <code>{cantidad}</code> del comando Discord del juego.</div>
             <?php endif; ?>
         </div>
         <div class="mb-3">

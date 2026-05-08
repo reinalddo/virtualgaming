@@ -918,6 +918,23 @@ function api_discord_order_package_uses_named_amount(array $order): bool {
     return false;
 }
 
+function api_discord_order_package_amount_from_name(array $order): string {
+    $packageName = trim((string) ($order['paquete_nombre'] ?? ''));
+    if ($packageName === '') {
+        return '';
+    }
+
+    if (preg_match('/(\d+\s*\+\s*\d+)/u', $packageName, $compoundMatch) === 1) {
+        return preg_replace('/\s+/u', '', (string) ($compoundMatch[1] ?? '')) ?? '';
+    }
+
+    if (preg_match('/\b(\d{1,6})\b/u', $packageName, $numericMatch) === 1) {
+        return trim((string) ($numericMatch[1] ?? ''));
+    }
+
+    return '';
+}
+
 function resolve_api_discord_order_param_value(array $order, array $playerFields, string $param): string {
     $normalizedParam = normalize_player_field_key($param);
     if ($normalizedParam === '') {
@@ -932,14 +949,28 @@ function resolve_api_discord_order_param_value(array $order, array $playerFields
     switch ($normalizedParam) {
         case 'cantidad':
         case 'amount':
+            $packageAmount = trim((string) ($order['paquete_cantidad'] ?? ''));
+
             if (api_discord_order_package_uses_named_amount($order)) {
+                if ($packageAmount !== '' && $packageAmount !== '1') {
+                    return $packageAmount;
+                }
+
                 $packageName = trim((string) ($order['paquete_nombre'] ?? ''));
                 if ($packageName !== '') {
                     return $packageName;
                 }
             }
 
-            $packageAmount = trim((string) ($order['paquete_cantidad'] ?? ''));
+            if ($packageAmount !== '' && $packageAmount !== '1') {
+                return $packageAmount;
+            }
+
+            $derivedAmount = api_discord_order_package_amount_from_name($order);
+            if ($derivedAmount !== '') {
+                return $derivedAmount;
+            }
+
             if ($packageAmount !== '') {
                 return $packageAmount;
             }
