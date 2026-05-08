@@ -313,7 +313,7 @@ function api_discord_command_placeholders(array $command): array {
         return [];
     }
 
-    if (preg_match_all('/\{([a-zA-Z0-9_]+)\}/', $template, $matches) !== 1) {
+    if (preg_match_all('/\{([a-zA-Z0-9_]+)\}/', $template, $matches) < 1) {
         return [];
     }
 
@@ -351,7 +351,7 @@ function api_discord_render_command_text(array $command, array $values): array {
 
     $commandText = $template;
     $missingParams = [];
-    if (preg_match_all('/\{([a-zA-Z0-9_]+)\}/', $template, $matches) === 1) {
+    if (preg_match_all('/\{([a-zA-Z0-9_]+)\}/', $template, $matches) > 0) {
         foreach ($matches[1] as $index => $placeholder) {
             $token = (string) ($matches[0][$index] ?? '');
             $normalizedPlaceholder = strtolower(trim((string) $placeholder));
