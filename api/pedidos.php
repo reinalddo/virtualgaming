@@ -956,8 +956,8 @@ function api_discord_normalize_package_token(string $value): string {
 
 function api_discord_mobile_legends_amount_token(array $order): string {
     $candidates = [
-        trim((string) ($order['paquete_cantidad'] ?? '')),
         trim((string) ($order['paquete_nombre'] ?? '')),
+        trim((string) ($order['paquete_cantidad'] ?? '')),
     ];
 
     foreach ($candidates as $candidate) {
@@ -990,9 +990,14 @@ function api_discord_mobile_legends_amount_token(array $order): string {
         if (str_contains($normalized, 'pase')) {
             return 'pase';
         }
-        if (preg_match('/^\d+(?:\+\d+)?$/', $normalized) === 1) {
+        if ($normalized !== '1' && preg_match('/^\d+(?:\+\d+)?$/', $normalized) === 1) {
             return $normalized;
         }
+    }
+
+    $packageAmount = trim((string) ($order['paquete_cantidad'] ?? ''));
+    if ($packageAmount !== '' && $packageAmount !== '1') {
+        return $packageAmount;
     }
 
     return '';
