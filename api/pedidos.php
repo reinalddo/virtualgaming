@@ -1217,7 +1217,7 @@ function execute_api_discord_order_dispatch(array $order): array {
     ];
 
     if ($successCount === $purchaseQuantity) {
-        $responsePayload['message'] = 'Comando Discord enviado correctamente para ' . order_purchase_quantity_text($purchaseQuantity) . '.';
+        $responsePayload['message'] = 'Tu pago fue verificado y la recarga se envió correctamente para ' . order_purchase_quantity_text($purchaseQuantity) . '. Estamos esperando la confirmación automática final del proveedor.';
         return [
             'ok' => true,
             'sent' => true,

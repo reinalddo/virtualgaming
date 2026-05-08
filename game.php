@@ -5186,9 +5186,10 @@ include __DIR__ . "/includes/header.php";
           renderBinancePaymentDetails(data, (data && data.provider_reference) ? data.provider_reference : reference, totalText);
           showPaymentStatusModal('Pago pendiente en Binance Pay', 'El checkout sigue pendiente. Puedes dejar esta ventana abierta mientras completas el pago.', 'info');
         } else {
-          setPaymentAlert('La compra sigue en proceso. Puedes dejar esta ventana y el sistema continuará el seguimiento.', 'info');
+          const successPresentation = successfulProviderPendingPresentation(providerFlow);
+          setPaymentAlert(successPresentation.message, 'success');
           renderProviderPaymentDetails(data, reference, totalText);
-          showPaymentStatusModal('Compra en proceso', 'La compra sigue en proceso. El sistema continuará el seguimiento automático.', 'info');
+          showPaymentStatusModal(successPresentation.title, successPresentation.message, 'success');
         }
         return;
       }
@@ -5575,6 +5576,7 @@ include __DIR__ . "/includes/header.php";
     const variant = options && (options.variant === 'underpaid' || options.variant === 'overpaid')
       ? options.variant
       : '';
+    const reasonCaption = String((options && options.reasonCaption) || 'Detalle detectado por el sistema:').trim();
     const safeSummary = String(summary || '').trim();
     const safeSteps = Array.isArray(steps) ? steps.filter((step) => String(step || '').trim() !== '') : [];
     const safeReasons = Array.isArray(reasons) ? reasons.filter((reason) => String(reason || '').trim() !== '') : [];
@@ -5590,10 +5592,49 @@ include __DIR__ . "/includes/header.php";
       ${safeSummary !== '' ? `<div class="payment-reasons-summary">${escapePaymentHtml(safeSummary)}</div>` : ''}
       ${safeSteps.length ? `<ol class="payment-reasons-steps">${safeSteps.map((step) => `<li>${escapePaymentHtml(step)}</li>`).join('')}</ol>` : ''}
       ${safeReasons.length ? `
-        <div class="payment-reasons-caption">Detalle detectado por el sistema:</div>
+        <div class="payment-reasons-caption">${escapePaymentHtml(reasonCaption)}</div>
         <ul>${safeReasons.map((reason) => `<li>${escapePaymentHtml(reason)}</li>`).join('')}</ul>
       ` : ''}
     `;
+  }
+
+  function successfulProviderPendingPresentation(providerFlow) {
+    const normalizedFlow = String(providerFlow || '').toLowerCase();
+    if (normalizedFlow === 'tracking') {
+      return {
+        title: 'Recarga enviada con éxito',
+        summary: 'Tu pago fue verificado y la solicitud de recarga ya fue enviada correctamente. Ahora estamos esperando la confirmación automática final del proveedor.',
+        message: 'Tu pago fue verificado y la recarga ya fue enviada correctamente. Estamos esperando la confirmación automática final del proveedor.',
+        steps: [
+          'La solicitud de recarga ya fue aceptada y sigue activa en el sistema.',
+          'Puedes esperar unos instantes mientras continuamos la confirmación automática.',
+          'Si la confirmación tarda más de lo habitual, podrás contactar al administrador con tu número de orden.'
+        ],
+        reasons: [
+          'Tu pago ya fue verificado correctamente.',
+          'La recarga ya fue enviada al proveedor.',
+          'El sistema continuará el seguimiento automático hasta confirmar el resultado final.'
+        ],
+        reasonCaption: '¿Por qué este mensaje es exitoso?'
+      };
+    }
+
+    return {
+      title: 'Recarga enviada con éxito',
+      summary: 'Tu pago fue verificado y la solicitud de recarga ya fue enviada correctamente al proveedor.',
+      message: 'Tu pago fue verificado y la recarga ya fue enviada correctamente. Estamos esperando la confirmación automática final del proveedor.',
+      steps: [
+        'La recarga ya fue solicitada correctamente al proveedor.',
+        'Puedes esperar unos instantes mientras confirmamos el resultado final de forma automática.',
+        'Si la confirmación tarda más de lo habitual, podrás contactar al administrador con tu número de orden.'
+      ],
+      reasons: [
+        'Tu pago ya fue verificado correctamente.',
+        'El comando de recarga fue enviado correctamente al proveedor.',
+        'La orden quedó registrada para seguimiento automático hasta su confirmación final.'
+      ],
+      reasonCaption: '¿Por qué este mensaje es exitoso?'
+    };
   }
 
   function renderSupportActionLinks(reference, totalText) {
@@ -5668,31 +5709,31 @@ include __DIR__ . "/includes/header.php";
     clearPaymentSupportUi();
 
     const providerFlow = String((data && data.provider_flow) || '').toLowerCase();
-    const reasons = normalizeProviderReasonsForDisplay(providerFlow, extractPaymentReasons(data));
+    let reasons = normalizeProviderReasonsForDisplay(providerFlow, extractPaymentReasons(data));
     let title = 'La recarga requiere revisión manual';
     let summary = 'El pago bancario fue verificado, pero el proveedor no confirmó una entrega automática.';
     let steps = [
       'Conserva el comprobante de pago y el número de referencia de esta orden.',
       'Nuestro equipo revisará el pedido; si deseas acelerar la revisión, contáctanos por WhatsApp con tu comprobante.'
     ];
+    let reasonCaption = 'Detalle detectado por el sistema:';
 
     if (providerFlow === 'accepted') {
-      title = 'La compra quedó en proceso';
-      summary = 'El proveedor aceptó la orden, pero todavía no reporta entrega final.';
-      steps = [
-        'Tu pago ya quedó verificado correctamente.',
-        'Nuestro equipo dará seguimiento al pedido hasta que el proveedor confirme el resultado final.'
-      ];
+      const presentation = successfulProviderPendingPresentation(providerFlow);
+      title = presentation.title;
+      summary = presentation.summary;
+      steps = presentation.steps;
+      reasons = presentation.reasons;
+      reasonCaption = presentation.reasonCaption;
     }
 
     if (providerFlow === 'tracking') {
-      title = 'La compra quedó en seguimiento automático';
-      summary = 'El pago ya fue verificado. La API del proveedor no respondió a tiempo, pero el sistema seguirá consultando hasta confirmar el resultado.';
-      steps = [
-        'Tu pago quedó verificado correctamente y la orden sigue activa.',
-        'Primero intentaremos resolverla por webhook; si no llega confirmación, el sistema hará sincronización automática posterior.',
-        'Si el proveedor no confirma pronto, el equipo también podrá revisarla desde la sincronización manual del panel.'
-      ];
+      const presentation = successfulProviderPendingPresentation(providerFlow);
+      title = presentation.title;
+      summary = presentation.summary;
+      steps = presentation.steps;
+      reasons = presentation.reasons;
+      reasonCaption = presentation.reasonCaption;
     }
 
     if (providerFlow === 'inventory_shortage') {
@@ -5705,8 +5746,8 @@ include __DIR__ . "/includes/header.php";
       ];
     }
 
-    renderSupportCard(paymentModalReasons, title, summary, steps, reasons);
-    renderSupportCard(paymentStatusModalReasons, title, summary, steps, reasons);
+    renderSupportCard(paymentModalReasons, title, summary, steps, reasons, { reasonCaption });
+    renderSupportCard(paymentStatusModalReasons, title, summary, steps, reasons, { reasonCaption });
     renderSupportActionLinks(reference, totalText);
 
     scrollPaymentModalToTop();
@@ -6509,8 +6550,12 @@ include __DIR__ . "/includes/header.php";
                       const hasProviderDetails = extractPaymentReasons(data).length > 0;
                       const isAcceptedFlow = providerFlow === 'accepted' || providerFlow === 'tracking';
                       const requiresManualReview = providerFlow === 'manual_review' || (!isAcceptedFlow && hasProviderDetails);
+                      const successPresentation = isAcceptedFlow ? successfulProviderPendingPresentation(providerFlow) : null;
 
-                      setPaymentAlert(paidMessage, requiresManualReview ? 'warning' : (isAcceptedFlow ? 'info' : 'success'));
+                      setPaymentAlert(
+                        successPresentation ? successPresentation.message : paidMessage,
+                        requiresManualReview ? 'warning' : 'success'
+                      );
                       if (hasProviderDetails || providerFlow === 'accepted') {
                         renderProviderPaymentDetails(data, reference, getConfirmedPaymentTotalText());
                       } else {
@@ -6521,9 +6566,9 @@ include __DIR__ . "/includes/header.php";
                       clearPaymentTimer();
                       setCancelOrderButtonMode('close');
                       showPaymentStatusModal(
-                        requiresManualReview ? 'Revisión requerida' : (isAcceptedFlow ? 'Compra en proceso' : 'Operación exitosa'),
-                        paidMessage,
-                        requiresManualReview ? 'danger' : (isAcceptedFlow ? 'info' : 'success')
+                        requiresManualReview ? 'Revisión requerida' : (successPresentation ? successPresentation.title : 'Operación exitosa'),
+                        successPresentation ? successPresentation.message : paidMessage,
+                        requiresManualReview ? 'danger' : 'success'
                       );
                       if (providerFlow === 'accepted' || providerFlow === 'tracking') {
                         setPaymentStatusWaiting(true);
