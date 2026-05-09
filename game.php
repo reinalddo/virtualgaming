@@ -2867,6 +2867,7 @@ include __DIR__ . "/includes/header.php";
   };
   const paymentDifferenceFeatureEnabled = <?= $paymentDifferenceEnabled ? 'true' : 'false' ?>;
   const gameEntryWindowEnabled = <?= !empty($gameEntryWindowPayload['enabled']) ? 'true' : 'false' ?>;
+  const currentGameName = <?= json_encode((string) ($game['nombre'] ?? ''), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const paymentSuccessContent = {
     title: <?php echo json_encode($paymentSuccessTitle, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>,
     extraMessage: <?php echo json_encode($paymentSuccessExtraMessage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>
@@ -5042,11 +5043,21 @@ include __DIR__ . "/includes/header.php";
     }, 120);
   }
 
-  function showPaymentStatusModal(title, message, type) {
+  function showPaymentStatusModal(title, message, type, options = {}) {
     const normalizedType = type === 'success' || type === 'danger' ? type : 'info';
     const successExtraMessage = normalizedType === 'success'
       ? String(paymentSuccessContent.extraMessage || '').trim()
       : '';
+    const contextualExtraMessage = normalizedType !== 'danger'
+      ? String((options && options.extraMessage) || '').trim()
+      : '';
+    const extraMessageMarkup = [];
+    if (successExtraMessage !== '') {
+      extraMessageMarkup.push(`<span class="payment-status-extra-copy">${escapePaymentHtml(successExtraMessage)}</span>`);
+    }
+    if (contextualExtraMessage !== '') {
+      extraMessageMarkup.push(`<span class="payment-status-extra-copy" style="display:block;margin-top:${successExtraMessage !== '' ? '0.5rem' : '0'};color:#22c55e;font-weight:700;opacity:1;">${escapePaymentHtml(contextualExtraMessage)}</span>`);
+    }
     if (paymentStatusModalTitle) {
       const resolvedTitle = normalizedType === 'success'
         ? (String(paymentSuccessContent.title || '').trim() || title || 'Pago exitoso')
@@ -5057,15 +5068,16 @@ include __DIR__ . "/includes/header.php";
     }
     if (paymentStatusModalMessage) {
       paymentStatusModalMessage.textContent = message || 'Tu solicitud fue procesada.';
-      paymentStatusModalMessage.classList.toggle('mb-2', successExtraMessage !== '');
-      paymentStatusModalMessage.classList.toggle('mb-4', successExtraMessage === '');
+      paymentStatusModalMessage.classList.toggle('mb-2', extraMessageMarkup.length > 0);
+      paymentStatusModalMessage.classList.toggle('mb-4', extraMessageMarkup.length === 0);
     }
     if (paymentStatusModalExtraMessage) {
-      if (successExtraMessage !== '') {
-        paymentStatusModalExtraMessage.textContent = successExtraMessage;
+      if (extraMessageMarkup.length > 0) {
+        paymentStatusModalExtraMessage.innerHTML = extraMessageMarkup.join('');
         paymentStatusModalExtraMessage.classList.remove('d-none');
       } else {
         paymentStatusModalExtraMessage.textContent = '';
+        paymentStatusModalExtraMessage.innerHTML = '';
         paymentStatusModalExtraMessage.classList.add('d-none');
       }
     }
@@ -5130,11 +5142,12 @@ include __DIR__ . "/includes/header.php";
         const successMessage = getAccountSalePayload(data)
           ? 'Pago verificado y cuenta entregada correctamente.'
           : 'Pago verificado y recarga procesada correctamente.';
-        setPaymentAlert(successMessage, 'success');
+        const successNote = buildBloodStrikeEliteDiscordSuccessNote(data);
+        setPaymentAlert(successMessage, 'success', { extraMessage: successNote });
         setPaymentFormDisabled(true);
         clearPaymentTimer();
         setCancelOrderButtonMode('close');
-        showPaymentStatusModal('Operación exitosa', successMessage, 'success');
+        showPaymentStatusModal('Operación exitosa', successMessage, 'success', { extraMessage: successNote });
         return;
       }
 
@@ -5158,7 +5171,8 @@ include __DIR__ . "/includes/header.php";
 
         if (!isAcceptedFlow) {
           clearPaymentStatusPolling();
-          setPaymentAlert(paidMessage, requiresManualReview ? 'warning' : 'success');
+          const paidNote = requiresManualReview ? '' : buildBloodStrikeEliteDiscordSuccessNote(data);
+          setPaymentAlert(paidMessage, requiresManualReview ? 'warning' : 'success', { extraMessage: paidNote });
           if (providerFlow === 'inventory_shortage') {
             renderProviderPaymentDetails(data, reference, totalText);
           } else {
@@ -5167,7 +5181,7 @@ include __DIR__ . "/includes/header.php";
           setPaymentFormDisabled(true);
           clearPaymentTimer();
           setCancelOrderButtonMode('close');
-          showPaymentStatusModal(requiresManualReview ? 'Revisión requerida' : 'Operación exitosa', paidMessage, requiresManualReview ? 'danger' : 'success');
+          showPaymentStatusModal(requiresManualReview ? 'Revisión requerida' : 'Operación exitosa', paidMessage, requiresManualReview ? 'danger' : 'success', { extraMessage: paidNote });
           return;
         }
       }
@@ -5180,7 +5194,8 @@ include __DIR__ . "/includes/header.php";
 
         if (!isAcceptedFlow) {
           clearPaymentStatusPolling();
-          setPaymentAlert(paidMessage, requiresManualReview ? 'warning' : 'success');
+          const paidNote = requiresManualReview ? '' : buildBloodStrikeEliteDiscordSuccessNote(data);
+          setPaymentAlert(paidMessage, requiresManualReview ? 'warning' : 'success', { extraMessage: paidNote });
           if (providerFlow === 'inventory_shortage') {
             renderProviderPaymentDetails(data, reference, totalText);
           } else {
@@ -5189,7 +5204,7 @@ include __DIR__ . "/includes/header.php";
           setPaymentFormDisabled(true);
           clearPaymentTimer();
           setCancelOrderButtonMode('close');
-          showPaymentStatusModal(requiresManualReview ? 'Revisión requerida' : 'Operación exitosa', paidMessage, requiresManualReview ? 'danger' : 'success');
+          showPaymentStatusModal(requiresManualReview ? 'Revisión requerida' : 'Operación exitosa', paidMessage, requiresManualReview ? 'danger' : 'success', { extraMessage: paidNote });
           return;
         }
       }
@@ -5315,6 +5330,40 @@ include __DIR__ . "/includes/header.php";
       .replace(/'/g, '&#039;');
   }
 
+  function normalizePaymentContextText(value) {
+    let normalized = String(value || '').trim();
+    if (normalized === '') {
+      return '';
+    }
+
+    if (typeof normalized.normalize === 'function') {
+      normalized = normalized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
+
+    return normalized.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  }
+
+  function buildBloodStrikeEliteDiscordSuccessNote(data) {
+    const providerName = normalizePaymentContextText((activePack && activePack.provider) || '');
+    if (providerName !== 'discord') {
+      return '';
+    }
+
+    const normalizedGameName = normalizePaymentContextText((data && data.game_name) || currentGameName || '');
+    if (!normalizedGameName.includes('blood strike') && !normalizedGameName.includes('bloodstriker')) {
+      return '';
+    }
+
+    const packName = String((data && (data.pack_name || data.package_name)) || (activePack && activePack.name) || '').trim();
+    const normalizedPackName = normalizePaymentContextText(packName);
+    if (!normalizedPackName.includes('elite')) {
+      return '';
+    }
+
+    const purchaseName = packName !== '' ? packName : 'tu compra';
+    return `Luego de la compra, espera un aproximado de 15 min para que se ejecute ${purchaseName}.`;
+  }
+
   function paymentReferencePlaceholder(method) {
     const digits = Number(method && method.referencia_digitos ? method.referencia_digitos : 0);
     if (digits > 0) {
@@ -5361,16 +5410,22 @@ include __DIR__ . "/includes/header.php";
     return methods;
   }
 
-  function setPaymentAlert(message, type) {
+  function setPaymentAlert(message, type, options = {}) {
     if (!paymentModalAlert) {
       return;
     }
     if (!message) {
       paymentModalAlert.className = 'd-none alert mb-3';
       paymentModalAlert.textContent = '';
+      paymentModalAlert.innerHTML = '';
       return;
     }
-    paymentModalAlert.textContent = message;
+    const contextualExtraMessage = String((options && options.extraMessage) || '').trim();
+    if (contextualExtraMessage !== '') {
+      paymentModalAlert.innerHTML = `<div>${escapePaymentHtml(message)}</div><div class="small mt-2 fw-semibold" style="color:#22c55e;">${escapePaymentHtml(contextualExtraMessage)}</div>`;
+    } else {
+      paymentModalAlert.textContent = message;
+    }
     paymentModalAlert.className = `alert mb-3 alert-${type || 'info'}`;
     scrollPaymentModalToTop();
   }
@@ -5416,13 +5471,12 @@ include __DIR__ . "/includes/header.php";
       return '';
     }
 
-    const gameName = <?= json_encode((string) ($game['nombre'] ?? ''), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     const productName = paymentSummaryProduct ? paymentSummaryProduct.textContent : '';
     const userIdentifier = paymentSummaryUser ? paymentSummaryUser.textContent : '';
     const message = [
       'Hola, necesito apoyo para revisar manualmente un pago.',
       `Pedido: #${orderId || '-'}`,
-      `Juego: ${gameName || '-'}`,
+      `Juego: ${currentGameName || '-'}`,
       `Producto: ${productName || '-'}`,
       `ID Jugador: ${userIdentifier || '-'}`,
       `Referencia: ${reference || '-'}`,
@@ -6530,13 +6584,14 @@ include __DIR__ . "/includes/header.php";
                         : (paymentMode === 'points'
                           ? 'Canje realizado y recarga procesada correctamente.'
                           : 'La recarga fue procesada correctamente.'));
-                      setPaymentAlert(successMessage, 'success');
+                      const successNote = buildBloodStrikeEliteDiscordSuccessNote(data);
+                      setPaymentAlert(successMessage, 'success', { extraMessage: successNote });
                       renderDeliveredCodes(data);
                       renderOverpaidPaymentDifference(data);
                       setPaymentFormDisabled(true);
                       clearPaymentTimer();
                       setCancelOrderButtonMode('close');
-                      showPaymentStatusModal('Operación exitosa', successMessage, 'success');
+                      showPaymentStatusModal('Operación exitosa', successMessage, 'success', { extraMessage: successNote });
                       return;
                     }
 
@@ -6572,10 +6627,12 @@ include __DIR__ . "/includes/header.php";
                       const isAcceptedFlow = providerFlow === 'accepted' || providerFlow === 'tracking';
                       const requiresManualReview = providerFlow === 'manual_review' || (!isAcceptedFlow && hasProviderDetails);
                       const successPresentation = isAcceptedFlow ? successfulProviderPendingPresentation(providerFlow) : null;
+                      const paidNote = requiresManualReview ? '' : buildBloodStrikeEliteDiscordSuccessNote(data);
 
                       setPaymentAlert(
                         successPresentation ? successPresentation.message : paidMessage,
-                        requiresManualReview ? 'warning' : (successPresentation ? 'info' : 'success')
+                        requiresManualReview ? 'warning' : (successPresentation ? 'info' : 'success'),
+                        { extraMessage: paidNote }
                       );
                       if (hasProviderDetails || providerFlow === 'accepted') {
                         renderProviderPaymentDetails(data, reference, getConfirmedPaymentTotalText());
@@ -6589,7 +6646,8 @@ include __DIR__ . "/includes/header.php";
                       showPaymentStatusModal(
                         requiresManualReview ? 'Revisión requerida' : (successPresentation ? successPresentation.title : 'Operación exitosa'),
                         successPresentation ? successPresentation.message : paidMessage,
-                        requiresManualReview ? 'danger' : (successPresentation ? 'info' : 'success')
+                        requiresManualReview ? 'danger' : (successPresentation ? 'info' : 'success'),
+                        { extraMessage: paidNote }
                       );
                       if (providerFlow === 'accepted' || providerFlow === 'tracking') {
                         setPaymentStatusWaiting(true);
