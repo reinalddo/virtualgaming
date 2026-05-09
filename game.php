@@ -546,7 +546,7 @@ include __DIR__ . "/includes/header.php";
           <label class="form-label text-info" id="player-primary-label">ID de usuario</label>
           <div class="d-flex flex-column flex-sm-row gap-2 align-items-stretch">
             <input type="text" id="order-user-id" name="user_id" placeholder="Ej: 12345678" value="<?= htmlspecialchars($loggedUserLastPurchaseIdentifier, ENT_QUOTES, 'UTF-8') ?>" class="form-control bg-dark text-info border-info" required />
-            <button type="button" id="verify-player-button" class="btn btn-outline-info fw-bold text-nowrap<?= $playerVerificationConfig ? '' : ' d-none' ?>"><?= htmlspecialchars((string) ($playerVerificationConfig['buttonLabel'] ?? 'Verificar nombre del jugador'), ENT_QUOTES, 'UTF-8') ?></button>
+            <button type="button" id="verify-player-button" class="btn btn-outline-info fw-bold text-nowrap d-none"><?= htmlspecialchars((string) ($playerVerificationConfig['buttonLabel'] ?? 'Verificar nombre del jugador'), ENT_QUOTES, 'UTF-8') ?></button>
           </div>
           <div id="player-verification-feedback" class="d-none mt-2"></div>
         </div>
@@ -4687,8 +4687,16 @@ include __DIR__ . "/includes/header.php";
     return temporaryFailureSnippets.some((snippet) => normalizedMessage.includes(snippet));
   }
 
+  function activePackSupportsPlayerVerification() {
+    if (!playerVerificationConfig || !activePack || isAccountSalePack(activePack)) {
+      return false;
+    }
+
+    return String(activePack.provider || '').trim().toLowerCase() !== 'discord';
+  }
+
   function requiresVerifiedPlayerForCheckout() {
-    if (isAccountSalePack(activePack)) {
+    if (!activePackSupportsPlayerVerification()) {
       return false;
     }
 
@@ -4703,7 +4711,7 @@ include __DIR__ . "/includes/header.php";
       return;
     }
 
-    if (!playerVerificationConfig || isAccountSalePack(activePack)) {
+    if (!activePackSupportsPlayerVerification()) {
       verifyPlayerButton.classList.add('d-none');
       return;
     }
@@ -4716,7 +4724,7 @@ include __DIR__ . "/includes/header.php";
   }
 
   function handlePlayerVerificationFieldChange() {
-    if (!playerVerificationConfig || isAccountSalePack(activePack)) {
+    if (!activePackSupportsPlayerVerification()) {
       invalidatePlayerVerificationRequests();
       resetPlayerVerificationState();
       syncPlayerVerificationUi();
@@ -4761,7 +4769,7 @@ include __DIR__ . "/includes/header.php";
   }
 
   async function verifyCurrentPlayer(options = {}) {
-    if (!playerVerificationConfig || isAccountSalePack(activePack)) {
+    if (!activePackSupportsPlayerVerification()) {
       return;
     }
 
@@ -4791,6 +4799,7 @@ include __DIR__ . "/includes/header.php";
     try {
       const requestBody = new URLSearchParams();
       requestBody.set('game_id', "<?= (string) ($game['id'] ?? '') ?>");
+      requestBody.set('package_id', String((activePack && activePack.id) || ''));
       requestBody.set('user_identifier', payload.userIdentifier);
       requestBody.set('player_fields_json', JSON.stringify(payload.playerFields));
 
