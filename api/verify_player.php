@@ -55,7 +55,7 @@ if (!$game) {
 
 $packageId = (int) ($_POST['package_id'] ?? $_GET['package_id'] ?? 0);
 if ($packageId > 0) {
-    $packageStmt = $mysqli->prepare('SELECT id, paquete_api, monto_ff, api_provider FROM juego_paquetes WHERE id = ? AND id_juego = ? LIMIT 1');
+    $packageStmt = $mysqli->prepare('SELECT id, paquete_api, monto_ff, api_provider FROM juego_paquetes WHERE id = ? AND juego_id = ? LIMIT 1');
     if (!$packageStmt) {
         verify_player_json(['ok' => false, 'message' => 'No se pudo preparar la verificación del paquete.'], 500);
     }
