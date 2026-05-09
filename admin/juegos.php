@@ -102,11 +102,11 @@ function ensure_juegos_orden_column(mysqli $mysqli): void {
     }
 }
 
-function admin_game_normalize_api_selection(array $payload, string $giftVenKey, string $discordKey): array {
+function admin_game_normalize_api_selection(array $payload, string $giftVenKey, string $discordKey, bool $allowCombined = false): array {
     $giftVenCategory = trim((string) ($payload[$giftVenKey] ?? ''));
     $discordCommand = trim((string) ($payload[$discordKey] ?? ''));
 
-    if ($giftVenCategory !== '' && $discordCommand !== '') {
+    if (!$allowCombined && $giftVenCategory !== '' && $discordCommand !== '') {
         return [
             'ok' => false,
             'message' => 'Solo puedes seleccionar una API por juego: TiendaGiftVen o Discord.',
@@ -163,6 +163,8 @@ $adminPackagesBaseUrl = app_path('/admin/paquetes');
 $adminGameEntryWindowBaseUrl = app_path('/admin/ventana-inicial-juegos');
 $gameEntryWindowEnabled = game_entry_window_feature_available();
 $discordApiEnabled = trim((string) store_config_get('api_discord', '0')) === '1';
+$mixedApiUnionEnabled = $discordApiEnabled && trim((string) store_config_get('union_apis_discord_giftven', '0')) === '1';
+$gameApiExclusiveClass = $mixedApiUnionEnabled ? '' : ' js-exclusive-api-select';
 $apiCategories = [];
 $apiCategoriesError = null;
 if (recargas_api_is_configured()) {
@@ -262,7 +264,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_juego_submit'], 
     $edit_descripcion = trim($_POST['edit_descripcion']);
     $edit_slug = slugify($edit_nombre);
     $edit_popular = isset($_POST['edit_popular']) ? 1 : 0;
-    $apiSelection = admin_game_normalize_api_selection($_POST, 'edit_categoria_api_tiendagiftven', 'edit_categoria_api_discord');
+    $apiSelection = admin_game_normalize_api_selection($_POST, 'edit_categoria_api_tiendagiftven', 'edit_categoria_api_discord', $mixedApiUnionEnabled);
     if (!$apiSelection['ok']) {
         admin_games_redirect($adminGamesUrl, ['editar' => $edit_id, 'error' => $apiSelection['message']]);
     }
@@ -299,7 +301,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['des
     $slug = slugify($nombre);
     $moneda_fija_id = !empty($_POST['moneda_fija_id']) ? intval($_POST['moneda_fija_id']) : null;
     $popular = isset($_POST['popular']) ? 1 : 0;
-    $apiSelection = admin_game_normalize_api_selection($_POST, 'categoria_api_tiendagiftven', 'categoria_api_discord');
+    $apiSelection = admin_game_normalize_api_selection($_POST, 'categoria_api_tiendagiftven', 'categoria_api_discord', $mixedApiUnionEnabled);
     if (!$apiSelection['ok']) {
         admin_games_redirect($adminGamesUrl, ['error' => $apiSelection['message']]);
     }
@@ -403,18 +405,18 @@ if ($resPaquetes instanceof mysqli_result) {
             </div>
             <div class="form-check mb-3">
                 <label class="form-label text-neon" for="editCategoriaApiInput">Juegos API TiendaGiftVen</label>
-                <select name="edit_categoria_api_tiendagiftven" id="editCategoriaApiInput" class="form-select js-exclusive-api-select" data-exclusive-group="edit-game-api" data-exclusive-target="editDiscordApiInput" style="background:#222c3a;color:#00fff7;border:1px solid #00fff7;">
+                <select name="edit_categoria_api_tiendagiftven" id="editCategoriaApiInput" class="form-select<?= $gameApiExclusiveClass ?>" data-exclusive-group="edit-game-api" data-exclusive-target="editDiscordApiInput" data-exclusive-enabled="<?= $mixedApiUnionEnabled ? '0' : '1' ?>" style="background:#222c3a;color:#00fff7;border:1px solid #00fff7;">
                     <option value="">Proceso manual / sin API</option>
                     <?php foreach ($apiCategories as $apiCategory): ?>
                     <option value="<?= htmlspecialchars($apiCategory, ENT_QUOTES, 'UTF-8') ?>" <?= (string) ($juego_edit['categoria_api'] ?? '') === (string) $apiCategory ? 'selected' : '' ?>><?= htmlspecialchars($apiCategory, ENT_QUOTES, 'UTF-8') ?></option>
                     <?php endforeach; ?>
                 </select>
-                <div class="form-text mt-2" style="color:#8be9fd;">Selecciona la categoría exacta de TiendaGiftVen. Si eliges una aquí, el select de Discord debe quedar vacío.</div>
+                <div class="form-text mt-2" style="color:#8be9fd;"><?= $mixedApiUnionEnabled ? 'Selecciona la categoría exacta de TiendaGiftVen. Con la unión activa puedes guardar también un comando de Discord en este mismo juego.' : 'Selecciona la categoría exacta de TiendaGiftVen. Si eliges una aquí, el select de Discord debe quedar vacío.' ?></div>
             </div>
             <?php if ($discordApiEnabled): ?>
             <div class="form-check mb-3">
                 <label class="form-label text-neon" for="editDiscordApiInput">Juegos API Discord</label>
-                <select name="edit_categoria_api_discord" id="editDiscordApiInput" class="form-select js-exclusive-api-select" data-exclusive-group="edit-game-api" data-exclusive-target="editCategoriaApiInput" style="background:#222c3a;color:#00fff7;border:1px solid #00fff7;">
+                <select name="edit_categoria_api_discord" id="editDiscordApiInput" class="form-select<?= $gameApiExclusiveClass ?>" data-exclusive-group="edit-game-api" data-exclusive-target="editCategoriaApiInput" data-exclusive-enabled="<?= $mixedApiUnionEnabled ? '0' : '1' ?>" style="background:#222c3a;color:#00fff7;border:1px solid #00fff7;">
                     <option value="">Proceso manual / sin API</option>
                     <?php foreach ($discordApiCommands as $discordCommand): ?>
                         <?php $discordKey = (string) ($discordCommand['key'] ?? ''); ?>
@@ -422,7 +424,7 @@ if ($resPaquetes instanceof mysqli_result) {
                         <option value="<?= htmlspecialchars($discordKey, ENT_QUOTES, 'UTF-8') ?>" <?= (string) ($juego_edit['categoria_api_discord'] ?? '') === $discordKey ? 'selected' : '' ?>><?= htmlspecialchars($discordLabel, ENT_QUOTES, 'UTF-8') ?></option>
                     <?php endforeach; ?>
                 </select>
-                <div class="form-text mt-2" style="color:#8be9fd;">Selecciona el comando base de Discord que usará este juego más adelante. Si eliges uno aquí, TiendaGiftVen debe quedar vacío.</div>
+                <div class="form-text mt-2" style="color:#8be9fd;"><?= $mixedApiUnionEnabled ? 'Selecciona el comando base de Discord. Con la unión activa este juego puede conservar también su categoría de TiendaGiftVen.' : 'Selecciona el comando base de Discord que usará este juego más adelante. Si eliges uno aquí, TiendaGiftVen debe quedar vacío.' ?></div>
             </div>
             <?php endif; ?>
             <div class="form-check mb-3">
@@ -463,18 +465,18 @@ if ($resPaquetes instanceof mysqli_result) {
             </div>
             <div class="form-check mt-3">
                 <label class="form-label" for="categoriaApiInput" style="color:#00fff7;">Juegos API TiendaGiftVen</label>
-                <select name="categoria_api_tiendagiftven" id="categoriaApiInput" class="form-select js-exclusive-api-select" data-exclusive-group="create-game-api" data-exclusive-target="categoriaDiscordApiInput" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
+                <select name="categoria_api_tiendagiftven" id="categoriaApiInput" class="form-select<?= $gameApiExclusiveClass ?>" data-exclusive-group="create-game-api" data-exclusive-target="categoriaDiscordApiInput" data-exclusive-enabled="<?= $mixedApiUnionEnabled ? '0' : '1' ?>" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
                     <option value="">Proceso manual / sin API</option>
                     <?php foreach ($apiCategories as $apiCategory): ?>
                     <option value="<?= htmlspecialchars($apiCategory, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($apiCategory, ENT_QUOTES, 'UTF-8') ?></option>
                     <?php endforeach; ?>
                 </select>
-                <div class="form-text mt-2" style="color:#8be9fd;">Selecciona la categoría exacta del catálogo de TiendaGiftVen. Si la eliges, el select de Discord debe quedar vacío.</div>
+                <div class="form-text mt-2" style="color:#8be9fd;"><?= $mixedApiUnionEnabled ? 'Selecciona la categoría exacta del catálogo de TiendaGiftVen. Con la unión activa también puedes guardar un comando de Discord en este mismo juego.' : 'Selecciona la categoría exacta del catálogo de TiendaGiftVen. Si la eliges, el select de Discord debe quedar vacío.' ?></div>
             </div>
             <?php if ($discordApiEnabled): ?>
             <div class="form-check mt-3">
                 <label class="form-label" for="categoriaDiscordApiInput" style="color:#00fff7;">Juegos API Discord</label>
-                <select name="categoria_api_discord" id="categoriaDiscordApiInput" class="form-select js-exclusive-api-select" data-exclusive-group="create-game-api" data-exclusive-target="categoriaApiInput" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
+                <select name="categoria_api_discord" id="categoriaDiscordApiInput" class="form-select<?= $gameApiExclusiveClass ?>" data-exclusive-group="create-game-api" data-exclusive-target="categoriaApiInput" data-exclusive-enabled="<?= $mixedApiUnionEnabled ? '0' : '1' ?>" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
                     <option value="">Proceso manual / sin API</option>
                     <?php foreach ($discordApiCommands as $discordCommand): ?>
                         <?php $discordKey = (string) ($discordCommand['key'] ?? ''); ?>
@@ -482,7 +484,7 @@ if ($resPaquetes instanceof mysqli_result) {
                         <option value="<?= htmlspecialchars($discordKey, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($discordLabel, ENT_QUOTES, 'UTF-8') ?></option>
                     <?php endforeach; ?>
                 </select>
-                <div class="form-text mt-2" style="color:#8be9fd;">Selecciona el comando base de Discord que representa este juego. Si eliges este valor, TiendaGiftVen debe quedar vacío.</div>
+                <div class="form-text mt-2" style="color:#8be9fd;"><?= $mixedApiUnionEnabled ? 'Selecciona el comando base de Discord. Con la unión activa este juego puede conservar también su categoría de TiendaGiftVen.' : 'Selecciona el comando base de Discord que representa este juego. Si eliges este valor, TiendaGiftVen debe quedar vacío.' ?></div>
             </div>
             <?php endif; ?>
             <div class="form-check mt-3">
@@ -567,10 +569,11 @@ if ($resPaquetes instanceof mysqli_result) {
                     <td style="background:#181f2a; color:#00fff7;">
                         <div class="fw-semibold"><?= htmlspecialchars($j['nombre']) ?></div>
                         <div class="small" style="color:#b2f6ff;"><?= $totalPaquetes ?> paquete<?= $totalPaquetes === 1 ? '' : 's' ?> registrado<?= $totalPaquetes === 1 ? '' : 's' ?></div>
+                        <?php if (!empty($j['categoria_api'])): ?>
+                            <div class="small mt-1"><span style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.2rem 0.55rem;border-radius:999px;border:1px solid rgba(52,211,153,0.7);background:rgba(16,185,129,0.12);color:#6ee7b7;font-weight:700;letter-spacing:0.04em;">API TiendaGiftVen: <?= htmlspecialchars((string) $j['categoria_api'], ENT_QUOTES, 'UTF-8') ?></span></div>
+                        <?php endif; ?>
                         <?php if ($discordApiEnabled && !empty($j['categoria_api_discord'])): ?>
                             <div class="small mt-1"><span style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.2rem 0.55rem;border-radius:999px;border:1px solid rgba(192,132,252,0.7);background:rgba(168,85,247,0.12);color:#e9d5ff;font-weight:700;letter-spacing:0.04em;">API Discord: <?= htmlspecialchars((string) $j['categoria_api_discord'], ENT_QUOTES, 'UTF-8') ?></span></div>
-                        <?php elseif (!empty($j['categoria_api'])): ?>
-                            <div class="small mt-1"><span style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.2rem 0.55rem;border-radius:999px;border:1px solid rgba(52,211,153,0.7);background:rgba(16,185,129,0.12);color:#6ee7b7;font-weight:700;letter-spacing:0.04em;">API TiendaGiftVen: <?= htmlspecialchars((string) $j['categoria_api'], ENT_QUOTES, 'UTF-8') ?></span></div>
                         <?php endif; ?>
                     </td>
                     <td class="text-center" style="background:#181f2a;">
@@ -658,10 +661,11 @@ if ($resPaquetes instanceof mysqli_result) {
                                 <?php endif; ?>
                             </div>
                             <div style="font-size:0.9rem; color:#b2f6ff;"><?= $totalPaquetes ?> paquete<?= $totalPaquetes === 1 ? '' : 's' ?> registrado<?= $totalPaquetes === 1 ? '' : 's' ?></div>
+                            <?php if (!empty($j['categoria_api'])): ?>
+                                <div class="mt-1"><span style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.2rem 0.55rem;border-radius:999px;border:1px solid rgba(52,211,153,0.7);background:rgba(16,185,129,0.12);color:#6ee7b7;font-weight:700;font-size:0.78rem;letter-spacing:0.04em;">API TiendaGiftVen: <?= htmlspecialchars((string) $j['categoria_api'], ENT_QUOTES, 'UTF-8') ?></span></div>
+                            <?php endif; ?>
                             <?php if ($discordApiEnabled && !empty($j['categoria_api_discord'])): ?>
                                 <div class="mt-1"><span style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.2rem 0.55rem;border-radius:999px;border:1px solid rgba(192,132,252,0.7);background:rgba(168,85,247,0.12);color:#e9d5ff;font-weight:700;font-size:0.78rem;letter-spacing:0.04em;">API Discord: <?= htmlspecialchars((string) $j['categoria_api_discord'], ENT_QUOTES, 'UTF-8') ?></span></div>
-                            <?php elseif (!empty($j['categoria_api'])): ?>
-                                <div class="mt-1"><span style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.2rem 0.55rem;border-radius:999px;border:1px solid rgba(52,211,153,0.7);background:rgba(16,185,129,0.12);color:#6ee7b7;font-weight:700;font-size:0.78rem;letter-spacing:0.04em;">API TiendaGiftVen: <?= htmlspecialchars((string) $j['categoria_api'], ENT_QUOTES, 'UTF-8') ?></span></div>
                             <?php endif; ?>
                             <div style="font-size:0.85rem; color:#b2f6ff;">Orden: <?= max(1, (int) ($j['orden'] ?? 0)) ?></div>
                             <div class="text-muted" style="font-size:0.85rem; color:#b2f6ff;">ID: <?= $j['id'] ?></div>
@@ -752,16 +756,16 @@ if ($resPaquetes instanceof mysqli_result) {
                 <span class="ml-2 text-slate-300">Marcar como popular</span>
             </label>
             <label class="block text-slate-300 font-medium mb-1">Juegos API TiendaGiftVen:</label>
-            <select name="edit_categoria_api_tiendagiftven" id="editCategoriaApiInputLegacy" class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white mb-2 js-exclusive-api-select" data-exclusive-group="edit-game-api-legacy" data-exclusive-target="editDiscordApiInputLegacy">
+            <select name="edit_categoria_api_tiendagiftven" id="editCategoriaApiInputLegacy" class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white mb-2<?= $gameApiExclusiveClass ?>" data-exclusive-group="edit-game-api-legacy" data-exclusive-target="editDiscordApiInputLegacy" data-exclusive-enabled="<?= $mixedApiUnionEnabled ? '0' : '1' ?>">
                 <option value="">Proceso manual / sin API</option>
                 <?php foreach ($apiCategories as $apiCategory): ?>
                 <option value="<?= htmlspecialchars($apiCategory, ENT_QUOTES, 'UTF-8') ?>" <?= (string) ($juego_edit['categoria_api'] ?? '') === (string) $apiCategory ? 'selected' : '' ?>><?= htmlspecialchars($apiCategory, ENT_QUOTES, 'UTF-8') ?></option>
                 <?php endforeach; ?>
             </select>
-            <div class="text-xs text-slate-400 mb-2">Si eliges TiendaGiftVen, deja vacío el select de Discord.</div>
+            <div class="text-xs text-slate-400 mb-2"><?= $mixedApiUnionEnabled ? 'Con la unión activa puedes guardar también el comando de Discord en este mismo juego.' : 'Si eliges TiendaGiftVen, deja vacío el select de Discord.' ?></div>
             <?php if ($discordApiEnabled): ?>
             <label class="block text-slate-300 font-medium mb-1">Juegos API Discord:</label>
-            <select name="edit_categoria_api_discord" id="editDiscordApiInputLegacy" class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white mb-2 js-exclusive-api-select" data-exclusive-group="edit-game-api-legacy" data-exclusive-target="editCategoriaApiInputLegacy">
+            <select name="edit_categoria_api_discord" id="editDiscordApiInputLegacy" class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white mb-2<?= $gameApiExclusiveClass ?>" data-exclusive-group="edit-game-api-legacy" data-exclusive-target="editCategoriaApiInputLegacy" data-exclusive-enabled="<?= $mixedApiUnionEnabled ? '0' : '1' ?>">
                 <option value="">Proceso manual / sin API</option>
                 <?php foreach ($discordApiCommands as $discordCommand): ?>
                 <?php $discordKey = (string) ($discordCommand['key'] ?? ''); ?>
@@ -769,7 +773,7 @@ if ($resPaquetes instanceof mysqli_result) {
                 <option value="<?= htmlspecialchars($discordKey, ENT_QUOTES, 'UTF-8') ?>" <?= (string) ($juego_edit['categoria_api_discord'] ?? '') === $discordKey ? 'selected' : '' ?>><?= htmlspecialchars($discordLabel, ENT_QUOTES, 'UTF-8') ?></option>
                 <?php endforeach; ?>
             </select>
-            <div class="text-xs text-slate-400 mb-2">Si eliges Discord, deja vacío el select de TiendaGiftVen.</div>
+            <div class="text-xs text-slate-400 mb-2"><?= $mixedApiUnionEnabled ? 'Con la unión activa puedes conservar también la categoría de TiendaGiftVen en este juego.' : 'Si eliges Discord, deja vacío el select de TiendaGiftVen.' ?></div>
             <?php endif; ?>
             <label class="block text-slate-300 mb-1">Imagen actual:</label>
             <?php if ($juego_edit['imagen']): ?>
@@ -971,6 +975,10 @@ document.querySelectorAll('.js-ajax-order-form').forEach((form) => {
 
 document.querySelectorAll('.js-exclusive-api-select').forEach((select) => {
     select.addEventListener('change', () => {
+        if (String(select.dataset.exclusiveEnabled || '1') !== '1') {
+            return;
+        }
+
         const selectedValue = String(select.value || '').trim();
         if (selectedValue === '') {
             return;

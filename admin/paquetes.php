@@ -190,6 +190,13 @@ function ensure_juego_paquetes_paquete_api_column(mysqli $mysqli): void {
     }
 }
 
+function ensure_juego_paquetes_api_provider_column(mysqli $mysqli): void {
+    $result = $mysqli->query("SHOW COLUMNS FROM juego_paquetes LIKE 'api_provider'");
+    if (!($result instanceof mysqli_result) || $result->num_rows === 0) {
+        $mysqli->query("ALTER TABLE juego_paquetes ADD COLUMN api_provider VARCHAR(30) NULL AFTER paquete_api");
+    }
+}
+
 function ensure_juego_paquetes_cantidad_text_column(mysqli $mysqli): void {
     $result = $mysqli->query("SHOW COLUMNS FROM juego_paquetes LIKE 'cantidad'");
     if (!($result instanceof mysqli_result) || $result->num_rows === 0) {
@@ -250,6 +257,64 @@ function admin_package_save_discord_catalog(mysqli $mysqli, int $gameId, array $
     $stmt->close();
 
     return $ok;
+}
+
+function admin_package_normalize_provider_value($value): string {
+    $normalized = strtolower(trim((string) $value));
+    return in_array($normalized, ['giftven', 'discord', 'free_fire'], true) ? $normalized : '';
+}
+
+function admin_package_resolve_provider(array $package, array $game, bool $discordFeatureEnabled): string {
+    $storedProvider = admin_package_normalize_provider_value($package['api_provider'] ?? '');
+    if ($storedProvider !== '') {
+        return $storedProvider;
+    }
+
+    if ((int) ($package['paquete_api'] ?? 0) > 0) {
+        return 'giftven';
+    }
+
+    if (trim((string) ($package['monto_ff'] ?? '')) !== '') {
+        return 'free_fire';
+    }
+
+    if ($discordFeatureEnabled && trim((string) ($game['categoria_api_discord'] ?? '')) !== '') {
+        return 'discord';
+    }
+
+    return '';
+}
+
+function admin_package_provider_label(string $provider): string {
+    return match ($provider) {
+        'giftven' => 'TiendaGiftVen',
+        'discord' => 'Discord',
+        'free_fire' => 'Free Fire API',
+        default => 'Manual',
+    };
+}
+
+function admin_package_provider_reference_text(string $provider, array $package, array $apiProductsById): string {
+    if ($provider === 'giftven') {
+        $apiProductId = (int) ($package['paquete_api'] ?? 0);
+        if ($apiProductId > 0 && isset($apiProductsById[$apiProductId])) {
+            return recargas_api_product_label($apiProductsById[$apiProductId]);
+        }
+
+        return $apiProductId > 0 ? 'ID ' . $apiProductId : '—';
+    }
+
+    if ($provider === 'discord') {
+        $quantity = trim((string) ($package['cantidad'] ?? ''));
+        return $quantity !== '' ? $quantity : '—';
+    }
+
+    if ($provider === 'free_fire') {
+        $amount = trim((string) ($package['monto_ff'] ?? ''));
+        return $amount !== '' ? free_fire_api_amount_label($amount) : '—';
+    }
+
+    return '—';
 }
 
 function admin_package_format_catalog_quantity(array $item): string {
@@ -464,6 +529,7 @@ function admin_package_apply_bulk_feature_actions(mysqli $mysqli, int $gameId, i
 ensure_juego_paquetes_monto_ff_column($mysqli);
 ensure_juego_paquetes_activo_column($mysqli);
 ensure_juego_paquetes_paquete_api_column($mysqli);
+ensure_juego_paquetes_api_provider_column($mysqli);
 ensure_juego_paquetes_cantidad_text_column($mysqli);
 ensure_juego_paquetes_orden_column($mysqli);
 ensure_juegos_api_discord_catalog_columns($mysqli);
@@ -493,18 +559,34 @@ $res_juego->bind_param('i', $juego_id);
 $res_juego->execute();
 $juego = $res_juego->get_result()->fetch_assoc();
 $freeFireApiOptions = free_fire_api_amount_options();
+$discordApiEnabled = trim((string) store_config_get('api_discord', '0')) === '1';
+$unionApisEnabled = $discordApiEnabled && trim((string) store_config_get('union_apis_discord_giftven', '0')) === '1';
 $juegoCategoriaApi = trim((string) ($juego['categoria_api'] ?? ''));
 $juegoCategoriaApiDiscord = trim((string) ($juego['categoria_api_discord'] ?? ''));
-$usesApiCatalog = $juegoCategoriaApi !== '';
-$usesDiscordCatalog = !$usesApiCatalog && $juegoCategoriaApiDiscord !== '' && trim((string) store_config_get('api_discord', '0')) === '1';
-$usesLegacyFreeFire = !$usesApiCatalog && !empty($juego['api_free_fire']);
+$hasGiftVenCatalog = $juegoCategoriaApi !== '';
+$hasDiscordCatalog = $juegoCategoriaApiDiscord !== '' && $discordApiEnabled;
+$usesApiCatalog = $hasGiftVenCatalog;
+$usesDiscordCatalog = !$hasGiftVenCatalog && $hasDiscordCatalog;
+$usesLegacyFreeFire = !$hasGiftVenCatalog && !$hasDiscordCatalog && !empty($juego['api_free_fire']);
+$packageSourceOptions = [];
+if ($hasGiftVenCatalog) {
+    $packageSourceOptions['giftven'] = admin_package_provider_label('giftven');
+}
+if ($hasDiscordCatalog) {
+    $packageSourceOptions['discord'] = admin_package_provider_label('discord');
+}
+if ($usesLegacyFreeFire) {
+    $packageSourceOptions['free_fire'] = admin_package_provider_label('free_fire');
+}
+$packageSourceSelectionEnabled = $unionApisEnabled && count($packageSourceOptions) > 1;
+$packageDefaultProvider = $packageSourceSelectionEnabled ? '' : (array_key_first($packageSourceOptions) ?: '');
 $winPointsName = win_points_program_name();
 $defaultWinPointsReward = 0;
 $apiProducts = [];
 $apiProductsById = [];
 $apiProductsError = null;
-$discordTopupCommand = $usesDiscordCatalog ? api_discord_find_command($juegoCategoriaApiDiscord) : null;
-$discordPriceCommand = $usesDiscordCatalog ? admin_package_find_api_discord_price_command($juegoCategoriaApiDiscord) : null;
+$discordTopupCommand = $hasDiscordCatalog ? api_discord_find_command($juegoCategoriaApiDiscord) : null;
+$discordPriceCommand = $hasDiscordCatalog ? admin_package_find_api_discord_price_command($juegoCategoriaApiDiscord) : null;
 $discordTopupCommandText = $discordTopupCommand ? api_discord_sample_command_text($discordTopupCommand) : '';
 $discordPriceCommandText = $discordPriceCommand ? api_discord_sample_command_text($discordPriceCommand) : '';
 $discordCatalogStatus = strtolower(trim((string) ($juego['api_discord_catalog_status'] ?? '')));
@@ -521,8 +603,9 @@ if ($discordCatalogJson !== '') {
 }
 $discordCatalogNotice = trim((string) ($_GET['discord_catalog_notice'] ?? ''));
 $discordCatalogError = trim((string) ($_GET['discord_catalog_error'] ?? ''));
+$packageError = trim((string) ($_GET['package_error'] ?? ''));
 
-if ($usesApiCatalog) {
+if ($hasGiftVenCatalog) {
     try {
         $apiProducts = recargas_api_fetch_products_by_category($juegoCategoriaApi);
         foreach ($apiProducts as $apiProduct) {
@@ -534,7 +617,7 @@ if ($usesApiCatalog) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['sync_discord_catalog'])) {
-    if (!$usesDiscordCatalog) {
+    if (!$hasDiscordCatalog) {
         admin_packages_redirect($adminPackageBaseUrl . '/' . $juego_id, ['discord_catalog_error' => 'Este juego no usa el flujo de precios por API Discord.']);
     }
 
@@ -583,7 +666,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['sync_discord_catalog'
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['import_discord_catalog_text'])) {
-    if (!$usesDiscordCatalog) {
+    if (!$hasDiscordCatalog) {
         admin_packages_redirect($adminPackageBaseUrl . '/' . $juego_id, ['discord_catalog_error' => 'Este juego no usa catálogo Discord.']);
     }
 
@@ -701,15 +784,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_paquete_id'])) {
     $edit_id = intval($_POST['edit_paquete_id']);
     $edit_nombre = trim($_POST['edit_nombre'] ?? '');
     $edit_clave = trim($_POST['edit_clave'] ?? '');
-    $edit_monto_ff = $usesLegacyFreeFire ? trim((string) ($_POST['edit_monto_ff'] ?? '')) : '';
-    $edit_paquete_api = $usesApiCatalog ? trim((string) ($_POST['edit_paquete_api'] ?? '')) : '';
+    $edit_provider = admin_package_normalize_provider_value($_POST['edit_api_provider'] ?? $packageDefaultProvider);
+    if ($edit_provider === '' || !isset($packageSourceOptions[$edit_provider])) {
+        admin_packages_redirect($adminPackageBaseUrl . '/' . $juego_id, ['package_error' => 'Selecciona un origen válido para este paquete antes de guardarlo.']);
+    }
+    $edit_monto_ff = $edit_provider === 'free_fire' ? trim((string) ($_POST['edit_monto_ff'] ?? '')) : '';
+    $edit_paquete_api = $edit_provider === 'giftven' ? trim((string) ($_POST['edit_paquete_api'] ?? '')) : '';
     $edit_vender_cuenta = $accountSaleFeatureEnabled && isset($_POST['edit_vender_cuenta']) ? 1 : 0;
     $edit_cuenta_texto = $accountSaleFeatureEnabled
         ? package_account_sales_normalize_text((string) ($_POST['edit_cuenta_texto'] ?? ''))
         : '';
-    $edit_cantidad = $usesDiscordCatalog
+    $edit_cantidad = $edit_provider === 'discord'
         ? api_discord_normalize_catalog_quantity($_POST['edit_cantidad'] ?? '')
-        : (string) intval($_POST['edit_cantidad'] ?? 0);
+        : '1';
     if ($edit_cantidad === '') {
         $edit_cantidad = '1';
     }
@@ -729,12 +816,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_paquete_id'])) {
             $editNewGalleryFiles
         )
         : ['items' => [], 'delete_paths' => []];
+    if ($edit_provider === 'giftven' && $edit_paquete_api === '') {
+        admin_packages_redirect($adminPackageBaseUrl . '/' . $juego_id, ['package_error' => 'Selecciona el producto de TiendaGiftVen para este paquete.']);
+    }
+    if ($edit_provider === 'free_fire' && $edit_monto_ff === '') {
+        admin_packages_redirect($adminPackageBaseUrl . '/' . $juego_id, ['package_error' => 'Selecciona el monto de Free Fire para este paquete.']);
+    }
     if ($edit_imagen_icono) {
-        $stmt = $mysqli->prepare("UPDATE juego_paquetes SET nombre=?, clave=?, monto_ff=NULLIF(?, ''), paquete_api=NULLIF(?, ''), vender_cuenta=?, cuenta_texto=NULLIF(?, ''), cantidad=?, precio=?, win_points_reward=?, imagen_icono=?, activo=? WHERE id=?");
-        $stmt->bind_param('ssssissdisii', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_paquete_api, $edit_vender_cuenta, $edit_cuenta_texto, $edit_cantidad, $edit_precio, $edit_win_points_reward, $edit_imagen_icono, $edit_activo, $edit_id);
+        $stmt = $mysqli->prepare("UPDATE juego_paquetes SET nombre=?, clave=?, monto_ff=NULLIF(?, ''), paquete_api=NULLIF(?, ''), api_provider=?, vender_cuenta=?, cuenta_texto=NULLIF(?, ''), cantidad=?, precio=?, win_points_reward=?, imagen_icono=?, activo=? WHERE id=?");
+        $stmt->bind_param('sssssissdisii', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_paquete_api, $edit_provider, $edit_vender_cuenta, $edit_cuenta_texto, $edit_cantidad, $edit_precio, $edit_win_points_reward, $edit_imagen_icono, $edit_activo, $edit_id);
     } else {
-        $stmt = $mysqli->prepare("UPDATE juego_paquetes SET nombre=?, clave=?, monto_ff=NULLIF(?, ''), paquete_api=NULLIF(?, ''), vender_cuenta=?, cuenta_texto=NULLIF(?, ''), cantidad=?, precio=?, win_points_reward=?, activo=? WHERE id=?");
-        $stmt->bind_param('ssssissdiii', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_paquete_api, $edit_vender_cuenta, $edit_cuenta_texto, $edit_cantidad, $edit_precio, $edit_win_points_reward, $edit_activo, $edit_id);
+        $stmt = $mysqli->prepare("UPDATE juego_paquetes SET nombre=?, clave=?, monto_ff=NULLIF(?, ''), paquete_api=NULLIF(?, ''), api_provider=?, vender_cuenta=?, cuenta_texto=NULLIF(?, ''), cantidad=?, precio=?, win_points_reward=?, activo=? WHERE id=?");
+        $stmt->bind_param('sssssissdiii', $edit_nombre, $edit_clave, $edit_monto_ff, $edit_paquete_api, $edit_provider, $edit_vender_cuenta, $edit_cuenta_texto, $edit_cantidad, $edit_precio, $edit_win_points_reward, $edit_activo, $edit_id);
     }
     $stmt->execute();
     $stmt->close();
@@ -786,18 +879,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_paquete_id'])) {
 }
 
 // Procesar creación de paquete
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['clave'], $_POST['cantidad'], $_POST['precio'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['clave'], $_POST['precio'])) {
     $nombre = trim($_POST['nombre']);
     $clave = trim($_POST['clave']);
-    $monto_ff = $usesLegacyFreeFire ? trim((string) ($_POST['monto_ff'] ?? '')) : '';
-    $paquete_api = $usesApiCatalog ? trim((string) ($_POST['paquete_api'] ?? '')) : '';
+    $provider = admin_package_normalize_provider_value($_POST['api_provider'] ?? $packageDefaultProvider);
+    if ($provider === '' || !isset($packageSourceOptions[$provider])) {
+        admin_packages_redirect($adminPackageBaseUrl . '/' . $juego_id, ['package_error' => 'Selecciona el origen del paquete antes de guardarlo.']);
+    }
+    $monto_ff = $provider === 'free_fire' ? trim((string) ($_POST['monto_ff'] ?? '')) : '';
+    $paquete_api = $provider === 'giftven' ? trim((string) ($_POST['paquete_api'] ?? '')) : '';
     $vender_cuenta = $accountSaleFeatureEnabled && isset($_POST['vender_cuenta']) ? 1 : 0;
     $cuenta_texto = $accountSaleFeatureEnabled
         ? package_account_sales_normalize_text((string) ($_POST['cuenta_texto'] ?? ''))
         : '';
-    $cantidad = $usesDiscordCatalog
+    $cantidad = $provider === 'discord'
         ? api_discord_normalize_catalog_quantity($_POST['cantidad'] ?? '')
-        : (string) intval($_POST['cantidad']);
+        : '1';
     if ($cantidad === '') {
         $cantidad = '1';
     }
@@ -810,8 +907,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['cla
     $newGalleryPayload = $accountSaleFeatureEnabled
         ? admin_package_build_account_gallery_payload([], [], [], [], $_POST['new_account_gallery_description'] ?? [], $newGalleryFiles)
         : ['items' => [], 'delete_paths' => []];
-    $stmt = $mysqli->prepare("INSERT INTO juego_paquetes (juego_id, nombre, clave, monto_ff, paquete_api, vender_cuenta, cuenta_texto, cantidad, precio, win_points_reward, imagen_icono, activo, orden) VALUES (?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param('issssissdisii', $juego_id, $nombre, $clave, $monto_ff, $paquete_api, $vender_cuenta, $cuenta_texto, $cantidad, $precio, $win_points_reward, $imagen_icono, $activo, $orden);
+    if ($provider === 'giftven' && $paquete_api === '') {
+        admin_packages_redirect($adminPackageBaseUrl . '/' . $juego_id, ['package_error' => 'Selecciona el producto de TiendaGiftVen para este paquete.']);
+    }
+    if ($provider === 'free_fire' && $monto_ff === '') {
+        admin_packages_redirect($adminPackageBaseUrl . '/' . $juego_id, ['package_error' => 'Selecciona el monto de Free Fire para este paquete.']);
+    }
+    $stmt = $mysqli->prepare("INSERT INTO juego_paquetes (juego_id, nombre, clave, monto_ff, paquete_api, api_provider, vender_cuenta, cuenta_texto, cantidad, precio, win_points_reward, imagen_icono, activo, orden) VALUES (?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param('isssssissdisii', $juego_id, $nombre, $clave, $monto_ff, $paquete_api, $provider, $vender_cuenta, $cuenta_texto, $cantidad, $precio, $win_points_reward, $imagen_icono, $activo, $orden);
     $stmt->execute();
     $newPackageId = (int) $mysqli->insert_id;
     $stmt->close();
@@ -863,7 +966,7 @@ include '../includes/header.php';
 ?>
 <main class="container py-4">
     <h2 class="mb-4 text-neon">Paquetes de <?= htmlspecialchars($juego['nombre'] ?? 'Juego') ?></h2>
-    <?php if ($usesDiscordCatalog): ?>
+    <?php if ($hasDiscordCatalog): ?>
         <div class="rounded-4 p-3 mb-4" style="background:#101826;border:1px solid rgba(34,211,238,0.18);">
             <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
                 <div>
@@ -941,7 +1044,10 @@ $0.41"><?= htmlspecialchars($discordCatalogRaw, ENT_QUOTES, 'UTF-8') ?></textare
             </div>
         </div>
     <?php endif; ?>
-    <form method="post" enctype="multipart/form-data" class="row g-3 mb-4" style="background:#181f2a; border-radius:16px; border:2px solid #22d3ee; box-shadow:0 0 24px #22d3ee33; padding:2rem;">
+    <form method="post" enctype="multipart/form-data" class="row g-3 mb-4" data-package-source-form="1" style="background:#181f2a; border-radius:16px; border:2px solid #22d3ee; box-shadow:0 0 24px #22d3ee33; padding:2rem;">
+        <?php if (!$packageSourceSelectionEnabled && $packageDefaultProvider !== ''): ?>
+            <input type="hidden" name="api_provider" value="<?= htmlspecialchars($packageDefaultProvider, ENT_QUOTES, 'UTF-8') ?>">
+        <?php endif; ?>
         <div class="col-md-6">
             <label class="form-label text-neon">Nombre del paquete</label>
             <input type="text" name="nombre" placeholder="Nombre del paquete" required class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;" data-discord-catalog-field="name">
@@ -950,10 +1056,27 @@ $0.41"><?= htmlspecialchars($discordCatalogRaw, ENT_QUOTES, 'UTF-8') ?></textare
             <label class="form-label text-neon">Clave interna</label>
             <input type="text" name="clave" placeholder="Clave" required class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;" data-discord-catalog-field="key">
         </div>
-        <?php if ($usesApiCatalog): ?>
-            <div class="col-md-6">
+        <?php if ($packageSourceSelectionEnabled): ?>
+            <div class="col-12">
+                <div class="rounded-4 p-3" style="background:#101826;border:1px solid rgba(34,211,238,0.18);">
+                    <div class="text-neon fw-semibold">Origen del paquete</div>
+                    <div class="small mt-2" style="color:#8be9fd;">Selecciona una sola API por paquete. Cuando elijas una, los demás paneles quedarán bloqueados hasta limpiar la selección.</div>
+                    <div class="d-flex flex-wrap gap-3 mt-3">
+                        <?php foreach ($packageSourceOptions as $sourceKey => $sourceLabel): ?>
+                            <label class="d-inline-flex align-items-center gap-2 rounded-pill px-3 py-2" style="background:rgba(15,23,42,0.92);border:1px solid rgba(34,211,238,0.28);color:#d8fbff;cursor:pointer;">
+                                <input type="radio" name="api_provider" value="<?= htmlspecialchars($sourceKey, ENT_QUOTES, 'UTF-8') ?>" class="form-check-input mt-0" data-package-source-radio>
+                                <span><?= htmlspecialchars($sourceLabel, ENT_QUOTES, 'UTF-8') ?></span>
+                            </label>
+                        <?php endforeach; ?>
+                    </div>
+                    <button type="button" class="btn btn-outline-info btn-sm mt-3 d-none" data-package-source-clear>Limpiar selección</button>
+                </div>
+            </div>
+        <?php endif; ?>
+        <?php if ($hasGiftVenCatalog): ?>
+            <div class="col-md-6" data-package-source-panel="giftven">
                 <label class="form-label text-neon">Producto API</label>
-                <select name="paquete_api" required class="form-select" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;">
+                <select name="paquete_api" <?= $packageSourceSelectionEnabled ? 'data-package-source-required="1"' : 'required' ?> class="form-select" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;">
                     <option value="">Selecciona un producto API</option>
                     <?php foreach ($apiProducts as $apiProduct): ?>
                         <option value="<?= (int) ($apiProduct['id'] ?? 0) ?>"><?= htmlspecialchars(recargas_api_product_label($apiProduct), ENT_QUOTES, 'UTF-8') ?></option>
@@ -961,13 +1084,14 @@ $0.41"><?= htmlspecialchars($discordCatalogRaw, ENT_QUOTES, 'UTF-8') ?></textare
                 </select>
                 <div class="form-text mt-2" style="color:#8be9fd;">Categoría API vinculada: <?= htmlspecialchars($juegoCategoriaApi, ENT_QUOTES, 'UTF-8') ?></div>
             </div>
-        <?php elseif ($usesDiscordCatalog): ?>
-            <div class="col-md-6">
+        <?php endif; ?>
+        <?php if ($hasDiscordCatalog): ?>
+            <div class="col-md-6" data-package-source-panel="discord">
                 <label class="form-label text-neon">Cantidad / paquete Discord</label>
-                <input type="text" name="cantidad" placeholder="Ej: 86, 257+40 o Pase semanal" required class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;" value="1" maxlength="80" data-discord-catalog-field="quantity">
+                <input type="text" name="cantidad" placeholder="Ej: 86, 257+40 o Pase semanal" <?= $packageSourceSelectionEnabled ? 'data-package-source-required="1"' : 'required' ?> class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;" value="1" maxlength="80" data-discord-catalog-field="quantity">
                 <div class="form-text mt-2" style="color:#8be9fd;">Registra aquí el valor exacto que debe reemplazar <code>{cantidad}</code> en el comando de recarga de Discord.</div>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-6" data-package-source-panel="discord">
                 <?php if (!empty($discordCatalogItems)): ?>
                     <label class="form-label text-neon">Paquete a recargar</label>
                     <select class="form-select mb-3" data-discord-catalog-select style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;">
@@ -1005,23 +1129,17 @@ $0.41"><?= htmlspecialchars($discordCatalogRaw, ENT_QUOTES, 'UTF-8') ?></textare
                     <div class="form-text mt-2" style="color:#8be9fd;">Último texto crudo recibido: <?= htmlspecialchars(mb_strimwidth($discordCatalogRaw, 0, 220, '...'), ENT_QUOTES, 'UTF-8') ?></div>
                 <?php endif; ?>
             </div>
-        <?php elseif ($usesLegacyFreeFire): ?>
-            <div class="col-md-6">
+        <?php endif; ?>
+        <?php if ($usesLegacyFreeFire): ?>
+            <div class="col-md-6" data-package-source-panel="free_fire">
                 <label class="form-label text-neon">Montos (API)</label>
-                <select name="monto_ff" required class="form-select" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;">
+                <select name="monto_ff" <?= $packageSourceSelectionEnabled ? 'data-package-source-required="1"' : 'required' ?> class="form-select" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;">
                     <option value="">Selecciona un monto API</option>
                     <?php foreach ($freeFireApiOptions as $amount => $option): ?>
                         <option value="<?= htmlspecialchars($amount, ENT_QUOTES, 'UTF-8') ?>">&#128142; <?= htmlspecialchars($option['suggested_name'], ENT_QUOTES, 'UTF-8') ?> - <?= htmlspecialchars($option['diamonds'], ENT_QUOTES, 'UTF-8') ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
-        <?php endif; ?>
-        <?php if (!$usesDiscordCatalog): ?>
-        <div class="col-md-4" style="display:none;">
-            <label class="form-label text-neon">Cantidad</label>
-            <input type="number" name="cantidad_visible" min="0" placeholder="Cantidad" class="form-control" style="background:#222c3a; color:#22d3ee; border:1px solid #22d3ee;" value="1">
-        </div>
-        <input type="hidden" name="cantidad" value="1">
         <?php endif; ?>
         <div class="col-md-4">
             <label class="form-label text-neon">Precio USD</label>
@@ -1162,9 +1280,12 @@ $0.41"><?= htmlspecialchars($discordCatalogRaw, ENT_QUOTES, 'UTF-8') ?></textare
             <?php endforeach; ?>
         </div>
     </div>
-    <?php if ($usesApiCatalog && $apiProductsError !== null): ?>
+    <?php if ($packageError !== ''): ?>
+        <div class="alert alert-danger mb-4"><?= htmlspecialchars($packageError, ENT_QUOTES, 'UTF-8') ?></div>
+    <?php endif; ?>
+    <?php if ($hasGiftVenCatalog && $apiProductsError !== null): ?>
         <div class="alert alert-warning mb-4">No se pudieron cargar los productos de la categoría API: <?= htmlspecialchars($apiProductsError, ENT_QUOTES, 'UTF-8') ?></div>
-    <?php elseif ($usesApiCatalog && empty($apiProducts)): ?>
+    <?php elseif ($hasGiftVenCatalog && empty($apiProducts)): ?>
         <div class="alert alert-warning mb-4">No hay productos disponibles en la API para la categoría <?= htmlspecialchars($juegoCategoriaApi, ENT_QUOTES, 'UTF-8') ?>.</div>
     <?php endif; ?>
     <?php if ($discordCatalogError !== ''): ?>
@@ -1173,7 +1294,7 @@ $0.41"><?= htmlspecialchars($discordCatalogRaw, ENT_QUOTES, 'UTF-8') ?></textare
     <?php if ($discordCatalogNotice !== ''): ?>
         <div class="alert alert-info mb-4"><?= htmlspecialchars($discordCatalogNotice, ENT_QUOTES, 'UTF-8') ?></div>
     <?php endif; ?>
-    <?php if ($usesDiscordCatalog && $discordCatalogStatus === 'pending' && $discordCatalogNotice === ''): ?>
+    <?php if ($hasDiscordCatalog && $discordCatalogStatus === 'pending' && $discordCatalogNotice === ''): ?>
         <div class="alert alert-warning mb-4">La consulta de precios sigue pendiente. Cuando el relay llame a <code>action=discord_catalog_listener</code>, el catálogo se actualizará aquí.</div>
     <?php endif; ?>
     <div class="d-flex flex-wrap gap-2 mb-3">
@@ -1188,7 +1309,10 @@ $0.41"><?= htmlspecialchars($discordCatalogRaw, ENT_QUOTES, 'UTF-8') ?></textare
                     <th style="color:#22d3ee; background:#181f2a;">Nombre</th>
                     <th style="color:#22d3ee; background:#181f2a;">Clave</th>
                     <th style="color:#22d3ee; background:#181f2a;">Orden</th>
-                    <?php if ($usesApiCatalog): ?>
+                    <?php if ($packageSourceSelectionEnabled): ?>
+                        <th style="color:#22d3ee; background:#181f2a;">Origen</th>
+                        <th style="color:#22d3ee; background:#181f2a;">Referencia API</th>
+                    <?php elseif ($usesApiCatalog): ?>
                         <th style="color:#22d3ee; background:#181f2a;">Producto API</th>
                     <?php elseif ($usesLegacyFreeFire): ?>
                         <th style="color:#22d3ee; background:#181f2a;">Monto FF</th>
@@ -1205,6 +1329,8 @@ $0.41"><?= htmlspecialchars($discordCatalogRaw, ENT_QUOTES, 'UTF-8') ?></textare
                 <?php $packageGalleryItems = $packageAccountGalleryByPackage[(int) ($p['id'] ?? 0)] ?? []; ?>
                 <?php $packageSellsAccount = (int) ($p['vender_cuenta'] ?? 0) === 1; ?>
                 <?php $packageIsActive = !isset($p['activo']) || !empty($p['activo']); ?>
+                <?php $packageProvider = admin_package_resolve_provider($p, $juego, $discordApiEnabled); ?>
+                <?php $packageProviderReference = admin_package_provider_reference_text($packageProvider, $p, $apiProductsById); ?>
                 <tr class="js-package-record js-package-filterable <?= $packageIsActive ? 'activo' : 'inactivo' ?>" data-package-context="desktop" data-package-id="<?= (int) ($p['id'] ?? 0) ?>" style="background:#181f2a; color:#fff;<?= (($currentPackageTab === 'active' && !$packageIsActive) || ($currentPackageTab === 'inactive' && $packageIsActive)) ? 'display:none;' : '' ?>">
                     <td style="background:#181f2a;">
                         <?php if (!empty($p['imagen_icono'])): ?>
@@ -1217,6 +1343,9 @@ $0.41"><?= htmlspecialchars($discordCatalogRaw, ENT_QUOTES, 'UTF-8') ?></textare
                     </td>
                     <td class="fw-semibold text-neon" style="background:#181f2a; color:#22d3ee;">
                         <div><?= htmlspecialchars($p['nombre']) ?></div>
+                        <?php if ($packageSourceSelectionEnabled): ?>
+                            <div class="small mt-2"><span style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.2rem 0.55rem;border-radius:999px;border:1px solid rgba(34,211,238,0.35);background:rgba(15,23,42,0.92);color:#d8fbff;font-weight:700;letter-spacing:0.03em;"><?= htmlspecialchars(admin_package_provider_label($packageProvider), ENT_QUOTES, 'UTF-8') ?></span></div>
+                        <?php endif; ?>
                         <?php if ($packageSellsAccount): ?>
                             <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
                                 <span class="badge rounded-pill px-3 py-2" style="background:rgba(34,211,238,0.14);border:1px solid rgba(34,211,238,0.28);color:#d8fbff;">Vender Cuenta</span>
@@ -1234,11 +1363,13 @@ $0.41"><?= htmlspecialchars($discordCatalogRaw, ENT_QUOTES, 'UTF-8') ?></textare
                             <input type="number" name="orden" min="1" value="<?= max(1, (int) ($p['orden'] ?? 0)) ?>" class="form-control form-control-sm text-center js-ajax-order-input" style="width:84px;background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;" data-last-value="<?= max(1, (int) ($p['orden'] ?? 0)) ?>" onchange="window.adminPackageOrderChange(this)">
                         </form>
                     </td>
-                    <?php if ($usesApiCatalog): ?>
-                        <?php $apiProductId = (int) ($p['paquete_api'] ?? 0); ?>
-                        <td style="background:#181f2a; color:#fff;"><?= htmlspecialchars($apiProductId > 0 && isset($apiProductsById[$apiProductId]) ? recargas_api_product_label($apiProductsById[$apiProductId]) : ($apiProductId > 0 ? 'ID ' . $apiProductId : '—'), ENT_QUOTES, 'UTF-8') ?></td>
+                    <?php if ($packageSourceSelectionEnabled): ?>
+                        <td style="background:#181f2a; color:#fff;"><?= htmlspecialchars(admin_package_provider_label($packageProvider), ENT_QUOTES, 'UTF-8') ?></td>
+                        <td style="background:#181f2a; color:#fff;"><?= htmlspecialchars($packageProviderReference, ENT_QUOTES, 'UTF-8') ?></td>
+                    <?php elseif ($usesApiCatalog): ?>
+                        <td style="background:#181f2a; color:#fff;"><?= htmlspecialchars($packageProviderReference, ENT_QUOTES, 'UTF-8') ?></td>
                     <?php elseif ($usesLegacyFreeFire): ?>
-                        <td style="background:#181f2a; color:#fff;"><?= htmlspecialchars(!empty($p['monto_ff']) ? free_fire_api_amount_label((string) $p['monto_ff']) : '—') ?></td>
+                        <td style="background:#181f2a; color:#fff;"><?= htmlspecialchars($packageProviderReference, ENT_QUOTES, 'UTF-8') ?></td>
                     <?php endif; ?>
                     <td class="text-center" style="background:#181f2a;">
                         <form method="post" action="<?= htmlspecialchars($adminPackageBaseUrl, ENT_QUOTES, 'UTF-8') ?>/<?= $juego_id ?>" class="m-0 d-inline-block js-ajax-toggle-form">
@@ -1270,6 +1401,8 @@ $0.41"><?= htmlspecialchars($discordCatalogRaw, ENT_QUOTES, 'UTF-8') ?></textare
             <?php $packageGalleryItems = $packageAccountGalleryByPackage[(int) ($p['id'] ?? 0)] ?? []; ?>
             <?php $packageSellsAccount = (int) ($p['vender_cuenta'] ?? 0) === 1; ?>
             <?php $packageIsActive = !isset($p['activo']) || !empty($p['activo']); ?>
+            <?php $packageProvider = admin_package_resolve_provider($p, $juego, $discordApiEnabled); ?>
+            <?php $packageProviderReference = admin_package_provider_reference_text($packageProvider, $p, $apiProductsById); ?>
             <div class="col-12 js-package-record js-package-filterable <?= $packageIsActive ? 'activo' : 'inactivo' ?>" data-package-context="mobile" data-package-id="<?= (int) ($p['id'] ?? 0) ?>" style="<?= (($currentPackageTab === 'active' && !$packageIsActive) || ($currentPackageTab === 'inactive' && $packageIsActive)) ? 'display:none;' : '' ?>">
                 <div class="card neon-card p-3" style="background:#181f2a; border:2px solid #22d3ee; box-shadow:0 0 16px #22d3ee,0 0 4px #2dd4bf; color:#22d3ee;">
                     <div class="d-flex align-items-center mb-2">
@@ -1282,6 +1415,9 @@ $0.41"><?= htmlspecialchars($discordCatalogRaw, ENT_QUOTES, 'UTF-8') ?></textare
                         <?php endif; ?>
                         <div>
                             <div class="fw-bold text-neon" style="font-size:1.1rem; color:#22d3ee;"><?= htmlspecialchars($p['nombre']) ?></div>
+                            <?php if ($packageSourceSelectionEnabled): ?>
+                                <div class="small mt-1" style="color:#b2f6ff;">Origen: <?= htmlspecialchars(admin_package_provider_label($packageProvider), ENT_QUOTES, 'UTF-8') ?></div>
+                            <?php endif; ?>
                             <div class="small" style="font-size:0.85rem; color:#b2f6ff;">Orden: <?= max(1, (int) ($p['orden'] ?? 0)) ?></div>
                             <div class="text-muted" style="font-size:0.85rem; color:#b2f6ff;">ID: <?= $p['id'] ?></div>
                             <div class="mt-2">
@@ -1304,11 +1440,12 @@ $0.41"><?= htmlspecialchars($discordCatalogRaw, ENT_QUOTES, 'UTF-8') ?></textare
                         <div style="color:#8be9fd;"><span class="fw-semibold">Galería:</span> <?= count($packageGalleryItems) ?> imágenes</div>
                     <?php endif; ?>
                     <?= admin_package_feature_badges_html($packageFeatures) ?>
-                    <?php if ($usesApiCatalog): ?>
-                        <?php $apiProductId = (int) ($p['paquete_api'] ?? 0); ?>
-                        <div style="color:#fff;"><span class="fw-semibold">Producto API:</span> <?= htmlspecialchars($apiProductId > 0 && isset($apiProductsById[$apiProductId]) ? recargas_api_product_label($apiProductsById[$apiProductId]) : ($apiProductId > 0 ? 'ID ' . $apiProductId : '—'), ENT_QUOTES, 'UTF-8') ?></div>
+                    <?php if ($packageSourceSelectionEnabled): ?>
+                        <div style="color:#fff;"><span class="fw-semibold">Referencia API:</span> <?= htmlspecialchars($packageProviderReference, ENT_QUOTES, 'UTF-8') ?></div>
+                    <?php elseif ($usesApiCatalog): ?>
+                        <div style="color:#fff;"><span class="fw-semibold">Producto API:</span> <?= htmlspecialchars($packageProviderReference, ENT_QUOTES, 'UTF-8') ?></div>
                     <?php elseif ($usesLegacyFreeFire): ?>
-                        <div style="color:#fff;"><span class="fw-semibold">Monto FF:</span> <?= htmlspecialchars(!empty($p['monto_ff']) ? free_fire_api_amount_label((string) $p['monto_ff']) : '—') ?></div>
+                        <div style="color:#fff;"><span class="fw-semibold">Monto FF:</span> <?= htmlspecialchars($packageProviderReference, ENT_QUOTES, 'UTF-8') ?></div>
                     <?php endif; ?>
                     <div class="text-neon" style="color:#22d3ee;"><span class="fw-semibold">Precio:</span> $<?= number_format($p['precio'], 2) ?></div>
                     <div style="color:#fff;"><span class="fw-semibold"><?= htmlspecialchars($winPointsName, ENT_QUOTES, 'UTF-8') ?>:</span> <?= (int) ($p['win_points_reward'] ?? 0) ?></div>
@@ -1356,15 +1493,19 @@ if (isset($_GET['editar'])) {
     $paqEditFeatureIds = package_feature_catalog_ids_for_package($mysqli, $edit_id);
     $paqEditFeatures = $packageFeaturesByPackage[$edit_id] ?? [];
     $paqEditGallery = package_account_sales_fetch_gallery($mysqli, $edit_id);
+    $paqEditProvider = $paq_edit ? admin_package_resolve_provider($paq_edit, $juego, $discordApiEnabled) : '';
     if ($paq_edit):
 ?>
 <div class="fixed-top w-100 h-100 d-flex align-items-start justify-content-center" style="background:rgba(0,0,0,0.7);z-index:1050;overflow-y:auto;padding:1rem;">
-    <form method="post" enctype="multipart/form-data" class="bg-dark neon-card p-4 rounded-4 position-relative" style="max-width:560px;width:100%;max-height:calc(100vh - 2rem);overflow-y:auto;box-shadow:0 0 2rem #22d3ee33;">
+    <form method="post" enctype="multipart/form-data" class="bg-dark neon-card p-4 rounded-4 position-relative" data-package-source-form="1" style="max-width:560px;width:100%;max-height:calc(100vh - 2rem);overflow-y:auto;box-shadow:0 0 2rem #22d3ee33;">
         <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
             <h3 class="text-neon mb-0">Editar paquete</h3>
             <a href="<?= htmlspecialchars($adminPackageBaseUrl, ENT_QUOTES, 'UTF-8') ?>/<?= $juego_id ?>" class="btn btn-outline-info btn-sm flex-shrink-0">Cerrar</a>
         </div>
         <input type="hidden" name="edit_paquete_id" value="<?= $paq_edit['id'] ?>">
+        <?php if (!$packageSourceSelectionEnabled && $packageDefaultProvider !== ''): ?>
+            <input type="hidden" name="edit_api_provider" value="<?= htmlspecialchars($packageDefaultProvider, ENT_QUOTES, 'UTF-8') ?>">
+        <?php endif; ?>
         <div class="mb-3">
             <label class="form-label text-neon">Nombre</label>
             <input type="text" name="edit_nombre" value="<?= htmlspecialchars($paq_edit['nombre']) ?>" required class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;" data-discord-catalog-field="name">
@@ -1373,18 +1514,34 @@ if (isset($_GET['editar'])) {
             <label class="form-label text-neon">Clave interna</label>
             <input type="text" name="edit_clave" value="<?= htmlspecialchars($paq_edit['clave']) ?>" required class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;" data-discord-catalog-field="key">
         </div>
-        <?php if ($usesApiCatalog): ?>
-            <div class="mb-3">
+        <?php if ($packageSourceSelectionEnabled): ?>
+            <div class="mb-3 rounded-4 p-3" style="background:#101826;border:1px solid rgba(34,211,238,0.18);">
+                <div class="text-neon fw-semibold">Origen del paquete</div>
+                <div class="small mt-2" style="color:#8be9fd;">Este juego tiene varias APIs. Elige cuál debe usar este paquete.</div>
+                <div class="d-flex flex-wrap gap-3 mt-3">
+                    <?php foreach ($packageSourceOptions as $sourceKey => $sourceLabel): ?>
+                        <label class="d-inline-flex align-items-center gap-2 rounded-pill px-3 py-2" style="background:rgba(15,23,42,0.92);border:1px solid rgba(34,211,238,0.28);color:#d8fbff;cursor:pointer;">
+                            <input type="radio" name="edit_api_provider" value="<?= htmlspecialchars($sourceKey, ENT_QUOTES, 'UTF-8') ?>" class="form-check-input mt-0" data-package-source-radio <?= $paqEditProvider === $sourceKey ? 'checked' : '' ?>>
+                            <span><?= htmlspecialchars($sourceLabel, ENT_QUOTES, 'UTF-8') ?></span>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
+                <button type="button" class="btn btn-outline-info btn-sm mt-3" data-package-source-clear>Limpiar selección</button>
+            </div>
+        <?php endif; ?>
+        <?php if ($hasGiftVenCatalog): ?>
+            <div class="mb-3" data-package-source-panel="giftven">
                 <label class="form-label text-neon">Producto API</label>
-                <select name="edit_paquete_api" required class="form-select" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
+                <select name="edit_paquete_api" <?= $packageSourceSelectionEnabled ? 'data-package-source-required="1"' : 'required' ?> class="form-select" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
                     <option value="">Selecciona un producto API</option>
                     <?php foreach ($apiProducts as $apiProduct): ?>
                         <option value="<?= (int) ($apiProduct['id'] ?? 0) ?>" <?= (int) ($paq_edit['paquete_api'] ?? 0) === (int) ($apiProduct['id'] ?? 0) ? 'selected' : '' ?>><?= htmlspecialchars(recargas_api_product_label($apiProduct), ENT_QUOTES, 'UTF-8') ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
-        <?php elseif ($usesDiscordCatalog): ?>
-            <div class="mb-3">
+        <?php endif; ?>
+        <?php if ($hasDiscordCatalog): ?>
+            <div class="mb-3" data-package-source-panel="discord">
                 <?php if (!empty($discordCatalogItems)): ?>
                     <label class="form-label text-neon">Paquete a recargar</label>
                     <select class="form-select mb-3" data-discord-catalog-select style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
@@ -1419,10 +1576,16 @@ if (isset($_GET['editar'])) {
                     <div class="form-text mt-2" style="color:#8be9fd;">Comando de recarga configurado: <?= htmlspecialchars($discordTopupCommandText, ENT_QUOTES, 'UTF-8') ?></div>
                 <?php endif; ?>
             </div>
-        <?php elseif ($usesLegacyFreeFire): ?>
-            <div class="mb-3">
+            <div class="mb-3" data-package-source-panel="discord">
+                <label class="form-label text-neon">Cantidad / paquete Discord</label>
+                <input type="text" name="edit_cantidad" value="<?= htmlspecialchars($paq_edit['cantidad']) ?>" <?= $packageSourceSelectionEnabled ? 'data-package-source-required="1"' : 'required' ?> maxlength="80" class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;" data-discord-catalog-field="quantity">
+                <div class="form-text mt-2" style="color:#8be9fd;">Este valor es el que se insertará exactamente en el parámetro <code>{cantidad}</code> del comando Discord del juego.</div>
+            </div>
+        <?php endif; ?>
+        <?php if ($usesLegacyFreeFire): ?>
+            <div class="mb-3" data-package-source-panel="free_fire">
                 <label class="form-label text-neon">Montos (API)</label>
-                <select name="edit_monto_ff" required class="form-select" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
+                <select name="edit_monto_ff" <?= $packageSourceSelectionEnabled ? 'data-package-source-required="1"' : 'required' ?> class="form-select" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;">
                     <option value="">Selecciona un monto API</option>
                     <?php foreach ($freeFireApiOptions as $amount => $option): ?>
                         <option value="<?= htmlspecialchars($amount, ENT_QUOTES, 'UTF-8') ?>" <?= (string) ($paq_edit['monto_ff'] ?? '') === (string) $amount ? 'selected' : '' ?>>&#128142; <?= htmlspecialchars($option['suggested_name'], ENT_QUOTES, 'UTF-8') ?> - <?= htmlspecialchars($option['diamonds'], ENT_QUOTES, 'UTF-8') ?></option>
@@ -1430,13 +1593,6 @@ if (isset($_GET['editar'])) {
                 </select>
             </div>
         <?php endif; ?>
-        <div class="mb-3">
-            <label class="form-label text-neon"><?= $usesDiscordCatalog ? 'Cantidad / paquete Discord' : 'Cantidad' ?></label>
-            <input type="<?= $usesDiscordCatalog ? 'text' : 'number' ?>" name="edit_cantidad" value="<?= htmlspecialchars($paq_edit['cantidad']) ?>" <?= $usesDiscordCatalog ? 'maxlength="80"' : 'min="0"' ?> required class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;" data-discord-catalog-field="quantity">
-            <?php if ($usesDiscordCatalog): ?>
-                <div class="form-text mt-2" style="color:#8be9fd;">Este valor es el que se insertará exactamente en el parámetro <code>{cantidad}</code> del comando Discord del juego.</div>
-            <?php endif; ?>
-        </div>
         <div class="mb-3">
             <label class="form-label text-neon">Precio USD</label>
             <input type="number" step="0.01" name="edit_precio" value="<?= htmlspecialchars($paq_edit['precio']) ?>" required class="form-control" style="background:#222c3a;color:#22d3ee;border:1px solid #22d3ee;" data-discord-catalog-field="price">
@@ -2317,10 +2473,88 @@ if (typeof window.bindDiscordCatalogSelects !== 'function') {
     };
 }
 
+if (typeof window.applyPackageSourceSelection !== 'function') {
+    window.applyPackageSourceSelection = function(form) {
+        if (!(form instanceof HTMLElement)) {
+            return;
+        }
+
+        const radios = Array.from(form.querySelectorAll('[data-package-source-radio]'));
+        if (!radios.length) {
+            return;
+        }
+
+        const selectedRadio = radios.find((radio) => radio.checked) || null;
+        const selectedSource = selectedRadio ? String(selectedRadio.value || '').trim() : '';
+
+        form.querySelectorAll('[data-package-source-panel]').forEach((panel) => {
+            const panelSource = String(panel.dataset.packageSourcePanel || '').trim();
+            const isActive = selectedSource === '' || panelSource === selectedSource;
+            panel.classList.toggle('opacity-50', selectedSource !== '' && !isActive);
+
+            panel.querySelectorAll('input, select, textarea, button').forEach((control) => {
+                if (control.hasAttribute('data-package-source-radio') || control.hasAttribute('data-package-source-clear')) {
+                    return;
+                }
+
+                if (String(control.type || '').toLowerCase() === 'hidden') {
+                    return;
+                }
+
+                const sourceRequired = control.dataset.packageSourceRequired === '1';
+
+                if (selectedSource !== '' && !isActive) {
+                    control.disabled = true;
+                    control.required = false;
+                    return;
+                }
+
+                control.disabled = false;
+                if (sourceRequired) {
+                    control.required = selectedSource !== '' && isActive;
+                }
+            });
+        });
+
+        form.querySelectorAll('[data-package-source-clear]').forEach((button) => {
+            button.classList.toggle('d-none', selectedSource === '');
+        });
+    };
+}
+
+if (typeof window.bindPackageSourceForms !== 'function') {
+    window.bindPackageSourceForms = function(root = document) {
+        root.querySelectorAll('[data-package-source-form]').forEach((form) => {
+            if (form.dataset.boundPackageSource === '1') {
+                window.applyPackageSourceSelection(form);
+                return;
+            }
+
+            form.dataset.boundPackageSource = '1';
+            form.querySelectorAll('[data-package-source-radio]').forEach((radio) => {
+                radio.addEventListener('change', function() {
+                    window.applyPackageSourceSelection(form);
+                });
+            });
+            form.querySelectorAll('[data-package-source-clear]').forEach((button) => {
+                button.addEventListener('click', function() {
+                    form.querySelectorAll('[data-package-source-radio]').forEach((radio) => {
+                        radio.checked = false;
+                    });
+                    window.applyPackageSourceSelection(form);
+                });
+            });
+
+            window.applyPackageSourceSelection(form);
+        });
+    };
+}
+
 window.bindPackageFeatureIconPreview();
 window.bindPackageFeatureApplyButtons();
 window.bindPackageAccountSaleScopes();
 window.bindDiscordCatalogSelects();
+window.bindPackageSourceForms();
 
 const packageFeatureApplyReplaceButton = document.getElementById('package-feature-apply-replace');
 const packageFeatureApplyAddButton = document.getElementById('package-feature-apply-add');

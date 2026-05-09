@@ -350,6 +350,16 @@ include __DIR__ . "/includes/header.php";
         $apiRequiredFields = [];
         $packFeatures = $packageFeaturesByPackage[$packId] ?? [];
         $packIsAccountSale = package_account_sales_is_enabled_for_package($pack, $accountSaleFeatureEnabled);
+        $packApiProvider = strtolower(trim((string) ($pack['api_provider'] ?? '')));
+        if ($packApiProvider === '') {
+          if ($packApiId > 0) {
+            $packApiProvider = 'giftven';
+          } elseif (!empty($pack['monto_ff'])) {
+            $packApiProvider = 'free_fire';
+          } elseif (!empty($game['categoria_api_discord'])) {
+            $packApiProvider = 'discord';
+          }
+        }
         $packAccountGallery = $packIsAccountSale ? ($packageAccountSaleGalleryMap[$packId] ?? []) : [];
         $packAccountGalleryPayload = array_values(array_map(static function (array $item): array {
           $imageUrl = package_feature_public_asset_url((string) ($item['image_path'] ?? ''));
@@ -361,9 +371,9 @@ include __DIR__ . "/includes/header.php";
         }, array_filter($packAccountGallery, static function (array $item): bool {
           return trim((string) ($item['image_path'] ?? '')) !== '';
         })));
-        if ($usesCatalogApi && $packApiId > 0 && isset($apiProductsById[$packApiId])) {
+        if ($packApiProvider === 'giftven' && $packApiId > 0 && isset($apiProductsById[$packApiId])) {
           $apiRequiredFields = recargas_api_describe_required_fields($apiProductsById[$packApiId]);
-        } elseif (!$usesCatalogApi && !empty($discordCheckoutRequiredFields)) {
+        } elseif ($packApiProvider === 'discord' && !empty($discordCheckoutRequiredFields)) {
           $apiRequiredFields = $discordCheckoutRequiredFields;
         }
         $img_paquete = !empty($pack['imagen_icono']) ? $pack['imagen_icono'] : (!empty($game['imagen_paquete']) ? $game['imagen_paquete'] : null);
@@ -372,6 +382,7 @@ include __DIR__ . "/includes/header.php";
       <div class="col">
         <article class="pack-card card border-info bg-dark text-start w-100 h-100 shadow-sm"
           data-package-id="<?= $packId ?>"
+          data-package-provider="<?= htmlspecialchars($packApiProvider, ENT_QUOTES, 'UTF-8') ?>"
           data-base="<?= htmlspecialchars($precio_base) ?>"
           data-name="<?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?>"
           data-cantidad="<?= htmlspecialchars($pack['cantidad'], ENT_QUOTES, 'UTF-8') ?>"
@@ -3782,6 +3793,7 @@ include __DIR__ . "/includes/header.php";
   function buildPackStateFromCard(card) {
     return {
       id: card.dataset.packageId,
+      provider: String(card.dataset.packageProvider || '').trim(),
       name: card.dataset.name,
       priceValue: Number(card.dataset.priceValue || 0),
       moneda: card.dataset.moneda,
@@ -4454,7 +4466,7 @@ include __DIR__ . "/includes/header.php";
     const existingValues = collectPlayerFields();
     const packRequiredFields = pack && Array.isArray(pack.requiredFields) ? pack.requiredFields : [];
     const requiredFields = packRequiredFields.length ? packRequiredFields : getPlayerVerificationDefaultFields();
-    const shouldShowPrimaryField = !isAccountSalePack(pack) && (!gameUsesCatalogApi || !pack || requiredFields.length > 0);
+    const shouldShowPrimaryField = !isAccountSalePack(pack) && (!pack || pack.provider !== 'giftven' || requiredFields.length > 0);
     const primaryConfig = requiredFields[0] || defaultPrimaryField;
     setAccountSaleNote(pack);
 

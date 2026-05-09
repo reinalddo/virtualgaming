@@ -388,6 +388,28 @@ function admin_extra_features_ensure_schema(): void {
         $discordStmt->close();
     }
 
+    store_config_upsert(
+        'union_apis_discord_giftven',
+        store_config_get('union_apis_discord_giftven', '0') === '1' ? '1' : '0',
+        $configDescriptions['union_apis_discord_giftven'] ?? 'Permite combinar paquetes de TiendaGiftVen y Discord dentro del mismo juego, moviendo la elección del proveedor al paquete.'
+    );
+    $unionFeatureName = 'Union APIs Discord + GiftVen';
+    $unionFeatureDescription = 'Permite vender en un mismo juego paquetes de TiendaGiftVen y Discord, eligiendo el proveedor final desde cada paquete.';
+    $unionStmt = $mysqli->prepare(
+        "UPDATE configuracion_general
+         SET mostrar_a_cliente = 1,
+             funcion_venta = COALESCE(NULLIF(funcion_venta, ''), ?),
+             descripcion_venta = COALESCE(NULLIF(descripcion_venta, ''), ?),
+             precio = COALESCE(precio, 30),
+             comision_venta = COALESCE(comision_venta, 0)
+         WHERE clave = 'union_apis_discord_giftven'"
+    );
+    if ($unionStmt) {
+        $unionStmt->bind_param('ss', $unionFeatureName, $unionFeatureDescription);
+        $unionStmt->execute();
+        $unionStmt->close();
+    }
+
     $ensured = true;
 }
 
@@ -501,6 +523,49 @@ function admin_update_extra_feature(int $featureId, int $basePrice, int $commiss
     $stmt->close();
 
     return $executed;
+}
+
+function admin_fetch_extra_feature_by_id(int $featureId): ?array {
+    if ($featureId <= 0) {
+        return null;
+    }
+
+    admin_extra_features_ensure_schema();
+
+    $mysqli = store_config_db();
+    $stmt = $mysqli->prepare('SELECT id, clave, valor FROM configuracion_general WHERE id = ? LIMIT 1');
+    if (!$stmt) {
+        return null;
+    }
+
+    $stmt->bind_param('i', $featureId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result instanceof mysqli_result ? $result->fetch_assoc() : null;
+    $stmt->close();
+
+    return is_array($row) ? $row : null;
+}
+
+function admin_validate_extra_feature_update(array $feature, string $value): ?string {
+    $featureKey = trim((string) ($feature['clave'] ?? ''));
+    if ($featureKey === '') {
+        return 'La función seleccionada no es válida.';
+    }
+
+    $nextIsActive = admin_extra_feature_is_active($value);
+    $discordEnabled = admin_extra_feature_is_active(store_config_get('api_discord', '0'));
+    $unionEnabled = admin_extra_feature_is_active(store_config_get('union_apis_discord_giftven', '0'));
+
+    if ($featureKey === 'union_apis_discord_giftven' && $nextIsActive && !$discordEnabled) {
+        return 'Primero debes activar API Discord antes de habilitar Union APIs Discord + GiftVen.';
+    }
+
+    if ($featureKey === 'api_discord' && !$nextIsActive && $unionEnabled) {
+        return 'No puedes desactivar API Discord mientras Union APIs Discord + GiftVen siga activa.';
+    }
+
+    return null;
 }
 
 function admin_render_extra_features_table(array $features, bool $isRootViewer, string $whatsappNumber = ''): string {
@@ -1501,9 +1566,14 @@ switch ($seccion) {
             $basePrice = max(0, intval($_POST['precio'] ?? 0));
             $commission = max(0, intval($_POST['comision_venta'] ?? 0));
             $value = isset($_POST['activar_funcion']) ? '1' : '0';
+            $feature = admin_fetch_extra_feature_by_id($featureId);
 
             if ($featureId <= 0) {
                 admin_set_flash('error', 'La función seleccionada no es válida.');
+            } elseif (!$feature) {
+                admin_set_flash('error', 'No se encontró la función extra seleccionada.');
+            } elseif (($validationError = admin_validate_extra_feature_update($feature, $value)) !== null) {
+                admin_set_flash('error', $validationError);
             } elseif (admin_update_extra_feature($featureId, $basePrice, $commission, $value)) {
                 admin_set_flash('success', 'Función extra actualizada correctamente.');
             } else {

@@ -78,6 +78,7 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         paquete_cantidad VARCHAR(80) DEFAULT NULL,
         monto_ff VARCHAR(20) DEFAULT NULL,
         paquete_api INT DEFAULT NULL,
+        api_provider VARCHAR(30) DEFAULT NULL,
         moneda VARCHAR(20) DEFAULT NULL,
         precio DECIMAL(12,2) NOT NULL DEFAULT 0,
         precio_original DECIMAL(12,2) DEFAULT NULL,
@@ -152,6 +153,7 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         'paquete_cantidad' => "ALTER TABLE pedidos ADD COLUMN paquete_cantidad VARCHAR(80) NULL AFTER paquete_nombre",
         'monto_ff' => "ALTER TABLE pedidos ADD COLUMN monto_ff VARCHAR(20) NULL AFTER paquete_cantidad",
         'paquete_api' => "ALTER TABLE pedidos ADD COLUMN paquete_api INT NULL AFTER monto_ff",
+        'api_provider' => "ALTER TABLE pedidos ADD COLUMN api_provider VARCHAR(30) NULL AFTER paquete_api",
         'moneda' => "ALTER TABLE pedidos ADD COLUMN moneda VARCHAR(20) NULL AFTER paquete_cantidad",
         'precio' => "ALTER TABLE pedidos ADD COLUMN precio DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER moneda",
         'precio_original' => "ALTER TABLE pedidos ADD COLUMN precio_original DECIMAL(12,2) NULL AFTER precio",
@@ -250,6 +252,13 @@ function ensure_juego_paquetes_paquete_api_column(mysqli $mysqli): void {
     $result = $mysqli->query("SHOW COLUMNS FROM juego_paquetes LIKE 'paquete_api'");
     if (!($result instanceof mysqli_result) || $result->num_rows === 0) {
         $mysqli->query("ALTER TABLE juego_paquetes ADD COLUMN paquete_api INT NULL AFTER monto_ff");
+    }
+}
+
+function ensure_juego_paquetes_api_provider_column(mysqli $mysqli): void {
+    $result = $mysqli->query("SHOW COLUMNS FROM juego_paquetes LIKE 'api_provider'");
+    if (!($result instanceof mysqli_result) || $result->num_rows === 0) {
+        $mysqli->query("ALTER TABLE juego_paquetes ADD COLUMN api_provider VARCHAR(30) NULL AFTER paquete_api");
     }
 }
 
@@ -808,8 +817,8 @@ function api_discord_order_status_default_message(string $status): string {
     }
 }
 
-function build_api_discord_order_insert_data(mysqli $mysqli, int $gameId): array {
-    if ($gameId <= 0 || !api_discord_orders_enabled()) {
+function build_api_discord_order_insert_data(mysqli $mysqli, int $gameId, string $packageProvider = ''): array {
+    if ($gameId <= 0 || $packageProvider !== 'discord' || !api_discord_orders_enabled()) {
         return [];
     }
 
@@ -3199,7 +3208,7 @@ function sync_local_order_with_binance_payload(mysqli $mysqli, array $order, arr
     $phone = substr(trim((string) ($order['telefono_contacto'] ?? '')), 0, 40);
     $paymentMethodName = 'Binance Pay';
     $updatedOrder = $order;
-    $usesCatalogApi = game_uses_catalog_api($mysqli, (int) ($updatedOrder['juego_id'] ?? 0));
+    $usesCatalogApi = order_uses_catalog_api_provider($updatedOrder);
 
     if (order_is_account_sale($updatedOrder)) {
         try {
@@ -3227,7 +3236,7 @@ function sync_local_order_with_binance_payload(mysqli $mysqli, array $order, arr
         ];
     }
 
-    if (game_uses_discord_api($mysqli, (int) ($updatedOrder['juego_id'] ?? 0))) {
+    if (order_uses_api_discord($updatedOrder)) {
         $dispatchResult = execute_api_discord_order_dispatch($updatedOrder);
         persist_api_discord_dispatch_result($mysqli, $updatedOrder, $dispatchResult, 'pagado', 'pagado', $verifiedReference, $phone);
 
@@ -3664,6 +3673,61 @@ function game_discord_api_command(mysqli $mysqli, int $gameId): string {
 
 function game_uses_discord_api(mysqli $mysqli, int $gameId): bool {
     return game_discord_api_command($mysqli, $gameId) !== '';
+}
+
+function normalize_api_provider_value($value): string {
+    $normalized = strtolower(trim((string) $value));
+    return in_array($normalized, ['giftven', 'discord', 'free_fire'], true) ? $normalized : '';
+}
+
+function package_api_provider_from_row(array $package, array $game = []): string {
+    $storedProvider = normalize_api_provider_value($package['api_provider'] ?? '');
+    if ($storedProvider !== '') {
+        return $storedProvider;
+    }
+
+    if ((int) ($package['paquete_api'] ?? 0) > 0) {
+        return 'giftven';
+    }
+
+    if (trim((string) ($package['monto_ff'] ?? '')) !== '') {
+        return 'free_fire';
+    }
+
+    if (trim((string) ($game['categoria_api_discord'] ?? '')) !== '') {
+        return 'discord';
+    }
+
+    return '';
+}
+
+function order_api_provider(array $order): string {
+    $storedProvider = normalize_api_provider_value($order['api_provider'] ?? '');
+    if ($storedProvider !== '') {
+        return $storedProvider;
+    }
+
+    if ((int) ($order['paquete_api'] ?? 0) > 0) {
+        return 'giftven';
+    }
+
+    if (trim((string) ($order['monto_ff'] ?? '')) !== '') {
+        return 'free_fire';
+    }
+
+    if (trim((string) ($order['api_discord_command_key'] ?? '')) !== '') {
+        return 'discord';
+    }
+
+    return '';
+}
+
+function order_uses_catalog_api_provider(array $order): bool {
+    return order_api_provider($order) === 'giftven';
+}
+
+function order_uses_free_fire_api_provider(array $order): bool {
+    return order_api_provider($order) === 'free_fire';
 }
 
 function fetch_game_package(mysqli $mysqli, int $packageId, int $gameId): ?array {
@@ -6464,6 +6528,11 @@ try {
     error_log('TVG ensure_juego_paquetes_paquete_api_column skipped: ' . $e->getMessage());
 }
 try {
+    ensure_juego_paquetes_api_provider_column($mysqli);
+} catch (Throwable $e) {
+    error_log('TVG ensure_juego_paquetes_api_provider_column skipped: ' . $e->getMessage());
+}
+try {
     influencer_coupon_ensure_sales_table_mysqli($mysqli);
 } catch (Throwable $e) {
     error_log('TVG influencer_coupon_ensure_sales_table_mysqli skipped: ' . $e->getMessage());
@@ -6515,10 +6584,12 @@ if ($action === 'create') {
         $cupon = normalize_coupon_code($cuponInput);
     }
     $tenant_slug = resolve_tenant_slug();
-    $usesCatalogApi = game_uses_catalog_api($mysqli, (int) $game_id);
-    $usesDiscordApi = game_uses_discord_api($mysqli, (int) $game_id);
-    $discordCommandKey = $usesDiscordApi ? game_discord_api_command($mysqli, (int) $game_id) : '';
-    $discordCheckoutRequiredFields = $discordCommandKey !== '' ? api_discord_checkout_required_fields($discordCommandKey) : [];
+    $usesCatalogApi = false;
+    $usesDiscordApi = false;
+    $usesFreeFireApi = false;
+    $packageApiProvider = '';
+    $discordCommandKey = '';
+    $discordCheckoutRequiredFields = [];
     $catalogProduct = null;
     $selectedPackageIsAccountSale = false;
     $accountSaleTextSnapshot = null;
@@ -6546,6 +6617,14 @@ if ($action === 'create') {
             $pack_amount_text = sanitize_str((string) ($selectedPackage['cantidad'] ?? $pack_amount_text), 80);
             $monto_ff = sanitize_str((string) ($selectedPackage['monto_ff'] ?? ''), 20);
             $paquete_api = isset($selectedPackage['paquete_api']) ? (int) $selectedPackage['paquete_api'] : null;
+            $packageApiProvider = package_api_provider_from_row($selectedPackage, [
+                'categoria_api_discord' => game_discord_api_command($mysqli, (int) $game_id),
+            ]);
+            $usesCatalogApi = $packageApiProvider === 'giftven';
+            $usesDiscordApi = $packageApiProvider === 'discord';
+            $usesFreeFireApi = $packageApiProvider === 'free_fire';
+            $discordCommandKey = $usesDiscordApi ? game_discord_api_command($mysqli, (int) $game_id) : '';
+            $discordCheckoutRequiredFields = $discordCommandKey !== '' ? api_discord_checkout_required_fields($discordCommandKey) : [];
             if ($pack_amount_text !== null && is_numeric($pack_amount_text)) {
                 $pack_amount_num = intval($pack_amount_text);
             }
@@ -6594,8 +6673,12 @@ if ($action === 'create') {
         json_error('Este paquete no tiene un producto API configurado.');
     }
 
-    if (!$selectedPackageIsAccountSale && !$usesCatalogApi && game_uses_free_fire_api($mysqli, (int) $game_id) && $monto_ff === null) {
+    if (!$selectedPackageIsAccountSale && $usesFreeFireApi && ($monto_ff === null || $monto_ff === '')) {
         json_error('Este paquete no tiene un monto API configurado para Free Fire.');
+    }
+
+    if (!$selectedPackageIsAccountSale && $usesDiscordApi && $discordCommandKey === '') {
+        json_error('Este paquete usa Discord pero el juego no tiene un comando base configurado.');
     }
 
     if (!$selectedPackageIsAccountSale && $usesCatalogApi) {
@@ -6622,7 +6705,7 @@ if ($action === 'create') {
         }
     }
 
-    if (!$selectedPackageIsAccountSale && !$usesCatalogApi && $discordCheckoutRequiredFields !== []) {
+    if (!$selectedPackageIsAccountSale && $usesDiscordApi && $discordCheckoutRequiredFields !== []) {
         $discordMissingFields = [];
         foreach ($discordCheckoutRequiredFields as $fieldConfig) {
             if (!is_array($fieldConfig)) {
@@ -6722,7 +6805,7 @@ if ($action === 'create') {
     }
 
     $winPointsPaymentMode = 'money';
-    $apiDiscordOrderData = build_api_discord_order_insert_data($mysqli, (int) $game_id);
+    $apiDiscordOrderData = build_api_discord_order_insert_data($mysqli, (int) $game_id, $packageApiProvider);
     try {
         $order_id = pedidos_insert_order($mysqli, array_merge([
             'tenant_slug' => $tenant_slug,
@@ -6733,6 +6816,7 @@ if ($action === 'create') {
             'paquete_cantidad' => $pack_amount_text,
             'monto_ff' => $monto_ff,
             'paquete_api' => $paquete_api,
+            'api_provider' => $packageApiProvider !== '' ? $packageApiProvider : null,
             'moneda' => $currency,
             'precio' => $price,
             'precio_original' => $priceBeforeDifferenceCredit,
@@ -6985,7 +7069,7 @@ if ($action === 'submit_payment') {
         }
 
         $updatedOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
-        $usesCatalogApi = game_uses_catalog_api($mysqli, (int) ($updatedOrder['juego_id'] ?? 0));
+        $usesCatalogApi = order_uses_catalog_api_provider($updatedOrder);
         $requiredPoints = max(0, (int) ($redemption['required_points'] ?? 0));
 
         if (order_is_account_sale($updatedOrder)) {
@@ -7459,7 +7543,7 @@ if ($action === 'submit_payment') {
     $adminEmail = resolve_admin_email($mysqli);
     $paymentMethodName = (string) ($method['nombre'] ?? 'Método de pago');
     $brandingImages = email_branding_embedded_images();
-    $usesCatalogApi = game_uses_catalog_api($mysqli, $gameId);
+    $usesCatalogApi = order_uses_catalog_api_provider($updatedOrder);
 
     if ($usesBankValidation) {
         $matchingMovement = $preselectedMatchingMovement;
@@ -7582,7 +7666,7 @@ if ($action === 'submit_payment') {
                 });
             }
 
-            if (game_uses_discord_api($mysqli, $gameId)) {
+            if (order_uses_api_discord($updatedOrder)) {
                 $dispatchResult = execute_api_discord_order_dispatch($updatedOrder);
                 if (!persist_api_discord_dispatch_result($mysqli, $updatedOrder, $dispatchResult, 'pendiente', 'pagado', $verifiedReference, $phone)) {
                     json_error('No se pudo guardar el resultado del envío Discord.', 500);
@@ -8473,7 +8557,7 @@ if ($action === 'admin_retry_recharge') {
     $phone = (string) ($order['telefono_contacto'] ?? '');
     $paymentMethodName = 'Panel administrativo';
 
-    if (game_uses_discord_api($mysqli, $gameId)) {
+    if (order_uses_api_discord($order)) {
         $dispatchResult = execute_api_discord_order_dispatch($order);
         if (!persist_api_discord_dispatch_result($mysqli, $order, $dispatchResult, 'pagado', 'pagado', $verifiedReference, $phone)) {
             json_error('No se pudo guardar el resultado del envío Discord.', 500);
@@ -8496,7 +8580,7 @@ if ($action === 'admin_retry_recharge') {
         });
     }
 
-    if (game_uses_catalog_api($mysqli, $gameId)) {
+    if (order_uses_catalog_api_provider($order)) {
         $packageApiId = (int) ($order['paquete_api'] ?? 0);
         if ($packageApiId <= 0) {
             json_error('Este pedido no tiene un producto API configurado.', 409);
@@ -8689,7 +8773,7 @@ if ($action === 'admin_retry_recharge') {
         json_error('La recarga no pudo completarse automaticamente: ' . $providerMessage, 409);
     }
 
-    if (game_uses_free_fire_api($mysqli, $gameId)) {
+    if (order_uses_free_fire_api_provider($order)) {
         $monto = sanitize_str((string) ($order['monto_ff'] ?? ''), 20) ?? '';
         $numero = sanitize_str((string) ($order['user_identifier'] ?? ''), 150) ?? '';
         if ($monto === '') {
