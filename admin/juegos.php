@@ -151,6 +151,27 @@ function admin_game_next_order(mysqli $mysqli): int {
     return max(1, (int) ($row['next_order'] ?? 1));
 }
 
+function admin_game_discord_command_options(array $commands): array {
+    $options = [];
+    foreach ($commands as $command) {
+        if (!is_array($command)) {
+            continue;
+        }
+
+        $key = trim((string) ($command['key'] ?? ''));
+        if ($key === '') {
+            continue;
+        }
+
+        $options[] = [
+            'key' => $key,
+            'label' => trim((string) ($command['label'] ?? $key)),
+        ];
+    }
+
+    return $options;
+}
+
 ensure_juegos_api_free_fire_column($mysqli);
 ensure_juegos_activo_column($mysqli);
 ensure_juegos_categoria_api_column($mysqli);
@@ -175,7 +196,22 @@ if (recargas_api_is_configured()) {
     }
 }
 $discordApiCommands = $discordApiEnabled ? api_discord_topup_commands() : [];
+$discordApiCommandOptions = admin_game_discord_command_options($discordApiCommands);
 $adminGamesError = trim((string) ($_GET['error'] ?? ''));
+
+if (admin_games_is_ajax_request() && isset($_GET['load_discord_games'])) {
+    if (!$discordApiEnabled) {
+        admin_games_json_response([
+            'ok' => false,
+            'message' => 'API Discord está desactivada en la configuración general.',
+        ], 422);
+    }
+
+    admin_games_json_response([
+        'ok' => true,
+        'commands' => $discordApiCommandOptions,
+    ]);
+}
 
 if (isset($_GET['toggle_activo'])) {
     $toggleId = intval($_GET['toggle_activo']);
@@ -416,14 +452,17 @@ if ($resPaquetes instanceof mysqli_result) {
             <?php if ($discordApiEnabled): ?>
             <div class="form-check mb-3">
                 <label class="form-label text-neon" for="editDiscordApiInput">Juegos API Discord</label>
-                <select name="edit_categoria_api_discord" id="editDiscordApiInput" class="form-select<?= $gameApiExclusiveClass ?>" data-exclusive-group="edit-game-api" data-exclusive-target="editCategoriaApiInput" data-exclusive-enabled="<?= $mixedApiUnionEnabled ? '0' : '1' ?>" style="background:#222c3a;color:#00fff7;border:1px solid #00fff7;">
-                    <option value="">Proceso manual / sin API</option>
-                    <?php foreach ($discordApiCommands as $discordCommand): ?>
-                        <?php $discordKey = (string) ($discordCommand['key'] ?? ''); ?>
-                        <?php $discordLabel = trim((string) ($discordCommand['label'] ?? $discordKey)); ?>
-                        <option value="<?= htmlspecialchars($discordKey, ENT_QUOTES, 'UTF-8') ?>" <?= (string) ($juego_edit['categoria_api_discord'] ?? '') === $discordKey ? 'selected' : '' ?>><?= htmlspecialchars($discordLabel, ENT_QUOTES, 'UTF-8') ?></option>
-                    <?php endforeach; ?>
-                </select>
+                <div class="d-flex gap-2 align-items-start flex-wrap">
+                    <select name="edit_categoria_api_discord" id="editDiscordApiInput" class="form-select<?= $gameApiExclusiveClass ?> flex-grow-1" data-discord-games-select="1" data-exclusive-group="edit-game-api" data-exclusive-target="editCategoriaApiInput" data-exclusive-enabled="<?= $mixedApiUnionEnabled ? '0' : '1' ?>" style="background:#222c3a;color:#00fff7;border:1px solid #00fff7;min-width:260px;">
+                        <option value="">Proceso manual / sin API</option>
+                        <?php foreach ($discordApiCommandOptions as $discordCommand): ?>
+                            <?php $discordKey = (string) ($discordCommand['key'] ?? ''); ?>
+                            <?php $discordLabel = trim((string) ($discordCommand['label'] ?? $discordKey)); ?>
+                            <option value="<?= htmlspecialchars($discordKey, ENT_QUOTES, 'UTF-8') ?>" <?= (string) ($juego_edit['categoria_api_discord'] ?? '') === $discordKey ? 'selected' : '' ?>><?= htmlspecialchars($discordLabel, ENT_QUOTES, 'UTF-8') ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <button type="button" class="btn btn-outline-info js-refresh-discord-games" style="border-color:#00fff7;color:#00fff7;white-space:nowrap;">Traer juegos</button>
+                </div>
                 <div class="form-text mt-2" style="color:#8be9fd;"><?= $mixedApiUnionEnabled ? 'Selecciona el comando base de Discord. Con la unión activa este juego puede conservar también su categoría de TiendaGiftVen.' : 'Selecciona el comando base de Discord que usará este juego más adelante. Si eliges uno aquí, TiendaGiftVen debe quedar vacío.' ?></div>
             </div>
             <?php endif; ?>
@@ -476,14 +515,17 @@ if ($resPaquetes instanceof mysqli_result) {
             <?php if ($discordApiEnabled): ?>
             <div class="form-check mt-3">
                 <label class="form-label" for="categoriaDiscordApiInput" style="color:#00fff7;">Juegos API Discord</label>
-                <select name="categoria_api_discord" id="categoriaDiscordApiInput" class="form-select<?= $gameApiExclusiveClass ?>" data-exclusive-group="create-game-api" data-exclusive-target="categoriaApiInput" data-exclusive-enabled="<?= $mixedApiUnionEnabled ? '0' : '1' ?>" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;">
-                    <option value="">Proceso manual / sin API</option>
-                    <?php foreach ($discordApiCommands as $discordCommand): ?>
-                        <?php $discordKey = (string) ($discordCommand['key'] ?? ''); ?>
-                        <?php $discordLabel = trim((string) ($discordCommand['label'] ?? $discordKey)); ?>
-                        <option value="<?= htmlspecialchars($discordKey, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($discordLabel, ENT_QUOTES, 'UTF-8') ?></option>
-                    <?php endforeach; ?>
-                </select>
+                <div class="d-flex gap-2 align-items-start flex-wrap">
+                    <select name="categoria_api_discord" id="categoriaDiscordApiInput" class="form-select<?= $gameApiExclusiveClass ?> flex-grow-1" data-discord-games-select="1" data-exclusive-group="create-game-api" data-exclusive-target="categoriaApiInput" data-exclusive-enabled="<?= $mixedApiUnionEnabled ? '0' : '1' ?>" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7; min-width:260px;">
+                        <option value="">Proceso manual / sin API</option>
+                        <?php foreach ($discordApiCommandOptions as $discordCommand): ?>
+                            <?php $discordKey = (string) ($discordCommand['key'] ?? ''); ?>
+                            <?php $discordLabel = trim((string) ($discordCommand['label'] ?? $discordKey)); ?>
+                            <option value="<?= htmlspecialchars($discordKey, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($discordLabel, ENT_QUOTES, 'UTF-8') ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <button type="button" class="btn btn-outline-info js-refresh-discord-games" style="border-color:#00fff7;color:#00fff7;white-space:nowrap;">Traer juegos</button>
+                </div>
                 <div class="form-text mt-2" style="color:#8be9fd;"><?= $mixedApiUnionEnabled ? 'Selecciona el comando base de Discord. Con la unión activa este juego puede conservar también su categoría de TiendaGiftVen.' : 'Selecciona el comando base de Discord que representa este juego. Si eliges este valor, TiendaGiftVen debe quedar vacío.' ?></div>
             </div>
             <?php endif; ?>
@@ -765,14 +807,17 @@ if ($resPaquetes instanceof mysqli_result) {
             <div class="text-xs text-slate-400 mb-2"><?= $mixedApiUnionEnabled ? 'Con la unión activa puedes guardar también el comando de Discord en este mismo juego.' : 'Si eliges TiendaGiftVen, deja vacío el select de Discord.' ?></div>
             <?php if ($discordApiEnabled): ?>
             <label class="block text-slate-300 font-medium mb-1">Juegos API Discord:</label>
-            <select name="edit_categoria_api_discord" id="editDiscordApiInputLegacy" class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white mb-2<?= $gameApiExclusiveClass ?>" data-exclusive-group="edit-game-api-legacy" data-exclusive-target="editCategoriaApiInputLegacy" data-exclusive-enabled="<?= $mixedApiUnionEnabled ? '0' : '1' ?>">
-                <option value="">Proceso manual / sin API</option>
-                <?php foreach ($discordApiCommands as $discordCommand): ?>
-                <?php $discordKey = (string) ($discordCommand['key'] ?? ''); ?>
-                <?php $discordLabel = trim((string) ($discordCommand['label'] ?? $discordKey)); ?>
-                <option value="<?= htmlspecialchars($discordKey, ENT_QUOTES, 'UTF-8') ?>" <?= (string) ($juego_edit['categoria_api_discord'] ?? '') === $discordKey ? 'selected' : '' ?>><?= htmlspecialchars($discordLabel, ENT_QUOTES, 'UTF-8') ?></option>
-                <?php endforeach; ?>
-            </select>
+            <div class="flex gap-2 items-start flex-wrap mb-2">
+                <select name="edit_categoria_api_discord" id="editDiscordApiInputLegacy" class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white<?= $gameApiExclusiveClass ?>" data-discord-games-select="1" data-exclusive-group="edit-game-api-legacy" data-exclusive-target="editCategoriaApiInputLegacy" data-exclusive-enabled="<?= $mixedApiUnionEnabled ? '0' : '1' ?>" style="flex:1 1 260px;">
+                    <option value="">Proceso manual / sin API</option>
+                    <?php foreach ($discordApiCommandOptions as $discordCommand): ?>
+                    <?php $discordKey = (string) ($discordCommand['key'] ?? ''); ?>
+                    <?php $discordLabel = trim((string) ($discordCommand['label'] ?? $discordKey)); ?>
+                    <option value="<?= htmlspecialchars($discordKey, ENT_QUOTES, 'UTF-8') ?>" <?= (string) ($juego_edit['categoria_api_discord'] ?? '') === $discordKey ? 'selected' : '' ?>><?= htmlspecialchars($discordLabel, ENT_QUOTES, 'UTF-8') ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <button type="button" class="bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-400 px-3 py-2 rounded-lg js-refresh-discord-games" style="white-space:nowrap;">Traer juegos</button>
+            </div>
             <div class="text-xs text-slate-400 mb-2"><?= $mixedApiUnionEnabled ? 'Con la unión activa puedes conservar también la categoría de TiendaGiftVen en este juego.' : 'Si eliges Discord, deja vacío el select de TiendaGiftVen.' ?></div>
             <?php endif; ?>
             <label class="block text-slate-300 mb-1">Imagen actual:</label>
@@ -992,6 +1037,86 @@ document.querySelectorAll('.js-exclusive-api-select').forEach((select) => {
         const other = document.getElementById(targetId);
         if (other) {
             other.value = '';
+        }
+    });
+});
+
+async function fetchDiscordGameOptions() {
+    const response = await fetch('<?= htmlspecialchars($adminGamesUrl, ENT_QUOTES, 'UTF-8') ?>?ajax=1&load_discord_games=1', {
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json, text/plain, */*'
+        },
+        cache: 'no-store'
+    });
+
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload || payload.ok !== true || !Array.isArray(payload.commands)) {
+        throw new Error(payload && payload.message ? payload.message : 'No se pudieron traer los juegos de API Discord.');
+    }
+
+    return payload.commands;
+}
+
+function populateDiscordGameSelect(select, commands) {
+    if (!select) {
+        return;
+    }
+
+    const currentValue = String(select.value || '');
+    const fragment = document.createDocumentFragment();
+    const manualOption = document.createElement('option');
+    manualOption.value = '';
+    manualOption.textContent = 'Proceso manual / sin API';
+    fragment.appendChild(manualOption);
+
+    let hasCurrentValue = currentValue === '';
+    commands.forEach((command) => {
+        const key = String((command && command.key) || '').trim();
+        if (key === '') {
+            return;
+        }
+
+        const option = document.createElement('option');
+        option.value = key;
+        option.textContent = String((command && command.label) || key).trim() || key;
+        if (key === currentValue) {
+            hasCurrentValue = true;
+        }
+        fragment.appendChild(option);
+    });
+
+    select.innerHTML = '';
+    select.appendChild(fragment);
+    select.value = hasCurrentValue ? currentValue : '';
+}
+
+document.querySelectorAll('.js-refresh-discord-games').forEach((button) => {
+    button.addEventListener('click', async () => {
+        if (button.dataset.loading === '1') {
+            return;
+        }
+
+        const originalText = button.textContent;
+        button.dataset.loading = '1';
+        button.disabled = true;
+        button.textContent = 'Trayendo...';
+
+        try {
+            const commands = await fetchDiscordGameOptions();
+            document.querySelectorAll('[data-discord-games-select="1"]').forEach((select) => {
+                populateDiscordGameSelect(select, commands);
+            });
+            button.textContent = 'Actualizado';
+            window.setTimeout(() => {
+                button.textContent = originalText;
+            }, 1200);
+        } catch (error) {
+            button.textContent = originalText;
+            window.alert(error.message || 'No se pudieron traer los juegos de API Discord.');
+        } finally {
+            button.disabled = false;
+            button.dataset.loading = '0';
         }
     });
 });

@@ -144,6 +144,15 @@
     "params": ["id", "cantidad"]
   },
   {
+    "key": "blood_strike_topup",
+    "kind": "topup",
+    "label": "Blood Strike recarga",
+    "game": "blood_strike",
+    "template": ".bloodup {id} {cantidad}",
+    "sample": ".bloodup 123456789 10",
+    "params": ["id", "cantidad"]
+  },
+  {
     "key": "roblox_topup",
     "kind": "topup",
     "label": "Roblox recarga",
