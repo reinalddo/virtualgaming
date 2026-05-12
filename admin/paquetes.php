@@ -785,7 +785,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_paquete_id'])) {
     $edit_nombre = trim($_POST['edit_nombre'] ?? '');
     $edit_clave = trim($_POST['edit_clave'] ?? '');
     $edit_provider = admin_package_normalize_provider_value($_POST['edit_api_provider'] ?? $packageDefaultProvider);
-    if ($edit_provider === '' || !isset($packageSourceOptions[$edit_provider])) {
+    if (($edit_provider === '' && !empty($packageSourceOptions)) || ($edit_provider !== '' && !isset($packageSourceOptions[$edit_provider]))) {
         admin_packages_redirect($adminPackageBaseUrl . '/' . $juego_id, ['package_error' => 'Selecciona un origen válido para este paquete antes de guardarlo.']);
     }
     $edit_monto_ff = $edit_provider === 'free_fire' ? trim((string) ($_POST['edit_monto_ff'] ?? '')) : '';
@@ -883,7 +883,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['cla
     $nombre = trim($_POST['nombre']);
     $clave = trim($_POST['clave']);
     $provider = admin_package_normalize_provider_value($_POST['api_provider'] ?? $packageDefaultProvider);
-    if ($provider === '' || !isset($packageSourceOptions[$provider])) {
+    if (($provider === '' && !empty($packageSourceOptions)) || ($provider !== '' && !isset($packageSourceOptions[$provider]))) {
         admin_packages_redirect($adminPackageBaseUrl . '/' . $juego_id, ['package_error' => 'Selecciona el origen del paquete antes de guardarlo.']);
     }
     $monto_ff = $provider === 'free_fire' ? trim((string) ($_POST['monto_ff'] ?? '')) : '';
