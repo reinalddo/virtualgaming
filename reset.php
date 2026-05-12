@@ -9,6 +9,7 @@ $resetToken = trim((string) ($_GET['token'] ?? $_POST['token'] ?? ''));
 $resetPasswordError = '';
 $requestEmailValue = auth_normalize_email($_POST['email'] ?? '');
 $neonButtonStyle = 'display:block;width:100%;border:1px solid rgba(103,232,249,.68);background:linear-gradient(135deg,#22d3ee 0%,#0ea5e9 46%,#8b5cf6 100%);box-shadow:0 0 0 1px rgba(255,255,255,.08) inset,0 0 20px rgba(34,211,238,.32),0 14px 30px rgba(14,165,233,.24);';
+$neonInlineButtonStyle = 'display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;border:1px solid rgba(103,232,249,.68);background:linear-gradient(135deg,#22d3ee 0%,#0ea5e9 46%,#8b5cf6 100%);box-shadow:0 0 0 1px rgba(255,255,255,.08) inset,0 0 20px rgba(34,211,238,.32),0 14px 30px rgba(14,165,233,.24);min-height:42px;padding:0 18px;';
 
 function reset_table_exists(mysqli $mysqli, string $table): bool {
   $escapedTable = $mysqli->real_escape_string($table);
@@ -470,9 +471,11 @@ include __DIR__ . "/includes/header.php";
               <input type="hidden" name="action" value="request">
               <div>
                 <label class="block text-xs text-slate-400">Correo electrónico</label>
-                <input type="email" name="email" value="<?= htmlspecialchars($requestEmailValue, ENT_QUOTES, 'UTF-8') ?>" autocomplete="email" class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400/70" placeholder="nombre@correo.com" />
+                <div class="mt-1 flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <input type="email" name="email" value="<?= htmlspecialchars($requestEmailValue, ENT_QUOTES, 'UTF-8') ?>" autocomplete="email" class="min-w-0 flex-1 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-cyan-400/70" placeholder="nombre@correo.com" />
+                  <button type="submit" class="shrink-0 rounded-xl px-4 py-2 text-sm font-semibold uppercase tracking-wide text-white transition hover:brightness-110" style="<?= htmlspecialchars($neonInlineButtonStyle, ENT_QUOTES, 'UTF-8') ?>">Enviar instrucciones</button>
+                </div>
               </div>
-              <button type="submit" class="w-full rounded-xl px-4 py-2 text-sm font-semibold uppercase tracking-wide text-white transition hover:brightness-110" style="<?= htmlspecialchars($neonButtonStyle, ENT_QUOTES, 'UTF-8') ?>">Enviar instrucciones</button>
             </form>
           <?php endif; ?>
         </div>
