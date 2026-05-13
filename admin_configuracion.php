@@ -71,6 +71,7 @@ $galleryForm = [
     'datos' => $paymentMethodEditItem['datos'] ?? '',
     'moneda_id' => isset($paymentMethodEditItem['moneda_id']) ? (int) $paymentMethodEditItem['moneda_id'] : 0,
     'referencia_digitos' => isset($paymentMethodEditItem['referencia_digitos']) ? max(0, (int) $paymentMethodEditItem['referencia_digitos']) : 0,
+    'descuento_porcentaje' => isset($paymentMethodEditItem['descuento_porcentaje']) ? (float) $paymentMethodEditItem['descuento_porcentaje'] : 0,
     'activo' => !array_key_exists('activo', $paymentMethodEditItem ?? []) ? true : !empty($paymentMethodEditItem['activo']),
   ];
 $themeDefinitions = store_theme_definitions();
@@ -1368,6 +1369,11 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
                     <label class="form-label">Access Token</label>
                     <input type="text" name="binance_pay_access_token" value="<?= htmlspecialchars($cfg['binance_pay_access_token'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="Token del Store en CoinPal">
                   </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Descuento Binance Pay (%)</label>
+                    <input type="number" name="binance_pay_descuento" min="0" max="100" step="0.01" value="<?= htmlspecialchars($cfg['binance_pay_descuento'] ?? '0', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="0.00">
+                    <div class="form-text mt-2">Se aplicará automáticamente cuando el cliente complete la orden con Binance Pay.</div>
+                  </div>
                   <div class="col-12">
                     <label class="form-label">Store URL registrado en CoinPal</label>
                     <input type="url" name="binance_pay_store_url" value="<?= htmlspecialchars($cfg['binance_pay_store_url'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="https://tudominio.com">
@@ -2053,6 +2059,11 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
                       <input type="number" name="referencia_digitos_metodo_pago" min="0" step="1" value="<?= (int) $paymentMethodForm['referencia_digitos'] ?>" class="form-control" placeholder="0 = sin límite">
                       <div class="form-text">Si colocas `0` o lo dejas vacío, el número de referencia será sin límite. Si colocas `5`, se validarán 5 dígitos; si colocas `7`, se validarán 7, y así sucesivamente.</div>
                     </div>
+                    <div class="col-md-6">
+                      <label class="form-label">Descuento disponible (%)</label>
+                      <input type="number" name="descuento_metodo_pago_porcentaje" min="0" max="100" step="0.01" value="<?= htmlspecialchars(number_format((float) $paymentMethodForm['descuento_porcentaje'], 2, '.', ''), ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="0.00">
+                      <div class="form-text">Ejemplo: `3` aplica 3% de descuento cuando el cliente elige este método.</div>
+                    </div>
                     <div class="col-12">
                       <div class="form-check">
                         <input class="form-check-input" type="checkbox" value="1" id="activoMetodoPago" name="activo_metodo_pago" <?= $paymentMethodForm['activo'] ? 'checked' : '' ?>>
@@ -2088,6 +2099,7 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
                         <tr>
                           <th>Nombre</th>
                           <th>Moneda</th>
+                          <th>Descuento</th>
                           <th>Dígitos Ref.</th>
                           <th>Datos</th>
                           <th>Estado</th>
@@ -2099,6 +2111,7 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
                           <tr>
                             <td class="fw-bold"><?= htmlspecialchars($method['nombre'], ENT_QUOTES, 'UTF-8') ?></td>
                             <td><?= htmlspecialchars(trim((string) (($method['moneda_nombre'] ?? '') . ' ' . (!empty($method['moneda_clave']) ? '(' . $method['moneda_clave'] . ')' : ''))) ?: 'Sin moneda', ENT_QUOTES, 'UTF-8') ?></td>
+                            <td><?= (float) ($method['descuento_porcentaje'] ?? 0) > 0 ? htmlspecialchars(rtrim(rtrim(number_format((float) $method['descuento_porcentaje'], 2, '.', ''), '0'), '.') . '%', ENT_QUOTES, 'UTF-8') : 'Sin descuento' ?></td>
                             <td><?= !empty($method['referencia_digitos']) ? (int) $method['referencia_digitos'] : 'Sin límite' ?></td>
                             <td style="white-space: pre-line;"><?= htmlspecialchars($method['datos'], ENT_QUOTES, 'UTF-8') ?></td>
                             <td><?= !empty($method['activo']) ? '<span class="gallery-badge-neon">Activo</span>' : '<span class="text-secondary">Inactivo</span>' ?></td>
@@ -2123,6 +2136,7 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
                         <?= !empty($method['activo']) ? '<span class="gallery-badge-neon">Activo</span>' : '<span class="text-secondary small">Inactivo</span>' ?>
                       </div>
                       <div class="small text-info-emphasis mt-2"><?= htmlspecialchars(trim((string) (($method['moneda_nombre'] ?? '') . ' ' . (!empty($method['moneda_clave']) ? '(' . $method['moneda_clave'] . ')' : ''))) ?: 'Sin moneda', ENT_QUOTES, 'UTF-8') ?></div>
+                      <div class="small text-success mt-1">Descuento: <?= (float) ($method['descuento_porcentaje'] ?? 0) > 0 ? htmlspecialchars(rtrim(rtrim(number_format((float) $method['descuento_porcentaje'], 2, '.', ''), '0'), '.') . '%', ENT_QUOTES, 'UTF-8') : 'Sin descuento' ?></div>
                       <div class="small text-secondary mt-1">Dígitos de referencia: <?= !empty($method['referencia_digitos']) ? (int) $method['referencia_digitos'] : 'Sin límite' ?></div>
                       <div class="small text-light mt-2" style="white-space: pre-line;"><?= htmlspecialchars($method['datos'], ENT_QUOTES, 'UTF-8') ?></div>
                       <div class="d-flex gap-2 mt-3 flex-wrap">

@@ -81,6 +81,9 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         api_provider VARCHAR(30) DEFAULT NULL,
         moneda VARCHAR(20) DEFAULT NULL,
         precio DECIMAL(12,2) NOT NULL DEFAULT 0,
+        precio_descuento_metodo_pago_base DECIMAL(12,2) DEFAULT NULL,
+        descuento_metodo_pago_porcentaje DECIMAL(5,2) NOT NULL DEFAULT 0,
+        descuento_metodo_pago_monto DECIMAL(12,2) NOT NULL DEFAULT 0,
         precio_original DECIMAL(12,2) DEFAULT NULL,
         diferencia_pago_credito_aplicado DECIMAL(12,2) NOT NULL DEFAULT 0,
         diferencia_pago_credito_origen_pedido_id INT DEFAULT NULL,
@@ -91,6 +94,8 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         cliente_usuario_id INT DEFAULT NULL,
         numero_referencia VARCHAR(120) DEFAULT NULL,
         telefono_contacto VARCHAR(40) DEFAULT NULL,
+        metodo_pago VARCHAR(160) DEFAULT NULL,
+        payment_method_id INT NOT NULL DEFAULT 0,
         cupon VARCHAR(60) DEFAULT NULL,
         cantidad_compra INT NOT NULL DEFAULT 1,
         vender_cuenta TINYINT(1) NOT NULL DEFAULT 0,
@@ -156,7 +161,10 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         'api_provider' => "ALTER TABLE pedidos ADD COLUMN api_provider VARCHAR(30) NULL AFTER paquete_api",
         'moneda' => "ALTER TABLE pedidos ADD COLUMN moneda VARCHAR(20) NULL AFTER paquete_cantidad",
         'precio' => "ALTER TABLE pedidos ADD COLUMN precio DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER moneda",
-        'precio_original' => "ALTER TABLE pedidos ADD COLUMN precio_original DECIMAL(12,2) NULL AFTER precio",
+        'precio_descuento_metodo_pago_base' => "ALTER TABLE pedidos ADD COLUMN precio_descuento_metodo_pago_base DECIMAL(12,2) NULL AFTER precio",
+        'descuento_metodo_pago_porcentaje' => "ALTER TABLE pedidos ADD COLUMN descuento_metodo_pago_porcentaje DECIMAL(5,2) NOT NULL DEFAULT 0 AFTER precio_descuento_metodo_pago_base",
+        'descuento_metodo_pago_monto' => "ALTER TABLE pedidos ADD COLUMN descuento_metodo_pago_monto DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER descuento_metodo_pago_porcentaje",
+        'precio_original' => "ALTER TABLE pedidos ADD COLUMN precio_original DECIMAL(12,2) NULL AFTER descuento_metodo_pago_monto",
         'diferencia_pago_credito_aplicado' => "ALTER TABLE pedidos ADD COLUMN diferencia_pago_credito_aplicado DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER precio_original",
         'diferencia_pago_credito_origen_pedido_id' => "ALTER TABLE pedidos ADD COLUMN diferencia_pago_credito_origen_pedido_id INT NULL AFTER diferencia_pago_credito_aplicado",
         'diferencia_pago_credito_activado' => "ALTER TABLE pedidos ADD COLUMN diferencia_pago_credito_activado TINYINT(1) NOT NULL DEFAULT 0 AFTER diferencia_pago_credito_origen_pedido_id",
@@ -167,7 +175,9 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         'cliente_usuario_id' => "ALTER TABLE pedidos ADD COLUMN cliente_usuario_id INT NULL AFTER email",
         'numero_referencia' => "ALTER TABLE pedidos ADD COLUMN numero_referencia VARCHAR(120) NULL AFTER cliente_usuario_id",
         'telefono_contacto' => "ALTER TABLE pedidos ADD COLUMN telefono_contacto VARCHAR(40) NULL AFTER numero_referencia",
-        'cupon' => "ALTER TABLE pedidos ADD COLUMN cupon VARCHAR(60) NULL AFTER telefono_contacto",
+        'metodo_pago' => "ALTER TABLE pedidos ADD COLUMN metodo_pago VARCHAR(160) NULL AFTER telefono_contacto",
+        'payment_method_id' => "ALTER TABLE pedidos ADD COLUMN payment_method_id INT NOT NULL DEFAULT 0 AFTER metodo_pago",
+        'cupon' => "ALTER TABLE pedidos ADD COLUMN cupon VARCHAR(60) NULL AFTER payment_method_id",
         'cantidad_compra' => "ALTER TABLE pedidos ADD COLUMN cantidad_compra INT NOT NULL DEFAULT 1 AFTER cupon",
         'vender_cuenta' => "ALTER TABLE pedidos ADD COLUMN vender_cuenta TINYINT(1) NOT NULL DEFAULT 0 AFTER cantidad_compra",
         'cuenta_entrega_texto' => "ALTER TABLE pedidos ADD COLUMN cuenta_entrega_texto LONGTEXT NULL AFTER vender_cuenta",
@@ -2495,6 +2505,96 @@ function resolve_binance_checkout_money(array $order): array {
         'amount' => round($checkoutAmount, 2),
         'text' => $targetCurrencyCode !== '' ? ($targetCurrencyCode . ' ' . currency_format_amount($checkoutAmount, $targetCurrency)) : '',
         'uses_order_currency' => $targetCurrencyCode !== '' && $targetCurrencyCode === $orderCurrencyCode,
+    ];
+}
+
+function payment_method_discount_feature_enabled(): bool {
+    return trim((string) store_config_get('descuento_metodo_pago', '0')) === '1';
+}
+
+function payment_method_binance_discount_percentage(): float {
+    return payment_methods_normalize_discount_percentage(store_config_get('binance_pay_descuento', '0'));
+}
+
+function resolve_order_payment_discount_base_amount(array $order): float {
+    $baseAmount = payment_difference_normalize_amount((float) ($order['precio_descuento_metodo_pago_base'] ?? 0));
+    if ($baseAmount > 0) {
+        return $baseAmount;
+    }
+
+    return payment_difference_normalize_amount((float) ($order['precio'] ?? 0));
+}
+
+function resolve_order_payment_discount_snapshot(array $order, string $paymentMode, ?array $method = null): array {
+    $baseAmount = resolve_order_payment_discount_base_amount($order);
+    $normalizedMode = in_array($paymentMode, ['money', 'binance'], true) ? $paymentMode : '';
+    $percentage = 0.0;
+    $methodName = '';
+    $paymentMethodId = 0;
+
+    if ($normalizedMode === 'money' && is_array($method)) {
+        $methodName = trim((string) ($method['nombre'] ?? 'Método de pago'));
+        $paymentMethodId = max(0, (int) ($method['id'] ?? 0));
+        if (payment_method_discount_feature_enabled()) {
+            $percentage = payment_methods_normalize_discount_percentage($method['descuento_porcentaje'] ?? 0);
+        }
+    } elseif ($normalizedMode === 'binance') {
+        $methodName = 'Binance Pay';
+        if (payment_method_discount_feature_enabled()) {
+            $percentage = payment_method_binance_discount_percentage();
+        }
+    }
+
+    $discountAmount = payment_difference_normalize_amount(($baseAmount * $percentage) / 100);
+    if ($discountAmount > $baseAmount) {
+        $discountAmount = $baseAmount;
+    }
+
+    return [
+        'base_amount' => $baseAmount,
+        'discount_percentage' => $percentage,
+        'discount_amount' => $discountAmount,
+        'final_amount' => payment_difference_normalize_amount($baseAmount - $discountAmount),
+        'method_name' => $methodName,
+        'payment_method_id' => $paymentMethodId,
+    ];
+}
+
+function persist_order_payment_selection(mysqli $mysqli, array $order, string $paymentMode, ?array $method = null): array {
+    $orderId = (int) ($order['id'] ?? 0);
+    $snapshot = resolve_order_payment_discount_snapshot($order, $paymentMode, $method);
+    if ($orderId <= 0) {
+        return [
+            'snapshot' => $snapshot,
+            'order' => $order,
+            'price_changed' => false,
+        ];
+    }
+
+    $stmt = $mysqli->prepare("UPDATE pedidos SET precio_descuento_metodo_pago_base = ?, descuento_metodo_pago_porcentaje = ?, descuento_metodo_pago_monto = ?, precio = ?, metodo_pago = ?, payment_method_id = ? WHERE id = ? AND estado = 'pendiente' LIMIT 1");
+    if ($stmt) {
+        $methodName = $snapshot['method_name'];
+        $paymentMethodId = (int) ($snapshot['payment_method_id'] ?? 0);
+        $stmt->bind_param(
+            'ddddsii',
+            $snapshot['base_amount'],
+            $snapshot['discount_percentage'],
+            $snapshot['discount_amount'],
+            $snapshot['final_amount'],
+            $methodName,
+            $paymentMethodId,
+            $orderId
+        );
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    $updatedOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
+
+    return [
+        'snapshot' => $snapshot,
+        'order' => $updatedOrder,
+        'price_changed' => abs(((float) ($order['precio'] ?? 0)) - ((float) ($updatedOrder['precio'] ?? 0))) > 0.009,
     ];
 }
 
@@ -6819,6 +6919,9 @@ if ($action === 'create') {
             'api_provider' => $packageApiProvider !== '' ? $packageApiProvider : null,
             'moneda' => $currency,
             'precio' => $price,
+            'precio_descuento_metodo_pago_base' => $price,
+            'descuento_metodo_pago_porcentaje' => 0,
+            'descuento_metodo_pago_monto' => 0,
             'precio_original' => $priceBeforeDifferenceCredit,
             'diferencia_pago_credito_aplicado' => $paymentDifferenceCreditApplied,
             'diferencia_pago_credito_origen_pedido_id' => $paymentDifferenceCreditSourceOrderId > 0 ? $paymentDifferenceCreditSourceOrderId : null,
@@ -6960,6 +7063,13 @@ if ($action === 'submit_payment') {
     }
 
     if ($paymentMode === 'binance') {
+        $discountSync = persist_order_payment_selection($mysqli, $order, 'binance');
+        $order = is_array($discountSync['order'] ?? null) ? $discountSync['order'] : $order;
+        if (!empty($discountSync['price_changed']) && trim((string) ($order['binance_pay_reference'] ?? '')) !== '') {
+            clear_order_binance_pay_tracking($mysqli, $orderId);
+            $order = fetch_order_by_id($mysqli, $orderId) ?: $order;
+        }
+
         if (!binance_pay_is_enabled()) {
             json_error('Binance Pay no está activo en esta tienda.', 409);
         }
@@ -7449,6 +7559,9 @@ if ($action === 'submit_payment') {
     if ($referenceDigitsLimit > 0 && strlen($referenceNumberRaw) !== $referenceDigitsLimit) {
         json_error('La referencia debe contener exactamente ' . $referenceDigitsLimit . ' dígitos.');
     }
+
+    $discountSync = persist_order_payment_selection($mysqli, $order, 'money', $method);
+    $order = is_array($discountSync['order'] ?? null) ? $discountSync['order'] : $order;
 
     $phone = substr($phoneRaw, 0, 40);
     $referenceNumber = substr($referenceNumberRaw, 0, 120);

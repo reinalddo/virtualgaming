@@ -616,6 +616,7 @@ function store_config_descriptions(): array {
         'barra_superior' => 'Activa o desactiva la barra superior fija con buscador y reubicación del acceso principal del sitio público.',
         'api_binance' => 'Activa o desactiva la configuracion e integracion de Binance Pay via CoinPal para este tenant.',
         'api_binance_usuario' => 'Activa o desactiva el uso visible de Binance Pay para clientes y procesos automaticos de la tienda cuando el tenant ya tiene disponible api_binance.',
+        'descuento_metodo_pago' => 'Activa o desactiva los descuentos porcentuales por método de pago dentro del checkout público.',
         'api_discord' => 'Activa o desactiva la integración base de API Discord para enviar comandos de consulta y pruebas de recarga desde este tenant.',
         'api_discord_webhook_url' => 'Webhook de Discord usado para enviar mensajes de prueba y comandos controlados al canal configurado.',
         'api_discord_timeout' => 'Tiempo máximo en segundos que la sonda webhook de API Discord esperará por la respuesta HTTP de Discord.',
@@ -629,6 +630,7 @@ function store_config_descriptions(): array {
         'binance_pay_store_id' => 'Store ID registrado en CoinPal para esta tienda.',
         'binance_pay_access_token' => 'Access Token del Store registrado en CoinPal para esta tienda.',
         'binance_pay_store_url' => 'URL o dominio registrado en CoinPal My Store para esta tienda.',
+        'binance_pay_descuento' => 'Porcentaje de descuento aplicado cuando el cliente paga usando Binance Pay.',
     ];
 
     foreach (store_theme_definitions() as $key => $definition) {
@@ -709,6 +711,7 @@ function store_config_defaults(): array {
         'barra_superior' => '0',
         'api_binance' => '0',
         'api_binance_usuario' => '1',
+        'descuento_metodo_pago' => '0',
         'api_discord' => '0',
         'api_discord_webhook_url' => '',
         'api_discord_timeout' => '10',
@@ -722,6 +725,7 @@ function store_config_defaults(): array {
         'binance_pay_store_id' => '',
         'binance_pay_access_token' => '',
         'binance_pay_store_url' => '',
+        'binance_pay_descuento' => '0',
     ];
 
     foreach (store_theme_definitions() as $key => $definition) {
@@ -1226,6 +1230,9 @@ function store_config_ensure_defaults(): void {
     $discordFeatureKey = 'api_discord';
     $discordFeatureName = 'API Discord';
     $discordFeatureDescription = 'Automatiza pruebas webhook y futuras integraciones de comandos de Discord para consultas de precios y recargas controladas.';
+    $paymentDiscountFeatureKey = 'descuento_metodo_pago';
+    $paymentDiscountFeatureName = 'Descuento por Método de Pago';
+    $paymentDiscountFeatureDescription = 'Permite ofrecer descuentos porcentuales por cada método de pago configurado y mostrarlos al cliente durante el checkout.';
 
     foreach (store_config_defaults() as $key => $value) {
         $description = $descriptions[$key] ?? null;
@@ -1274,6 +1281,23 @@ function store_config_ensure_defaults(): void {
                     'funcion_venta' => $discordFeatureName,
                     'descripcion_venta' => $discordFeatureDescription,
                     'precio' => '60',
+                    'comision_venta' => '0',
+                ]
+            );
+            continue;
+        }
+
+        if ($key === $paymentDiscountFeatureKey) {
+            store_config_insert_missing_default(
+                $mysqli,
+                $key,
+                $value,
+                $description,
+                [
+                    'mostrar_a_cliente' => '1',
+                    'funcion_venta' => $paymentDiscountFeatureName,
+                    'descripcion_venta' => $paymentDiscountFeatureDescription,
+                    'precio' => '20',
                     'comision_venta' => '0',
                 ]
             );

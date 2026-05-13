@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS payment_methods (
     datos TEXT NOT NULL,
     moneda_id INT NULL,
     referencia_digitos INT NOT NULL DEFAULT 0,
+    descuento_porcentaje DECIMAL(5,2) NOT NULL DEFAULT 0,
     activo TINYINT(1) NOT NULL DEFAULT 1,
     creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -49,6 +50,9 @@ SQL;
     if (!isset($columns['referencia_digitos'])) {
         $mysqli->query('ALTER TABLE payment_methods ADD COLUMN referencia_digitos INT NOT NULL DEFAULT 0 AFTER moneda_id');
     }
+    if (!isset($columns['descuento_porcentaje'])) {
+        $mysqli->query('ALTER TABLE payment_methods ADD COLUMN descuento_porcentaje DECIMAL(5,2) NOT NULL DEFAULT 0 AFTER referencia_digitos');
+    }
 
     $hasCurrencyIndex = false;
     $indexResult = $mysqli->query("SHOW INDEX FROM payment_methods WHERE Key_name = 'idx_payment_methods_moneda_id'");
@@ -60,6 +64,30 @@ SQL;
     }
 
     $initialized = true;
+}
+
+function payment_methods_normalize_discount_percentage($value): float {
+    if ($value === null || $value === '') {
+        return 0.0;
+    }
+
+    if (is_string($value)) {
+        $value = str_replace(',', '.', trim($value));
+    }
+
+    if (!is_numeric($value)) {
+        return 0.0;
+    }
+
+    $normalized = round((float) $value, 2);
+    if ($normalized < 0) {
+        return 0.0;
+    }
+    if ($normalized > 100) {
+        return 100.0;
+    }
+
+    return $normalized;
 }
 
 function payment_methods_currency_options(): array {
@@ -114,6 +142,7 @@ function payment_methods_all(): array {
             $row['activo'] = (int) $row['activo'];
             $row['moneda_id'] = isset($row['moneda_id']) ? (int) $row['moneda_id'] : 0;
             $row['referencia_digitos'] = isset($row['referencia_digitos']) ? max(0, (int) $row['referencia_digitos']) : 0;
+            $row['descuento_porcentaje'] = payment_methods_normalize_discount_percentage($row['descuento_porcentaje'] ?? 0);
             $items[] = $row;
         }
     }
@@ -148,6 +177,7 @@ function payment_methods_find(int $id): ?array {
     $item['activo'] = (int) $item['activo'];
     $item['moneda_id'] = isset($item['moneda_id']) ? (int) $item['moneda_id'] : 0;
     $item['referencia_digitos'] = isset($item['referencia_digitos']) ? max(0, (int) $item['referencia_digitos']) : 0;
+    $item['descuento_porcentaje'] = payment_methods_normalize_discount_percentage($item['descuento_porcentaje'] ?? 0);
     return $item;
 }
 
@@ -158,6 +188,8 @@ function payment_methods_validate_form(array $input): array {
     $referenciaDigitos = isset($input['referencia_digitos_metodo_pago']) && $input['referencia_digitos_metodo_pago'] !== ''
         ? (int) $input['referencia_digitos_metodo_pago']
         : 0;
+    $descuentoPorcentajeRaw = trim((string) ($input['descuento_metodo_pago_porcentaje'] ?? '0'));
+    $descuentoPorcentaje = payment_methods_normalize_discount_percentage($descuentoPorcentajeRaw);
     $activo = isset($input['activo_metodo_pago']) ? 1 : 0;
     $errors = [];
 
@@ -175,6 +207,9 @@ function payment_methods_validate_form(array $input): array {
     if ($referenciaDigitos < 0) {
         $errors[] = 'Los dígitos de referencia no pueden ser negativos.';
     }
+    if ($descuentoPorcentajeRaw !== '' && !is_numeric(str_replace(',', '.', $descuentoPorcentajeRaw))) {
+        $errors[] = 'El descuento del método de pago debe ser numérico.';
+    }
 
     return [
         'is_valid' => empty($errors),
@@ -184,6 +219,7 @@ function payment_methods_validate_form(array $input): array {
             'datos' => $datos,
             'moneda_id' => $monedaId,
             'referencia_digitos' => $referenciaDigitos,
+            'descuento_porcentaje' => $descuentoPorcentaje,
             'activo' => $activo,
         ],
     ];
@@ -194,17 +230,17 @@ function payment_methods_save(array $data, ?int $id = null): bool {
 
     $mysqli = payment_methods_db();
     if ($id === null) {
-        $stmt = $mysqli->prepare('INSERT INTO payment_methods (nombre, datos, moneda_id, referencia_digitos, activo) VALUES (?, ?, ?, ?, ?)');
+        $stmt = $mysqli->prepare('INSERT INTO payment_methods (nombre, datos, moneda_id, referencia_digitos, descuento_porcentaje, activo) VALUES (?, ?, ?, ?, ?, ?)');
         if (!$stmt) {
             return false;
         }
-        $stmt->bind_param('ssiii', $data['nombre'], $data['datos'], $data['moneda_id'], $data['referencia_digitos'], $data['activo']);
+        $stmt->bind_param('ssiddi', $data['nombre'], $data['datos'], $data['moneda_id'], $data['referencia_digitos'], $data['descuento_porcentaje'], $data['activo']);
     } else {
-        $stmt = $mysqli->prepare('UPDATE payment_methods SET nombre = ?, datos = ?, moneda_id = ?, referencia_digitos = ?, activo = ? WHERE id = ?');
+        $stmt = $mysqli->prepare('UPDATE payment_methods SET nombre = ?, datos = ?, moneda_id = ?, referencia_digitos = ?, descuento_porcentaje = ?, activo = ? WHERE id = ?');
         if (!$stmt) {
             return false;
         }
-        $stmt->bind_param('ssiiii', $data['nombre'], $data['datos'], $data['moneda_id'], $data['referencia_digitos'], $data['activo'], $id);
+        $stmt->bind_param('ssiddii', $data['nombre'], $data['datos'], $data['moneda_id'], $data['referencia_digitos'], $data['descuento_porcentaje'], $data['activo'], $id);
     }
 
     $ok = $stmt->execute();
@@ -250,7 +286,7 @@ function payment_methods_active_by_currency(): array {
 
     $mysqli = payment_methods_db();
     $items = [];
-    $res = $mysqli->query("SELECT pm.id, pm.nombre, pm.datos, pm.moneda_id, pm.referencia_digitos,
+    $res = $mysqli->query("SELECT pm.id, pm.nombre, pm.datos, pm.moneda_id, pm.referencia_digitos, pm.descuento_porcentaje,
         m.nombre AS moneda_nombre, m.clave AS moneda_clave
         FROM payment_methods pm
         INNER JOIN monedas m ON m.id = pm.moneda_id
@@ -273,6 +309,7 @@ function payment_methods_active_by_currency(): array {
                 'moneda_nombre' => (string) ($row['moneda_nombre'] ?? ''),
                 'moneda_clave' => (string) ($row['moneda_clave'] ?? ''),
                 'referencia_digitos' => max(0, (int) ($row['referencia_digitos'] ?? 0)),
+                'descuento_porcentaje' => payment_methods_normalize_discount_percentage($row['descuento_porcentaje'] ?? 0),
             ];
         }
     }
