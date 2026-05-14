@@ -1281,14 +1281,132 @@ include __DIR__ . "/includes/header.php";
   }
 
   .payment-summary-discount {
-    margin-top: 0.75rem;
-    padding: 0.8rem 0.95rem;
-    border-radius: 0.95rem;
-    border: 1px solid rgba(74, 222, 128, 0.28);
-    background: rgba(20, 83, 45, 0.22);
+    margin-top: 0.85rem;
+  }
+
+  .payment-discount-panel {
+    position: relative;
+    overflow: hidden;
+    padding: 1rem;
+    border-radius: 1.05rem;
+    border: 1px solid rgba(34, 211, 238, 0.24);
+    background:
+      radial-gradient(circle at top right, rgba(74, 222, 128, 0.2), transparent 34%),
+      linear-gradient(135deg, rgba(6, 78, 59, 0.3), rgba(8, 47, 73, 0.42) 48%, rgba(15, 23, 42, 0.96));
+    box-shadow: 0 18px 34px rgba(2, 6, 23, 0.34), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  }
+
+  .payment-discount-panel::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(34, 211, 238, 0), rgba(34, 211, 238, 0.9), rgba(74, 222, 128, 0));
+  }
+
+  .payment-discount-panel-method {
+    background:
+      radial-gradient(circle at top right, rgba(34, 211, 238, 0.16), transparent 34%),
+      linear-gradient(135deg, rgba(8, 47, 73, 0.52), rgba(15, 23, 42, 0.95));
+  }
+
+  .payment-discount-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.85rem;
+  }
+
+  .payment-discount-badge,
+  .payment-discount-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    padding: 0.35rem 0.8rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .payment-discount-badge {
+    border: 1px solid rgba(34, 211, 238, 0.34);
+    background: rgba(8, 47, 73, 0.55);
+    color: #cffafe;
+  }
+
+  .payment-discount-chip {
+    border: 1px solid rgba(74, 222, 128, 0.4);
+    background: rgba(20, 83, 45, 0.58);
     color: #dcfce7;
+    box-shadow: 0 0 18px rgba(74, 222, 128, 0.18);
+  }
+
+  .payment-discount-panel-title {
+    color: #f8fafc;
+    font-weight: 800;
+    font-size: 1rem;
+    line-height: 1.35;
+  }
+
+  .payment-discount-panel-copy {
+    margin-top: 0.4rem;
+    color: #dbeafe;
     font-size: 0.92rem;
-    line-height: 1.5;
+    line-height: 1.6;
+  }
+
+  .payment-discount-grid {
+    margin-top: 0.9rem;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.65rem;
+  }
+
+  .payment-discount-stat {
+    padding: 0.78rem 0.82rem;
+    border-radius: 0.9rem;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    background: rgba(15, 23, 42, 0.44);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  }
+
+  .payment-discount-stat span {
+    display: block;
+    color: #94a3b8;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .payment-discount-stat strong {
+    display: block;
+    margin-top: 0.3rem;
+    color: #f8fafc;
+    font-size: 0.98rem;
+    line-height: 1.25;
+  }
+
+  .payment-discount-stat-highlight {
+    border-color: rgba(74, 222, 128, 0.35);
+    background: linear-gradient(135deg, rgba(20, 83, 45, 0.48), rgba(6, 78, 59, 0.18));
+  }
+
+  .payment-discount-stat-highlight strong {
+    color: #86efac;
+  }
+
+  @media (max-width: 575.98px) {
+    .payment-discount-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
 
   .payment-difference-banner {
@@ -1338,14 +1456,7 @@ include __DIR__ . "/includes/header.php";
   }
 
   .payment-method-discount {
-    margin-top: 0.9rem;
-    padding: 0.8rem 0.95rem;
-    border-radius: 0.95rem;
-    border: 1px solid rgba(34, 211, 238, 0.24);
-    background: rgba(8, 47, 73, 0.28);
-    color: #cffafe;
-    font-size: 0.9rem;
-    line-height: 1.55;
+    margin-top: 0.95rem;
   }
 
   .payment-modal-content .form-control::placeholder {
@@ -1473,6 +1584,32 @@ include __DIR__ . "/includes/header.php";
 
   .payment-modal-content.payment-modal-skin-enabled .payment-summary-total {
     border-top-color: rgba(var(--theme-payment-main-card-border-rgb, 22, 78, 99), 0.3);
+  }
+
+  .payment-modal-content.payment-modal-skin-enabled .payment-discount-panel {
+    border-color: rgba(var(--theme-payment-main-card-border-rgb, 22, 78, 99), 0.56);
+    background:
+      radial-gradient(circle at top right, rgba(var(--theme-payment-main-card-border-rgb, 22, 78, 99), 0.24), transparent 36%),
+      linear-gradient(135deg, rgba(var(--theme-payment-main-card-border-rgb, 22, 78, 99), 0.2), var(--theme-payment-main-card-bg, #111827));
+  }
+
+  .payment-modal-content.payment-modal-skin-enabled .payment-discount-badge {
+    border-color: rgba(var(--theme-payment-main-card-border-rgb, 22, 78, 99), 0.5);
+    color: var(--theme-payment-main-title, #F8FAFC);
+  }
+
+  .payment-modal-content.payment-modal-skin-enabled .payment-discount-chip {
+    color: var(--theme-payment-main-title, #F8FAFC);
+  }
+
+  .payment-modal-content.payment-modal-skin-enabled .payment-discount-panel-title,
+  .payment-modal-content.payment-modal-skin-enabled .payment-discount-stat strong {
+    color: var(--theme-payment-main-title, #F8FAFC);
+  }
+
+  .payment-modal-content.payment-modal-skin-enabled .payment-discount-panel-copy,
+  .payment-modal-content.payment-modal-skin-enabled .payment-discount-stat span {
+    color: var(--theme-payment-main-text, #CBD5E1);
   }
 
   .payment-modal-content.payment-modal-skin-enabled .payment-summary-total strong,
@@ -4117,14 +4254,58 @@ include __DIR__ . "/includes/header.php";
     };
   }
 
+  function renderPaymentDiscountPanel(pricing, options = {}) {
+    const variant = options.variant === 'method' ? 'method' : 'summary';
+    const mode = options.mode || (activePaymentOrder ? activePaymentOrder.paymentMode : 'money');
+    const methodName = mode === 'binance'
+      ? String(binancePayButtonLabel || 'Binance Pay')
+      : String(options.method && options.method.nombre ? options.method.nombre : 'Metodo de pago');
+    const badgeText = variant === 'method' ? 'Metodo elegido' : 'Boost activo';
+    const titleText = variant === 'method'
+      ? `${methodName} mantiene tu bonus en esta orden`
+      : `Precio gamer desbloqueado con ${methodName}`;
+    const copyText = variant === 'method'
+      ? `Precio real del paquete ${pricing.baseText}. Ahorras ${pricing.discountText} y cierras la compra pagando ${pricing.totalText}.`
+      : `Precio real del paquete ${pricing.baseText}. ${methodName} aplica ${formatDiscountPercentage(pricing.discountPercentage)} de descuento, te ahorra ${pricing.discountText} y deja el total final en ${pricing.totalText}.`;
+    const totalLabel = variant === 'method' ? 'Pagas hoy' : 'Total final';
+
+    return `
+      <div class="payment-discount-panel payment-discount-panel-${variant}">
+        <div class="payment-discount-panel-head">
+          <span class="payment-discount-badge">${escapePaymentHtml(badgeText)}</span>
+          <span class="payment-discount-chip">${escapePaymentHtml(formatDiscountPercentage(pricing.discountPercentage))} OFF</span>
+        </div>
+        <div class="payment-discount-panel-title">${escapePaymentHtml(titleText)}</div>
+        <div class="payment-discount-panel-copy">${escapePaymentHtml(copyText)}</div>
+        <div class="payment-discount-grid">
+          <div class="payment-discount-stat">
+            <span>Precio real</span>
+            <strong>${escapePaymentHtml(pricing.baseText)}</strong>
+          </div>
+          <div class="payment-discount-stat">
+            <span>Descuento</span>
+            <strong>${escapePaymentHtml(formatDiscountPercentage(pricing.discountPercentage))}</strong>
+          </div>
+          <div class="payment-discount-stat">
+            <span>Ahorras</span>
+            <strong>${escapePaymentHtml(pricing.discountText)}</strong>
+          </div>
+          <div class="payment-discount-stat payment-discount-stat-highlight">
+            <span>${escapePaymentHtml(totalLabel)}</span>
+            <strong>${escapePaymentHtml(pricing.totalText)}</strong>
+          </div>
+        </div>
+      </div>`;
+  }
+
   function updatePaymentPricingUi(methodOverride = null) {
     if (!activePaymentOrder) {
       if (paymentSummaryDiscount) {
-        paymentSummaryDiscount.textContent = '';
+        paymentSummaryDiscount.innerHTML = '';
         paymentSummaryDiscount.classList.add('d-none');
       }
       if (paymentMethodDiscount) {
-        paymentMethodDiscount.textContent = '';
+        paymentMethodDiscount.innerHTML = '';
         paymentMethodDiscount.classList.add('d-none');
       }
       return;
@@ -4139,23 +4320,35 @@ include __DIR__ . "/includes/header.php";
 
     if (paymentSummaryDiscount) {
       if (pricing.discountPercentage > 0 && activePaymentOrder.paymentMode !== 'points') {
-        paymentSummaryDiscount.textContent = `Descuento aplicado: ${formatDiscountPercentage(pricing.discountPercentage)}. Ahorras ${pricing.discountText} y pagarás ${pricing.totalText}.`;
+        paymentSummaryDiscount.innerHTML = renderPaymentDiscountPanel(pricing, {
+          variant: 'summary',
+          mode: activePaymentOrder.paymentMode,
+          method: resolvedMethod,
+        });
         paymentSummaryDiscount.classList.remove('d-none');
       } else {
-        paymentSummaryDiscount.textContent = '';
+        paymentSummaryDiscount.innerHTML = '';
         paymentSummaryDiscount.classList.add('d-none');
       }
     }
 
     if (paymentMethodDiscount) {
       if (pricing.discountPercentage > 0 && activePaymentOrder.paymentMode === 'money' && resolvedMethod) {
-        paymentMethodDiscount.textContent = `Este método te da ${formatDiscountPercentage(pricing.discountPercentage)} de descuento. Total original ${pricing.baseText}. Total final ${pricing.totalText}.`;
+        paymentMethodDiscount.innerHTML = renderPaymentDiscountPanel(pricing, {
+          variant: 'method',
+          mode: activePaymentOrder.paymentMode,
+          method: resolvedMethod,
+        });
         paymentMethodDiscount.classList.remove('d-none');
       } else if (pricing.discountPercentage > 0 && activePaymentOrder.paymentMode === 'binance') {
-        paymentMethodDiscount.textContent = `Binance Pay tiene ${formatDiscountPercentage(pricing.discountPercentage)} de descuento activo. Total original ${pricing.baseText}. Total final ${pricing.totalText}.`;
+        paymentMethodDiscount.innerHTML = renderPaymentDiscountPanel(pricing, {
+          variant: 'method',
+          mode: activePaymentOrder.paymentMode,
+          method: resolvedMethod,
+        });
         paymentMethodDiscount.classList.remove('d-none');
       } else {
-        paymentMethodDiscount.textContent = '';
+        paymentMethodDiscount.innerHTML = '';
         paymentMethodDiscount.classList.add('d-none');
       }
     }
