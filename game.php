@@ -5557,10 +5557,10 @@ include __DIR__ . "/includes/header.php";
           renderBinancePaymentDetails(data, (data && data.provider_reference) ? data.provider_reference : reference, totalText);
           showPaymentStatusModal('Pago pendiente en Binance Pay', 'El checkout sigue pendiente. Puedes dejar esta ventana abierta mientras completas el pago.', 'info');
         } else {
-          const successPresentation = successfulProviderPendingPresentation(providerFlow);
-          setPaymentAlert(successPresentation.message, 'info');
+          const successPresentation = successfulProviderPendingPresentation(providerFlow, data);
+          setPaymentAlert(successPresentation.message, successPresentation.statusType || 'info');
           renderProviderPaymentDetails(data, reference, totalText);
-          showPaymentStatusModal(successPresentation.title, successPresentation.message, 'info');
+          showPaymentStatusModal(successPresentation.title, successPresentation.message, successPresentation.statusType || 'info');
         }
         return;
       }
@@ -6008,8 +6008,25 @@ include __DIR__ . "/includes/header.php";
     `;
   }
 
-  function successfulProviderPendingPresentation(providerFlow) {
+  function successfulProviderPendingPresentation(providerFlow, data = null) {
     const normalizedFlow = String(providerFlow || '').toLowerCase();
+    const keepDetailedPassPresentation = buildBloodStrikeEliteDiscordSuccessNote(data) !== '';
+
+    if (!keepDetailedPassPresentation) {
+      return {
+        title: 'Pago exitoso',
+        summary: 'La recarga ya fue enviada al proveedor y está terminando su confirmación automática final.',
+        message: 'Pago exitoso. Tu recarga fue procesada automáticamente y ya quedó enviada al proveedor.',
+        steps: [
+          'No necesitas volver a pagar ni repetir el proceso.',
+          'Solo espera unos instantes mientras recibimos la confirmación final automática.'
+        ],
+        reasons: [],
+        reasonCaption: '¿Qué significa este estado?',
+        statusType: 'success'
+      };
+    }
+
     if (normalizedFlow === 'tracking') {
       return {
         title: 'Pago verificado, esperando confirmación',
@@ -6025,7 +6042,8 @@ include __DIR__ . "/includes/header.php";
           'La orden ya fue enviada al proveedor.',
           'La recarga sólo se marcará como completada cuando exista confirmación final del proveedor.'
         ],
-        reasonCaption: '¿Qué significa este estado?'
+        reasonCaption: '¿Qué significa este estado?',
+        statusType: 'info'
       };
     }
 
@@ -6043,7 +6061,8 @@ include __DIR__ . "/includes/header.php";
         'La orden ya fue enviada al proveedor.',
         'La recarga sólo se marcará como completada cuando exista confirmación final del proveedor.'
       ],
-      reasonCaption: '¿Qué significa este estado?'
+      reasonCaption: '¿Qué significa este estado?',
+      statusType: 'info'
     };
   }
 
@@ -6129,7 +6148,7 @@ include __DIR__ . "/includes/header.php";
     let reasonCaption = 'Detalle detectado por el sistema:';
 
     if (providerFlow === 'accepted') {
-      const presentation = successfulProviderPendingPresentation(providerFlow);
+      const presentation = successfulProviderPendingPresentation(providerFlow, data);
       title = presentation.title;
       summary = presentation.summary;
       steps = presentation.steps;
@@ -6138,7 +6157,7 @@ include __DIR__ . "/includes/header.php";
     }
 
     if (providerFlow === 'tracking') {
-      const presentation = successfulProviderPendingPresentation(providerFlow);
+      const presentation = successfulProviderPendingPresentation(providerFlow, data);
       title = presentation.title;
       summary = presentation.summary;
       steps = presentation.steps;
@@ -6964,12 +6983,12 @@ include __DIR__ . "/includes/header.php";
                       const hasProviderDetails = extractPaymentReasons(data).length > 0;
                       const isAcceptedFlow = providerFlow === 'accepted' || providerFlow === 'tracking';
                       const requiresManualReview = providerFlow === 'manual_review' || (!isAcceptedFlow && hasProviderDetails);
-                      const successPresentation = isAcceptedFlow ? successfulProviderPendingPresentation(providerFlow) : null;
+                      const successPresentation = isAcceptedFlow ? successfulProviderPendingPresentation(providerFlow, data) : null;
                       const paidNote = requiresManualReview ? '' : buildBloodStrikeEliteDiscordSuccessNote(data);
 
                       setPaymentAlert(
                         successPresentation ? successPresentation.message : paidMessage,
-                        requiresManualReview ? 'warning' : (successPresentation ? 'info' : 'success'),
+                        requiresManualReview ? 'warning' : (successPresentation ? (successPresentation.statusType || 'info') : 'success'),
                         { extraMessage: paidNote }
                       );
                       if (hasProviderDetails || providerFlow === 'accepted') {
@@ -6984,7 +7003,7 @@ include __DIR__ . "/includes/header.php";
                       showPaymentStatusModal(
                         requiresManualReview ? 'Revisión requerida' : (successPresentation ? successPresentation.title : 'Operación exitosa'),
                         successPresentation ? successPresentation.message : paidMessage,
-                        requiresManualReview ? 'danger' : (successPresentation ? 'info' : 'success'),
+                        requiresManualReview ? 'danger' : (successPresentation ? (successPresentation.statusType || 'info') : 'success'),
                         { extraMessage: paidNote }
                       );
                       if (providerFlow === 'accepted' || providerFlow === 'tracking') {
