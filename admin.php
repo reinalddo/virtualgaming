@@ -827,6 +827,24 @@ function admin_fetch_influencer_users(PDO $pdo): array {
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
+function admin_fetch_influencer_sales_counts_by_coupon(PDO $pdo): array {
+    $stmt = $pdo->query('SELECT cupon_id, COUNT(*) AS total FROM cupones_influencer_ventas GROUP BY cupon_id');
+    if (!$stmt instanceof PDOStatement) {
+        return [];
+    }
+
+    $counts = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $couponId = (int) ($row['cupon_id'] ?? 0);
+        if ($couponId <= 0) {
+            continue;
+        }
+        $counts[$couponId] = (int) ($row['total'] ?? 0);
+    }
+
+    return $counts;
+}
+
 function admin_match_coupon_influencer_user_id(array $users, ?array $coupon): string {
     if (!$coupon) {
         return '';
@@ -3003,6 +3021,7 @@ require_once __DIR__ . '/includes/header.php';
                     $couponAdminTab = 'influencers';
                 }
                 $cupones = $pdo->query('SELECT * FROM cupones ORDER BY id DESC')->fetchAll(PDO::FETCH_ASSOC);
+                $couponInfluencerSalesCounts = admin_fetch_influencer_sales_counts_by_coupon($pdo);
                 $influencerUsers = admin_fetch_influencer_users($pdo);
                 $couponGameScopeEnabled = admin_coupons_game_scope_enabled();
                 $couponGameOptions = admin_fetch_coupon_game_options($pdo);
@@ -3470,6 +3489,7 @@ require_once __DIR__ . '/includes/header.php';
                             </thead>
                             <tbody>
                                 <?php foreach ($cupones as $c): ?>
+                                    <?php $displayUsageCount = influencer_coupon_has_owner($c) ? (int) ($couponInfluencerSalesCounts[(int) ($c['id'] ?? 0)] ?? 0) : (int) ($c['usos_actuales'] ?? 0); ?>
                                     <tr style="background:#181f2a; color:#fff;">
                                         <td style="background:#181f2a; color:#00fff7; font-weight:bold;">
                                             <div><?= htmlspecialchars((string) $c['codigo']) ?></div>
@@ -3503,7 +3523,7 @@ require_once __DIR__ . '/includes/header.php';
                                         <?php if ($winPointsCouponToggleEnabled): ?>
                                         <td style="background:#181f2a; color:#b2f6ff;"><?= !empty($c['permitir_acumular_puntos']) ? 'Sí' : 'No' ?></td>
                                         <?php endif; ?>
-                                        <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars((string) ($c['usos_actuales'] ?? 0)) ?> / <?= htmlspecialchars(admin_display_value($c['limite_usos'] ?? null, '∞')) ?></td>
+                                        <td style="background:#181f2a; color:#b2f6ff;"><?= htmlspecialchars((string) $displayUsageCount) ?> / <?= htmlspecialchars(admin_display_value($c['limite_usos'] ?? null, '∞')) ?></td>
                                         <td style="background:#181f2a; color:#b2f6ff;"><?= !empty($c['activo']) ? 'Sí' : 'No' ?></td>
                                         <td style="background:#181f2a;">
                                             <a href="?seccion=cupones&tab=cupones&editar_cupon=<?= urlencode((string) $c['id']) ?>" style="color:#00fff7; text-decoration:underline; margin-right:1em;">Editar</a>
@@ -3583,6 +3603,7 @@ require_once __DIR__ . '/includes/header.php';
 
                     <div class="d-block d-md-none">
                         <?php foreach ($cupones as $c): ?>
+                            <?php $displayUsageCount = influencer_coupon_has_owner($c) ? (int) ($couponInfluencerSalesCounts[(int) ($c['id'] ?? 0)] ?? 0) : (int) ($c['usos_actuales'] ?? 0); ?>
                             <div style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:1rem; color:#00fff7; margin-bottom:1.2rem;">
                                 <div style="font-weight:bold; font-size:1.15em; color:#00fff7;"><?= htmlspecialchars((string) $c['codigo']) ?></div>
                                 <div style="margin-top:0.45rem; color:#b2f6ff;">Tipo: <?= htmlspecialchars((string) $c['tipo_descuento']) ?> | Valor: <?= htmlspecialchars((string) $c['valor_descuento']) ?></div>
@@ -3597,7 +3618,7 @@ require_once __DIR__ . '/includes/header.php';
                                 <?php if ($winPointsCouponToggleEnabled): ?>
                                 <div style="margin-top:0.45rem; color:#b2f6ff;">Acumula puntos: <?= !empty($c['permitir_acumular_puntos']) ? 'Sí' : 'No' ?></div>
                                 <?php endif; ?>
-                                <div style="margin-top:0.45rem; color:#b2f6ff;">Usos: <?= htmlspecialchars((string) ($c['usos_actuales'] ?? 0)) ?> / <?= htmlspecialchars(admin_display_value($c['limite_usos'] ?? null, '∞')) ?></div>
+                                <div style="margin-top:0.45rem; color:#b2f6ff;">Usos: <?= htmlspecialchars((string) $displayUsageCount) ?> / <?= htmlspecialchars(admin_display_value($c['limite_usos'] ?? null, '∞')) ?></div>
                                 <div style="margin-top:0.45rem; color:#b2f6ff;">Activo: <?= !empty($c['activo']) ? 'Sí' : 'No' ?></div>
                                 <div style="display:flex; gap:1rem; margin-top:1rem; flex-wrap:wrap;">
                                     <a href="?seccion=cupones&tab=cupones&editar_cupon=<?= urlencode((string) $c['id']) ?>" style="color:#00fff7; text-decoration:underline; font-weight:bold;">Editar</a>
