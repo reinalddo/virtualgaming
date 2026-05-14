@@ -90,6 +90,12 @@ function payment_methods_normalize_discount_percentage($value): float {
     return $normalized;
 }
 
+function payment_methods_discount_feature_enabled(): bool {
+    require_once __DIR__ . '/store_config.php';
+
+    return trim((string) store_config_get('descuento_metodo_pago', '0')) === '1';
+}
+
 function payment_methods_currency_options(): array {
     $mysqli = payment_methods_db();
     $currencies = [];
@@ -188,8 +194,11 @@ function payment_methods_validate_form(array $input): array {
     $referenciaDigitos = isset($input['referencia_digitos_metodo_pago']) && $input['referencia_digitos_metodo_pago'] !== ''
         ? (int) $input['referencia_digitos_metodo_pago']
         : 0;
+    $discountFeatureEnabled = payment_methods_discount_feature_enabled();
     $descuentoPorcentajeRaw = trim((string) ($input['descuento_metodo_pago_porcentaje'] ?? '0'));
-    $descuentoPorcentaje = payment_methods_normalize_discount_percentage($descuentoPorcentajeRaw);
+    $descuentoPorcentaje = $discountFeatureEnabled
+        ? payment_methods_normalize_discount_percentage($descuentoPorcentajeRaw)
+        : 0.0;
     $activo = isset($input['activo_metodo_pago']) ? 1 : 0;
     $errors = [];
 
@@ -207,7 +216,7 @@ function payment_methods_validate_form(array $input): array {
     if ($referenciaDigitos < 0) {
         $errors[] = 'Los dígitos de referencia no pueden ser negativos.';
     }
-    if ($descuentoPorcentajeRaw !== '' && !is_numeric(str_replace(',', '.', $descuentoPorcentajeRaw))) {
+    if ($discountFeatureEnabled && $descuentoPorcentajeRaw !== '' && !is_numeric(str_replace(',', '.', $descuentoPorcentajeRaw))) {
         $errors[] = 'El descuento del método de pago debe ser numérico.';
     }
 

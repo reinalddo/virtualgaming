@@ -2216,6 +2216,7 @@ switch ($seccion) {
             }
 
             if ($activeTab === 'api-binance') {
+                $paymentMethodDiscountsEnabled = trim((string) store_config_get('descuento_metodo_pago', '0')) === '1';
                 $binanceUserEnabled = isset($_POST['api_binance_usuario_present'])
                     ? (isset($_POST['api_binance_usuario']) && (string) $_POST['api_binance_usuario'] === '1' ? '1' : '0')
                     : trim((string) store_config_get('api_binance_usuario', '1'));
@@ -2225,7 +2226,9 @@ switch ($seccion) {
                 $accessToken = trim((string) ($_POST['binance_pay_access_token'] ?? ''));
                 $storeUrl = trim((string) ($_POST['binance_pay_store_url'] ?? ''));
                 $binanceDiscountRaw = trim((string) ($_POST['binance_pay_descuento'] ?? '0'));
-                $binanceDiscount = payment_methods_normalize_discount_percentage($binanceDiscountRaw);
+                $binanceDiscount = $paymentMethodDiscountsEnabled
+                    ? payment_methods_normalize_discount_percentage($binanceDiscountRaw)
+                    : 0.0;
 
                 if ($merchantNo !== '' && preg_match('/^\d+$/', $merchantNo) !== 1) {
                     admin_set_flash('error', 'El Merchant No debe contener solo números.');
@@ -2245,7 +2248,7 @@ switch ($seccion) {
                     admin_redirect('configuracion', ['tab' => 'api-binance']);
                 }
 
-                if ($binanceDiscountRaw !== '' && !is_numeric(str_replace(',', '.', $binanceDiscountRaw))) {
+                if ($paymentMethodDiscountsEnabled && $binanceDiscountRaw !== '' && !is_numeric(str_replace(',', '.', $binanceDiscountRaw))) {
                     admin_set_flash('error', 'El descuento de Binance Pay debe ser numérico.');
                     define('ADMIN_CONFIG_POST_HANDLED', true);
                     admin_redirect('configuracion', ['tab' => 'api-binance']);
