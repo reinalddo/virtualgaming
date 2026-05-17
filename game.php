@@ -2710,7 +2710,7 @@ include __DIR__ . "/includes/header.php";
     margin: 0;
     min-height: 8.5rem;
     aspect-ratio: 16 / 9;
-    padding: 0.45rem;
+    padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2724,10 +2724,10 @@ include __DIR__ . "/includes/header.php";
   .pack-card-image {
     width: 100%;
     height: 100%;
-    object-fit: contain;
+    object-fit: cover;
     display: block;
     transform: none;
-    border-radius: calc(0.95rem - 1px);
+    border-radius: 0;
   }
 
   .pack-card-glow {
@@ -2838,7 +2838,7 @@ include __DIR__ . "/includes/header.php";
     .pack-card-media {
       min-height: 7.3rem;
       aspect-ratio: 16 / 10;
-      padding: 0.35rem;
+      padding: 0;
     }
 
     .pack-card-content {
