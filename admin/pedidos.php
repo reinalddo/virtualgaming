@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../includes/tenant.php';
 tenant_start_session();
 $adminRole = trim((string) ($_SESSION['auth_user']['rol'] ?? ''));
-if (!isset($_SESSION['auth_user']) || !in_array($adminRole, ['admin', 'empleado'], true)) {
+if (!isset($_SESSION['auth_user']) || !in_array($adminRole, ['admin', 'empleado', 'root'], true)) {
   header('Location: ' . app_path('/login.php'));
     exit();
 }
