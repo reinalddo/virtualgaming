@@ -221,6 +221,47 @@ function admin_json_response(array $payload, int $statusCode = 200): void {
     exit();
 }
 
+function admin_startup_popup_gallery_images(): array {
+    return store_config_startup_popup_gallery_images((string) store_config_get('inicio_popup_galeria_imagenes', '[]'));
+}
+
+function admin_startup_popup_gallery_save(array $images): bool {
+    $normalized = [];
+    foreach ($images as $image) {
+        $path = trim((string) $image);
+        if ($path === '') {
+            continue;
+        }
+        $normalized[] = $path;
+    }
+
+    $normalized = array_values(array_unique($normalized));
+    $json = json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (!is_string($json)) {
+        return false;
+    }
+
+    return store_config_upsert('inicio_popup_galeria_imagenes', $json);
+}
+
+function admin_startup_popup_gallery_payload(array $images): array {
+    $items = [];
+    foreach (array_values($images) as $index => $image) {
+        $items[] = [
+            'path' => $image,
+            'url' => $image,
+            'name' => basename($image),
+            'order' => $index + 1,
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'items' => $items,
+        'count' => count($items),
+    ];
+}
+
 function admin_display_value($value, string $fallback = '—'): string {
     $text = trim((string) $value);
     return $text !== '' ? $text : $fallback;
@@ -1918,6 +1959,75 @@ switch ($seccion) {
         home_gallery_ensure_table();
         payment_methods_ensure_table();
 
+        if ($activeTab === 'ventana-inicial' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['startup_popup_gallery_action'])) {
+            $galleryEnabled = store_config_get('inicio_popup_galeria', '0') === '1';
+            if (!$galleryEnabled) {
+                admin_json_response(['ok' => false, 'message' => 'La galería de la ventana inicial no está habilitada en esta tienda.'], 422);
+            }
+
+            $galleryAction = trim((string) ($_POST['startup_popup_gallery_action'] ?? ''));
+            $galleryImages = admin_startup_popup_gallery_images();
+
+            if ($galleryAction === 'upload') {
+                if (!isset($_FILES['inicio_popup_galeria_imagenes'])) {
+                    admin_json_response(['ok' => false, 'message' => 'Selecciona al menos una imagen para subir.'], 422);
+                }
+
+                $upload = store_config_store_startup_popup_gallery_uploads($_FILES['inicio_popup_galeria_imagenes']);
+                if (!$upload['success']) {
+                    admin_json_response(['ok' => false, 'message' => (string) ($upload['message'] ?? 'No se pudieron subir las imágenes seleccionadas.')], 422);
+                }
+
+                $newImages = array_values(array_filter(array_map('strval', $upload['paths'] ?? [])));
+                $galleryImages = array_values(array_merge($galleryImages, $newImages));
+                if (!admin_startup_popup_gallery_save($galleryImages)) {
+                    foreach ($newImages as $newImage) {
+                        store_config_delete_startup_popup_gallery_file($newImage);
+                    }
+                    admin_json_response(['ok' => false, 'message' => 'No se pudo guardar la galería de la ventana inicial.'], 500);
+                }
+
+                admin_json_response(admin_startup_popup_gallery_payload($galleryImages));
+            }
+
+            $galleryImagePath = trim((string) ($_POST['startup_popup_gallery_image'] ?? ''));
+            $galleryIndex = array_search($galleryImagePath, $galleryImages, true);
+            if ($galleryImagePath === '' || $galleryIndex === false) {
+                admin_json_response(['ok' => false, 'message' => 'La imagen seleccionada no existe dentro de la galería actual.'], 404);
+            }
+
+            if ($galleryAction === 'delete') {
+                unset($galleryImages[$galleryIndex]);
+                $galleryImages = array_values($galleryImages);
+                if (!admin_startup_popup_gallery_save($galleryImages)) {
+                    admin_json_response(['ok' => false, 'message' => 'No se pudo actualizar la galería de la ventana inicial.'], 500);
+                }
+
+                store_config_delete_startup_popup_gallery_file($galleryImagePath);
+                admin_json_response(admin_startup_popup_gallery_payload($galleryImages));
+            }
+
+            if ($galleryAction === 'move') {
+                $direction = trim((string) ($_POST['startup_popup_gallery_direction'] ?? ''));
+                $targetIndex = $direction === 'left' ? $galleryIndex - 1 : ($direction === 'right' ? $galleryIndex + 1 : $galleryIndex);
+                if ($targetIndex < 0 || $targetIndex >= count($galleryImages) || $targetIndex === $galleryIndex) {
+                    admin_json_response(admin_startup_popup_gallery_payload($galleryImages));
+                }
+
+                $swapImage = $galleryImages[$targetIndex];
+                $galleryImages[$targetIndex] = $galleryImages[$galleryIndex];
+                $galleryImages[$galleryIndex] = $swapImage;
+
+                if (!admin_startup_popup_gallery_save($galleryImages)) {
+                    admin_json_response(['ok' => false, 'message' => 'No se pudo reordenar la galería de la ventana inicial.'], 500);
+                }
+
+                admin_json_response(admin_startup_popup_gallery_payload($galleryImages));
+            }
+
+            admin_json_response(['ok' => false, 'message' => 'Acción de galería no soportada.'], 422);
+        }
+
         if ($activeTab === 'galeria' && isset($_GET['eliminar_galeria'])) {
             $galleryId = intval($_GET['eliminar_galeria']);
             if ($galleryId > 0 && home_gallery_delete($galleryId)) {
@@ -2402,10 +2512,26 @@ switch ($seccion) {
                 $popupMode = trim((string) ($_POST['inicio_popup_modo'] ?? 'none'));
                 $popupFrequency = trim((string) ($_POST['inicio_popup_frecuencia'] ?? 'per_session'));
                 $popupChannelName = trim((string) ($_POST['inicio_popup_nombre_canal'] ?? 'DanisA Gamer Store'));
-                $popupVideoUrl = store_config_normalize_youtube_url((string) ($_POST['inicio_popup_video_url'] ?? ''));
+                $popupNormalEnabled = store_config_get('inicio_popup_activo', '1') === '1';
+                $popupVideoEnabled = store_config_get('inicio_popup_video_activo', '0') === '1';
+                $popupGalleryEnabled = store_config_get('inicio_popup_galeria', '0') === '1';
+                $popupVideoUrl = $popupVideoEnabled
+                    ? store_config_normalize_youtube_url((string) ($_POST['inicio_popup_video_url'] ?? ''))
+                    : store_config_normalize_youtube_url((string) store_config_get('inicio_popup_video_url', ''));
                 $channelUrl = store_config_normalize_social_url(store_config_get('whatsapp_channel', ''));
+                $currentGalleryImages = admin_startup_popup_gallery_images();
+                $availableModes = ['none'];
+                if ($popupNormalEnabled) {
+                    $availableModes[] = 'normal';
+                }
+                if ($popupVideoEnabled) {
+                    $availableModes[] = 'video';
+                }
+                if ($popupGalleryEnabled) {
+                    $availableModes[] = 'gallery';
+                }
 
-                if (!in_array($popupMode, ['none', 'normal', 'video'], true)) {
+                if (!in_array($popupMode, ['none', 'normal', 'video', 'gallery'], true)) {
                     admin_set_flash('error', 'Selecciona un modo válido para la ventana inicial.');
                     define('ADMIN_CONFIG_POST_HANDLED', true);
                     admin_redirect('configuracion', ['tab' => 'ventana-inicial']);
@@ -2417,13 +2543,19 @@ switch ($seccion) {
                     admin_redirect('configuracion', ['tab' => 'ventana-inicial']);
                 }
 
+                if (!in_array($popupMode, $availableModes, true)) {
+                    admin_set_flash('error', 'El modo seleccionado no está habilitado dentro de los procesos disponibles de la ventana inicial.');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'ventana-inicial']);
+                }
+
                 if ($popupMode === 'normal' && $popupChannelName === '') {
                     admin_set_flash('error', 'Debes indicar el nombre del canal para la ventana inicial.');
                     define('ADMIN_CONFIG_POST_HANDLED', true);
                     admin_redirect('configuracion', ['tab' => 'ventana-inicial']);
                 }
 
-                if ($popupMode !== 'none' && !store_config_is_valid_social_url($channelUrl)) {
+                if (in_array($popupMode, ['normal', 'video', 'gallery'], true) && !store_config_is_valid_social_url($channelUrl)) {
                     admin_set_flash('error', 'Debes configurar primero un enlace válido en Redes Sociales > Whatsapp Channel para usar cualquier ventana inicial.');
                     define('ADMIN_CONFIG_POST_HANDLED', true);
                     admin_redirect('configuracion', ['tab' => 'ventana-inicial']);
@@ -2435,11 +2567,17 @@ switch ($seccion) {
                     admin_redirect('configuracion', ['tab' => 'ventana-inicial']);
                 }
 
-                store_config_upsert('inicio_popup_activo', $popupMode === 'normal' ? '1' : '0');
-                store_config_upsert('inicio_popup_video_activo', $popupMode === 'video' ? '1' : '0');
+                if ($popupMode === 'gallery' && count($currentGalleryImages) === 0) {
+                    admin_set_flash('error', 'Debes cargar al menos una imagen para activar la ventana inicial de galería.');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'ventana-inicial']);
+                }
+
+                store_config_upsert('inicio_popup_modo', $popupMode);
                 store_config_upsert('inicio_popup_frecuencia', $popupFrequency);
                 store_config_upsert('inicio_popup_nombre_canal', $popupChannelName !== '' ? $popupChannelName : 'DanisA Gamer Store');
                 store_config_upsert('inicio_popup_video_url', $popupVideoUrl);
+
                 admin_set_flash('success', 'Configuración de la ventana inicial actualizada.');
             }
 

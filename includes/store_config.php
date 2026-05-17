@@ -598,11 +598,14 @@ function store_config_descriptions(): array {
         'win_points_notification_position' => 'Posicion de la notificacion flotante de Win Points en la pagina publica.',
         'win_points_default_award' => 'Cantidad de puntos que se asigna por defecto a un paquete cuando no tiene un valor propio configurado.',
         'inicio_popup_tab_habilitado' => 'Activa o desactiva globalmente el tab y la función de la ventana inicial',
-        'inicio_popup_activo' => 'Activa o desactiva la aparición de la ventana inicial en el index',
-        'inicio_popup_video_activo' => 'Activa o desactiva la aparición de la ventana inicial con video en el index',
+        'inicio_popup_activo' => 'Activa o desactiva la disponibilidad de la ventana inicial normal en el index',
+        'inicio_popup_video_activo' => 'Activa o desactiva la disponibilidad de la ventana inicial con video en el index',
+        'inicio_popup_galeria' => 'Activa o desactiva la disponibilidad de la ventana inicial de galería en el index',
+        'inicio_popup_modo' => 'Modo seleccionado para la ventana inicial del index',
         'inicio_popup_frecuencia' => 'Frecuencia con la que debe aparecer la ventana inicial en el index',
         'inicio_popup_nombre_canal' => 'Nombre visible del canal en la ventana inicial',
         'inicio_popup_video_url' => 'Enlace de YouTube usado en la ventana inicial con video',
+        'inicio_popup_galeria_imagenes' => 'Listado JSON de imágenes usadas por la ventana inicial de galería',
         'ff_bank_api_base_url' => 'Enlace base de la API del banco para consultar movimientos',
         'ff_bank_dias_disponibles' => 'Dias disponibles reportados por la API del banco al consultar movimientos',
         'ff_bank_posicion' => 'Posicion para la conexion al banco de Free Fire',
@@ -698,9 +701,12 @@ function store_config_defaults(): array {
         'inicio_popup_tab_habilitado' => '1',
         'inicio_popup_activo' => '1',
         'inicio_popup_video_activo' => '0',
+        'inicio_popup_galeria' => '0',
+        'inicio_popup_modo' => '',
         'inicio_popup_frecuencia' => 'per_session',
         'inicio_popup_nombre_canal' => 'DanisA Gamer Store',
         'inicio_popup_video_url' => '',
+        'inicio_popup_galeria_imagenes' => '[]',
         'ff_bank_api_base_url' => 'https://pagonorte.net',
         'ff_bank_dias_disponibles' => '',
         'ff_api_usuario' => '',
@@ -1233,6 +1239,9 @@ function store_config_ensure_defaults(): void {
     $paymentDiscountFeatureKey = 'descuento_metodo_pago';
     $paymentDiscountFeatureName = 'Descuento por Método de Pago';
     $paymentDiscountFeatureDescription = 'Permite ofrecer descuentos porcentuales por cada método de pago configurado y mostrarlos al cliente durante el checkout.';
+    $startupPopupGalleryFeatureKey = 'inicio_popup_galeria';
+    $startupPopupGalleryFeatureName = 'Ventana Inicial Galería';
+    $startupPopupGalleryFeatureDescription = 'Permite mostrar una ventana inicial tipo galería con imágenes promocionales, acceso al canal de WhatsApp y cierre controlado al entrar al index.';
 
     foreach (store_config_defaults() as $key => $value) {
         $description = $descriptions[$key] ?? null;
@@ -1299,6 +1308,22 @@ function store_config_ensure_defaults(): void {
                     'descripcion_venta' => $paymentDiscountFeatureDescription,
                     'precio' => '20',
                     'comision_venta' => '0',
+                ]
+            );
+            continue;
+        }
+
+        if ($key === $startupPopupGalleryFeatureKey) {
+            store_config_insert_missing_default(
+                $mysqli,
+                $key,
+                $value,
+                $description,
+                [
+                    'mostrar_a_cliente' => '1',
+                    'funcion_venta' => $startupPopupGalleryFeatureName,
+                    'descripcion_venta' => $startupPopupGalleryFeatureDescription,
+                    'precio' => '15',
                 ]
             );
             continue;
@@ -1592,6 +1617,44 @@ function store_config_delete_public_background_media_file(string $relativePath):
     }
 }
 
+function store_config_is_managed_startup_popup_gallery_path(string $relativePath): bool {
+    return tenant_is_managed_path($relativePath, 'store/startup-popup-gallery');
+}
+
+function store_config_delete_startup_popup_gallery_file(string $relativePath): void {
+    if ($relativePath === '' || !store_config_is_managed_startup_popup_gallery_path($relativePath)) {
+        return;
+    }
+
+    $absolutePath = tenant_resolve_public_path($relativePath);
+    if ($absolutePath !== null && is_file($absolutePath)) {
+        @unlink($absolutePath);
+    }
+}
+
+function store_config_startup_popup_gallery_images(?string $rawJson = null): array {
+    $json = $rawJson;
+    if ($json === null) {
+        $json = (string) store_config_get('inicio_popup_galeria_imagenes', '[]');
+    }
+
+    $decoded = json_decode((string) $json, true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+
+    $items = [];
+    foreach ($decoded as $item) {
+        $path = trim((string) $item);
+        if ($path === '') {
+            continue;
+        }
+        $items[] = $path;
+    }
+
+    return array_values(array_unique($items));
+}
+
 function store_config_store_named_logo_upload(array $file, string $prefix = 'store-logo'): array {
     if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
         return ['success' => true, 'path' => ''];
@@ -1730,4 +1793,91 @@ function store_config_store_public_background_media_upload(array $file): array {
     }
 
     return ['success' => true, 'path' => tenant_upload_public_path('store/backgrounds', $fileName, true)];
+}
+
+function store_config_store_startup_popup_gallery_upload(array $file): array {
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        return ['success' => true, 'path' => ''];
+    }
+
+    if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+        return ['success' => false, 'message' => 'No se pudo cargar una imagen de la galería de la ventana inicial.'];
+    }
+
+    $tmpName = $file['tmp_name'] ?? '';
+    if ($tmpName === '' || !is_uploaded_file($tmpName)) {
+        return ['success' => false, 'message' => 'Una imagen de la galería de la ventana inicial no es válida.'];
+    }
+
+    if (($file['size'] ?? 0) > 6 * 1024 * 1024) {
+        return ['success' => false, 'message' => 'Cada imagen de la galería de la ventana inicial no puede superar 6 MB.'];
+    }
+
+    $imageInfo = @getimagesize($tmpName);
+    if ($imageInfo === false) {
+        return ['success' => false, 'message' => 'Cada archivo de la galería de la ventana inicial debe ser una imagen válida.'];
+    }
+
+    $mime = $imageInfo['mime'] ?? '';
+    $extensions = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+        'image/gif' => 'gif',
+    ];
+
+    if (!isset($extensions[$mime])) {
+        return ['success' => false, 'message' => 'Formato no permitido para la galería de la ventana inicial. Usa JPG, PNG, WEBP o GIF.'];
+    }
+
+    $targetDir = tenant_upload_absolute_dir('store/startup-popup-gallery');
+    if (!is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
+        return ['success' => false, 'message' => 'No se pudo crear la carpeta de la galería de la ventana inicial.'];
+    }
+
+    $fileName = 'startup-popup-gallery-' . date('YmdHis') . '-' . bin2hex(random_bytes(4)) . '.' . $extensions[$mime];
+    $targetPath = $targetDir . DIRECTORY_SEPARATOR . $fileName;
+
+    if (!move_uploaded_file($tmpName, $targetPath)) {
+        return ['success' => false, 'message' => 'No se pudo guardar una imagen de la galería de la ventana inicial en el servidor.'];
+    }
+
+    return ['success' => true, 'path' => tenant_upload_public_path('store/startup-popup-gallery', $fileName, true)];
+}
+
+function store_config_store_startup_popup_gallery_uploads(array $files): array {
+    $normalizedFiles = [];
+
+    if (isset($files['name']) && is_array($files['name'])) {
+        $total = count($files['name']);
+        for ($index = 0; $index < $total; $index++) {
+            $normalizedFiles[] = [
+                'name' => $files['name'][$index] ?? '',
+                'type' => $files['type'][$index] ?? '',
+                'tmp_name' => $files['tmp_name'][$index] ?? '',
+                'error' => $files['error'][$index] ?? UPLOAD_ERR_NO_FILE,
+                'size' => $files['size'][$index] ?? 0,
+            ];
+        }
+    } elseif ($files !== []) {
+        $normalizedFiles[] = $files;
+    }
+
+    $paths = [];
+    foreach ($normalizedFiles as $file) {
+        $upload = store_config_store_startup_popup_gallery_upload($file);
+        if (!$upload['success']) {
+            foreach ($paths as $path) {
+                store_config_delete_startup_popup_gallery_file($path);
+            }
+            return $upload;
+        }
+
+        $path = trim((string) ($upload['path'] ?? ''));
+        if ($path !== '') {
+            $paths[] = $path;
+        }
+    }
+
+    return ['success' => true, 'paths' => $paths];
 }

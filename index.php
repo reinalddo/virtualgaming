@@ -12,8 +12,9 @@ require_once __DIR__ . "/includes/slugify.php";
 currency_ensure_schema();
 $pageTitle = store_config_get('nombre_tienda', 'TVirtualGaming') . " | " . store_config_get('nombre_tienda_subtitulo', 'Tienda de monedas digitales');
 $startupPopupTabEnabled = store_config_get('inicio_popup_tab_habilitado', '1') === '1';
-$startupPopupEnabled = $startupPopupTabEnabled && store_config_get('inicio_popup_activo', '1') === '1';
+$startupPopupNormalEnabled = $startupPopupTabEnabled && store_config_get('inicio_popup_activo', '1') === '1';
 $startupPopupVideoEnabled = $startupPopupTabEnabled && store_config_get('inicio_popup_video_activo', '0') === '1';
+$startupPopupGalleryEnabled = $startupPopupTabEnabled && store_config_get('inicio_popup_galeria', '0') === '1';
 $startupPopupFrequency = store_config_get('inicio_popup_frecuencia', 'per_session');
 if (!in_array($startupPopupFrequency, ['always', 'per_entry', 'per_session'], true)) {
   $startupPopupFrequency = 'per_session';
@@ -26,17 +27,29 @@ $startupPopupChannelUrl = store_config_normalize_social_url(store_config_get('wh
 $startupPopupChannelValid = store_config_is_valid_social_url($startupPopupChannelUrl);
 $startupPopupVideoUrl = store_config_normalize_youtube_url(store_config_get('inicio_popup_video_url', ''));
 $startupPopupVideoEmbedUrl = store_config_youtube_embed_url($startupPopupVideoUrl);
-$startupPopupMode = 'none';
-if ($startupPopupVideoEnabled) {
-  $startupPopupMode = 'video';
-} elseif ($startupPopupEnabled) {
-  $startupPopupMode = 'default';
+$startupPopupGalleryImages = store_config_startup_popup_gallery_images((string) store_config_get('inicio_popup_galeria_imagenes', '[]'));
+$startupPopupMode = trim(store_config_get('inicio_popup_modo', ''));
+if (!in_array($startupPopupMode, ['none', 'normal', 'video', 'gallery'], true)
+  || ($startupPopupMode === 'normal' && !$startupPopupNormalEnabled)
+  || ($startupPopupMode === 'video' && !$startupPopupVideoEnabled)
+  || ($startupPopupMode === 'gallery' && !$startupPopupGalleryEnabled)) {
+  if ($startupPopupVideoEnabled) {
+    $startupPopupMode = 'video';
+  } elseif ($startupPopupNormalEnabled) {
+    $startupPopupMode = 'normal';
+  } elseif ($startupPopupGalleryEnabled) {
+    $startupPopupMode = 'gallery';
+  } else {
+    $startupPopupMode = 'none';
+  }
 }
 $startupPopupShouldRender = false;
 if ($startupPopupMode === 'video') {
   $startupPopupShouldRender = $startupPopupChannelValid && $startupPopupVideoEmbedUrl !== '';
-} elseif ($startupPopupMode === 'default') {
+} elseif ($startupPopupMode === 'normal') {
   $startupPopupShouldRender = $startupPopupChannelValid;
+} elseif ($startupPopupMode === 'gallery') {
+  $startupPopupShouldRender = $startupPopupChannelValid && count($startupPopupGalleryImages) > 0;
 }
 $startupPopupShouldOpen = false;
 if ($startupPopupShouldRender) {
@@ -139,7 +152,7 @@ $accentMap = [
           padding: 1rem;
           background: radial-gradient(circle at top, rgba(var(--theme-startup-popup-accent-rgb), 0.16), rgba(0, 0, 0, 0) 34%), rgba(2, 6, 12, 0.74);
           backdrop-filter: blur(12px);
-          pointer-events: none;
+          pointer-events: auto;
         }
         .startup-popup-shell.is-hidden {
           display: none;
@@ -387,6 +400,138 @@ $accentMap = [
         .startup-popup-video-dismiss:hover {
           color: #fff5f5;
         }
+        .startup-popup-gallery-stage {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          width: min(100%, 390px);
+          pointer-events: auto;
+        }
+        .startup-popup-card-gallery {
+          width: 100%;
+          height: min(calc(100vh - 9.5rem), 540px);
+          height: min(calc(100dvh - 9.5rem), 540px);
+          padding: 0;
+          border-radius: 28px;
+          overflow: hidden;
+          background: rgba(8, 12, 18, 0.98);
+          box-shadow: 0 22px 60px rgba(0, 0, 0, 0.58), 0 0 30px rgba(var(--theme-startup-popup-accent-rgb), 0.18);
+        }
+        .startup-popup-gallery-viewport {
+          position: relative;
+          width: 100%;
+          height: 100%;
+          overflow: hidden;
+          background: rgba(8, 12, 18, 0.98);
+        }
+        .startup-popup-gallery-slide {
+          position: absolute;
+          inset: 0;
+          opacity: 0;
+          transition: opacity 0.35s ease;
+          pointer-events: none;
+        }
+        .startup-popup-gallery-slide.is-active {
+          opacity: 1;
+        }
+        .startup-popup-gallery-slide img {
+          width: 100%;
+          height: 100%;
+          display: block;
+          object-fit: cover;
+        }
+        .startup-popup-gallery-dots {
+          position: absolute;
+          left: 50%;
+          bottom: 1rem;
+          transform: translateX(-50%);
+          display: inline-flex;
+          align-items: center;
+          gap: 0.45rem;
+          padding: 0.38rem 0.6rem;
+          border-radius: 999px;
+          background: rgba(5, 10, 16, 0.54);
+          backdrop-filter: blur(10px);
+          z-index: 2;
+        }
+        .startup-popup-gallery-dot {
+          width: 10px;
+          height: 10px;
+          border: 0;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.58);
+          padding: 0;
+          transition: transform 0.2s ease, background-color 0.2s ease;
+        }
+        .startup-popup-gallery-dot.is-active {
+          transform: scale(1.18);
+          background: rgba(var(--theme-startup-popup-accent-rgb), 1);
+        }
+        .startup-popup-gallery-actions {
+          width: 100%;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 0.72rem;
+          margin-top: 0.9rem;
+          pointer-events: auto;
+        }
+        .startup-popup-gallery-link {
+          width: min(100%, 320px);
+          pointer-events: auto;
+        }
+        .startup-popup-gallery-close {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 72px;
+          min-height: 58px;
+          padding: 0.95rem 1.5rem;
+          border: 0;
+          border-radius: 999px;
+          background: linear-gradient(180deg, rgba(239, 68, 68, 0.98), rgba(185, 28, 28, 0.94));
+          color: #fff5f5;
+          font-size: 1.3rem;
+          font-weight: 800;
+          line-height: 1;
+          box-shadow: 0 14px 24px rgba(185, 28, 28, 0.28), 0 0 14px rgba(239, 68, 68, 0.18);
+          transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+          pointer-events: auto;
+        }
+        .startup-popup-gallery-close:hover {
+          color: #fff5f5;
+          transform: translateY(-1px);
+        }
+        .startup-popup-gallery-close:disabled,
+        .startup-popup-gallery-close.is-locked {
+          cursor: not-allowed;
+          opacity: 0.9;
+          transform: none;
+        }
+        .startup-popup-gallery-close::before {
+          content: "";
+          position: absolute;
+          inset: -4px;
+          border-radius: inherit;
+          border: 3px solid rgba(255, 255, 255, 0.18);
+          border-top-color: rgba(var(--theme-startup-popup-accent-rgb), 1);
+          opacity: 0;
+          transition: opacity 0.2s ease;
+        }
+        .startup-popup-gallery-close.is-locked::before {
+          opacity: 1;
+          animation: startup-popup-gallery-close-spin 0.95s linear infinite;
+        }
+        .startup-popup-gallery-close-label {
+          position: relative;
+          z-index: 1;
+        }
+        @keyframes startup-popup-gallery-close-spin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
         @media (max-width: 420px) {
           .startup-popup-shell {
             padding: 0.32rem;
@@ -422,6 +567,26 @@ $accentMap = [
             margin-top: 0.5rem;
             padding: 0.68rem 0.74rem;
             font-size: 0.76rem;
+          }
+          .startup-popup-gallery-stage {
+            width: 100%;
+          }
+          .startup-popup-card-gallery {
+            height: min(calc(100vh - 8.8rem), 500px);
+            height: min(calc(100dvh - 8.8rem), 500px);
+            border-radius: 24px;
+          }
+          .startup-popup-gallery-actions {
+            margin-top: 0.78rem;
+            gap: 0.6rem;
+          }
+          .startup-popup-gallery-link {
+            width: 100%;
+          }
+          .startup-popup-gallery-close {
+            min-width: 68px;
+            min-height: 54px;
+            padding: 0.88rem 1.3rem;
           }
         }
         .promo-section-mobile,
@@ -555,7 +720,7 @@ $accentMap = [
       </style>
 
       <?php if ($startupPopupShouldRender): ?>
-        <div id="startup-popup" class="startup-popup-shell is-hidden" data-frequency="<?= htmlspecialchars($startupPopupFrequency, ENT_QUOTES, 'UTF-8') ?>" data-should-open="<?= $startupPopupShouldOpen ? '1' : '0' ?>" aria-hidden="true">
+        <div id="startup-popup" class="startup-popup-shell is-hidden" data-frequency="<?= htmlspecialchars($startupPopupFrequency, ENT_QUOTES, 'UTF-8') ?>" data-should-open="<?= $startupPopupShouldOpen ? '1' : '0' ?>" data-mode="<?= htmlspecialchars($startupPopupMode, ENT_QUOTES, 'UTF-8') ?>" data-close-delay="<?= $startupPopupMode === 'gallery' ? '2000' : '0' ?>" aria-hidden="true">
           <?php if ($startupPopupMode === 'video'): ?>
             <div class="startup-popup-card startup-popup-card-video">
               <button type="button" class="startup-popup-close" id="startup-popup-close" aria-label="Cerrar ventana inicial">
@@ -573,6 +738,34 @@ $accentMap = [
                 <span>📢 Canal de WhatsApp</span>
               </a>
               <button type="button" class="startup-popup-link startup-popup-video-dismiss" id="startup-popup-dismiss">Cerrar y recargar</button>
+            </div>
+          <?php elseif ($startupPopupMode === 'gallery'): ?>
+            <div class="startup-popup-gallery-stage">
+              <div class="startup-popup-card startup-popup-card-gallery">
+                <div class="startup-popup-gallery-viewport">
+                  <?php foreach ($startupPopupGalleryImages as $galleryIndex => $galleryImage): ?>
+                    <div class="startup-popup-gallery-slide<?= $galleryIndex === 0 ? ' is-active' : '' ?>" data-startup-gallery-slide>
+                      <img src="<?= htmlspecialchars($galleryImage, ENT_QUOTES, 'UTF-8') ?>" alt="Imagen <?= $galleryIndex + 1 ?> de la ventana inicial">
+                    </div>
+                  <?php endforeach; ?>
+                  <?php if (count($startupPopupGalleryImages) > 1): ?>
+                    <div class="startup-popup-gallery-dots" aria-label="Indicadores de la galería inicial">
+                      <?php foreach ($startupPopupGalleryImages as $galleryIndex => $galleryImage): ?>
+                        <button type="button" class="startup-popup-gallery-dot<?= $galleryIndex === 0 ? ' is-active' : '' ?>" data-startup-gallery-dot data-index="<?= $galleryIndex ?>" aria-label="Imagen <?= $galleryIndex + 1 ?>" aria-current="<?= $galleryIndex === 0 ? 'true' : 'false' ?>"></button>
+                      <?php endforeach; ?>
+                    </div>
+                  <?php endif; ?>
+                </div>
+              </div>
+              <div class="startup-popup-gallery-actions">
+                <a href="<?= htmlspecialchars($startupPopupChannelUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" class="startup-popup-link startup-popup-gallery-link" id="startup-popup-link">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M20.52 3.48A11.8 11.8 0 0 0 12.08 0C5.54 0 .22 5.32.22 11.86c0 2.09.55 4.13 1.58 5.93L0 24l6.39-1.67a11.8 11.8 0 0 0 5.69 1.45h.01c6.54 0 11.86-5.32 11.86-11.86 0-3.17-1.23-6.16-3.43-8.44ZM12.09 21.76h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.79.99 1.01-3.69-.23-.38A9.87 9.87 0 0 1 2.2 11.86C2.2 6.4 6.63 1.98 12.08 1.98c2.64 0 5.12 1.03 6.98 2.91a9.8 9.8 0 0 1 2.88 6.98c0 5.45-4.43 9.89-9.85 9.89Zm5.42-7.41c-.3-.15-1.76-.87-2.03-.97-.27-.1-.46-.15-.66.15-.2.3-.76.97-.93 1.17-.17.2-.34.22-.64.07-.3-.15-1.27-.47-2.41-1.49-.89-.8-1.49-1.79-1.67-2.09-.17-.3-.02-.47.13-.62.13-.13.3-.34.44-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.66-1.59-.9-2.17-.24-.58-.48-.5-.66-.5h-.56c-.2 0-.52.08-.79.37-.27.3-1.05 1.03-1.05 2.52 0 1.49 1.08 2.92 1.23 3.12.15.2 2.11 3.23 5.12 4.52.72.31 1.29.49 1.73.63.73.23 1.39.2 1.91.12.58-.09 1.76-.72 2.01-1.42.25-.69.25-1.29.17-1.42-.07-.12-.27-.2-.57-.35Z"/></svg>
+                  <span>Unirse al canal de WhatsApp</span>
+                </a>
+                <button type="button" class="startup-popup-gallery-close is-locked" id="startup-popup-dismiss" data-startup-gallery-close aria-label="Cerrar ventana inicial">
+                  <span class="startup-popup-gallery-close-label">X</span>
+                </button>
+              </div>
             </div>
           <?php else: ?>
             <div class="startup-popup-card">
@@ -761,9 +954,18 @@ $pageScripts = [
     const closeButton = document.getElementById("startup-popup-close");
     const dismissButton = document.getElementById("startup-popup-dismiss");
     const videoFrame = popup.querySelector("iframe[data-embed-src]");
+    const gallerySlides = Array.from(popup.querySelectorAll("[data-startup-gallery-slide]"));
+    const galleryDots = Array.from(popup.querySelectorAll("[data-startup-gallery-dot]"));
+    const galleryCloseButton = popup.querySelector("[data-startup-gallery-close]");
     const popupFrequency = popup.dataset.frequency || "per_session";
     const popupShouldOpen = popup.dataset.shouldOpen === "1";
+    const popupMode = popup.dataset.mode || "none";
+    const closeDelayMs = Number.parseInt(popup.dataset.closeDelay || "0", 10);
     const perEntryStorageKey = "vg_startup_popup_seen";
+    let galleryIndex = 0;
+    let galleryAutoplayId = 0;
+    let galleryUnlockTimeoutId = 0;
+    let popupCanClose = popupMode !== "gallery" || closeDelayMs <= 0;
 
     const stopVideoPlayback = () => {
       if (!videoFrame) {
@@ -784,7 +986,77 @@ $pageScripts = [
       }
     };
 
-    const hidePopup = () => {
+    const stopGalleryAutoplay = () => {
+      if (galleryAutoplayId) {
+        window.clearInterval(galleryAutoplayId);
+        galleryAutoplayId = 0;
+      }
+    };
+
+    const setGalleryIndex = (index) => {
+      if (!gallerySlides.length) {
+        return;
+      }
+
+      galleryIndex = ((index % gallerySlides.length) + gallerySlides.length) % gallerySlides.length;
+      gallerySlides.forEach((slide, slideIndex) => {
+        slide.classList.toggle("is-active", slideIndex === galleryIndex);
+      });
+      galleryDots.forEach((dot, dotIndex) => {
+        const isActive = dotIndex === galleryIndex;
+        dot.classList.toggle("is-active", isActive);
+        dot.setAttribute("aria-current", isActive ? "true" : "false");
+      });
+    };
+
+    const startGalleryAutoplay = () => {
+      if (gallerySlides.length < 2) {
+        return;
+      }
+
+      stopGalleryAutoplay();
+      galleryAutoplayId = window.setInterval(() => {
+        setGalleryIndex(galleryIndex + 1);
+      }, 3200);
+    };
+
+    const lockGalleryClose = () => {
+      if (!galleryCloseButton || popupMode !== "gallery") {
+        popupCanClose = true;
+        return;
+      }
+
+      window.clearTimeout(galleryUnlockTimeoutId);
+      popupCanClose = closeDelayMs <= 0;
+      galleryCloseButton.classList.remove("is-ready", "is-locked");
+
+      if (popupCanClose) {
+        galleryCloseButton.disabled = false;
+        galleryCloseButton.removeAttribute("aria-disabled");
+        galleryCloseButton.classList.add("is-ready");
+        return;
+      }
+
+      galleryCloseButton.disabled = true;
+      galleryCloseButton.setAttribute("aria-disabled", "true");
+      void galleryCloseButton.offsetWidth;
+      galleryCloseButton.classList.add("is-locked");
+      galleryUnlockTimeoutId = window.setTimeout(() => {
+        popupCanClose = true;
+        galleryCloseButton.disabled = false;
+        galleryCloseButton.removeAttribute("aria-disabled");
+        galleryCloseButton.classList.remove("is-locked");
+        galleryCloseButton.classList.add("is-ready");
+      }, closeDelayMs);
+    };
+
+    const hidePopup = (force = false) => {
+      if (!force && !popupCanClose) {
+        return;
+      }
+
+      stopGalleryAutoplay();
+      window.clearTimeout(galleryUnlockTimeoutId);
       stopVideoPlayback();
       popup.classList.add("is-hidden");
       popup.setAttribute("aria-hidden", "true");
@@ -797,6 +1069,13 @@ $pageScripts = [
       }
 
       restoreVideoPlayback();
+      if (popupMode === "gallery") {
+        setGalleryIndex(0);
+        startGalleryAutoplay();
+        lockGalleryClose();
+      } else {
+        popupCanClose = true;
+      }
       popup.classList.remove("is-hidden");
       popup.setAttribute("aria-hidden", "false");
 
@@ -834,7 +1113,17 @@ $pageScripts = [
       if (!button) {
         return;
       }
-      button.addEventListener("click", hidePopup);
+      button.addEventListener("click", () => hidePopup());
+    });
+
+    galleryDots.forEach((dot) => {
+      dot.addEventListener("click", () => {
+        const nextIndex = Number.parseInt(dot.dataset.index || "0", 10);
+        if (!Number.isNaN(nextIndex)) {
+          setGalleryIndex(nextIndex);
+          startGalleryAutoplay();
+        }
+      });
     });
 
     popup.addEventListener("click", (event) => {
@@ -855,7 +1144,7 @@ $pageScripts = [
       }
     });
 
-    window.addEventListener("pagehide", hidePopup);
+    window.addEventListener("pagehide", () => hidePopup(true));
   })();
 </script>
 SCRIPT,

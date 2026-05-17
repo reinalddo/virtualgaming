@@ -58,11 +58,14 @@ INSERT INTO configuracion_general (clave, valor, descripcion) VALUES
 ('google_client_secret', '', 'Client Secret de Google para login y registro social'),
 ('win_points_notification_position', 'bottom-left', 'Posicion de la notificacion flotante de Win Points en la pagina publica.'),
 ('inicio_popup_tab_habilitado', '1', 'Activa o desactiva globalmente el tab y la función de la ventana inicial'),
-('inicio_popup_activo', '1', 'Activa o desactiva la aparición de la ventana inicial en el index'),
-('inicio_popup_video_activo', '0', 'Activa o desactiva la aparición de la ventana inicial con video en el index'),
+('inicio_popup_activo', '1', 'Activa o desactiva la disponibilidad de la ventana inicial normal en el index'),
+('inicio_popup_video_activo', '0', 'Activa o desactiva la disponibilidad de la ventana inicial con video en el index'),
+('inicio_popup_galeria', '0', 'Activa o desactiva la disponibilidad de la ventana inicial de galería en el index'),
+('inicio_popup_modo', '', 'Modo seleccionado para la ventana inicial del index'),
 ('inicio_popup_frecuencia', 'per_session', 'Frecuencia con la que debe aparecer la ventana inicial en el index'),
 ('inicio_popup_nombre_canal', 'DanisA Gamer Store', 'Nombre visible del canal en la ventana inicial'),
 ('inicio_popup_video_url', '', 'Enlace de YouTube usado en la ventana inicial con video'),
+('inicio_popup_galeria_imagenes', '[]', 'Listado JSON de imágenes usadas por la ventana inicial de galería'),
 ('ff_bank_api_base_url', 'https://pagonorte.net', 'Enlace base de la API del banco para consultar movimientos'),
 ('ff_bank_dias_disponibles', '', 'Dias disponibles reportados por la API del banco al consultar movimientos'),
 ('binance_pay_merchant_no', '', 'Merchant No configurado para Binance Pay via CoinPal.'),
@@ -175,3 +178,10 @@ SET mostrar_a_cliente = 1,
     precio = COALESCE(precio, 60),
     comision_venta = COALESCE(comision_venta, 0)
 WHERE clave = 'api_discord';
+
+UPDATE configuracion_general
+SET mostrar_a_cliente = 1,
+    funcion_venta = 'Ventana Inicial Galería',
+    descripcion_venta = 'Muestra una ventana inicial tipo galería con imágenes promocionales, botón al canal de WhatsApp y cierre controlado al entrar al index.',
+    precio = 15
+WHERE clave = 'inicio_popup_galeria';

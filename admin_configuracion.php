@@ -217,15 +217,35 @@ if ($paymentDifferenceConfigEnabled) {
   }
 }
 $themeFieldGroups['Textos y estados'] = ['theme_text', 'theme_text_muted', 'theme_price_text', 'theme_price_muted', 'theme_warning', 'theme_danger'];
-$startupPopupMode = 'none';
-if (($cfg['inicio_popup_video_activo'] ?? '0') === '1') {
-  $startupPopupMode = 'video';
-} elseif (($cfg['inicio_popup_activo'] ?? '1') === '1') {
-  $startupPopupMode = 'normal';
+$startupPopupNormalEnabled = ($cfg['inicio_popup_activo'] ?? '1') === '1';
+$startupPopupVideoEnabled = ($cfg['inicio_popup_video_activo'] ?? '0') === '1';
+$startupPopupGalleryEnabled = ($cfg['inicio_popup_galeria'] ?? '0') === '1';
+$startupPopupMode = trim((string) ($cfg['inicio_popup_modo'] ?? ''));
+$startupPopupAvailableModes = ['none' => 'No mostrar ninguna ventana inicial'];
+if ($startupPopupNormalEnabled) {
+  $startupPopupAvailableModes['normal'] = 'Mostrar ventana inicial normal';
+}
+if ($startupPopupVideoEnabled) {
+  $startupPopupAvailableModes['video'] = 'Mostrar ventana inicial con video';
+}
+if ($startupPopupGalleryEnabled) {
+  $startupPopupAvailableModes['gallery'] = 'Mostrar ventana inicial de galería';
+}
+if (!array_key_exists($startupPopupMode, $startupPopupAvailableModes)) {
+  if ($startupPopupVideoEnabled) {
+    $startupPopupMode = 'video';
+  } elseif ($startupPopupGalleryEnabled) {
+    $startupPopupMode = 'gallery';
+  } elseif ($startupPopupNormalEnabled) {
+    $startupPopupMode = 'normal';
+  } else {
+    $startupPopupMode = 'none';
+  }
 }
 $startupPopupVideoUrl = store_config_normalize_youtube_url((string) ($cfg['inicio_popup_video_url'] ?? ''));
 $startupPopupChannelUrl = store_config_normalize_social_url((string) ($cfg['whatsapp_channel'] ?? ''));
 $startupPopupChannelReady = store_config_is_valid_social_url($startupPopupChannelUrl);
+$startupPopupGalleryImages = store_config_startup_popup_gallery_images((string) ($cfg['inicio_popup_galeria_imagenes'] ?? '[]'));
 $googleCallbackUrl = google_oauth_callback_url();
 $apiDiscordPriceCommands = api_discord_price_commands();
 $apiDiscordSelectedProbeKey = trim((string) ($cfg['api_discord_probe_command'] ?? 'mobile_legends_price'));
@@ -612,6 +632,121 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
     font-weight: 700;
     color: #9be7ff;
     background: rgba(34, 211, 238, 0.08);
+  }
+  .startup-popup-gallery-manager {
+    display: grid;
+    gap: 0.85rem;
+  }
+  .startup-popup-gallery-upload-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+  }
+  .startup-popup-gallery-upload-btn {
+    min-width: min(100%, 240px);
+    padding-inline: 1.25rem;
+  }
+  .startup-popup-gallery-status {
+    color: rgba(216, 251, 255, 0.78);
+    font-size: 0.82rem;
+    line-height: 1.4;
+  }
+  .startup-popup-gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 0.9rem;
+  }
+  .startup-popup-gallery-card {
+    position: relative;
+    border-radius: 18px;
+    border: 1px solid rgba(34, 211, 238, 0.24);
+    background: rgba(15, 23, 42, 0.52);
+    padding: 0.55rem;
+    box-shadow: 0 0 18px rgba(34, 211, 238, 0.08);
+  }
+  .startup-popup-gallery-thumb {
+    position: relative;
+    aspect-ratio: 4 / 5;
+    overflow: hidden;
+    border-radius: 14px;
+    background: rgba(15, 23, 42, 0.7);
+  }
+  .startup-popup-gallery-thumb img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+  }
+  .startup-popup-gallery-delete {
+    position: absolute;
+    top: 0.55rem;
+    right: 0.55rem;
+    z-index: 2;
+    width: 32px;
+    height: 32px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(185, 28, 28, 0.92);
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1;
+    box-shadow: 0 10px 18px rgba(127, 29, 29, 0.24);
+  }
+  .startup-popup-gallery-delete:hover {
+    background: rgba(220, 38, 38, 0.96);
+    color: #fff;
+  }
+  .startup-popup-gallery-meta {
+    display: grid;
+    gap: 0.45rem;
+    margin-top: 0.6rem;
+  }
+  .startup-popup-gallery-name {
+    color: #d8fbff;
+    font-size: 0.76rem;
+    line-height: 1.3;
+    word-break: break-word;
+    min-height: 2rem;
+  }
+  .startup-popup-gallery-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .startup-popup-gallery-order {
+    color: #9be7ff;
+    font-size: 0.74rem;
+    font-weight: 700;
+  }
+  .startup-popup-gallery-move-group {
+    display: inline-flex;
+    gap: 0.35rem;
+  }
+  .startup-popup-gallery-move {
+    min-width: 34px;
+    height: 34px;
+    border: 1px solid rgba(34, 211, 238, 0.28);
+    border-radius: 10px;
+    background: rgba(15, 23, 42, 0.8);
+    color: #d8fbff;
+    font-size: 0.92rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .startup-popup-gallery-move:hover {
+    background: rgba(34, 211, 238, 0.12);
+    color: #ffffff;
+  }
+  .startup-popup-gallery-empty {
+    border: 1px dashed rgba(34, 211, 238, 0.24);
+    border-radius: 18px;
+    padding: 1rem;
+    color: rgba(216, 251, 255, 0.68);
+    text-align: center;
+    font-size: 0.82rem;
   }
   .theme-swatch-card {
     height: 100%;
@@ -1801,7 +1936,7 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
               }());
             </script>
           <?php elseif ($activeTab === 'ventana-inicial'): ?>
-            <form method="post">
+            <form method="post" enctype="multipart/form-data">
               <input type="hidden" name="config_section" value="ventana-inicial">
               <div class="config-section-note mb-4">Controla la ventana emergente inicial del index. Puedes mostrar la ventana normal, la ventana con video o ninguna, pero nunca ambas al mismo tiempo. El botón principal usa automáticamente el enlace configurado en Redes Sociales, en el campo Whatsapp Channel.</div>
               <div class="row g-4 align-items-start">
@@ -1816,19 +1951,32 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
                             <span class="form-check-label fw-semibold">No mostrar ninguna ventana inicial</span>
                           </div>
                         </label>
-                        <label class="rounded-4 border p-3" style="border-color: rgba(34, 211, 238, 0.24); background: rgba(15, 23, 42, 0.48);">
-                          <div class="form-check mb-0">
-                            <input class="form-check-input" type="radio" name="inicio_popup_modo" id="inicioPopupModeNormal" value="normal" <?= $startupPopupMode === 'normal' ? 'checked' : '' ?>>
-                            <span class="form-check-label fw-semibold">Mostrar ventana inicial normal</span>
-                          </div>
-                        </label>
-                        <label class="rounded-4 border p-3" style="border-color: rgba(34, 211, 238, 0.24); background: rgba(15, 23, 42, 0.48);">
-                          <div class="form-check mb-0">
-                            <input class="form-check-input" type="radio" name="inicio_popup_modo" id="inicioPopupModeVideo" value="video" <?= $startupPopupMode === 'video' ? 'checked' : '' ?>>
-                            <span class="form-check-label fw-semibold">Mostrar ventana inicial con video</span>
-                          </div>
-                          <div class="form-text mt-2">Esta opción solo puede activarse cuando el enlace de YouTube esté completo y válido.</div>
-                        </label>
+                        <?php if ($startupPopupNormalEnabled): ?>
+                          <label class="rounded-4 border p-3" style="border-color: rgba(34, 211, 238, 0.24); background: rgba(15, 23, 42, 0.48);">
+                            <div class="form-check mb-0">
+                              <input class="form-check-input" type="radio" name="inicio_popup_modo" id="inicioPopupModeNormal" value="normal" <?= $startupPopupMode === 'normal' ? 'checked' : '' ?>>
+                              <span class="form-check-label fw-semibold">Mostrar ventana inicial normal</span>
+                            </div>
+                          </label>
+                        <?php endif; ?>
+                        <?php if ($startupPopupVideoEnabled): ?>
+                          <label class="rounded-4 border p-3" style="border-color: rgba(34, 211, 238, 0.24); background: rgba(15, 23, 42, 0.48);">
+                            <div class="form-check mb-0">
+                              <input class="form-check-input" type="radio" name="inicio_popup_modo" id="inicioPopupModeVideo" value="video" <?= $startupPopupMode === 'video' ? 'checked' : '' ?>>
+                              <span class="form-check-label fw-semibold">Mostrar ventana inicial con video</span>
+                            </div>
+                            <div class="form-text mt-2">Esta opción solo puede activarse cuando el enlace de YouTube esté completo y válido.</div>
+                          </label>
+                        <?php endif; ?>
+                        <?php if ($startupPopupGalleryEnabled): ?>
+                          <label class="rounded-4 border p-3" style="border-color: rgba(34, 211, 238, 0.24); background: rgba(15, 23, 42, 0.48);">
+                            <div class="form-check mb-0">
+                              <input class="form-check-input" type="radio" name="inicio_popup_modo" id="inicioPopupModeGallery" value="gallery" <?= $startupPopupMode === 'gallery' ? 'checked' : '' ?>>
+                              <span class="form-check-label fw-semibold">Mostrar ventana inicial de galería</span>
+                            </div>
+                            <div class="form-text mt-2">Usa una o varias imágenes en formato cover dentro de una ventana fija con controles debajo.</div>
+                          </label>
+                        <?php endif; ?>
                       </div>
                     </div>
                     <div class="mb-4">
@@ -1836,11 +1984,50 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
                       <input type="text" name="inicio_popup_nombre_canal" value="<?= htmlspecialchars($cfg['inicio_popup_nombre_canal'] ?? 'DanisA Gamer Store', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="DanisA Gamer Store">
                       <div class="form-text">Este nombre se usa en la ventana inicial normal.</div>
                     </div>
-                    <div class="mb-4">
-                      <label class="form-label">Enlace de YouTube para la ventana con video</label>
-                      <input type="url" name="inicio_popup_video_url" id="inicioPopupVideoUrl" value="<?= htmlspecialchars($startupPopupVideoUrl, ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="https://www.youtube.com/shorts/...">
-                      <div class="form-text">Acepta enlaces de YouTube Shorts, watch, embed o youtu.be. Si este campo está vacío, la ventana con video no puede seleccionarse.</div>
-                    </div>
+                    <?php if ($startupPopupVideoEnabled): ?>
+                      <div class="mb-4">
+                        <label class="form-label">Enlace de YouTube para la ventana con video</label>
+                        <input type="url" name="inicio_popup_video_url" id="inicioPopupVideoUrl" value="<?= htmlspecialchars($startupPopupVideoUrl, ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="https://www.youtube.com/shorts/...">
+                        <div class="form-text">Acepta enlaces de YouTube Shorts, watch, embed o youtu.be. Si este campo está vacío, la ventana con video no puede seleccionarse.</div>
+                      </div>
+                    <?php endif; ?>
+                    <?php if ($startupPopupGalleryEnabled): ?>
+                      <div class="mb-4">
+                        <label class="form-label">Imágenes de la galería</label>
+                        <div class="startup-popup-gallery-manager" data-startup-popup-gallery-manager>
+                          <input type="file" name="inicio_popup_galeria_imagenes[]" id="startupPopupGalleryInput" class="form-control" accept="image/jpeg,image/png,image/webp,image/gif" multiple>
+                          <div class="startup-popup-gallery-upload-row">
+                            <button type="button" class="neon-btn startup-popup-gallery-upload-btn" id="startupPopupGalleryUploadButton">Subir imágenes seleccionadas</button>
+                            <div class="startup-popup-gallery-status" id="startupPopupGalleryStatus">Puedes seleccionar imágenes de distintas carpetas en tandas separadas y subirlas una a una sin perder las que ya estén cargadas.</div>
+                          </div>
+                          <div>
+                            <label class="form-label d-block">Imágenes actuales</label>
+                            <div class="startup-popup-gallery-grid" id="startupPopupGalleryGrid" data-endpoint="<?= htmlspecialchars(app_path('/admin/configuracion?tab=ventana-inicial'), ENT_QUOTES, 'UTF-8') ?>" data-count-target="startupPopupGallerySummaryCount">
+                              <?php foreach ($startupPopupGalleryImages as $galleryIndex => $galleryImage): ?>
+                                <div class="startup-popup-gallery-card" data-gallery-path="<?= htmlspecialchars($galleryImage, ENT_QUOTES, 'UTF-8') ?>">
+                                  <button type="button" class="startup-popup-gallery-delete" data-gallery-action="delete" data-gallery-path="<?= htmlspecialchars($galleryImage, ENT_QUOTES, 'UTF-8') ?>" aria-label="Eliminar imagen">X</button>
+                                  <div class="startup-popup-gallery-thumb">
+                                    <img src="<?= htmlspecialchars($galleryImage, ENT_QUOTES, 'UTF-8') ?>" alt="Imagen <?= $galleryIndex + 1 ?> de la galería inicial">
+                                  </div>
+                                  <div class="startup-popup-gallery-meta">
+                                    <div class="startup-popup-gallery-name"><?= htmlspecialchars(basename($galleryImage), ENT_QUOTES, 'UTF-8') ?></div>
+                                    <div class="startup-popup-gallery-controls">
+                                      <span class="startup-popup-gallery-order">Orden <?= $galleryIndex + 1 ?></span>
+                                      <div class="startup-popup-gallery-move-group">
+                                        <button type="button" class="startup-popup-gallery-move" data-gallery-action="move" data-gallery-direction="left" data-gallery-path="<?= htmlspecialchars($galleryImage, ENT_QUOTES, 'UTF-8') ?>" aria-label="Mover a la izquierda">←</button>
+                                        <button type="button" class="startup-popup-gallery-move" data-gallery-action="move" data-gallery-direction="right" data-gallery-path="<?= htmlspecialchars($galleryImage, ENT_QUOTES, 'UTF-8') ?>" aria-label="Mover a la derecha">→</button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              <?php endforeach; ?>
+                            </div>
+                            <div class="startup-popup-gallery-empty<?= !empty($startupPopupGalleryImages) ? ' d-none' : '' ?>" id="startupPopupGalleryEmpty">Aún no hay imágenes cargadas en la galería de la ventana inicial.</div>
+                          </div>
+                        </div>
+                        <div class="form-text">La ventana usa tamaño fijo y cada imagen se adapta con cover para llenar todo el espacio. Usa el botón Subir para agregar nuevas tandas desde distintas carpetas.</div>
+                      </div>
+                    <?php endif; ?>
                     <div>
                       <label class="form-label">Frecuencia de aparición</label>
                       <select name="inicio_popup_frecuencia" class="form-select">
@@ -1854,10 +2041,16 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
                 <div class="col-lg-5">
                   <div class="config-section-note h-100">
                     <div class="fw-semibold text-info mb-2">Resumen</div>
-                    <div class="small">Modo seleccionado: <?php if ($startupPopupMode === 'normal'): ?>Ventana normal<?php elseif ($startupPopupMode === 'video'): ?>Ventana con video<?php else: ?>Ninguna<?php endif; ?>.</div>
+                    <div class="small">Modo seleccionado: <?php if ($startupPopupMode === 'normal'): ?>Ventana normal<?php elseif ($startupPopupMode === 'video'): ?>Ventana con video<?php elseif ($startupPopupMode === 'gallery'): ?>Ventana de galería<?php else: ?>Ninguna<?php endif; ?>.</div>
+                    <div class="small mt-2">Modos disponibles: <?= htmlspecialchars(implode(', ', array_values($startupPopupAvailableModes)), ENT_QUOTES, 'UTF-8') ?>.</div>
                     <div class="small mt-2">Canal mostrado: <?= htmlspecialchars($cfg['inicio_popup_nombre_canal'] ?? 'DanisA Gamer Store', ENT_QUOTES, 'UTF-8') ?>.</div>
                     <div class="small mt-2">Enlace del canal: <?= $startupPopupChannelReady ? htmlspecialchars($startupPopupChannelUrl, ENT_QUOTES, 'UTF-8') : 'No configurado aún en Redes Sociales' ?></div>
-                    <div class="small mt-2">Video de YouTube: <?= $startupPopupVideoUrl !== '' ? htmlspecialchars($startupPopupVideoUrl, ENT_QUOTES, 'UTF-8') : 'No configurado' ?></div>
+                    <?php if ($startupPopupVideoEnabled): ?>
+                      <div class="small mt-2">Video de YouTube: <?= $startupPopupVideoUrl !== '' ? htmlspecialchars($startupPopupVideoUrl, ENT_QUOTES, 'UTF-8') : 'No configurado' ?></div>
+                    <?php endif; ?>
+                    <?php if ($startupPopupGalleryEnabled): ?>
+                      <div class="small mt-2">Imágenes en galería: <span id="startupPopupGallerySummaryCount"><?= count($startupPopupGalleryImages) ?></span></div>
+                    <?php endif; ?>
                   </div>
                 </div>
               </div>
@@ -2306,6 +2499,162 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
 
     videoUrlInput.addEventListener('input', syncVideoModeAvailability);
     syncVideoModeAvailability();
+  })();
+
+  (() => {
+    const form = document.querySelector('form[enctype="multipart/form-data"] input[name="config_section"][value="ventana-inicial"]')?.form;
+    const fileInput = document.getElementById('startupPopupGalleryInput');
+    const uploadButton = document.getElementById('startupPopupGalleryUploadButton');
+    const status = document.getElementById('startupPopupGalleryStatus');
+    const grid = document.getElementById('startupPopupGalleryGrid');
+    const emptyState = document.getElementById('startupPopupGalleryEmpty');
+    const countTarget = document.getElementById(grid?.dataset.countTarget || '');
+    if (!form || !fileInput || !uploadButton || !grid || !emptyState || !status) {
+      return;
+    }
+
+    const endpoint = grid.dataset.endpoint || window.location.href;
+    let busy = false;
+
+    const setBusy = (nextBusy) => {
+      busy = nextBusy;
+      uploadButton.disabled = nextBusy;
+      grid.querySelectorAll('button').forEach((button) => {
+        button.disabled = nextBusy;
+      });
+    };
+
+    const setStatus = (message, isError = false) => {
+      status.textContent = message;
+      status.style.color = isError ? '#fda4af' : 'rgba(216, 251, 255, 0.78)';
+    };
+
+    const renderItems = (items) => {
+      grid.innerHTML = '';
+      if (!Array.isArray(items) || items.length === 0) {
+        emptyState.classList.remove('d-none');
+        if (countTarget) {
+          countTarget.textContent = '0';
+        }
+        return;
+      }
+
+      emptyState.classList.add('d-none');
+      items.forEach((item) => {
+        const card = document.createElement('div');
+        card.className = 'startup-popup-gallery-card';
+        card.dataset.galleryPath = item.path || '';
+        card.innerHTML = `
+          <button type="button" class="startup-popup-gallery-delete" data-gallery-action="delete" data-gallery-path="${item.path || ''}" aria-label="Eliminar imagen">X</button>
+          <div class="startup-popup-gallery-thumb">
+            <img src="${item.url || ''}" alt="Imagen ${item.order || 0} de la galería inicial">
+          </div>
+          <div class="startup-popup-gallery-meta">
+            <div class="startup-popup-gallery-name">${item.name || ''}</div>
+            <div class="startup-popup-gallery-controls">
+              <span class="startup-popup-gallery-order">Orden ${item.order || 0}</span>
+              <div class="startup-popup-gallery-move-group">
+                <button type="button" class="startup-popup-gallery-move" data-gallery-action="move" data-gallery-direction="left" data-gallery-path="${item.path || ''}" aria-label="Mover a la izquierda">←</button>
+                <button type="button" class="startup-popup-gallery-move" data-gallery-action="move" data-gallery-direction="right" data-gallery-path="${item.path || ''}" aria-label="Mover a la derecha">→</button>
+              </div>
+            </div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+
+      if (countTarget) {
+        countTarget.textContent = String(items.length);
+      }
+    };
+
+    const sendGalleryRequest = async (formData) => {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json, text/plain, */*'
+        },
+        body: formData
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload || payload.ok !== true) {
+        throw new Error(payload && payload.message ? payload.message : 'No se pudo actualizar la galería de la ventana inicial.');
+      }
+      return payload;
+    };
+
+    uploadButton.addEventListener('click', async () => {
+      if (busy) {
+        return;
+      }
+      if (!fileInput.files || fileInput.files.length === 0) {
+        setStatus('Selecciona al menos una imagen antes de subirla.', true);
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('config_section', 'ventana-inicial');
+      formData.append('startup_popup_gallery_action', 'upload');
+      formData.append('ajax', '1');
+      Array.from(fileInput.files).forEach((file) => {
+        formData.append('inicio_popup_galeria_imagenes[]', file);
+      });
+
+      setBusy(true);
+      setStatus('Subiendo imágenes seleccionadas...');
+      try {
+        const payload = await sendGalleryRequest(formData);
+        renderItems(payload.items || []);
+        fileInput.value = '';
+        setStatus('Imágenes subidas correctamente. Puedes seleccionar otra carpeta y volver a subir.');
+      } catch (error) {
+        setStatus(error.message, true);
+      } finally {
+        setBusy(false);
+      }
+    });
+
+    grid.addEventListener('click', async (event) => {
+      const button = event.target.closest('button[data-gallery-action]');
+      if (!button || busy) {
+        return;
+      }
+
+      const action = button.dataset.galleryAction || '';
+      const path = button.dataset.galleryPath || '';
+      if (!action || !path) {
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('config_section', 'ventana-inicial');
+      formData.append('startup_popup_gallery_action', action);
+      formData.append('startup_popup_gallery_image', path);
+      formData.append('ajax', '1');
+      if (action === 'move') {
+        formData.append('startup_popup_gallery_direction', button.dataset.galleryDirection || '');
+      }
+
+      setBusy(true);
+      setStatus(action === 'delete' ? 'Eliminando imagen...' : 'Reordenando galería...');
+      try {
+        const payload = await sendGalleryRequest(formData);
+        renderItems(payload.items || []);
+        setStatus(action === 'delete' ? 'Imagen eliminada de la galería.' : 'Orden de la galería actualizado.');
+      } catch (error) {
+        setStatus(error.message, true);
+      } finally {
+        setBusy(false);
+      }
+    });
+
+    form.addEventListener('submit', (event) => {
+      if (fileInput.files && fileInput.files.length > 0) {
+        event.preventDefault();
+        setStatus('Tienes imágenes seleccionadas sin subir. Usa primero el botón Subir imágenes seleccionadas.', true);
+      }
+    });
   })();
 
   (() => {
