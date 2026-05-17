@@ -284,7 +284,7 @@ include __DIR__ . "/includes/header.php";
 <section class="container mt-4">
   <div class="row mb-2 align-items-center">
     <div class="col">
-      <h3 class="h5 fw-bold text-info">Paquetes disponibles</h3>
+      <h2 class="page-step-title text-info mb-0">PASO 1: Selecciona el paquete</h2>
     </div>
     <div class="col-auto">
       <span class="text-uppercase text-secondary small">elige uno</span>
@@ -493,12 +493,6 @@ include __DIR__ . "/includes/header.php";
 
 
   <div class="container mb-4">
-    <div class="row mb-2">
-      <div class="col">
-        <h3 class="h5 fw-bold text-info">Resumen de compra</h3>
-        <span class="text-uppercase text-secondary small">verifica</span>
-      </div>
-    </div>
     <div id="purchase-summary-layout" class="purchase-summary-layout<?= $packageQuantityPurchaseEnabled ? '' : ' purchase-summary-layout-single' ?>">
       <?php if ($packageQuantityPurchaseEnabled): ?>
       <div class="purchase-summary-column purchase-summary-column-quantity">
@@ -533,13 +527,12 @@ include __DIR__ . "/includes/header.php";
 </section>
 
 
+<section class="container mt-4 mb-3">
+  <h2 class="page-step-title text-info mb-0">PASO 2: Coloca tu información de Jugador</h2>
+</section>
+
+
 <section class="container mt-5 mb-5 p-4 bg-dark bg-opacity-75 rounded-4 shadow">
-  <div class="row mb-2 align-items-center">
-    <div class="col">
-      <h3 class="h5 fw-bold text-info">Información de pedido</h3>
-      <span class="text-uppercase text-secondary small">seguro</span>
-    </div>
-  </div>
   <form class="row g-3" id="order-form">
     <div class="col-12">
       <div class="row g-3" id="player-fields-row">
@@ -581,6 +574,11 @@ include __DIR__ . "/includes/header.php";
       <?php endif; ?>
     </div>
   </form>
+</section>
+
+<section class="container mt-3 mb-5">
+  <h2 class="page-step-title text-info mb-0">PASO 3: Procede a pagar</h2>
+</section>
 
 
   <?php if (!empty($gameEntryWindowPayload['enabled'])): ?>
@@ -2563,6 +2561,14 @@ include __DIR__ . "/includes/header.php";
     justify-content: center;
   }
 
+  .page-step-title {
+    font-size: clamp(1.7rem, 3.1vw, 2.35rem);
+    font-weight: 900;
+    letter-spacing: 0.02em;
+    line-height: 1.08;
+    text-shadow: 0 0 18px rgba(var(--theme-button-primary-rgb), 0.16);
+  }
+
   .purchase-summary-layout-single {
     grid-template-columns: 32rem;
   }
@@ -2866,6 +2872,10 @@ include __DIR__ . "/includes/header.php";
     .purchase-summary-layout {
       grid-template-columns: 1fr;
       justify-content: stretch;
+    }
+
+    .page-step-title {
+      font-size: clamp(1.35rem, 6vw, 1.8rem);
     }
 
     .purchase-quantity-panel {
