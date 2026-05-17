@@ -252,19 +252,24 @@ include __DIR__ . "/includes/header.php";
 ?>
 
 
-<section class="container mt-5 mb-4 p-4 bg-dark bg-opacity-75 rounded-4 shadow">
-  <div class="row align-items-center">
-    <div class="col-auto">
-      <div class="rounded-4 border border-info bg-dark position-relative overflow-hidden" style="width:64px; height:64px;">
-        <img src="<?= htmlspecialchars(app_path('/' . ltrim((string) ($game["imagen"] ?? ''), '/')), ENT_QUOTES, "UTF-8") ?>" alt="<?= htmlspecialchars($game["nombre"] ?? '', ENT_QUOTES, "UTF-8") ?>" class="w-100 h-100 object-fit-cover" />
-        <?php if (!empty($game['popular'])): ?>
-          <span title="Popular" class="position-absolute top-0 end-0 text-success fs-4" style="right:8px;top:8px;">★</span>
-        <?php endif; ?>
-      </div>
+<section class="container mt-5 mb-4">
+  <div class="game-hero-card shadow">
+    <div class="game-hero-media" aria-hidden="true">
+      <?php if (!empty($game['imagen'])): ?>
+        <img src="<?= htmlspecialchars(app_path('/' . ltrim((string) ($game["imagen"] ?? ''), '/')), ENT_QUOTES, "UTF-8") ?>" alt="<?= htmlspecialchars($game["nombre"] ?? '', ENT_QUOTES, "UTF-8") ?>" class="game-hero-image" />
+      <?php else: ?>
+        <div class="game-hero-fallback"></div>
+      <?php endif; ?>
     </div>
-    <div class="col">
-      <h2 class="h4 fw-bold mb-2 text-info"><?= htmlspecialchars($game["nombre"] ?? '', ENT_QUOTES, "UTF-8") ?></h2>
-      <div class="d-flex flex-wrap gap-2 text-secondary small">
+    <div class="game-hero-overlay"></div>
+    <?php if (!empty($game['popular'])): ?>
+      <span title="Popular" class="game-hero-popular">★ Popular</span>
+    <?php endif; ?>
+    <div class="game-hero-content">
+      <div class="game-hero-title-box">
+        <h1 class="game-hero-title"><?= htmlspecialchars($game["nombre"] ?? '', ENT_QUOTES, "UTF-8") ?></h1>
+      </div>
+      <div class="game-hero-features text-secondary small">
         <?php 
           $carRes = $mysqli->query("SELECT caracteristica FROM juego_caracteristicas WHERE juego_id=" . intval($game['id']));
           while ($row = $carRes->fetch_assoc()) {
@@ -1185,6 +1190,113 @@ include __DIR__ . "/includes/header.php";
     color: #f8fafc;
   }
 
+  .game-hero-card {
+    position: relative;
+    min-height: clamp(210px, 27vw, 300px);
+    border-radius: 1.75rem;
+    overflow: hidden;
+    border: 1px solid rgba(34, 211, 238, 0.42);
+    background: linear-gradient(135deg, rgba(8, 15, 28, 0.96), rgba(5, 10, 22, 0.92));
+    box-shadow: 0 28px 60px rgba(0, 0, 0, 0.36), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  }
+
+  .game-hero-media,
+  .game-hero-overlay,
+  .game-hero-fallback {
+    position: absolute;
+    inset: 0;
+  }
+
+  .game-hero-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scale(1.015);
+  }
+
+  .game-hero-fallback {
+    background: radial-gradient(circle at top, rgba(34, 211, 238, 0.2), transparent 45%), linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(8, 47, 73, 0.92));
+  }
+
+  .game-hero-overlay {
+    background:
+      linear-gradient(180deg, rgba(4, 9, 19, 0.12) 0%, rgba(4, 9, 19, 0.36) 46%, rgba(4, 9, 19, 0.82) 100%),
+      radial-gradient(circle at center, rgba(34, 211, 238, 0.14), transparent 56%);
+  }
+
+  .game-hero-content {
+    position: relative;
+    z-index: 2;
+    min-height: inherit;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 1rem;
+    padding: 3.1rem 1.4rem 1rem;
+    text-align: center;
+  }
+
+  .game-hero-title-box {
+    width: min(100%, 46rem);
+    padding: 1rem 1.4rem;
+    border-radius: 1.35rem;
+    border: 1px solid rgba(125, 211, 252, 0.44);
+    background: linear-gradient(180deg, rgba(11, 19, 37, 0.18), rgba(11, 19, 37, 0.3));
+    backdrop-filter: blur(9px);
+    box-shadow: 0 18px 38px rgba(0, 0, 0, 0.26), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  }
+
+  .game-hero-title {
+    margin: 0;
+    color: #ffffff;
+    font-size: clamp(1.5rem, 3.4vw, 2.65rem);
+    font-weight: 900;
+    line-height: 1.05;
+    letter-spacing: 0.08em;
+    text-shadow: 0 2px 0 rgba(4, 10, 24, 0.98), 0 0 12px rgba(34, 211, 238, 0.2), 0 10px 28px rgba(0, 0, 0, 0.55);
+    -webkit-text-stroke: 1px rgba(6, 16, 34, 0.92);
+  }
+
+  .game-hero-features {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.65rem;
+    width: min(calc(100% - 7rem), 34rem);
+  }
+
+  .game-hero-features .game-feature-badge {
+    border-color: rgba(34, 211, 238, 0.42);
+    background: rgba(8, 15, 28, 0.58);
+    color: #f8fdff;
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  }
+
+  .game-hero-popular {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.45rem 0.8rem;
+    border-radius: 999px;
+    border: 1px solid rgba(250, 204, 21, 0.42);
+    background: rgba(12, 18, 31, 0.72);
+    color: #fde047;
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+  }
+
   .game-feature-badge {
     display: inline-flex;
     align-items: center;
@@ -1231,6 +1343,43 @@ include __DIR__ . "/includes/header.php";
   .payment-summary-feature-icon svg {
     width: 100%;
     height: 100%;
+  }
+
+  @media (max-width: 575.98px) {
+    .game-hero-card {
+      min-height: 190px;
+      border-radius: 1.35rem;
+    }
+
+    .game-hero-content {
+      padding: 3.2rem 0.95rem 0.85rem;
+      gap: 0.8rem;
+    }
+
+    .game-hero-title-box {
+      padding: 0.85rem 1rem;
+      border-radius: 1rem;
+    }
+
+    .game-hero-title {
+      font-size: clamp(1.2rem, 6.1vw, 1.85rem);
+      letter-spacing: 0.05em;
+      -webkit-text-stroke: 0.8px rgba(6, 16, 34, 0.95);
+    }
+
+    .game-hero-features {
+      top: 0.8rem;
+      left: 0.8rem;
+      gap: 0.45rem;
+      width: min(calc(100% - 6.3rem), 17rem);
+    }
+
+    .game-hero-popular {
+      top: 0.8rem;
+      right: 0.8rem;
+      padding: 0.38rem 0.64rem;
+      font-size: 0.74rem;
+    }
   }
 
   @media (max-width: 480px) {
