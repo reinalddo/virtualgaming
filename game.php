@@ -499,39 +499,33 @@ include __DIR__ . "/includes/header.php";
         <span class="text-uppercase text-secondary small">verifica</span>
       </div>
     </div>
-    <div class="row g-3">
-      <div class="col-md-8">
-        <div class="card bg-dark border-info mb-2">
-          <div class="card-body">
-            <div id="purchase-summary-head" class="purchase-summary-head<?= $packageQuantityPurchaseEnabled ? '' : ' purchase-summary-head-single' ?>">
-              <div class="purchase-summary-pack-copy">
-                <p class="small text-secondary mb-1">Paquete seleccionado</p>
-                <p id="selected-pack" class="fw-bold text-white mb-0">Ninguno</p>
-              </div>
-              <?php if ($packageQuantityPurchaseEnabled): ?>
-              <div id="purchase-quantity-panel" class="purchase-quantity-panel">
-                <label for="order-quantity" class="purchase-quantity-label">Cantidad a comprar</label>
-                <div class="purchase-quantity-stepper">
-                  <button type="button" id="order-quantity-decrease" class="purchase-quantity-btn" aria-label="Disminuir cantidad" disabled>-</button>
-                  <input type="number" id="order-quantity" min="1" step="1" value="1" inputmode="numeric" class="purchase-quantity-input" disabled>
-                  <button type="button" id="order-quantity-increase" class="purchase-quantity-btn" aria-label="Aumentar cantidad" disabled>+</button>
-                </div>
-                <div id="order-quantity-help" class="purchase-quantity-help">Minimo 1 recarga.</div>
-              </div>
-              <?php endif; ?>
-            </div>
+    <div id="purchase-summary-layout" class="purchase-summary-layout<?= $packageQuantityPurchaseEnabled ? '' : ' purchase-summary-layout-single' ?>">
+      <?php if ($packageQuantityPurchaseEnabled): ?>
+      <div class="purchase-summary-column purchase-summary-column-quantity">
+        <div id="purchase-quantity-panel" class="purchase-quantity-panel">
+          <label for="order-quantity" class="purchase-quantity-label">Cantidad a comprar</label>
+          <div class="purchase-quantity-stepper">
+            <button type="button" id="order-quantity-decrease" class="purchase-quantity-btn" aria-label="Disminuir cantidad" disabled>-</button>
+            <input type="number" id="order-quantity" min="1" step="1" value="1" inputmode="numeric" class="purchase-quantity-input" disabled>
+            <button type="button" id="order-quantity-increase" class="purchase-quantity-btn" aria-label="Aumentar cantidad" disabled>+</button>
           </div>
+          <div id="order-quantity-help" class="purchase-quantity-help">Selecciona un paquete para indicar la cantidad.</div>
         </div>
       </div>
-      <div class="col-md-4">
-        <div class="card bg-dark border-info mb-2">
-          <div class="card-body">
-            <p class="small text-secondary mb-1">Total</p>
-            <p id="selected-price" class="fw-bold text-info fs-5"><?= ($moneda_actual['clave'] ?? 'Bs.') . ' ' . currency_format_amount(0, $moneda_actual) ?></p>
-            <p id="selected-price-detail" class="small text-secondary mb-0 d-none"></p>
-            <p id="selected-win-points-total" class="small fw-semibold text-warning mb-0 d-none"></p>
-            <div id="payment-difference-banner" class="d-none payment-difference-banner mt-3"></div>
+      <?php endif; ?>
+      <div class="purchase-summary-column purchase-summary-column-result">
+        <div class="purchase-summary-pack-copy purchase-summary-pack-card">
+          <div>
+            <p class="purchase-summary-card-label mb-1">Paquete seleccionado</p>
+            <p id="selected-pack" class="purchase-summary-pack-name mb-0">Debes seleccionar un paquete.</p>
           </div>
+          <div class="purchase-summary-total-block">
+            <p class="purchase-summary-card-label mb-1">Total</p>
+            <p id="selected-price" class="purchase-summary-total-value mb-0"><?= ($moneda_actual['clave'] ?? 'Bs.') . ' ' . currency_format_amount(0, $moneda_actual) ?></p>
+          </div>
+          <p id="selected-price-detail" class="small text-secondary mb-0 d-none"></p>
+          <p id="selected-win-points-total" class="small fw-semibold text-warning mb-0 d-none"></p>
+          <div id="payment-difference-banner" class="d-none payment-difference-banner mt-3"></div>
         </div>
       </div>
     </div>
@@ -2561,30 +2555,91 @@ include __DIR__ . "/includes/header.php";
     overflow: hidden;
   }
 
-  .purchase-summary-head {
+  .purchase-summary-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(15.5rem, 17rem);
+    grid-template-columns: 17rem 32rem;
     gap: 1rem;
-    align-items: start;
+    align-items: stretch;
+    justify-content: center;
+  }
+
+  .purchase-summary-layout-single {
+    grid-template-columns: 32rem;
+  }
+
+  .purchase-summary-column {
+    min-width: 0;
+  }
+
+  .purchase-summary-column-quantity {
+    width: 100%;
+  }
+
+  .purchase-summary-column-result {
+    min-width: 0;
+    width: 32rem;
   }
 
   .purchase-summary-pack-copy {
     min-width: 0;
   }
 
-  .purchase-summary-head-single {
-    grid-template-columns: minmax(0, 1fr);
+  .purchase-summary-pack-card {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem 1.15rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(var(--theme-button-primary-rgb), 0.65);
+    background:
+      radial-gradient(circle at top right, rgba(var(--theme-button-primary-rgb), 0.15), transparent 34%),
+      linear-gradient(135deg, rgba(var(--theme-bg-main-rgb), 0.92), rgba(var(--theme-button-surface-rgb), 0.82) 55%, rgba(var(--theme-bg-main-rgb), 0.98));
+    box-shadow: 0 0 0 1px rgba(var(--theme-button-primary-rgb), 0.14), 0 0 22px rgba(var(--theme-button-primary-rgb), 0.14), inset 0 0 18px rgba(255, 255, 255, 0.02);
+  }
+
+  .purchase-summary-card-label {
+    color: var(--theme-text-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .purchase-summary-pack-name {
+    color: #f8fafc;
+    font-size: clamp(1.05rem, 2.2vw, 1.35rem);
+    font-weight: 800;
+    line-height: 1.15;
+  }
+
+  .purchase-summary-total-block {
+    margin-top: auto;
+    padding-top: 0.85rem;
+    border-top: 1px solid rgba(var(--theme-button-primary-rgb), 0.24);
+  }
+
+  .purchase-summary-total-value {
+    color: var(--theme-price-text);
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    font-weight: 900;
+    line-height: 1;
+    text-shadow: 0 0 14px rgba(var(--theme-button-primary-rgb), 0.18);
   }
 
   .purchase-quantity-panel {
-    justify-self: end;
     width: 100%;
     max-width: 17rem;
+    height: 100%;
     padding: 0.9rem;
     border-radius: 1rem;
     border: 1px solid rgba(var(--theme-button-primary-rgb), 0.28);
     background: linear-gradient(180deg, rgba(var(--theme-button-surface-rgb), 0.82), rgba(var(--theme-bg-main-rgb), 0.94));
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
   }
 
   .purchase-quantity-label {
@@ -2664,6 +2719,7 @@ include __DIR__ . "/includes/header.php";
     margin-top: 0.55rem;
     color: var(--theme-text-muted);
     font-size: 0.82rem;
+    font-weight: 600;
     line-height: 1.35;
   }
 
@@ -2807,12 +2863,12 @@ include __DIR__ . "/includes/header.php";
   }
 
   @media (max-width: 575.98px) {
-    .purchase-summary-head {
+    .purchase-summary-layout {
       grid-template-columns: 1fr;
+      justify-content: stretch;
     }
 
     .purchase-quantity-panel {
-      justify-self: stretch;
       max-width: none;
       padding: 0.8rem;
     }
@@ -3143,7 +3199,7 @@ include __DIR__ . "/includes/header.php";
   const packCards2 = Array.from(document.querySelectorAll('.pack-card'));
   const packAccountPreviewButtons = Array.from(document.querySelectorAll('.pack-account-preview-btn'));
   const selectedPack = document.getElementById("selected-pack");
-  const purchaseSummaryHead = document.getElementById('purchase-summary-head');
+  const purchaseSummaryLayout = document.getElementById('purchase-summary-layout');
   const purchaseQuantityPanel = document.getElementById('purchase-quantity-panel');
   const orderQuantityDecreaseButton = document.getElementById('order-quantity-decrease');
   const orderQuantityIncreaseButton = document.getElementById('order-quantity-increase');
@@ -3290,6 +3346,23 @@ include __DIR__ . "/includes/header.php";
     return orderQuantityInput ? normalizeOrderQuantity(orderQuantityInput.value) : 1;
   }
 
+  function getOrderQuantityBreakdownText(pack, quantity) {
+    if (!pack) {
+      return 'Selecciona un paquete para indicar la cantidad.';
+    }
+
+    if (isAccountSalePack(pack)) {
+      return 'La compra de cuentas siempre es de 1 unidad.';
+    }
+
+    const safeQuantity = normalizeOrderQuantity(quantity);
+    const unitAmount = formatCurrencyAmount(Number(pack.priceValue || 0), Boolean(pack.showDecimals));
+    const currencyCode = String(pack.moneda || monedaActualClave || '').trim();
+    return currencyCode !== ''
+      ? `${safeQuantity} x ${unitAmount} ${currencyCode}`
+      : `${safeQuantity} x ${unitAmount}`;
+  }
+
   function syncOrderQuantityInput(nextValue = null) {
     const quantityEnabled = Boolean(activePack) && !isAccountSalePack(activePack);
     const resolvedValue = quantityEnabled
@@ -3306,16 +3379,14 @@ include __DIR__ . "/includes/header.php";
       orderQuantityIncreaseButton.disabled = !quantityEnabled;
     }
     if (orderQuantityHelp) {
-      orderQuantityHelp.textContent = activePack
-        ? (quantityEnabled ? 'Minimo 1 recarga.' : 'La compra de cuentas siempre es de 1 unidad.')
-        : 'Selecciona un paquete para indicar la cantidad.';
+      orderQuantityHelp.textContent = getOrderQuantityBreakdownText(activePack, resolvedValue);
     }
     if (purchaseQuantityPanel) {
       purchaseQuantityPanel.classList.toggle('d-none', Boolean(activePack) && isAccountSalePack(activePack));
     }
-    if (purchaseSummaryHead) {
-      purchaseSummaryHead.classList.toggle(
-        'purchase-summary-head-single',
+    if (purchaseSummaryLayout) {
+      purchaseSummaryLayout.classList.toggle(
+        'purchase-summary-layout-single',
         !purchaseQuantityPanel || (Boolean(activePack) && isAccountSalePack(activePack))
       );
     }
@@ -6662,7 +6733,7 @@ include __DIR__ . "/includes/header.php";
       }
     } else {
       selectedTotalValue = 0;
-      selectedPack.textContent = 'Ninguno';
+      selectedPack.textContent = 'Debes seleccionar un paquete.';
       syncOrderQuantityInput(1);
       updateSelectedPriceDisplay(null);
       if (selectedWinPointsTotal) {
