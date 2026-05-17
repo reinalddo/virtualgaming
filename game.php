@@ -552,10 +552,9 @@ include __DIR__ . "/includes/header.php";
       <input type="email" name="email" placeholder="tu@email.com" value="<?= htmlspecialchars($loggedUserEmail, ENT_QUOTES, 'UTF-8') ?>" autocomplete="email" class="form-control bg-dark text-info border-info" required />
     </div>
     <div class="col-md-6">
-      <label class="form-label text-info">Cupón</label>
-      <div class="input-group">
-        <input type="text" name="coupon" id="coupon-input" placeholder="Código opcional" pattern="[A-Za-z0-9]+" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" title="Solo letras y números, sin espacios ni caracteres especiales." class="form-control bg-dark text-info border-info" />
-        <button type="button" id="apply-coupon-btn" class="btn btn-info fw-bold">Activar Código</button>
+      <label class="form-label text-info">Información importante</label>
+      <div class="email-disclaimer-card">
+        El correo electronico ingresado sera utilizado exclusivamente, para el envio de su comprobante electronico
       </div>
     </div>
     <div class="col-12">
@@ -578,6 +577,15 @@ include __DIR__ . "/includes/header.php";
 
 <section class="container mt-3 mb-5">
   <h2 class="page-step-title text-info mb-0">PASO 3: Procede a pagar</h2>
+  <div class="payment-coupon-shell mt-4">
+    <div class="payment-coupon-panel">
+      <label class="form-label text-info mb-2">Cupón</label>
+      <div class="input-group">
+        <input type="text" name="coupon" id="coupon-input" placeholder="Código opcional" pattern="[A-Za-z0-9]+" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" title="Solo letras y números, sin espacios ni caracteres especiales." class="form-control bg-dark text-info border-info" />
+        <button type="button" id="apply-coupon-btn" class="btn btn-info fw-bold">Activar Código</button>
+      </div>
+    </div>
+  </div>
 </section>
 
 
@@ -2573,6 +2581,43 @@ include __DIR__ . "/includes/header.php";
     grid-template-columns: 32rem;
   }
 
+  .email-disclaimer-card {
+    min-height: 100%;
+    padding: 0.95rem 1rem;
+    border-radius: 0.95rem;
+    border: 1px solid rgba(var(--theme-button-primary-rgb), 0.22);
+    background: linear-gradient(135deg, rgba(var(--theme-button-surface-rgb), 0.78), rgba(var(--theme-bg-main-rgb), 0.94));
+    color: #d6eef5;
+    font-size: 0.95rem;
+    line-height: 1.45;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  }
+
+  @media (min-width: 768px) {
+    .email-disclaimer-card {
+      min-height: calc(2.375rem + 2px);
+      padding: 0.55rem 0.9rem;
+      display: flex;
+      align-items: center;
+      font-size: 0.74rem;
+      line-height: 1.15;
+    }
+  }
+
+  .payment-coupon-shell {
+    display: flex;
+    justify-content: center;
+  }
+
+  .payment-coupon-panel {
+    width: min(100%, 38rem);
+    padding: 1rem 1.1rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(var(--theme-button-primary-rgb), 0.3);
+    background: linear-gradient(135deg, rgba(var(--theme-bg-main-rgb), 0.92), rgba(var(--theme-button-surface-rgb), 0.84) 58%, rgba(var(--theme-bg-main-rgb), 0.96));
+    box-shadow: 0 0 18px rgba(var(--theme-button-primary-rgb), 0.12), inset 0 0 0 1px rgba(255,255,255,0.03);
+  }
+
   .purchase-summary-column {
     min-width: 0;
   }
@@ -2872,6 +2917,11 @@ include __DIR__ . "/includes/header.php";
     .purchase-summary-layout {
       grid-template-columns: 1fr;
       justify-content: stretch;
+    }
+
+    .payment-coupon-panel {
+      width: 100%;
+      padding: 0.9rem 0.95rem;
     }
 
     .page-step-title {

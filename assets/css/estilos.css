@@ -576,6 +576,7 @@ body {
   background: linear-gradient(135deg, rgba(var(--theme-bg-main-rgb), 0.94), rgba(var(--theme-bg-alt-rgb), 0.92));
   box-shadow: 0 0 22px rgba(var(--theme-primary-rgb), 0.12), inset 0 0 0 1px rgba(var(--theme-secondary-rgb), 0.08);
   padding: 1rem 1.15rem;
+  text-align: center;
 }
 
 .social-footer-kicker {
@@ -590,6 +591,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 0.85rem;
+  justify-content: center;
 }
 
 .social-footer-link {
