@@ -1860,6 +1860,13 @@ function inline_embedded_images_for_html(string $html, array $embeddedImages): s
 
 function send_app_mail(string $to, string $subject, string $html, ?string $from = null, array $embeddedImages = []): void {
     global $mysqli;
+    $baseUrl = app_base_url();
+    $baseHost = strtolower(trim((string) parse_url($baseUrl, PHP_URL_HOST)));
+    if ($baseHost !== '' && !is_public_callback_host($baseHost)) {
+        error_log('TVG mail skipped on local/private host: ' . $subject);
+        return;
+    }
+
     $settings = isset($mysqli) && $mysqli instanceof mysqli
         ? load_mail_settings($mysqli)
         : [
@@ -1895,6 +1902,9 @@ function send_app_mail(string $to, string $subject, string $html, ?string $from 
         $mail->Password = $smtp_pass;
         $mail->SMTPSecure = $smtp_secure;
         $mail->Port = $smtp_port;
+        $mail->Timeout = 12;
+        $mail->Timelimit = 12;
+        $mail->SMTPKeepAlive = false;
         $mail->setFrom($fromAddr, $senderName);
         $mail->addAddress($to);
         foreach ($embeddedImages as $image) {
@@ -2100,6 +2110,9 @@ function app_base_url(): string {
 function is_public_callback_host(string $host): bool {
     $host = strtolower(trim($host, '[] '));
     if ($host === '' || $host === 'localhost' || $host === '::1') {
+        return false;
+    }
+    if (str_contains($host, '.') === false) {
         return false;
     }
     if (str_contains($host, '.local') || str_contains($host, '.test')) {
@@ -6992,11 +7005,8 @@ if ($action === 'create') {
         'coupon' => $cupon,
         'status' => 'No Verificado',
     ], '#34d399');
-    $brandingImages = email_branding_embedded_images();
-    send_app_mail($email, "Pedido creado #{$order_id} - no verificado", $customerHtml, null, $brandingImages);
-    if ($adminEmail !== null) {
-        send_app_mail($adminEmail, "Nuevo pedido #{$order_id}", $adminHtml, null, $brandingImages);
-    }
+    // These notifications are intentionally excluded from the synchronous checkout
+    // create flow so the payment window can open immediately after the order is stored.
 
     $createOrderPayload = [
         'ok' => true,

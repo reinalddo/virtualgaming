@@ -56,3 +56,7 @@
 2026-05-18 17:47:12 | code: CUPON01 | pack_price: 2520
 2026-05-18 17:47:35 | code: CUPON01 | pack_price: 2520
 2026-05-18 17:53:46 | code: CUPON01 | pack_price: 2520
+2026-05-18 19:00:34 | code: CUPON01 | pack_price: 2520
+2026-05-18 19:04:16 | code: CUPON01 | pack_price: 5040
+2026-05-18 19:04:30 | code: CUPON01 | pack_price: 5040
+2026-05-18 19:09:33 | code: CUPON01 | pack_price: 5040
