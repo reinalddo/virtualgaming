@@ -612,14 +612,6 @@ include __DIR__ . "/includes/header.php";
       </div>
     </div>
     <div class="col-12">
-      <button type="submit" id="buy-button" class="btn btn-success w-100 fw-bold text-uppercase" disabled>
-        Comprar Ahora
-      </button>
-      <?php if ($winPointsEnabled && $loggedUserId <= 0): ?>
-        <div id="win-points-guest-hint" class="win-points-guest-hint">
-          <?= htmlspecialchars($winPointsGuestMessage, ENT_QUOTES, 'UTF-8') ?>
-        </div>
-      <?php endif; ?>
     </div>
   </form>
 </section>
@@ -638,10 +630,37 @@ include __DIR__ . "/includes/header.php";
   <div class="payment-method-catalog-shell mt-4">
     <div class="payment-method-catalog-panel">
       <div class="payment-method-catalog-head">
-        <h3 class="payment-method-catalog-title mb-0">Métodos disponibles</h3>
+        <h3 class="payment-method-catalog-title mb-0">Métodos de pago disponibles</h3>
         <p id="payment-method-catalog-copy" class="payment-method-catalog-copy mb-0">Selecciona un paquete para mostrar los métodos activos.</p>
       </div>
       <div id="payment-method-catalog-grid" class="payment-method-catalog-grid"></div>
+    </div>
+  </div>
+  <div id="public-order-summary-shell" class="payment-order-summary-shell mt-4 d-none">
+    <div id="public-order-summary-coupon" class="payment-order-summary-coupon d-none">
+      <span class="payment-order-summary-coupon-badge">Cupón activo</span>
+      <strong id="public-order-summary-coupon-copy" class="payment-order-summary-coupon-copy"></strong>
+    </div>
+    <div id="public-order-summary-panel" class="payment-order-summary-panel">
+      <div class="payment-order-summary-head">
+        <div>
+          <h3 class="payment-order-summary-title mb-0">Resumen del Pedido</h3>
+        </div>
+        <div id="public-order-summary-method" class="payment-order-summary-method d-none"></div>
+      </div>
+      <div id="public-order-summary-rows" class="payment-order-summary-rows"></div>
+      <div class="payment-order-summary-total-wrap">
+        <span class="payment-order-summary-total-label">Total</span>
+        <strong id="public-order-summary-total" class="payment-order-summary-total-value">-</strong>
+      </div>
+      <button type="submit" id="buy-button" form="order-form" class="payment-order-summary-buy-btn" disabled>
+        Comprar Ahora
+      </button>
+      <?php if ($winPointsEnabled && $loggedUserId <= 0): ?>
+        <div id="win-points-guest-hint" class="win-points-guest-hint mt-3">
+          <?= htmlspecialchars($winPointsGuestMessage, ENT_QUOTES, 'UTF-8') ?>
+        </div>
+      <?php endif; ?>
     </div>
   </div>
 </section>
@@ -2861,6 +2880,202 @@ include __DIR__ . "/includes/header.php";
     font-size: 0.84rem;
   }
 
+  .payment-order-summary-shell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.8rem;
+  }
+
+  .payment-order-summary-coupon {
+    width: min(100%, 35rem);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.9rem;
+    padding: 0.8rem 1rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(52, 211, 153, 0.34);
+    background: linear-gradient(135deg, rgba(6, 78, 59, 0.94), rgba(6, 46, 32, 0.92) 55%, rgba(10, 24, 20, 0.98));
+    box-shadow: 0 0 22px rgba(16, 185, 129, 0.14), inset 0 0 0 1px rgba(255,255,255,0.04);
+  }
+
+  .payment-order-summary-coupon-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.36rem 0.68rem;
+    border-radius: 999px;
+    border: 1px solid rgba(167, 243, 208, 0.25);
+    background: rgba(5, 150, 105, 0.16);
+    color: #d1fae5;
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .payment-order-summary-coupon-copy {
+    color: #ecfdf5;
+    font-size: 0.9rem;
+    font-weight: 800;
+    line-height: 1.35;
+    text-align: right;
+  }
+
+  .payment-order-summary-panel {
+    width: min(100%, 35rem);
+    padding: 1.15rem 1.1rem 1.15rem;
+    border-radius: 1.15rem;
+    border: 1px solid rgba(34, 211, 238, 0.26);
+    background:
+      radial-gradient(circle at top center, rgba(34, 211, 238, 0.12), transparent 34%),
+      linear-gradient(180deg, rgba(6, 14, 26, 0.96), rgba(10, 20, 38, 0.94) 52%, rgba(8, 12, 22, 0.98));
+    box-shadow: 0 0 28px rgba(34, 211, 238, 0.12), inset 0 0 0 1px rgba(255,255,255,0.03);
+    opacity: 0;
+    transform: translateY(-18px) scale(0.985);
+    transition: opacity 0.28s ease, transform 0.32s ease, box-shadow 0.24s ease, border-color 0.24s ease;
+  }
+
+  .payment-order-summary-panel.is-active {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  .payment-order-summary-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.9rem;
+    margin-bottom: 1rem;
+  }
+
+  .payment-order-summary-eyebrow {
+    color: #7dd3fc;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .payment-order-summary-title {
+    color: #f8fafc;
+    font-size: clamp(1.15rem, 2vw, 1.45rem);
+    font-weight: 900;
+    letter-spacing: 0.02em;
+    text-shadow: 0 0 16px rgba(34, 211, 238, 0.12);
+  }
+
+  .payment-order-summary-method {
+    align-self: center;
+    padding: 0.45rem 0.8rem;
+    border-radius: 999px;
+    border: 1px solid rgba(34, 197, 94, 0.34);
+    background: linear-gradient(180deg, rgba(20, 83, 45, 0.28), rgba(6, 22, 14, 0.92));
+    color: #dcfce7;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    box-shadow: 0 0 14px rgba(34, 197, 94, 0.14);
+  }
+
+  .payment-order-summary-rows {
+    display: grid;
+    gap: 0.55rem;
+  }
+
+  .payment-order-summary-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.85rem;
+    align-items: center;
+    padding: 0.72rem 0.9rem;
+    border-radius: 0.9rem;
+    background: linear-gradient(180deg, rgba(13, 22, 38, 0.92), rgba(8, 13, 24, 0.96));
+    border: 1px solid rgba(59, 130, 246, 0.12);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+  }
+
+  .payment-order-summary-row-label {
+    color: #cbd5e1;
+    font-size: 0.86rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  .payment-order-summary-row-value {
+    color: #f8fafc;
+    font-size: 0.95rem;
+    font-weight: 900;
+    text-align: right;
+  }
+
+  .payment-order-summary-row-value.is-positive {
+    color: #4ade80;
+    text-shadow: 0 0 12px rgba(34, 197, 94, 0.16);
+  }
+
+  .payment-order-summary-total-wrap {
+    margin-top: 1rem;
+    padding: 1rem 1rem 0;
+    border-top: 1px solid rgba(34, 211, 238, 0.16);
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .payment-order-summary-total-label {
+    color: #cbd5e1;
+    font-size: 0.84rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .payment-order-summary-total-value {
+    color: #f8fafc;
+    font-size: clamp(1.45rem, 3.2vw, 2rem);
+    font-weight: 900;
+    line-height: 1;
+    text-align: right;
+    text-shadow: 0 0 18px rgba(34, 211, 238, 0.18);
+  }
+
+  .payment-order-summary-buy-btn {
+    width: 100%;
+    margin-top: 1rem;
+    min-height: 3.65rem;
+    border: 0;
+    border-radius: 0.95rem;
+    background: linear-gradient(135deg, rgba(30, 64, 175, 0.98), rgba(168, 85, 247, 0.98) 56%, rgba(236, 72, 153, 0.98));
+    color: #f8fafc;
+    font-size: 0.98rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    box-shadow: 0 14px 30px rgba(168, 85, 247, 0.24), 0 0 0 1px rgba(255,255,255,0.08), inset 0 1px 0 rgba(255,255,255,0.18);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease, opacity 0.18s ease;
+  }
+
+  .payment-order-summary-buy-btn:hover:not(:disabled),
+  .payment-order-summary-buy-btn:focus-visible:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 18px 34px rgba(168, 85, 247, 0.28), 0 0 22px rgba(236, 72, 153, 0.18);
+    filter: saturate(1.08);
+    outline: none;
+  }
+
+  .payment-order-summary-buy-btn:disabled {
+    opacity: 0.72;
+    cursor: not-allowed;
+    box-shadow: none;
+    filter: grayscale(0.08);
+  }
+
   .purchase-summary-column {
     min-width: 0;
   }
@@ -3174,6 +3389,38 @@ include __DIR__ . "/includes/header.php";
 
     .payment-method-catalog-grid {
       grid-template-columns: 1fr;
+    }
+
+    .payment-order-summary-panel {
+      padding: 1rem 0.9rem 1rem;
+    }
+
+    .payment-order-summary-coupon {
+      padding: 0.8rem 0.9rem;
+      display: grid;
+      justify-items: start;
+    }
+
+    .payment-order-summary-coupon-copy {
+      text-align: left;
+    }
+
+    .payment-order-summary-head {
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .payment-order-summary-method {
+      justify-self: start;
+    }
+
+    .payment-order-summary-total-wrap {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .payment-order-summary-total-value {
+      text-align: left;
     }
 
     .page-step-title {
@@ -3525,6 +3772,13 @@ include __DIR__ . "/includes/header.php";
   const selectedPriceDetail = document.getElementById('selected-price-detail');
   const selectedWinPointsTotal = document.getElementById('selected-win-points-total');
   const paymentDifferenceBanner = document.getElementById('payment-difference-banner');
+  const publicOrderSummaryShell = document.getElementById('public-order-summary-shell');
+  const publicOrderSummaryCoupon = document.getElementById('public-order-summary-coupon');
+  const publicOrderSummaryCouponCopy = document.getElementById('public-order-summary-coupon-copy');
+  const publicOrderSummaryPanel = document.getElementById('public-order-summary-panel');
+  const publicOrderSummaryMethod = document.getElementById('public-order-summary-method');
+  const publicOrderSummaryRows = document.getElementById('public-order-summary-rows');
+  const publicOrderSummaryTotal = document.getElementById('public-order-summary-total');
   const orderForm = document.getElementById("order-form");
   const orderEmailInput = orderForm ? orderForm.querySelector('input[name="email"]') : null;
   const buyButton = document.getElementById("buy-button");
@@ -3559,6 +3813,15 @@ include __DIR__ . "/includes/header.php";
     extraMessage: <?php echo json_encode($paymentSuccessExtraMessage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>
   };
   let paymentDifferenceCreditState = <?= json_encode($activePaymentDifferenceCredit, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+  let publicCheckoutSummaryTotalText = '';
+  let publicCheckoutSummaryAnimationKey = '';
+  let appliedCouponSummary = {
+    code: '',
+    discountAmount: 0,
+    originalAmount: 0,
+    discountType: '',
+    discountValue: 0,
+  };
   const paymentStatusModal = document.getElementById('payment-status-modal');
   const paymentStatusModalTitle = document.getElementById('payment-status-modal-title');
   const paymentStatusModalMessage = document.getElementById('payment-status-modal-message');
@@ -4675,6 +4938,151 @@ include __DIR__ . "/includes/header.php";
 
   function formatWinPointsAmount(points) {
     return `${Number(points || 0).toLocaleString('en-US')} ${winPointsState.name || 'Win Points'}`;
+  }
+
+  function restartPublicCheckoutSummaryAnimation(key) {
+    if (!publicOrderSummaryPanel) {
+      return;
+    }
+
+    if (publicCheckoutSummaryAnimationKey === key && publicOrderSummaryPanel.classList.contains('is-active')) {
+      return;
+    }
+
+    publicCheckoutSummaryAnimationKey = key;
+    publicOrderSummaryPanel.classList.remove('is-active');
+    void publicOrderSummaryPanel.offsetWidth;
+    requestAnimationFrame(() => {
+      publicOrderSummaryPanel.classList.add('is-active');
+    });
+  }
+
+  function clearAppliedCouponSummary() {
+    appliedCouponSummary = {
+      code: '',
+      discountAmount: 0,
+      originalAmount: 0,
+      discountType: '',
+      discountValue: 0,
+    };
+  }
+
+  function renderPublicOrderSummary(pack = activePack) {
+    if (!publicOrderSummaryShell || !publicOrderSummaryRows || !publicOrderSummaryTotal || !buyButton) {
+      return;
+    }
+
+    if (!pack) {
+      publicOrderSummaryShell.classList.add('d-none');
+      if (publicOrderSummaryPanel) {
+        publicOrderSummaryPanel.classList.remove('is-active');
+      }
+      if (publicOrderSummaryMethod) {
+        publicOrderSummaryMethod.textContent = '';
+        publicOrderSummaryMethod.classList.add('d-none');
+      }
+      if (publicOrderSummaryCoupon && publicOrderSummaryCouponCopy) {
+        publicOrderSummaryCoupon.classList.add('d-none');
+        publicOrderSummaryCouponCopy.textContent = '';
+      }
+      publicOrderSummaryRows.innerHTML = '';
+      publicOrderSummaryTotal.textContent = '-';
+      publicCheckoutSummaryTotalText = '';
+      return;
+    }
+
+    const selection = resolvePreferredCheckoutSelection(pack);
+    if (!selection.mode) {
+      publicOrderSummaryShell.classList.add('d-none');
+      if (publicOrderSummaryPanel) {
+        publicOrderSummaryPanel.classList.remove('is-active');
+      }
+      if (publicOrderSummaryCoupon && publicOrderSummaryCouponCopy) {
+        publicOrderSummaryCoupon.classList.add('d-none');
+        publicOrderSummaryCouponCopy.textContent = '';
+      }
+      publicCheckoutSummaryTotalText = '';
+      return;
+    }
+
+    const selectedMethod = selection.mode === 'money'
+      ? (selection.methods.find((method) => String(method.id) === String(selection.methodId || '')) || selection.methods[0] || null)
+      : null;
+    const pricing = resolvePaymentPricing(selection.mode, selectedMethod);
+    const rows = [];
+    const couponDiscountAmount = selection.mode === 'points'
+      ? 0
+      : normalizeCurrencyAmount(Number(appliedCouponSummary.discountAmount || 0), pricing.showDecimals);
+    const couponCode = String(appliedCouponSummary.code || '').trim();
+    const couponActive = couponApplied && couponCode !== '' && couponDiscountAmount > 0;
+    const summaryBaseAmount = couponActive
+      ? normalizeCurrencyAmount(pricing.baseAmount + couponDiscountAmount, pricing.showDecimals)
+      : pricing.baseAmount;
+    const couponDiscountText = formatPaymentDifferenceMoney(pricing.currencyCode, couponDiscountAmount, pricing.showDecimals);
+
+    if (selection.mode === 'points') {
+      if (pricing.baseAmount > 0) {
+        rows.push({ label: 'Canje requerido', value: pricing.baseText, positive: false });
+      }
+    } else {
+      if (summaryBaseAmount > 0) {
+        rows.push({ label: couponActive ? 'Subtotal original' : 'Subtotal', value: formatPaymentDifferenceMoney(pricing.currencyCode, summaryBaseAmount, pricing.showDecimals), positive: false });
+      }
+      if (couponActive) {
+        rows.push({ label: `Cupón ${couponCode}`, value: couponDiscountText, positive: true });
+      }
+      if (pricing.discountPercentage > 0) {
+        rows.push({ label: 'Descuento', value: formatDiscountPercentage(pricing.discountPercentage), positive: true });
+      }
+      if (pricing.discountAmount > 0) {
+        rows.push({ label: 'Tu ahorro', value: pricing.discountText, positive: true });
+      }
+    }
+
+    if (pricing.totalAmount <= 0) {
+      publicOrderSummaryShell.classList.add('d-none');
+      if (publicOrderSummaryPanel) {
+        publicOrderSummaryPanel.classList.remove('is-active');
+      }
+      if (publicOrderSummaryCoupon && publicOrderSummaryCouponCopy) {
+        publicOrderSummaryCoupon.classList.add('d-none');
+        publicOrderSummaryCouponCopy.textContent = '';
+      }
+      publicCheckoutSummaryTotalText = '';
+      return;
+    }
+
+    publicOrderSummaryRows.innerHTML = rows.map((row) => `
+      <div class="payment-order-summary-row">
+        <span class="payment-order-summary-row-label">${escapePaymentHtml(row.label)}</span>
+        <strong class="payment-order-summary-row-value${row.positive ? ' is-positive' : ''}">${escapePaymentHtml(row.value)}</strong>
+      </div>`).join('');
+
+    const methodLabel = selection.mode === 'points'
+      ? String(winPointsState.name || 'Win Points')
+      : (selection.mode === 'binance'
+        ? String(binancePayButtonLabel || 'Binance Pay')
+        : String(selectedMethod && selectedMethod.nombre ? selectedMethod.nombre : 'Método de pago'));
+
+    if (publicOrderSummaryMethod) {
+      publicOrderSummaryMethod.textContent = methodLabel;
+      publicOrderSummaryMethod.classList.remove('d-none');
+    }
+
+    if (publicOrderSummaryCoupon && publicOrderSummaryCouponCopy) {
+      if (couponActive) {
+        publicOrderSummaryCouponCopy.textContent = `${couponCode} aplicado. Ahorras ${couponDiscountText}`;
+        publicOrderSummaryCoupon.classList.remove('d-none');
+      } else {
+        publicOrderSummaryCoupon.classList.add('d-none');
+        publicOrderSummaryCouponCopy.textContent = '';
+      }
+    }
+
+    publicCheckoutSummaryTotalText = pricing.totalText;
+    publicOrderSummaryTotal.textContent = pricing.totalText;
+    publicOrderSummaryShell.classList.remove('d-none');
+    restartPublicCheckoutSummaryAnimation(`${selection.mode}:${selection.methodId || methodLabel}:${pricing.totalText}:${couponCode}:${couponDiscountText}`);
   }
 
   function formatWinPointsExpirationText(summary, includeDate = false) {
@@ -7315,7 +7723,9 @@ include __DIR__ . "/includes/header.php";
     } else if (blockedByGameEntryWindow) {
       buyButton.textContent = defaultBuyButtonLabel;
     } else {
-      buyButton.textContent = needsPlayerVerification ? verifyUserBuyButtonLabel : defaultBuyButtonLabel;
+      buyButton.textContent = needsPlayerVerification
+        ? verifyUserBuyButtonLabel
+        : (publicCheckoutSummaryTotalText !== '' ? `${defaultBuyButtonLabel} - ${publicCheckoutSummaryTotalText}` : defaultBuyButtonLabel);
     }
     syncPlayerVerificationUi();
   }
@@ -7336,6 +7746,7 @@ include __DIR__ . "/includes/header.php";
         selectedWinPointsTotal.classList.toggle('d-none', !showWinPointsDetail);
       }
       renderPublicPaymentMethodCatalog(pack);
+      renderPublicOrderSummary(pack);
     } else {
       selectedTotalValue = 0;
       selectedPack.textContent = 'Debes seleccionar un paquete.';
@@ -7346,6 +7757,7 @@ include __DIR__ . "/includes/header.php";
         selectedWinPointsTotal.classList.add('d-none');
       }
       renderPublicPaymentMethodCatalog(null);
+      renderPublicOrderSummary(null);
     }
   }
 
@@ -7517,6 +7929,7 @@ include __DIR__ . "/includes/header.php";
               function resetCouponState(clearInput = false) {
                 couponApplied = false;
                 couponValue = '';
+                clearAppliedCouponSummary();
                 couponInput.disabled = false;
                 if (clearInput && couponInput) {
                   couponInput.value = '';
@@ -7524,6 +7937,8 @@ include __DIR__ . "/includes/header.php";
                 if (applyCouponButton) {
                   applyCouponButton.disabled = false;
                 }
+                renderPublicOrderSummary(activePack);
+                updateButtonState();
               }
 
               if (orderQuantityInput) {
@@ -7931,14 +8346,23 @@ include __DIR__ . "/includes/header.php";
                 .then(data => {
                   console.log('Respuesta backend:', data);
                   if (data.success) {
+                    couponApplied = true;
+                    couponValue = cupon;
+                    appliedCouponSummary = {
+                      code: cupon,
+                      discountAmount: normalizeCurrencyAmount(data.descuento, pack.showDecimals),
+                      originalAmount: normalizeCurrencyAmount(Number(data.nuevo_total || 0) + Number(data.descuento || 0), pack.showDecimals),
+                      discountType: String(data.tipo_descuento || ''),
+                      discountValue: Number(data.valor_descuento || 0),
+                    };
                     selectedTotalValue = normalizeCurrencyAmount(data.nuevo_total, pack.showDecimals);
                     pack.purchaseQuantity = getOrderQuantity();
                     updateSelectedPriceDisplay(pack);
-                    showToast(data.message + ` Descuento: ${formatCurrencyAmount(data.descuento, pack.showDecimals)}`,'success');
                     couponInput.disabled = true;
                     applyCouponButton.disabled = true;
-                    couponApplied = true;
+                    renderPublicOrderSummary(pack);
                     updateButtonState();
+                    showToast(data.message + ` Descuento: ${formatCurrencyAmount(data.descuento, pack.showDecimals)}`,'success');
                   } else {
                     showToast(data.message, 'error');
                   }
