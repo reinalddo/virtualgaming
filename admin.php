@@ -2348,6 +2348,8 @@ switch ($seccion) {
                 $binanceUserEnabled = isset($_POST['api_binance_usuario_present'])
                     ? (isset($_POST['api_binance_usuario']) && (string) $_POST['api_binance_usuario'] === '1' ? '1' : '0')
                     : trim((string) store_config_get('api_binance_usuario', '1'));
+                $currentBinanceImage = trim((string) store_config_get('binance_pay_image', ''));
+                $nextBinanceImage = $currentBinanceImage;
                 $merchantNo = trim((string) ($_POST['binance_pay_merchant_no'] ?? ''));
                 $secretKey = trim((string) ($_POST['binance_pay_secret_key'] ?? ''));
                 $storeId = trim((string) ($_POST['binance_pay_store_id'] ?? ''));
@@ -2357,6 +2359,8 @@ switch ($seccion) {
                 $binanceDiscount = $paymentMethodDiscountsEnabled
                     ? payment_methods_normalize_discount_percentage($binanceDiscountRaw)
                     : 0.0;
+                $hasBinanceImageUpload = isset($_FILES['binance_pay_image'])
+                    && (($_FILES['binance_pay_image']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
 
                 if ($merchantNo !== '' && preg_match('/^\d+$/', $merchantNo) !== 1) {
                     admin_set_flash('error', 'El Merchant No debe contener solo números.');
@@ -2382,13 +2386,35 @@ switch ($seccion) {
                     admin_redirect('configuracion', ['tab' => 'api-binance']);
                 }
 
+                if ($hasBinanceImageUpload) {
+                    $upload = store_config_store_named_logo_upload($_FILES['binance_pay_image'], 'binance-pay-method');
+                    if (!($upload['success'] ?? false)) {
+                        admin_set_flash('error', (string) ($upload['message'] ?? 'No se pudo cargar la imagen de Binance Pay.'));
+                        define('ADMIN_CONFIG_POST_HANDLED', true);
+                        admin_redirect('configuracion', ['tab' => 'api-binance']);
+                    }
+                    if (!empty($upload['path'])) {
+                        $nextBinanceImage = (string) $upload['path'];
+                    }
+                } elseif (isset($_POST['remove_binance_pay_image'])) {
+                    $nextBinanceImage = '';
+                }
+
                 store_config_upsert('api_binance_usuario', $binanceUserEnabled);
                 store_config_upsert('binance_pay_merchant_no', $merchantNo);
                 store_config_upsert('binance_pay_secret_key', $secretKey);
                 store_config_upsert('binance_pay_store_id', $storeId);
                 store_config_upsert('binance_pay_access_token', $accessToken);
                 store_config_upsert('binance_pay_store_url', $storeUrl);
+                if ($nextBinanceImage === '') {
+                    store_config_delete('binance_pay_image');
+                } else {
+                    store_config_upsert('binance_pay_image', $nextBinanceImage);
+                }
                 store_config_upsert('binance_pay_descuento', rtrim(rtrim(number_format($binanceDiscount, 2, '.', ''), '0'), '.'));
+                if ($currentBinanceImage !== '' && $currentBinanceImage !== $nextBinanceImage) {
+                    store_config_delete_logo_file($currentBinanceImage);
+                }
                 admin_set_flash('success', 'Configuración de Binance Pay actualizada.');
             }
 
@@ -2646,10 +2672,64 @@ switch ($seccion) {
                     admin_redirect('configuracion', $query);
                 }
 
+                $methodImagePath = (string) ($validation['data']['image_path'] ?? '');
+                $methodQrImagePath = (string) ($validation['data']['qr_image_path'] ?? '');
+
+                if (!empty($_FILES['imagen_metodo_pago']) && (int) ($_FILES['imagen_metodo_pago']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+                    $imageUpload = payment_methods_store_uploaded_image($_FILES['imagen_metodo_pago'], 'method');
+                    if (empty($imageUpload['ok'])) {
+                        admin_set_flash('error', (string) ($imageUpload['error'] ?? 'No se pudo subir la imagen del método.'));
+                        define('ADMIN_CONFIG_POST_HANDLED', true);
+                        $query = ['tab' => 'metodos-pago'];
+                        if ($paymentId > 0) {
+                            $query['editar_metodo_pago'] = $paymentId;
+                        }
+                        admin_redirect('configuracion', $query);
+                    }
+                    $methodImagePath = (string) ($imageUpload['path'] ?? '');
+                }
+
+                if (!empty($_FILES['imagen_qr_metodo_pago']) && (int) ($_FILES['imagen_qr_metodo_pago']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+                    $qrUpload = payment_methods_store_uploaded_image($_FILES['imagen_qr_metodo_pago'], 'qr');
+                    if (empty($qrUpload['ok'])) {
+                        if ($methodImagePath !== '' && $methodImagePath !== (string) ($validation['data']['image_path'] ?? '')) {
+                            payment_methods_delete_asset_file($methodImagePath);
+                        }
+                        admin_set_flash('error', (string) ($qrUpload['error'] ?? 'No se pudo subir la imagen QR del método.'));
+                        define('ADMIN_CONFIG_POST_HANDLED', true);
+                        $query = ['tab' => 'metodos-pago'];
+                        if ($paymentId > 0) {
+                            $query['editar_metodo_pago'] = $paymentId;
+                        }
+                        admin_redirect('configuracion', $query);
+                    }
+                    $methodQrImagePath = (string) ($qrUpload['path'] ?? '');
+                }
+
+                $validation['data']['image_path'] = $methodImagePath;
+                $validation['data']['qr_image_path'] = $methodQrImagePath;
+
                 if (payment_methods_save($validation['data'], $paymentId > 0 ? $paymentId : null)) {
+                    if ($existingMethod) {
+                        $oldImagePath = (string) ($existingMethod['image_path'] ?? '');
+                        $oldQrPath = (string) ($existingMethod['qr_image_path'] ?? '');
+                        if ($methodImagePath !== '' && $methodImagePath !== $oldImagePath) {
+                            payment_methods_delete_asset_file($oldImagePath);
+                        }
+                        if ($methodQrImagePath !== '' && $methodQrImagePath !== $oldQrPath) {
+                            payment_methods_delete_asset_file($oldQrPath);
+                        }
+                    }
                     admin_set_flash('success', $paymentId > 0 ? 'Método de pago actualizado.' : 'Método de pago creado.');
                     define('ADMIN_CONFIG_POST_HANDLED', true);
                     admin_redirect('configuracion', ['tab' => 'metodos-pago']);
+                }
+
+                if ($methodImagePath !== '' && $methodImagePath !== (string) ($existingMethod['image_path'] ?? '')) {
+                    payment_methods_delete_asset_file($methodImagePath);
+                }
+                if ($methodQrImagePath !== '' && $methodQrImagePath !== (string) ($existingMethod['qr_image_path'] ?? '')) {
+                    payment_methods_delete_asset_file($methodQrImagePath);
                 }
 
                 admin_set_flash('error', 'No se pudo guardar el método de pago.');

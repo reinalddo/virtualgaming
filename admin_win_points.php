@@ -69,7 +69,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $expirationDays = win_points_normalize_expiration_days($_POST['win_points_expiration_days'] ?? 180);
             $currentIcon = store_config_get('win_points_icon', '');
             $nextIcon = $currentIcon;
+          $currentPaymentImage = store_config_get('win_points_payment_image', '');
+          $nextPaymentImage = $currentPaymentImage;
             $hasUpload = isset($_FILES['win_points_icon']) && (($_FILES['win_points_icon']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
+          $hasPaymentImageUpload = isset($_FILES['win_points_payment_image']) && (($_FILES['win_points_payment_image']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
 
             if ($programName === '') {
                 throw new RuntimeException('Debes indicar un nombre para la moneda de premios.');
@@ -87,6 +90,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $nextIcon = '';
             }
 
+            if ($hasPaymentImageUpload) {
+              $paymentImageUpload = win_points_store_payment_image_upload($_FILES['win_points_payment_image']);
+              if (!($paymentImageUpload['success'] ?? false)) {
+                throw new RuntimeException((string) ($paymentImageUpload['message'] ?? 'No se pudo cargar la imagen del método de pago.'));
+              }
+              if (!empty($paymentImageUpload['path'])) {
+                $nextPaymentImage = (string) $paymentImageUpload['path'];
+              }
+            } elseif (isset($_POST['remove_win_points_payment_image'])) {
+              $nextPaymentImage = '';
+            }
+
             store_config_upsert('win_points_name', $programName);
             store_config_upsert('win_points_badge_background_color', $badgeBackgroundColor);
             store_config_upsert('win_points_badge_text_color', $badgeTextColor);
@@ -99,8 +114,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 store_config_upsert('win_points_icon', $nextIcon);
             }
 
+            if ($nextPaymentImage === '') {
+              store_config_delete('win_points_payment_image');
+            } else {
+              store_config_upsert('win_points_payment_image', $nextPaymentImage);
+            }
+
             if ($currentIcon !== '' && $currentIcon !== $nextIcon) {
                 win_points_delete_icon_file($currentIcon);
+            }
+            if ($currentPaymentImage !== '' && $currentPaymentImage !== $nextPaymentImage) {
+              win_points_delete_payment_image_file($currentPaymentImage);
             }
 
             admin_win_points_set_flash('success', 'Configuracion global de Win Points actualizada.');
@@ -820,6 +844,11 @@ include __DIR__ . '/includes/header.php';
               <input type="file" name="win_points_icon" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" class="form-control bg-dark text-info border-info" data-win-points-icon-input>
               <div class="form-text mt-2">La vista previa se muestra en formato cuadrado sin recortar la imagen.</div>
             </div>
+            <div class="col-md-7">
+              <label class="form-label text-info">Imagen método de pago</label>
+              <input type="file" name="win_points_payment_image" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" class="form-control bg-dark text-info border-info">
+              <div class="form-text mt-2">Esta imagen se mostrará en los paquetes como método de pago Win Points. Tamaño recomendado: 1200x480 px.</div>
+            </div>
             <div class="col-md-6">
               <label class="form-label text-info">Color de fondo del badge</label>
               <input type="color" name="win_points_badge_background_color" value="<?= htmlspecialchars($winPointsBadgeBackgroundColor, ENT_QUOTES, 'UTF-8') ?>" class="form-control form-control-color bg-dark border-info w-100" style="height:3rem;" data-win-points-badge-bg-input>
@@ -845,6 +874,16 @@ include __DIR__ . '/includes/header.php';
                 <?php endif; ?>
               </div>
             </div>
+            <div class="col-md-5">
+              <label class="form-label text-info">Vista previa método de pago</label>
+              <div class="win-points-icon-upload-stage">
+                <?php if (!empty($winPointsConfig['payment_image_url'])): ?>
+                  <img src="<?= htmlspecialchars((string) $winPointsConfig['payment_image_url'], ENT_QUOTES, 'UTF-8') ?>" alt="Metodo de pago <?= htmlspecialchars($winPointsConfig['name'], ENT_QUOTES, 'UTF-8') ?>">
+                <?php else: ?>
+                  <span class="win-points-icon-upload-empty">Sin imagen</span>
+                <?php endif; ?>
+              </div>
+            </div>
             <div class="col-12">
               <label class="form-label text-info">Vista previa del distintivo en paquetes</label>
               <div class="win-points-badge-preview-wrap">
@@ -860,6 +899,12 @@ include __DIR__ . '/includes/header.php';
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" value="1" id="removeWinPointsIcon" name="remove_win_points_icon" data-win-points-icon-remove>
                 <label class="form-check-label" for="removeWinPointsIcon">Eliminar icono actual</label>
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="1" id="removeWinPointsPaymentImage" name="remove_win_points_payment_image">
+                <label class="form-check-label" for="removeWinPointsPaymentImage">Eliminar imagen actual del método de pago</label>
               </div>
             </div>
             <div class="col-12 d-grid">

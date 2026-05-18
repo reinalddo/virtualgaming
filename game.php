@@ -211,6 +211,11 @@ $winPointsConfig = win_points_config();
 $winPointsEnabled = !empty($winPointsConfig['enabled']);
 $winPointsProgramName = (string) ($winPointsConfig['name'] ?? 'Win Points');
 $winPointsIconUrl = (string) ($winPointsConfig['icon_url'] ?? '');
+$winPointsPaymentImageUrl = (string) ($winPointsConfig['payment_image_url'] ?? '');
+$binancePayImageUrl = trim((string) store_config_get('binance_pay_image', ''));
+if ($binancePayImageUrl !== '' && preg_match('#^https?://#i', $binancePayImageUrl) !== 1) {
+  $binancePayImageUrl = function_exists('app_path') ? app_path('/' . ltrim($binancePayImageUrl, '/')) : '/' . ltrim($binancePayImageUrl, '/');
+}
 $winPointsNotificationLogoUrl = trim((string) store_config_get('recarga_notificaciones_logo', ''));
 if ($winPointsNotificationLogoUrl === '') {
   $winPointsNotificationLogoUrl = trim((string) store_config_get('logo_tienda', ''));
@@ -584,6 +589,15 @@ include __DIR__ . "/includes/header.php";
         <input type="text" name="coupon" id="coupon-input" placeholder="Código opcional" pattern="[A-Za-z0-9]+" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" title="Solo letras y números, sin espacios ni caracteres especiales." class="form-control bg-dark text-info border-info" />
         <button type="button" id="apply-coupon-btn" class="btn btn-info fw-bold">Activar Código</button>
       </div>
+    </div>
+  </div>
+  <div class="payment-method-catalog-shell mt-4">
+    <div class="payment-method-catalog-panel">
+      <div class="payment-method-catalog-head">
+        <h3 class="payment-method-catalog-title mb-0">Métodos disponibles</h3>
+        <p id="payment-method-catalog-copy" class="payment-method-catalog-copy mb-0">Selecciona un paquete para mostrar los métodos activos.</p>
+      </div>
+      <div id="payment-method-catalog-grid" class="payment-method-catalog-grid"></div>
     </div>
   </div>
 </section>
@@ -2618,6 +2632,165 @@ include __DIR__ . "/includes/header.php";
     box-shadow: 0 0 18px rgba(var(--theme-button-primary-rgb), 0.12), inset 0 0 0 1px rgba(255,255,255,0.03);
   }
 
+  .payment-method-catalog-shell {
+    display: flex;
+    justify-content: center;
+  }
+
+  .payment-method-catalog-panel {
+    width: min(100%, 64rem);
+    padding: 1rem 1.1rem 1.15rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(var(--theme-button-primary-rgb), 0.18);
+    background: linear-gradient(135deg, rgba(var(--theme-bg-main-rgb), 0.88), rgba(var(--theme-button-surface-rgb), 0.76) 58%, rgba(var(--theme-bg-main-rgb), 0.96));
+    box-shadow: 0 0 18px rgba(var(--theme-button-primary-rgb), 0.08), inset 0 0 0 1px rgba(255,255,255,0.02);
+  }
+
+  .payment-method-catalog-head {
+    display: grid;
+    gap: 0.18rem;
+    margin-bottom: 0.9rem;
+  }
+
+  .payment-method-catalog-title {
+    color: #f8fafc;
+    font-size: 1rem;
+    font-weight: 800;
+  }
+
+  .payment-method-catalog-copy {
+    color: #93c5fd;
+    font-size: 0.88rem;
+    line-height: 1.45;
+  }
+
+  .payment-method-catalog-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.9rem;
+  }
+
+  .payment-method-public-card {
+    position: relative;
+    width: 100%;
+    min-height: 104px;
+    aspect-ratio: 5 / 2;
+    padding: 0;
+    border-radius: 1rem;
+    border: 1px solid rgba(34, 211, 238, 0.22);
+    background: linear-gradient(135deg, rgba(8, 20, 36, 0.96), rgba(15, 23, 42, 0.92) 62%, rgba(8, 47, 73, 0.32));
+    overflow: hidden;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  }
+
+  .payment-method-public-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(120deg, transparent 18%, rgba(34, 211, 238, 0.14) 50%, transparent 82%);
+    transform: translateX(-120%);
+    transition: transform 0.42s ease;
+    pointer-events: none;
+  }
+
+  .payment-method-public-card:hover::before,
+  .payment-method-public-card:focus-visible::before {
+    transform: translateX(120%);
+  }
+
+  .payment-method-public-card:hover,
+  .payment-method-public-card:focus-visible {
+    transform: translateY(-2px);
+    border-color: rgba(34, 211, 238, 0.68);
+    box-shadow: 0 0 18px rgba(34, 211, 238, 0.14);
+    outline: none;
+  }
+
+  .payment-method-public-card.is-selected {
+    border-color: rgba(34, 197, 94, 0.88);
+    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.24), 0 0 24px rgba(34, 197, 94, 0.22);
+    background: linear-gradient(135deg, rgba(6, 26, 18, 0.98), rgba(15, 23, 42, 0.94) 58%, rgba(21, 128, 61, 0.2));
+  }
+
+  .payment-method-public-card.is-disabled {
+    opacity: 0.52;
+    cursor: not-allowed;
+  }
+
+  .payment-method-public-button {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: center;
+    color: inherit;
+    overflow: hidden;
+  }
+
+  .payment-method-public-button:disabled {
+    cursor: not-allowed;
+  }
+
+  .payment-method-public-image {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+    object-fit: cover;
+    display: block;
+  }
+
+  .payment-method-public-text {
+    display: grid;
+    gap: 0.2rem;
+    width: 100%;
+    padding: 1rem 1.1rem;
+    align-self: center;
+  }
+
+  .payment-method-public-name {
+    color: #f8fafc;
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+  }
+
+  .payment-method-public-meta {
+    color: #93c5fd;
+    font-size: 0.8rem;
+    line-height: 1.35;
+    font-weight: 600;
+  }
+
+  .payment-method-public-tag {
+    position: absolute;
+    top: 0.55rem;
+    right: 0.65rem;
+    z-index: 2;
+    padding: 0.22rem 0.5rem;
+    border-radius: 999px;
+    background: rgba(2, 6, 23, 0.68);
+    border: 1px solid rgba(34, 211, 238, 0.22);
+    color: #cbd5e1;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .payment-method-public-card.is-selected .payment-method-public-tag {
+    border-color: rgba(34, 197, 94, 0.34);
+    color: #dcfce7;
+  }
+
   .purchase-summary-column {
     min-width: 0;
   }
@@ -2922,6 +3095,15 @@ include __DIR__ . "/includes/header.php";
     .payment-coupon-panel {
       width: 100%;
       padding: 0.9rem 0.95rem;
+    }
+
+    .payment-method-catalog-panel {
+      width: 100%;
+      padding: 0.9rem 0.95rem 1rem;
+    }
+
+    .payment-method-catalog-grid {
+      grid-template-columns: 1fr;
     }
 
     .page-step-title {
@@ -3242,12 +3424,14 @@ include __DIR__ . "/includes/header.php";
   const binancePayDiscountPercentage = <?= json_encode((float) $binancePayDiscountPercentage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const accountSaleFeatureEnabled = <?= $accountSaleFeatureEnabled ? 'true' : 'false' ?>;
   const binancePayButtonLabel = 'Binance Pay';
+  const binancePayImageUrl = <?= json_encode($binancePayImageUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const paymentSupportWhatsappBase = <?= json_encode($paymentSupportWhatsappBase, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const winPointsState = <?= json_encode([
     'enabled' => $winPointsEnabled,
     'loggedIn' => $loggedUserId > 0,
     'name' => $winPointsProgramName,
     'iconUrl' => $winPointsIconUrl,
+    'paymentImageUrl' => $winPointsPaymentImageUrl,
     'notificationLogoUrl' => $winPointsNotificationLogoUrl,
     'notificationPosition' => $winPointsNotificationPosition,
     'guestMessage' => $winPointsGuestMessage,
@@ -3370,6 +3554,8 @@ include __DIR__ . "/includes/header.php";
   const paymentReferenceHelp = document.getElementById('payment-reference-help');
   const paymentPhoneGroup = document.getElementById('payment-phone-group');
   const paymentPhoneInput = document.getElementById('payment-phone-input');
+  const paymentMethodCatalogCopy = document.getElementById('payment-method-catalog-copy');
+  const paymentMethodCatalogGrid = document.getElementById('payment-method-catalog-grid');
   const paymentSubmitButton = document.getElementById('payment-submit-btn');
   const paymentCancelOrderButton = document.getElementById('payment-cancel-order-btn');
   const paymentCancelConfirmModal = document.getElementById('payment-cancel-confirm-modal');
@@ -3383,6 +3569,8 @@ include __DIR__ . "/includes/header.php";
   let couponValue = '';
   let activePaymentOrder = null;
   let paymentTimerInterval = null;
+  let preferredCheckoutPaymentMode = 'money';
+  let preferredCheckoutMethodId = '';
   let paymentDifferenceTicker = null;
   let gameEntryWindowAccepted = !gameEntryWindowEnabled;
   const defaultPrimaryField = {
@@ -4394,6 +4582,8 @@ include __DIR__ . "/includes/header.php";
     if (userRewardsExpirationValue) {
       userRewardsExpirationValue.textContent = formatWinPointsExpirationText(summary, true);
     }
+
+    renderPublicPaymentMethodCatalog(activePack);
   }
 
   function buildWinPointsFloatingNotification(payload) {
@@ -4662,6 +4852,62 @@ include __DIR__ . "/includes/header.php";
     return `money:${String(methodId || '')}`;
   }
 
+  function storePreferredCheckoutPayment(mode, methodId = '') {
+    preferredCheckoutPaymentMode = mode === 'points'
+      ? 'points'
+      : (mode === 'binance' ? 'binance' : 'money');
+    preferredCheckoutMethodId = preferredCheckoutPaymentMode === 'money' ? String(methodId || '') : '';
+  }
+
+  function resolvePreferredCheckoutSelection(pack) {
+    const methods = getPaymentMethodsForCurrency(pack ? pack.moneda : '');
+    const hasPointsRule = Boolean(pack && pack.redeemActive && getPackRequiredPoints(pack) > 0);
+    const requiredPoints = hasPointsRule ? getPackRequiredPoints(pack) : 0;
+    const canUsePointsNow = Boolean(pack && canRedeemPackWithPoints(pack));
+    const showPointsOption = Boolean(pack && winPointsState.enabled && hasPointsRule);
+    const canUseBinance = Boolean(pack && canUseBinanceCheckout(pack));
+    let nextMode = preferredCheckoutPaymentMode;
+    let nextMethodId = preferredCheckoutMethodId;
+
+    if (nextMode === 'money') {
+      const matchedMethod = methods.find((method) => String(method.id) === String(nextMethodId || ''));
+      nextMethodId = matchedMethod ? String(matchedMethod.id) : '';
+      if (nextMethodId === '') {
+        nextMode = '';
+      }
+    }
+
+    if (nextMode === 'binance' && !canUseBinance) {
+      nextMode = '';
+    }
+
+    if (nextMode === 'points' && !showPointsOption) {
+      nextMode = '';
+    }
+
+    if (nextMode === '') {
+      const defaultMethod = methods[0] || null;
+      if (defaultMethod) {
+        nextMode = 'money';
+        nextMethodId = String(defaultMethod.id);
+      } else if (canUseBinance) {
+        nextMode = 'binance';
+        nextMethodId = '';
+      }
+    }
+
+    return {
+      mode: nextMode,
+      methodId: nextMode === 'money' ? nextMethodId : '',
+      methods,
+      showPointsOption,
+      canUsePointsNow,
+      hasPointsRule,
+      requiredPoints,
+      canUseBinance,
+    };
+  }
+
   function shouldExpandSinglePaymentOption() {
     if (!activePaymentOrder) {
       return false;
@@ -4675,6 +4921,113 @@ include __DIR__ . "/includes/header.php";
   function paymentMethodMetaLabel(method) {
     const currencyLabel = `${method.moneda_nombre || ''}${method.moneda_clave ? ` (${method.moneda_clave})` : ''}`.trim();
     return currencyLabel || 'Método de pago';
+  }
+
+  function renderPublicPaymentMethodCatalog(pack = activePack) {
+    if (!paymentMethodCatalogGrid || !paymentMethodCatalogCopy) {
+      return;
+    }
+
+    if (!pack) {
+      paymentMethodCatalogGrid.innerHTML = '';
+      paymentMethodCatalogCopy.textContent = 'Selecciona un paquete para mostrar los métodos activos.';
+      return;
+    }
+
+    const selection = resolvePreferredCheckoutSelection(pack);
+    const cards = [];
+
+    selection.methods.forEach((method) => {
+      const methodId = String(method.id || '');
+      const discountPercentage = resolvePaymentModeDiscountPercentage('money', method);
+      const methodMeta = paymentMethodMetaLabel(method);
+      const methodMetaText = discountPercentage > 0
+        ? `${methodMeta} · ${formatDiscountPercentage(discountPercentage)} OFF`
+        : methodMeta;
+      const imageUrl = resolvePublicImageUrl(method.image_path || '');
+      const imageMarkup = imageUrl !== ''
+        ? `<img src="${escapePaymentHtml(imageUrl)}" alt="${escapePaymentHtml(method.nombre || 'Método de pago')}" class="payment-method-public-image"><span class="visually-hidden">${escapePaymentHtml(method.nombre || 'Método de pago')}</span>`
+        : `<span class="payment-method-public-text"><span class="payment-method-public-name">${escapePaymentHtml(method.nombre || 'Método de pago')}</span><span class="payment-method-public-meta">${escapePaymentHtml(methodMetaText)}</span></span>`;
+      const isSelected = selection.mode === 'money' && methodId === String(selection.methodId || '');
+      cards.push(`
+        <div class="payment-method-public-card${isSelected ? ' is-selected' : ''}">
+          <span class="payment-method-public-tag">Manual</span>
+          <button type="button" class="payment-method-public-button" data-payment-option="money" data-method-id="${escapePaymentHtml(methodId)}">${imageMarkup}</button>
+        </div>`);
+    });
+
+    if (selection.canUseBinance) {
+      const binanceDiscount = resolvePaymentModeDiscountPercentage('binance', null);
+      const binanceMeta = binanceDiscount > 0
+        ? `Checkout externo seguro · ${formatDiscountPercentage(binanceDiscount)} OFF`
+        : 'Checkout externo seguro con CoinPal';
+      const isSelected = selection.mode === 'binance';
+      const binanceMarkup = String(binancePayImageUrl || '').trim() !== ''
+        ? `<img src="${escapePaymentHtml(String(binancePayImageUrl || '').trim())}" alt="${escapePaymentHtml(binancePayButtonLabel)}" class="payment-method-public-image"><span class="visually-hidden">${escapePaymentHtml(binancePayButtonLabel)}</span>`
+        : `<span class="payment-method-public-text"><span class="payment-method-public-name">${escapePaymentHtml(binancePayButtonLabel)}</span><span class="payment-method-public-meta">${escapePaymentHtml(binanceMeta)}</span></span>`;
+      cards.push(`
+        <div class="payment-method-public-card${isSelected ? ' is-selected' : ''}">
+          <span class="payment-method-public-tag">Crypto</span>
+          <button type="button" class="payment-method-public-button" data-payment-option="binance">
+            ${binanceMarkup}
+          </button>
+        </div>`);
+    }
+
+    if (selection.showPointsOption) {
+      const pointsDisabled = !selection.hasPointsRule;
+      let pointsMeta = '';
+      if (!winPointsState.loggedIn) {
+        pointsMeta = 'Inicia sesión para usar tus premios';
+      } else if (!selection.hasPointsRule) {
+        pointsMeta = 'Este paquete no admite canje';
+      } else if (selection.canUsePointsNow) {
+        pointsMeta = `Saldo: ${formatWinPointsAmount(winPointsState.balance || 0)}`;
+      } else {
+        pointsMeta = `Necesitas ${formatWinPointsAmount(selection.requiredPoints || 0)}`;
+      }
+      const pointsMarkup = String(winPointsState.paymentImageUrl || '').trim() !== ''
+        ? `<img src="${escapePaymentHtml(String(winPointsState.paymentImageUrl || '').trim())}" alt="${escapePaymentHtml(winPointsState.name || 'Win Points')}" class="payment-method-public-image"><span class="visually-hidden">${escapePaymentHtml(winPointsState.name || 'Win Points')}</span>`
+        : `<span class="payment-method-public-text"><span class="payment-method-public-name">${escapePaymentHtml(winPointsState.name || 'Win Points')}</span><span class="payment-method-public-meta">${escapePaymentHtml(pointsMeta)}</span></span>`;
+      const isSelected = selection.mode === 'points' && selection.canUsePointsNow;
+      cards.push(`
+        <div class="payment-method-public-card${isSelected ? ' is-selected' : ''}${pointsDisabled ? ' is-disabled' : ''}">
+          <span class="payment-method-public-tag">Premios</span>
+          <button type="button" class="payment-method-public-button" data-payment-option="points" ${pointsDisabled ? 'disabled' : ''}>${pointsMarkup}</button>
+        </div>`);
+    }
+
+    if (!cards.length) {
+      paymentMethodCatalogGrid.innerHTML = '<div class="payment-method-public-card is-disabled"><div class="payment-method-public-text"><div class="payment-method-public-name">Sin métodos activos</div><div class="payment-method-public-meta">Este paquete no tiene métodos de pago disponibles en este momento.</div></div></div>';
+      paymentMethodCatalogCopy.textContent = 'No hay métodos activos disponibles para la moneda del paquete seleccionado.';
+      return;
+    }
+
+    paymentMethodCatalogGrid.innerHTML = cards.join('');
+
+    if (selection.mode === 'money' && selection.methodId !== '') {
+      const method = selection.methods.find((item) => String(item.id) === String(selection.methodId));
+      paymentMethodCatalogCopy.textContent = method
+        ? `Seleccionado: ${method.nombre}. Esta opción se abrirá marcada al pagar.`
+        : 'Selecciona cómo quieres pagar esta orden.';
+      return;
+    }
+
+    if (selection.mode === 'binance') {
+      paymentMethodCatalogCopy.textContent = 'Seleccionado: Binance Pay. El checkout externo se abrirá ya preparado al confirmar la orden.';
+      return;
+    }
+
+    if (selection.showPointsOption) {
+      paymentMethodCatalogCopy.textContent = selection.canUsePointsNow
+        ? `Seleccionado: ${winPointsState.name || 'Win Points'}. El sistema intentará el canje con tu saldo disponible.`
+        : (!winPointsState.loggedIn
+          ? `${winPointsState.name || 'Win Points'} está activo para este paquete. Inicia sesión para usarlo como método de pago.`
+          : `${winPointsState.name || 'Win Points'} está activo para este paquete, pero necesitas ${formatWinPointsAmount(selection.requiredPoints || 0)} para usarlo.`);
+      return;
+    }
+
+    paymentMethodCatalogCopy.textContent = 'Selecciona cómo quieres pagar esta orden.';
   }
 
   function paymentMethodAccordionMarkup(method) {
@@ -4823,6 +5176,9 @@ include __DIR__ . "/includes/header.php";
         ? `Canjear ${formatWinPointsAmount(activePaymentOrder.pointsRequired || 0)}`
         : (usingBinance ? 'Continuar con Binance Pay' : defaultPaymentSubmitButtonLabel);
     }
+    activePaymentOrder.preferredMode = nextMode;
+    storePreferredCheckoutPayment(nextMode, activePaymentOrder.selectedMethodId);
+    renderPublicPaymentMethodCatalog(activePack);
   }
 
   function renderWinPointsPaymentState(pack, currentMethod) {
@@ -4917,10 +5273,21 @@ include __DIR__ . "/includes/header.php";
       paymentMethodSelectWrap.classList.add('d-none');
     }
     renderPaymentModeOptions();
+    const preferredMode = String(activePaymentOrder.preferredMode || '').trim();
+    const resolvedPreferredMode = showRewardsState
+      ? (preferredMode === 'points' && activePaymentOrder.canUsePoints
+        ? 'points'
+        : (preferredMode === 'binance' && activePaymentOrder.canUseBinance
+          ? 'binance'
+          : (preferredMode === 'money' && activePaymentOrder.canUseMoney
+            ? 'money'
+            : (activePaymentOrder.canUseMoney ? 'money' : (activePaymentOrder.canUsePoints ? 'points' : 'binance')))))
+      : (preferredMode === 'binance' && activePaymentOrder.canUseBinance
+        ? 'binance'
+        : (activePaymentOrder.canUseMoney ? 'money' : 'binance'));
+
     setActivePaymentMode(
-      showRewardsState
-        ? (activePaymentOrder.canUseMoney ? 'money' : (activePaymentOrder.canUsePoints ? 'points' : 'binance'))
-        : (activePaymentOrder.canUseMoney ? 'money' : 'binance'),
+      resolvedPreferredMode,
       activePaymentOrder.selectedMethodId,
       { expandSelected: shouldExpandSinglePaymentOption() }
     );
@@ -6585,6 +6952,8 @@ include __DIR__ . "/includes/header.php";
       return null;
     }
 
+    const selectedMethod = resolveSelectedPaymentMethod(currencyCode, preferredCheckoutMethodId);
+
     if (methods.length === 1) {
       paymentMethodSelectWrap.classList.add('d-none');
       paymentMethodSelect.innerHTML = `<option value="${methods[0].id}">${escapePaymentHtml(methods[0].nombre || 'Método')}</option>`;
@@ -6594,8 +6963,9 @@ include __DIR__ . "/includes/header.php";
 
     paymentMethodSelectWrap.classList.remove('d-none');
     paymentMethodSelect.innerHTML = methods.map((method) => `<option value="${method.id}">${escapePaymentHtml(method.nombre || 'Método')}</option>`).join('');
-    renderPaymentMethodDetails(methods[0]);
-    return methods[0];
+    paymentMethodSelect.value = selectedMethod ? String(selectedMethod.id) : String(methods[0].id);
+    renderPaymentMethodDetails(selectedMethod || methods[0]);
+    return selectedMethod || methods[0];
   }
 
   function resetCheckoutState() {
@@ -6686,6 +7056,7 @@ include __DIR__ . "/includes/header.php";
   }
 
   function openPaymentModal(orderId, expiresAt, remainingSeconds, pack, userId, totalText, orderEmail) {
+    const preferredSelection = resolvePreferredCheckoutSelection(pack);
     const currentMethod = renderPaymentMethodsByCurrency(pack.moneda || '');
     const canUsePoints = canRedeemPackWithPoints(pack);
     const canUseBinance = canUseBinanceCheckout(pack);
@@ -6708,8 +7079,13 @@ include __DIR__ . "/includes/header.php";
       canUseMoney: Boolean(currentMethod),
       canUseBinance,
       canUsePoints,
-      paymentMode: currentMethod ? 'money' : (canUsePoints ? 'points' : 'binance'),
+      paymentMode: preferredSelection.mode === 'points'
+        ? 'points'
+        : (preferredSelection.mode === 'binance'
+          ? 'binance'
+          : (currentMethod ? 'money' : (canUsePoints ? 'points' : 'binance'))),
       selectedMethodId: currentMethod ? String(currentMethod.id) : '',
+      preferredMode: preferredSelection.mode || (currentMethod ? 'money' : (canUsePoints ? 'points' : 'binance')),
       pointsRequired: Number(pack.redeemRequiredPoints || 0),
       confirmedTotalText: String(totalText || '-').trim() || '-',
       expiring: false,
@@ -6791,6 +7167,7 @@ include __DIR__ . "/includes/header.php";
           : '';
         selectedWinPointsTotal.classList.toggle('d-none', !hasWinPointsRedemption);
       }
+      renderPublicPaymentMethodCatalog(pack);
     } else {
       selectedTotalValue = 0;
       selectedPack.textContent = 'Debes seleccionar un paquete.';
@@ -6800,6 +7177,7 @@ include __DIR__ . "/includes/header.php";
         selectedWinPointsTotal.textContent = '';
         selectedWinPointsTotal.classList.add('d-none');
       }
+      renderPublicPaymentMethodCatalog(null);
     }
   }
 
@@ -7038,12 +7416,34 @@ include __DIR__ . "/includes/header.php";
                   if (activePaymentOrder) {
                     activePaymentOrder.selectedMethodId = selectedMethod ? String(selectedMethod.id) : '';
                   }
+                  storePreferredCheckoutPayment('money', selectedMethod ? String(selectedMethod.id) : '');
                   if (activePaymentOrder && paymentWinPointsCard && !paymentWinPointsCard.classList.contains('d-none')) {
                     setActivePaymentMode('money', activePaymentOrder.selectedMethodId);
                     return;
                   }
                   renderPaymentMethodDetails(selectedMethod);
                   updatePaymentPricingUi(selectedMethod);
+                  renderPublicPaymentMethodCatalog(activePack);
+                });
+              }
+
+              if (paymentMethodCatalogGrid) {
+                paymentMethodCatalogGrid.addEventListener('click', function(event) {
+                  const button = event.target.closest('.payment-method-public-button');
+                  if (!button || button.disabled) {
+                    return;
+                  }
+
+                  const mode = button.dataset.paymentOption === 'points'
+                    ? 'points'
+                    : (button.dataset.paymentOption === 'binance' ? 'binance' : 'money');
+                  const methodId = button.dataset.methodId || '';
+                  storePreferredCheckoutPayment(mode, methodId);
+                  renderPublicPaymentMethodCatalog(activePack);
+
+                  if (activePaymentOrder) {
+                    setActivePaymentMode(mode, methodId, { expandSelected: shouldExpandSinglePaymentOption() });
+                  }
                 });
               }
 

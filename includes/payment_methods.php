@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS payment_methods (
     id INT AUTO_INCREMENT PRIMARY KEY,
     nombre VARCHAR(160) NOT NULL,
     datos TEXT NOT NULL,
+    image_path VARCHAR(255) NOT NULL DEFAULT '',
+    qr_image_path VARCHAR(255) NOT NULL DEFAULT '',
     moneda_id INT NULL,
     referencia_digitos INT NOT NULL DEFAULT 0,
     descuento_porcentaje DECIMAL(5,2) NOT NULL DEFAULT 0,
@@ -47,6 +49,12 @@ SQL;
     if (!isset($columns['moneda_id'])) {
         $mysqli->query('ALTER TABLE payment_methods ADD COLUMN moneda_id INT NULL AFTER datos');
     }
+    if (!isset($columns['image_path'])) {
+        $mysqli->query("ALTER TABLE payment_methods ADD COLUMN image_path VARCHAR(255) NOT NULL DEFAULT '' AFTER datos");
+    }
+    if (!isset($columns['qr_image_path'])) {
+        $mysqli->query("ALTER TABLE payment_methods ADD COLUMN qr_image_path VARCHAR(255) NOT NULL DEFAULT '' AFTER image_path");
+    }
     if (!isset($columns['referencia_digitos'])) {
         $mysqli->query('ALTER TABLE payment_methods ADD COLUMN referencia_digitos INT NOT NULL DEFAULT 0 AFTER moneda_id');
     }
@@ -64,6 +72,93 @@ SQL;
     }
 
     $initialized = true;
+}
+
+function payment_methods_storage_relative_dir(): string {
+    return 'assets/img/payment-methods';
+}
+
+function payment_methods_storage_absolute_dir(): string {
+    return dirname(__DIR__) . '/' . str_replace('\\', '/', payment_methods_storage_relative_dir());
+}
+
+function payment_methods_ensure_storage_dir(): string {
+    $dir = payment_methods_storage_absolute_dir();
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0775, true);
+    }
+
+    return $dir;
+}
+
+function payment_methods_is_valid_image_upload(array $file): bool {
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        return false;
+    }
+
+    $tmpName = (string) ($file['tmp_name'] ?? '');
+    if ($tmpName === '' || !is_uploaded_file($tmpName)) {
+        return false;
+    }
+
+    $imageInfo = @getimagesize($tmpName);
+    if (!is_array($imageInfo) || empty($imageInfo['mime'])) {
+        return false;
+    }
+
+    return in_array(strtolower((string) $imageInfo['mime']), ['image/jpeg', 'image/png', 'image/webp', 'image/gif'], true);
+}
+
+function payment_methods_store_uploaded_image(array $file, string $kind = 'method'): array {
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        return ['ok' => false, 'error' => 'No se recibió la imagen.'];
+    }
+
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        return ['ok' => false, 'error' => 'No se pudo subir la imagen del método de pago.'];
+    }
+
+    if (!payment_methods_is_valid_image_upload($file)) {
+        return ['ok' => false, 'error' => 'La imagen debe ser JPG, PNG, WEBP o GIF válida.'];
+    }
+
+    $tmpName = (string) ($file['tmp_name'] ?? '');
+    $extension = strtolower(pathinfo((string) ($file['name'] ?? ''), PATHINFO_EXTENSION));
+    if (!in_array($extension, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
+        $extension = 'png';
+    }
+
+    $safeKind = $kind === 'qr' ? 'qr' : 'method';
+    $storageDir = payment_methods_ensure_storage_dir();
+    $fileName = sprintf('%s_%s.%s', $safeKind, bin2hex(random_bytes(8)), $extension);
+    $absolutePath = $storageDir . '/' . $fileName;
+    $relativePath = payment_methods_storage_relative_dir() . '/' . $fileName;
+
+    if (!@move_uploaded_file($tmpName, $absolutePath)) {
+        return ['ok' => false, 'error' => 'No se pudo guardar la imagen del método de pago.'];
+    }
+
+    return ['ok' => true, 'path' => str_replace('\\', '/', $relativePath)];
+}
+
+function payment_methods_is_managed_asset_path(string $path): bool {
+    $normalized = trim(str_replace('\\', '/', $path));
+    if ($normalized === '') {
+        return false;
+    }
+
+    return strpos($normalized, payment_methods_storage_relative_dir() . '/') === 0;
+}
+
+function payment_methods_delete_asset_file(string $path): void {
+    if (!payment_methods_is_managed_asset_path($path)) {
+        return;
+    }
+
+    $absolutePath = dirname(__DIR__) . '/' . ltrim(str_replace('\\', '/', $path), '/');
+    if (is_file($absolutePath)) {
+        @unlink($absolutePath);
+    }
 }
 
 function payment_methods_normalize_discount_percentage($value): float {
@@ -147,6 +242,8 @@ function payment_methods_all(): array {
             $row['id'] = (int) $row['id'];
             $row['activo'] = (int) $row['activo'];
             $row['moneda_id'] = isset($row['moneda_id']) ? (int) $row['moneda_id'] : 0;
+            $row['image_path'] = trim((string) ($row['image_path'] ?? ''));
+            $row['qr_image_path'] = trim((string) ($row['qr_image_path'] ?? ''));
             $row['referencia_digitos'] = isset($row['referencia_digitos']) ? max(0, (int) $row['referencia_digitos']) : 0;
             $row['descuento_porcentaje'] = payment_methods_normalize_discount_percentage($row['descuento_porcentaje'] ?? 0);
             $items[] = $row;
@@ -182,6 +279,8 @@ function payment_methods_find(int $id): ?array {
     $item['id'] = (int) $item['id'];
     $item['activo'] = (int) $item['activo'];
     $item['moneda_id'] = isset($item['moneda_id']) ? (int) $item['moneda_id'] : 0;
+    $item['image_path'] = trim((string) ($item['image_path'] ?? ''));
+    $item['qr_image_path'] = trim((string) ($item['qr_image_path'] ?? ''));
     $item['referencia_digitos'] = isset($item['referencia_digitos']) ? max(0, (int) $item['referencia_digitos']) : 0;
     $item['descuento_porcentaje'] = payment_methods_normalize_discount_percentage($item['descuento_porcentaje'] ?? 0);
     return $item;
@@ -226,6 +325,8 @@ function payment_methods_validate_form(array $input): array {
         'data' => [
             'nombre' => $nombre,
             'datos' => $datos,
+            'image_path' => trim((string) ($input['existing_payment_method_image_path'] ?? '')),
+            'qr_image_path' => trim((string) ($input['existing_payment_method_qr_image_path'] ?? '')),
             'moneda_id' => $monedaId,
             'referencia_digitos' => $referenciaDigitos,
             'descuento_porcentaje' => $descuentoPorcentaje,
@@ -239,17 +340,17 @@ function payment_methods_save(array $data, ?int $id = null): bool {
 
     $mysqli = payment_methods_db();
     if ($id === null) {
-        $stmt = $mysqli->prepare('INSERT INTO payment_methods (nombre, datos, moneda_id, referencia_digitos, descuento_porcentaje, activo) VALUES (?, ?, ?, ?, ?, ?)');
+        $stmt = $mysqli->prepare('INSERT INTO payment_methods (nombre, datos, image_path, qr_image_path, moneda_id, referencia_digitos, descuento_porcentaje, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
         if (!$stmt) {
             return false;
         }
-        $stmt->bind_param('ssiddi', $data['nombre'], $data['datos'], $data['moneda_id'], $data['referencia_digitos'], $data['descuento_porcentaje'], $data['activo']);
+        $stmt->bind_param('ssssiddi', $data['nombre'], $data['datos'], $data['image_path'], $data['qr_image_path'], $data['moneda_id'], $data['referencia_digitos'], $data['descuento_porcentaje'], $data['activo']);
     } else {
-        $stmt = $mysqli->prepare('UPDATE payment_methods SET nombre = ?, datos = ?, moneda_id = ?, referencia_digitos = ?, descuento_porcentaje = ?, activo = ? WHERE id = ?');
+        $stmt = $mysqli->prepare('UPDATE payment_methods SET nombre = ?, datos = ?, image_path = ?, qr_image_path = ?, moneda_id = ?, referencia_digitos = ?, descuento_porcentaje = ?, activo = ? WHERE id = ?');
         if (!$stmt) {
             return false;
         }
-        $stmt->bind_param('ssiddii', $data['nombre'], $data['datos'], $data['moneda_id'], $data['referencia_digitos'], $data['descuento_porcentaje'], $data['activo'], $id);
+        $stmt->bind_param('ssssiddii', $data['nombre'], $data['datos'], $data['image_path'], $data['qr_image_path'], $data['moneda_id'], $data['referencia_digitos'], $data['descuento_porcentaje'], $data['activo'], $id);
     }
 
     $ok = $stmt->execute();
@@ -261,6 +362,7 @@ function payment_methods_save(array $data, ?int $id = null): bool {
 function payment_methods_delete(int $id): bool {
     payment_methods_ensure_table();
 
+    $existing = payment_methods_find($id);
     $mysqli = payment_methods_db();
     $stmt = $mysqli->prepare('DELETE FROM payment_methods WHERE id = ?');
     if (!$stmt) {
@@ -270,6 +372,11 @@ function payment_methods_delete(int $id): bool {
     $stmt->bind_param('i', $id);
     $ok = $stmt->execute();
     $stmt->close();
+
+    if ($ok && is_array($existing)) {
+        payment_methods_delete_asset_file((string) ($existing['image_path'] ?? ''));
+        payment_methods_delete_asset_file((string) ($existing['qr_image_path'] ?? ''));
+    }
 
     return $ok;
 }
@@ -295,7 +402,7 @@ function payment_methods_active_by_currency(): array {
 
     $mysqli = payment_methods_db();
     $items = [];
-    $res = $mysqli->query("SELECT pm.id, pm.nombre, pm.datos, pm.moneda_id, pm.referencia_digitos, pm.descuento_porcentaje,
+    $res = $mysqli->query("SELECT pm.id, pm.nombre, pm.datos, pm.image_path, pm.qr_image_path, pm.moneda_id, pm.referencia_digitos, pm.descuento_porcentaje,
         m.nombre AS moneda_nombre, m.clave AS moneda_clave
         FROM payment_methods pm
         INNER JOIN monedas m ON m.id = pm.moneda_id
@@ -314,6 +421,8 @@ function payment_methods_active_by_currency(): array {
                 'id' => (int) ($row['id'] ?? 0),
                 'nombre' => (string) ($row['nombre'] ?? ''),
                 'datos' => (string) ($row['datos'] ?? ''),
+                'image_path' => trim((string) ($row['image_path'] ?? '')),
+                'qr_image_path' => trim((string) ($row['qr_image_path'] ?? '')),
                 'moneda_id' => (int) ($row['moneda_id'] ?? 0),
                 'moneda_nombre' => (string) ($row['moneda_nombre'] ?? ''),
                 'moneda_clave' => (string) ($row['moneda_clave'] ?? ''),
