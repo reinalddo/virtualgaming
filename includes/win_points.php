@@ -99,6 +99,27 @@ if (!function_exists('win_points_payment_image_url')) {
     }
 }
 
+if (!function_exists('win_points_payment_corner_image_path')) {
+    function win_points_payment_corner_image_path(): string {
+        return trim(store_config_get('win_points_payment_corner_image', ''));
+    }
+}
+
+if (!function_exists('win_points_payment_corner_image_url')) {
+    function win_points_payment_corner_image_url(): string {
+        $path = win_points_payment_corner_image_path();
+        if ($path === '') {
+            return '';
+        }
+
+        if (preg_match('#^https?://#i', $path) === 1) {
+            return $path;
+        }
+
+        return function_exists('app_path') ? app_path('/' . ltrim($path, '/')) : '/' . ltrim($path, '/');
+    }
+}
+
 if (!function_exists('win_points_normalize_hex_color')) {
     function win_points_normalize_hex_color($value, string $default): string {
         $fallback = strtoupper(trim($default));
@@ -184,6 +205,8 @@ if (!function_exists('win_points_config')) {
             'icon_url' => win_points_icon_url(),
             'payment_image_path' => win_points_payment_image_path(),
             'payment_image_url' => win_points_payment_image_url(),
+            'payment_corner_image_path' => win_points_payment_corner_image_path(),
+            'payment_corner_image_url' => win_points_payment_corner_image_url(),
             'badge_background_color' => win_points_badge_background_color(),
             'badge_text_color' => win_points_badge_text_color(),
             'notification_position' => win_points_notification_position(),
@@ -214,6 +237,18 @@ if (!function_exists('win_points_store_payment_image_upload')) {
 
 if (!function_exists('win_points_delete_payment_image_file')) {
     function win_points_delete_payment_image_file(string $path): void {
+        store_config_delete_logo_file($path);
+    }
+}
+
+if (!function_exists('win_points_store_payment_corner_image_upload')) {
+    function win_points_store_payment_corner_image_upload(array $file): array {
+        return store_config_store_named_logo_upload($file, 'win-points-payment-corner');
+    }
+}
+
+if (!function_exists('win_points_delete_payment_corner_image_file')) {
+    function win_points_delete_payment_corner_image_file(string $path): void {
         store_config_delete_logo_file($path);
     }
 }

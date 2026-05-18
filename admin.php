@@ -2350,6 +2350,8 @@ switch ($seccion) {
                     : trim((string) store_config_get('api_binance_usuario', '1'));
                 $currentBinanceImage = trim((string) store_config_get('binance_pay_image', ''));
                 $nextBinanceImage = $currentBinanceImage;
+                $currentBinanceCornerImage = trim((string) store_config_get('binance_pay_corner_image', ''));
+                $nextBinanceCornerImage = $currentBinanceCornerImage;
                 $merchantNo = trim((string) ($_POST['binance_pay_merchant_no'] ?? ''));
                 $secretKey = trim((string) ($_POST['binance_pay_secret_key'] ?? ''));
                 $storeId = trim((string) ($_POST['binance_pay_store_id'] ?? ''));
@@ -2361,6 +2363,8 @@ switch ($seccion) {
                     : 0.0;
                 $hasBinanceImageUpload = isset($_FILES['binance_pay_image'])
                     && (($_FILES['binance_pay_image']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
+                $hasBinanceCornerImageUpload = isset($_FILES['binance_pay_corner_image'])
+                    && (($_FILES['binance_pay_corner_image']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
 
                 if ($merchantNo !== '' && preg_match('/^\d+$/', $merchantNo) !== 1) {
                     admin_set_flash('error', 'El Merchant No debe contener solo números.');
@@ -2400,6 +2404,23 @@ switch ($seccion) {
                     $nextBinanceImage = '';
                 }
 
+                if ($hasBinanceCornerImageUpload) {
+                    $cornerUpload = store_config_store_named_logo_upload($_FILES['binance_pay_corner_image'], 'binance-pay-corner');
+                    if (!($cornerUpload['success'] ?? false)) {
+                        if ($nextBinanceImage !== '' && $nextBinanceImage !== $currentBinanceImage) {
+                            store_config_delete_logo_file($nextBinanceImage);
+                        }
+                        admin_set_flash('error', (string) ($cornerUpload['message'] ?? 'No se pudo cargar la imagen promocional de Binance Pay.'));
+                        define('ADMIN_CONFIG_POST_HANDLED', true);
+                        admin_redirect('configuracion', ['tab' => 'api-binance']);
+                    }
+                    if (!empty($cornerUpload['path'])) {
+                        $nextBinanceCornerImage = (string) $cornerUpload['path'];
+                    }
+                } elseif (isset($_POST['remove_binance_pay_corner_image'])) {
+                    $nextBinanceCornerImage = '';
+                }
+
                 store_config_upsert('api_binance_usuario', $binanceUserEnabled);
                 store_config_upsert('binance_pay_merchant_no', $merchantNo);
                 store_config_upsert('binance_pay_secret_key', $secretKey);
@@ -2411,9 +2432,17 @@ switch ($seccion) {
                 } else {
                     store_config_upsert('binance_pay_image', $nextBinanceImage);
                 }
+                if ($nextBinanceCornerImage === '') {
+                    store_config_delete('binance_pay_corner_image');
+                } else {
+                    store_config_upsert('binance_pay_corner_image', $nextBinanceCornerImage);
+                }
                 store_config_upsert('binance_pay_descuento', rtrim(rtrim(number_format($binanceDiscount, 2, '.', ''), '0'), '.'));
                 if ($currentBinanceImage !== '' && $currentBinanceImage !== $nextBinanceImage) {
                     store_config_delete_logo_file($currentBinanceImage);
+                }
+                if ($currentBinanceCornerImage !== '' && $currentBinanceCornerImage !== $nextBinanceCornerImage) {
+                    store_config_delete_logo_file($currentBinanceCornerImage);
                 }
                 admin_set_flash('success', 'Configuración de Binance Pay actualizada.');
             }
@@ -2674,6 +2703,7 @@ switch ($seccion) {
 
                 $methodImagePath = (string) ($validation['data']['image_path'] ?? '');
                 $methodQrImagePath = (string) ($validation['data']['qr_image_path'] ?? '');
+                $methodCornerImagePath = (string) ($validation['data']['corner_image_path'] ?? '');
 
                 if (!empty($_FILES['imagen_metodo_pago']) && (int) ($_FILES['imagen_metodo_pago']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
                     $imageUpload = payment_methods_store_uploaded_image($_FILES['imagen_metodo_pago'], 'method');
@@ -2706,18 +2736,43 @@ switch ($seccion) {
                     $methodQrImagePath = (string) ($qrUpload['path'] ?? '');
                 }
 
+                if (!empty($_FILES['imagen_promocion_metodo_pago']) && (int) ($_FILES['imagen_promocion_metodo_pago']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+                    $cornerUpload = payment_methods_store_uploaded_image($_FILES['imagen_promocion_metodo_pago'], 'corner');
+                    if (empty($cornerUpload['ok'])) {
+                        if ($methodImagePath !== '' && $methodImagePath !== (string) ($validation['data']['image_path'] ?? '')) {
+                            payment_methods_delete_asset_file($methodImagePath);
+                        }
+                        if ($methodQrImagePath !== '' && $methodQrImagePath !== (string) ($validation['data']['qr_image_path'] ?? '')) {
+                            payment_methods_delete_asset_file($methodQrImagePath);
+                        }
+                        admin_set_flash('error', (string) ($cornerUpload['error'] ?? 'No se pudo subir la imagen promocional del método.'));
+                        define('ADMIN_CONFIG_POST_HANDLED', true);
+                        $query = ['tab' => 'metodos-pago'];
+                        if ($paymentId > 0) {
+                            $query['editar_metodo_pago'] = $paymentId;
+                        }
+                        admin_redirect('configuracion', $query);
+                    }
+                    $methodCornerImagePath = (string) ($cornerUpload['path'] ?? '');
+                }
+
                 $validation['data']['image_path'] = $methodImagePath;
                 $validation['data']['qr_image_path'] = $methodQrImagePath;
+                $validation['data']['corner_image_path'] = $methodCornerImagePath;
 
                 if (payment_methods_save($validation['data'], $paymentId > 0 ? $paymentId : null)) {
                     if ($existingMethod) {
                         $oldImagePath = (string) ($existingMethod['image_path'] ?? '');
                         $oldQrPath = (string) ($existingMethod['qr_image_path'] ?? '');
+                        $oldCornerPath = (string) ($existingMethod['corner_image_path'] ?? '');
                         if ($methodImagePath !== '' && $methodImagePath !== $oldImagePath) {
                             payment_methods_delete_asset_file($oldImagePath);
                         }
                         if ($methodQrImagePath !== '' && $methodQrImagePath !== $oldQrPath) {
                             payment_methods_delete_asset_file($oldQrPath);
+                        }
+                        if ($methodCornerImagePath !== '' && $methodCornerImagePath !== $oldCornerPath) {
+                            payment_methods_delete_asset_file($oldCornerPath);
                         }
                     }
                     admin_set_flash('success', $paymentId > 0 ? 'Método de pago actualizado.' : 'Método de pago creado.');
@@ -2730,6 +2785,9 @@ switch ($seccion) {
                 }
                 if ($methodQrImagePath !== '' && $methodQrImagePath !== (string) ($existingMethod['qr_image_path'] ?? '')) {
                     payment_methods_delete_asset_file($methodQrImagePath);
+                }
+                if ($methodCornerImagePath !== '' && $methodCornerImagePath !== (string) ($existingMethod['corner_image_path'] ?? '')) {
+                    payment_methods_delete_asset_file($methodCornerImagePath);
                 }
 
                 admin_set_flash('error', 'No se pudo guardar el método de pago.');

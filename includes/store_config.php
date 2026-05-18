@@ -596,6 +596,7 @@ function store_config_descriptions(): array {
         'win_points_name' => 'Nombre visible de la moneda de premios usada en el sitio y paneles.',
         'win_points_icon' => 'Ruta del icono usado para representar la moneda de premios.',
         'win_points_payment_image' => 'Ruta de la imagen horizontal usada para representar Win Points como metodo de pago en la pagina de paquetes.',
+        'win_points_payment_corner_image' => 'Ruta de la imagen promocional flotante usada en la esquina de la card publica de Win Points.',
         'win_points_notification_position' => 'Posicion de la notificacion flotante de Win Points en la pagina publica.',
         'win_points_default_award' => 'Cantidad de puntos que se asigna por defecto a un paquete cuando no tiene un valor propio configurado.',
         'inicio_popup_tab_habilitado' => 'Activa o desactiva globalmente el tab y la función de la ventana inicial',
@@ -635,6 +636,7 @@ function store_config_descriptions(): array {
         'binance_pay_access_token' => 'Access Token del Store registrado en CoinPal para esta tienda.',
         'binance_pay_store_url' => 'URL o dominio registrado en CoinPal My Store para esta tienda.',
         'binance_pay_image' => 'Ruta de la imagen horizontal usada para representar Binance Pay como metodo de pago en la pagina de paquetes.',
+        'binance_pay_corner_image' => 'Ruta de la imagen promocional flotante usada en la esquina de la card publica de Binance Pay.',
         'binance_pay_descuento' => 'Porcentaje de descuento aplicado cuando el cliente paga usando Binance Pay.',
     ];
 
@@ -699,6 +701,7 @@ function store_config_defaults(): array {
         'win_points_name' => 'Win Points',
         'win_points_icon' => '',
         'win_points_payment_image' => '',
+        'win_points_payment_corner_image' => '',
         'win_points_notification_position' => 'bottom-left',
         'win_points_default_award' => '0',
         'inicio_popup_tab_habilitado' => '1',
@@ -735,6 +738,7 @@ function store_config_defaults(): array {
         'binance_pay_access_token' => '',
         'binance_pay_store_url' => '',
         'binance_pay_image' => '',
+        'binance_pay_corner_image' => '',
         'binance_pay_descuento' => '0',
     ];
 

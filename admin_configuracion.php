@@ -72,6 +72,7 @@ $galleryForm = [
     'datos' => $paymentMethodEditItem['datos'] ?? '',
     'image_path' => $paymentMethodEditItem['image_path'] ?? '',
     'qr_image_path' => $paymentMethodEditItem['qr_image_path'] ?? '',
+    'corner_image_path' => $paymentMethodEditItem['corner_image_path'] ?? '',
     'moneda_id' => isset($paymentMethodEditItem['moneda_id']) ? (int) $paymentMethodEditItem['moneda_id'] : 0,
     'referencia_digitos' => isset($paymentMethodEditItem['referencia_digitos']) ? max(0, (int) $paymentMethodEditItem['referencia_digitos']) : 0,
     'descuento_porcentaje' => $paymentMethodDiscountsEnabled && isset($paymentMethodEditItem['descuento_porcentaje']) ? (float) $paymentMethodEditItem['descuento_porcentaje'] : 0,
@@ -1577,6 +1578,26 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
                       <?php endif; ?>
                     </div>
                   </div>
+                  <div class="col-md-7">
+                    <label class="form-label">Imagen promocional de esquina</label>
+                    <input type="file" name="binance_pay_corner_image" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" class="form-control">
+                    <div class="form-text mt-2">Aparecerá mitad dentro y mitad fuera de la card pública para destacar promociones. Tamaño recomendado: 320x320 px con transparencia.</div>
+                    <div class="form-check mt-3">
+                      <input class="form-check-input" type="checkbox" value="1" id="removeBinancePayCornerImage" name="remove_binance_pay_corner_image">
+                      <label class="form-check-label" for="removeBinancePayCornerImage">Eliminar imagen promocional actual</label>
+                    </div>
+                  </div>
+                  <div class="col-md-5">
+                    <label class="form-label">Vista previa promo esquina</label>
+                    <div class="config-section-note h-100 d-flex align-items-center justify-content-center p-3">
+                      <?php $binancePayCornerImagePath = trim((string) ($cfg['binance_pay_corner_image'] ?? '')); ?>
+                      <?php if ($binancePayCornerImagePath !== ''): ?>
+                        <img src="<?= htmlspecialchars(app_path('/' . ltrim($binancePayCornerImagePath, '/')), ENT_QUOTES, 'UTF-8') ?>" alt="Vista previa promo Binance Pay" class="img-fluid rounded-4 border border-info-subtle" style="max-width: 180px;">
+                      <?php else: ?>
+                        <span class="text-secondary">Sin imagen cargada</span>
+                      <?php endif; ?>
+                    </div>
+                  </div>
                   <div class="col-md-6">
                     <label class="form-label">Método de pago configurado</label>
                     <input type="text" class="form-control" value="Binance Pay" readonly>
@@ -2291,6 +2312,7 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
               <input type="hidden" name="payment_method_id" value="<?= $paymentMethodEditItem ? (int) $paymentMethodEditItem['id'] : 0 ?>">
               <input type="hidden" name="existing_payment_method_image_path" value="<?= htmlspecialchars((string) $paymentMethodForm['image_path'], ENT_QUOTES, 'UTF-8') ?>">
               <input type="hidden" name="existing_payment_method_qr_image_path" value="<?= htmlspecialchars((string) $paymentMethodForm['qr_image_path'], ENT_QUOTES, 'UTF-8') ?>">
+              <input type="hidden" name="existing_payment_method_corner_image_path" value="<?= htmlspecialchars((string) $paymentMethodForm['corner_image_path'], ENT_QUOTES, 'UTF-8') ?>">
               <div class="config-section-note mb-4">Registra los métodos de pago disponibles para transferencias, con el nombre visible al cliente y los datos exactos donde debe realizar el pago.</div>
               <div class="row g-4 align-items-start">
                 <div class="col-lg-8">
@@ -2327,6 +2349,11 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
                       <input type="file" name="imagen_qr_metodo_pago" accept="image/png,image/jpeg,image/webp,image/gif" class="form-control">
                       <div class="form-text">Se almacenará para usarla más adelante dentro del flujo de pago. Tamaño recomendado: 1000x1000 px para conservar buena lectura.</div>
                     </div>
+                    <div class="col-md-6">
+                      <label class="form-label">Imagen promocional de esquina</label>
+                      <input type="file" name="imagen_promocion_metodo_pago" accept="image/png,image/jpeg,image/webp,image/gif" class="form-control">
+                      <div class="form-text">Flotará en la esquina de la card pública para resaltar promociones o descuentos. Tamaño recomendado: 320x320 px con fondo transparente.</div>
+                    </div>
                     <?php if ($paymentMethodDiscountsEnabled): ?>
                     <div class="col-md-6">
                       <label class="form-label">Descuento disponible (%)</label>
@@ -2346,7 +2373,7 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
                   <div class="config-section-note">
                     Usa este tab para crear, editar o desactivar cuentas receptoras como bancos, billeteras o servicios de pago.
                   </div>
-                  <?php if (!empty($paymentMethodForm['image_path']) || !empty($paymentMethodForm['qr_image_path'])): ?>
+                  <?php if (!empty($paymentMethodForm['image_path']) || !empty($paymentMethodForm['qr_image_path']) || !empty($paymentMethodForm['corner_image_path'])): ?>
                     <div class="config-section-note mt-3">
                       <div class="d-grid gap-3">
                         <?php if (!empty($paymentMethodForm['image_path'])): ?>
@@ -2359,6 +2386,12 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
                           <div>
                             <div class="small text-info fw-semibold mb-2">Vista previa QR</div>
                             <img src="<?= htmlspecialchars(app_path('/' . ltrim((string) $paymentMethodForm['qr_image_path'], '/')), ENT_QUOTES, 'UTF-8') ?>" alt="Vista previa QR" class="img-fluid rounded-4 border border-info-subtle">
+                          </div>
+                        <?php endif; ?>
+                        <?php if (!empty($paymentMethodForm['corner_image_path'])): ?>
+                          <div>
+                            <div class="small text-info fw-semibold mb-2">Vista previa promo esquina</div>
+                            <img src="<?= htmlspecialchars(app_path('/' . ltrim((string) $paymentMethodForm['corner_image_path'], '/')), ENT_QUOTES, 'UTF-8') ?>" alt="Vista previa promo esquina" class="img-fluid rounded-4 border border-info-subtle" style="max-width: 180px;">
                           </div>
                         <?php endif; ?>
                       </div>
@@ -2401,12 +2434,20 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
                           <tr>
                             <td class="fw-bold"><?= htmlspecialchars($method['nombre'], ENT_QUOTES, 'UTF-8') ?></td>
                             <td>
-                              <?php if (!empty($method['image_path'])): ?>
+                              <?php if (!empty($method['image_path']) || !empty($method['corner_image_path'])): ?>
                                 <div class="payment-method-thumb-stack">
-                                  <div class="payment-method-thumb">
-                                    <img src="<?= htmlspecialchars(app_path('/' . ltrim((string) $method['image_path'], '/')), ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars('Vista previa ' . (string) $method['nombre'], ENT_QUOTES, 'UTF-8') ?>">
-                                  </div>
-                                  <span class="payment-method-thumb-caption">Vista previa</span>
+                                  <?php if (!empty($method['image_path'])): ?>
+                                    <div class="payment-method-thumb">
+                                      <img src="<?= htmlspecialchars(app_path('/' . ltrim((string) $method['image_path'], '/')), ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars('Vista previa ' . (string) $method['nombre'], ENT_QUOTES, 'UTF-8') ?>">
+                                    </div>
+                                    <span class="payment-method-thumb-caption">Catálogo</span>
+                                  <?php endif; ?>
+                                  <?php if (!empty($method['corner_image_path'])): ?>
+                                    <div class="payment-method-thumb" style="max-width: 120px;">
+                                      <img src="<?= htmlspecialchars(app_path('/' . ltrim((string) $method['corner_image_path'], '/')), ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars('Promo ' . (string) $method['nombre'], ENT_QUOTES, 'UTF-8') ?>">
+                                    </div>
+                                    <span class="payment-method-thumb-caption">Promo esquina</span>
+                                  <?php endif; ?>
                                 </div>
                               <?php else: ?>
                                 <span class="text-secondary">Sin imagen</span>
@@ -2450,7 +2491,7 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
                         <?= !empty($method['activo']) ? '<span class="gallery-badge-neon">Activo</span>' : '<span class="text-secondary small">Inactivo</span>' ?>
                       </div>
                       <div class="small text-info-emphasis mt-2"><?= htmlspecialchars(trim((string) (($method['moneda_nombre'] ?? '') . ' ' . (!empty($method['moneda_clave']) ? '(' . $method['moneda_clave'] . ')' : ''))) ?: 'Sin moneda', ENT_QUOTES, 'UTF-8') ?></div>
-                      <?php if (!empty($method['image_path']) || !empty($method['qr_image_path'])): ?>
+                      <?php if (!empty($method['image_path']) || !empty($method['qr_image_path']) || !empty($method['corner_image_path'])): ?>
                         <div class="payment-method-mobile-previews">
                           <?php if (!empty($method['image_path'])): ?>
                             <div class="payment-method-thumb-stack">
@@ -2466,6 +2507,14 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
                                 <img src="<?= htmlspecialchars(app_path('/' . ltrim((string) $method['qr_image_path'], '/')), ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars('Vista previa QR ' . (string) $method['nombre'], ENT_QUOTES, 'UTF-8') ?>">
                               </div>
                               <span class="payment-method-thumb-caption">Imagen QR</span>
+                            </div>
+                          <?php endif; ?>
+                          <?php if (!empty($method['corner_image_path'])): ?>
+                            <div class="payment-method-thumb-stack">
+                              <div class="payment-method-thumb" style="max-width: 120px;">
+                                <img src="<?= htmlspecialchars(app_path('/' . ltrim((string) $method['corner_image_path'], '/')), ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars('Promo ' . (string) $method['nombre'], ENT_QUOTES, 'UTF-8') ?>">
+                              </div>
+                              <span class="payment-method-thumb-caption">Promo esquina</span>
                             </div>
                           <?php endif; ?>
                         </div>

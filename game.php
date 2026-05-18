@@ -212,9 +212,14 @@ $winPointsEnabled = !empty($winPointsConfig['enabled']);
 $winPointsProgramName = (string) ($winPointsConfig['name'] ?? 'Win Points');
 $winPointsIconUrl = (string) ($winPointsConfig['icon_url'] ?? '');
 $winPointsPaymentImageUrl = (string) ($winPointsConfig['payment_image_url'] ?? '');
+$winPointsPaymentCornerImageUrl = (string) ($winPointsConfig['payment_corner_image_url'] ?? '');
 $binancePayImageUrl = trim((string) store_config_get('binance_pay_image', ''));
 if ($binancePayImageUrl !== '' && preg_match('#^https?://#i', $binancePayImageUrl) !== 1) {
   $binancePayImageUrl = function_exists('app_path') ? app_path('/' . ltrim($binancePayImageUrl, '/')) : '/' . ltrim($binancePayImageUrl, '/');
+}
+$binancePayCornerImageUrl = trim((string) store_config_get('binance_pay_corner_image', ''));
+if ($binancePayCornerImageUrl !== '' && preg_match('#^https?://#i', $binancePayCornerImageUrl) !== 1) {
+  $binancePayCornerImageUrl = function_exists('app_path') ? app_path('/' . ltrim($binancePayCornerImageUrl, '/')) : '/' . ltrim($binancePayCornerImageUrl, '/');
 }
 $winPointsNotificationLogoUrl = trim((string) store_config_get('recarga_notificaciones_logo', ''));
 if ($winPointsNotificationLogoUrl === '') {
@@ -396,6 +401,7 @@ include __DIR__ . "/includes/header.php";
           data-package-id="<?= $packId ?>"
           data-package-provider="<?= htmlspecialchars($packApiProvider, ENT_QUOTES, 'UTF-8') ?>"
           data-base="<?= htmlspecialchars($precio_base) ?>"
+          data-base-currency="<?= htmlspecialchars($clave_moneda) ?>"
           data-name="<?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?>"
           data-cantidad="<?= htmlspecialchars($pack['cantidad'], ENT_QUOTES, 'UTF-8') ?>"
           data-price-value="<?= htmlspecialchars((string) $precio_mostrar, ENT_QUOTES, 'UTF-8') ?>"
@@ -481,6 +487,44 @@ include __DIR__ . "/includes/header.php";
         maximumFractionDigits: showDecimals ? 2 : 0,
       });
     };
+    function setVisibleCurrency(currencyId, options = {}) {
+      const nextId = String(currencyId || '').trim();
+      if (nextId === '' || !monedas[nextId]) {
+        return false;
+      }
+
+      monedaActualId = nextId;
+      monedaActualClave = monedas[nextId].clave || 'USD';
+      monedaActualTasa = parseFloat(monedas[nextId].tasa || '1');
+      monedaActualMostrarDecimales = Boolean(monedas[nextId] && monedas[nextId].mostrar_decimales);
+
+      if (options.syncSelect !== false && monedaSelect && String(monedaSelect.value) !== nextId) {
+        monedaSelect.value = nextId;
+      }
+
+      updatePackPrices();
+
+      if (activePack) {
+        const selectedCard = packCards2.find((card) => card.classList.contains('neon-selected'));
+        if (selectedCard) {
+          activePack = buildPackStateFromCard(selectedCard);
+          updateResumenCompra(activePack);
+          renderPlayerFields(activePack);
+        }
+      } else {
+        renderPlayerFields(null);
+        updateResumenCompra(null);
+      }
+
+      if (options.resetCoupon !== false) {
+        if (couponInput && couponInput.value.trim() !== '') {
+          couponInput.value = '';
+        }
+        resetCouponState();
+      }
+
+      return true;
+    }
     function updatePackPrices() {
       packCards.forEach(card => {
         const base = parseFloat(card.getAttribute('data-base'));
@@ -2679,7 +2723,7 @@ include __DIR__ . "/includes/header.php";
     border-radius: 1rem;
     border: 1px solid rgba(34, 211, 238, 0.22);
     background: linear-gradient(135deg, rgba(8, 20, 36, 0.96), rgba(15, 23, 42, 0.92) 62%, rgba(8, 47, 73, 0.32));
-    overflow: hidden;
+    overflow: visible;
     transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
   }
 
@@ -2707,8 +2751,8 @@ include __DIR__ . "/includes/header.php";
   }
 
   .payment-method-public-card.is-selected {
-    border-color: rgba(34, 197, 94, 0.88);
-    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.24), 0 0 24px rgba(34, 197, 94, 0.22);
+    border-color: rgba(34, 197, 94, 0.98);
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.38), 0 0 0 5px rgba(34, 197, 94, 0.14), 0 0 34px rgba(34, 197, 94, 0.36);
     background: linear-gradient(135deg, rgba(6, 26, 18, 0.98), rgba(15, 23, 42, 0.94) 58%, rgba(21, 128, 61, 0.2));
   }
 
@@ -2728,6 +2772,7 @@ include __DIR__ . "/includes/header.php";
     justify-content: center;
     padding: 0;
     border: 0;
+    border-radius: inherit;
     background: transparent;
     text-align: center;
     color: inherit;
@@ -2745,6 +2790,30 @@ include __DIR__ . "/includes/header.php";
     max-height: none;
     object-fit: cover;
     display: block;
+  }
+
+  .payment-method-public-corner-badge {
+    position: absolute;
+    top: -0.95rem;
+    right: -0.35rem;
+    z-index: 4;
+    width: clamp(56px, 18vw, 82px);
+    aspect-ratio: 1;
+    pointer-events: none;
+    filter: drop-shadow(0 12px 18px rgba(2, 6, 23, 0.42));
+    transition: transform 0.18s ease, filter 0.18s ease;
+  }
+
+  .payment-method-public-corner-badge img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+
+  .payment-method-public-card.is-selected .payment-method-public-corner-badge {
+    transform: scale(1.06);
+    filter: drop-shadow(0 0 16px rgba(34, 197, 94, 0.42)) drop-shadow(0 12px 18px rgba(2, 6, 23, 0.48));
   }
 
   .payment-method-public-text {
@@ -2770,25 +2839,26 @@ include __DIR__ . "/includes/header.php";
     font-weight: 600;
   }
 
-  .payment-method-public-tag {
+  .payment-method-public-points-caption {
     position: absolute;
-    top: 0.55rem;
-    right: 0.65rem;
+    left: 0;
+    right: 0;
+    bottom: 0;
     z-index: 2;
-    padding: 0.22rem 0.5rem;
-    border-radius: 999px;
-    background: rgba(2, 6, 23, 0.68);
-    border: 1px solid rgba(34, 211, 238, 0.22);
-    color: #cbd5e1;
-    font-size: 0.68rem;
+    padding: 0.7rem 0.9rem 0.75rem;
+    background: linear-gradient(180deg, rgba(2, 6, 23, 0) 0%, rgba(2, 6, 23, 0.84) 42%, rgba(2, 6, 23, 0.95) 100%);
+    color: #f8fafc;
+    font-size: 0.78rem;
+    line-height: 1.35;
     font-weight: 700;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+    text-align: left;
   }
 
-  .payment-method-public-card.is-selected .payment-method-public-tag {
-    border-color: rgba(34, 197, 94, 0.34);
-    color: #dcfce7;
+  .payment-method-public-points-caption strong {
+    display: block;
+    color: #fde68a;
+    font-size: 0.84rem;
   }
 
   .purchase-summary-column {
@@ -3425,6 +3495,7 @@ include __DIR__ . "/includes/header.php";
   const accountSaleFeatureEnabled = <?= $accountSaleFeatureEnabled ? 'true' : 'false' ?>;
   const binancePayButtonLabel = 'Binance Pay';
   const binancePayImageUrl = <?= json_encode($binancePayImageUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+  const binancePayCornerImageUrl = <?= json_encode($binancePayCornerImageUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const paymentSupportWhatsappBase = <?= json_encode($paymentSupportWhatsappBase, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const winPointsState = <?= json_encode([
     'enabled' => $winPointsEnabled,
@@ -3432,6 +3503,7 @@ include __DIR__ . "/includes/header.php";
     'name' => $winPointsProgramName,
     'iconUrl' => $winPointsIconUrl,
     'paymentImageUrl' => $winPointsPaymentImageUrl,
+    'paymentCornerImageUrl' => $winPointsPaymentCornerImageUrl,
     'notificationLogoUrl' => $winPointsNotificationLogoUrl,
     'notificationPosition' => $winPointsNotificationPosition,
     'guestMessage' => $winPointsGuestMessage,
@@ -3604,6 +3676,10 @@ include __DIR__ . "/includes/header.php";
     }
 
     const safeQuantity = normalizeOrderQuantity(quantity);
+    if (shouldDisplayPackTotalInPoints(pack)) {
+      return `${safeQuantity} x ${formatWinPointsAmount(getPackRequiredPoints(pack, 1))}`;
+    }
+
     const unitAmount = formatCurrencyAmount(Number(pack.priceValue || 0), Boolean(pack.showDecimals));
     const currencyCode = String(pack.moneda || monedaActualClave || '').trim();
     return currencyCode !== ''
@@ -3673,6 +3749,10 @@ include __DIR__ . "/includes/header.php";
     return Math.max(0, Number(pack && pack.redeemRequiredPoints ? pack.redeemRequiredPoints : 0)) * normalizeOrderQuantity(quantity);
   }
 
+  function shouldDisplayPackTotalInPoints(pack = activePack) {
+    return Boolean(pack && resolvePreferredCheckoutSelection(pack).mode === 'points' && getPackRequiredPoints(pack) > 0);
+  }
+
   function getCurrencyShowDecimals(currencyCode, fallback = monedaActualMostrarDecimales) {
     const target = String(currencyCode || '').trim().toUpperCase();
     if (target === '') {
@@ -3707,10 +3787,48 @@ include __DIR__ . "/includes/header.php";
   function findCurrencyEntryByCode(currencyCode) {
     const rawTarget = String(currencyCode || '').trim().toUpperCase();
     const normalizedTarget = normalizeCurrencyAlias(currencyCode);
-    return Object.values(monedas).find((item) => {
+    const matchedEntry = Object.entries(monedas).find(([currencyId, item]) => {
       const rawCode = String(item && item.clave ? item.clave : '').trim().toUpperCase();
       return (rawTarget !== '' && rawCode === rawTarget) || (normalizedTarget !== '' && normalizeCurrencyAlias(rawCode) === normalizedTarget);
-    }) || null;
+    });
+
+    if (!matchedEntry) {
+      return null;
+    }
+
+    return {
+      id: String(matchedEntry[0] || '').trim(),
+      ...(matchedEntry[1] || {}),
+    };
+  }
+
+  function resolvePreferredDisplayCurrencyCode(mode, methodId = '', pack = activePack) {
+    if (mode === 'money') {
+      const methods = getPaymentMethodsForCurrency(pack ? pack.moneda : '');
+      const selectedMethod = methods.find((method) => String(method.id) === String(methodId || '')) || null;
+      return String(selectedMethod && selectedMethod.moneda_clave ? selectedMethod.moneda_clave : '').trim().toUpperCase();
+    }
+
+    if (mode === 'binance') {
+      const preferredEntry = resolvePreferredBinanceCurrencyEntry();
+      return String(preferredEntry && preferredEntry.clave ? preferredEntry.clave : '').trim().toUpperCase();
+    }
+
+    return '';
+  }
+
+  function syncVisibleCurrencyWithPreferredPayment(pack = activePack, options = {}) {
+    const targetCurrencyCode = resolvePreferredDisplayCurrencyCode(preferredCheckoutPaymentMode, preferredCheckoutMethodId, pack);
+    if (targetCurrencyCode === '') {
+      return false;
+    }
+
+    const entry = findCurrencyEntryByCode(targetCurrencyCode);
+    if (!entry || !entry.id) {
+      return false;
+    }
+
+    return setVisibleCurrency(entry.id, options);
   }
 
   function resolvePreferredBinanceCurrencyEntry() {
@@ -3863,6 +3981,16 @@ include __DIR__ . "/includes/header.php";
       return;
     }
 
+    if (shouldDisplayPackTotalInPoints(pack)) {
+      selectedPrice.textContent = formatWinPointsAmount(getPackRequiredPoints(pack, Number(pack.purchaseQuantity || getOrderQuantity())));
+      if (selectedPriceDetail) {
+        selectedPriceDetail.textContent = '';
+        selectedPriceDetail.classList.add('d-none');
+      }
+      refreshPaymentDifferenceBanner(pack);
+      return;
+    }
+
     const breakdown = getPaymentDifferenceBreakdown(pack, selectedTotalValue);
     selectedPrice.textContent = formatPaymentDifferenceMoney(pack.moneda || monedaActualClave, breakdown.finalAmount, breakdown.showDecimals);
 
@@ -3881,6 +4009,12 @@ include __DIR__ . "/includes/header.php";
 
   function refreshPaymentDifferenceBanner(pack = activePack) {
     if (!paymentDifferenceBanner) {
+      return;
+    }
+
+    if (shouldDisplayPackTotalInPoints(pack)) {
+      paymentDifferenceBanner.className = 'd-none payment-difference-banner mt-3';
+      paymentDifferenceBanner.innerHTML = '';
       return;
     }
 
@@ -4451,6 +4585,7 @@ include __DIR__ . "/includes/header.php";
       name: card.dataset.name,
       priceValue: Number(card.dataset.priceValue || 0),
       moneda: card.dataset.moneda,
+      baseCurrency: String(card.dataset.baseCurrency || card.dataset.moneda || '').trim(),
       cantidad: card.dataset.cantidad,
       showDecimals: card.dataset.showDecimals === '1',
       rewardPoints: Number(card.dataset.winPointsReward || 0),
@@ -4702,6 +4837,23 @@ include __DIR__ . "/includes/header.php";
 
   function resolvePaymentPricing(mode = null, method = null) {
     const pack = activePaymentOrder && activePaymentOrder.pack ? activePaymentOrder.pack : activePack;
+    const quantity = normalizeOrderQuantity(activePaymentOrder && activePaymentOrder.purchaseQuantity ? activePaymentOrder.purchaseQuantity : (pack && pack.purchaseQuantity ? pack.purchaseQuantity : getOrderQuantity()));
+    if ((mode || (activePaymentOrder ? activePaymentOrder.paymentMode : 'money')) === 'points' && pack && getPackRequiredPoints(pack, quantity) > 0) {
+      const pointsRequired = getPackRequiredPoints(pack, quantity);
+      const pointsText = formatWinPointsAmount(pointsRequired);
+      return {
+        currencyCode: String(winPointsState.name || 'Win Points'),
+        showDecimals: false,
+        baseAmount: pointsRequired,
+        discountPercentage: 0,
+        discountAmount: 0,
+        totalAmount: pointsRequired,
+        baseText: pointsText,
+        discountText: formatWinPointsAmount(0),
+        totalText: pointsText,
+      };
+    }
+
     const currencyCode = String((activePaymentOrder && activePaymentOrder.currency) || (pack && pack.moneda) || monedaActualClave || '').trim().toUpperCase();
     const showDecimals = Boolean(pack && pack.showDecimals);
     const baseAmount = normalizeCurrencyAmount(Number(activePaymentOrder && activePaymentOrder.baseAmount !== undefined ? activePaymentOrder.baseAmount : selectedTotalValue), showDecimals);
@@ -4860,7 +5012,8 @@ include __DIR__ . "/includes/header.php";
   }
 
   function resolvePreferredCheckoutSelection(pack) {
-    const methods = getPaymentMethodsForCurrency(pack ? pack.moneda : '');
+    const methodsCurrencyCode = String((pack && (pack.baseCurrency || pack.moneda)) || '').trim();
+    const methods = getPaymentMethodsForCurrency(methodsCurrencyCode);
     const hasPointsRule = Boolean(pack && pack.redeemActive && getPackRequiredPoints(pack) > 0);
     const requiredPoints = hasPointsRule ? getPackRequiredPoints(pack) : 0;
     const canUsePointsNow = Boolean(pack && canRedeemPackWithPoints(pack));
@@ -4923,6 +5076,15 @@ include __DIR__ . "/includes/header.php";
     return currencyLabel || 'Método de pago';
   }
 
+  function paymentMethodPublicCornerMarkup(imageUrl) {
+    const safeUrl = String(imageUrl || '').trim();
+    if (safeUrl === '') {
+      return '';
+    }
+
+    return `<span class="payment-method-public-corner-badge" aria-hidden="true"><img src="${escapePaymentHtml(safeUrl)}" alt=""></span>`;
+  }
+
   function renderPublicPaymentMethodCatalog(pack = activePack) {
     if (!paymentMethodCatalogGrid || !paymentMethodCatalogCopy) {
       return;
@@ -4945,14 +5107,15 @@ include __DIR__ . "/includes/header.php";
         ? `${methodMeta} · ${formatDiscountPercentage(discountPercentage)} OFF`
         : methodMeta;
       const imageUrl = resolvePublicImageUrl(method.image_path || '');
+      const cornerMarkup = paymentMethodPublicCornerMarkup(resolvePublicImageUrl(method.corner_image_path || ''));
       const imageMarkup = imageUrl !== ''
         ? `<img src="${escapePaymentHtml(imageUrl)}" alt="${escapePaymentHtml(method.nombre || 'Método de pago')}" class="payment-method-public-image"><span class="visually-hidden">${escapePaymentHtml(method.nombre || 'Método de pago')}</span>`
         : `<span class="payment-method-public-text"><span class="payment-method-public-name">${escapePaymentHtml(method.nombre || 'Método de pago')}</span><span class="payment-method-public-meta">${escapePaymentHtml(methodMetaText)}</span></span>`;
       const isSelected = selection.mode === 'money' && methodId === String(selection.methodId || '');
       cards.push(`
         <div class="payment-method-public-card${isSelected ? ' is-selected' : ''}">
-          <span class="payment-method-public-tag">Manual</span>
           <button type="button" class="payment-method-public-button" data-payment-option="money" data-method-id="${escapePaymentHtml(methodId)}">${imageMarkup}</button>
+          ${cornerMarkup}
         </div>`);
     });
 
@@ -4962,38 +5125,42 @@ include __DIR__ . "/includes/header.php";
         ? `Checkout externo seguro · ${formatDiscountPercentage(binanceDiscount)} OFF`
         : 'Checkout externo seguro con CoinPal';
       const isSelected = selection.mode === 'binance';
+      const binanceCornerMarkup = paymentMethodPublicCornerMarkup(String(binancePayCornerImageUrl || '').trim());
       const binanceMarkup = String(binancePayImageUrl || '').trim() !== ''
         ? `<img src="${escapePaymentHtml(String(binancePayImageUrl || '').trim())}" alt="${escapePaymentHtml(binancePayButtonLabel)}" class="payment-method-public-image"><span class="visually-hidden">${escapePaymentHtml(binancePayButtonLabel)}</span>`
         : `<span class="payment-method-public-text"><span class="payment-method-public-name">${escapePaymentHtml(binancePayButtonLabel)}</span><span class="payment-method-public-meta">${escapePaymentHtml(binanceMeta)}</span></span>`;
       cards.push(`
         <div class="payment-method-public-card${isSelected ? ' is-selected' : ''}">
-          <span class="payment-method-public-tag">Crypto</span>
           <button type="button" class="payment-method-public-button" data-payment-option="binance">
             ${binanceMarkup}
           </button>
+          ${binanceCornerMarkup}
         </div>`);
     }
 
     if (selection.showPointsOption) {
       const pointsDisabled = !selection.hasPointsRule;
-      let pointsMeta = '';
+      const pointsNeedText = `Necesitas ${formatWinPointsAmount(selection.requiredPoints || 0)}`;
+      let pointsMeta = pointsNeedText;
       if (!winPointsState.loggedIn) {
-        pointsMeta = 'Inicia sesión para usar tus premios';
+        pointsMeta = `${pointsNeedText} · Inicia sesión para usarlo`;
       } else if (!selection.hasPointsRule) {
         pointsMeta = 'Este paquete no admite canje';
       } else if (selection.canUsePointsNow) {
-        pointsMeta = `Saldo: ${formatWinPointsAmount(winPointsState.balance || 0)}`;
+        pointsMeta = `${pointsNeedText} · Saldo actual ${formatWinPointsAmount(winPointsState.balance || 0)}`;
       } else {
-        pointsMeta = `Necesitas ${formatWinPointsAmount(selection.requiredPoints || 0)}`;
+        pointsMeta = `${pointsNeedText} · Saldo actual ${formatWinPointsAmount(winPointsState.balance || 0)}`;
       }
-      const pointsMarkup = String(winPointsState.paymentImageUrl || '').trim() !== ''
-        ? `<img src="${escapePaymentHtml(String(winPointsState.paymentImageUrl || '').trim())}" alt="${escapePaymentHtml(winPointsState.name || 'Win Points')}" class="payment-method-public-image"><span class="visually-hidden">${escapePaymentHtml(winPointsState.name || 'Win Points')}</span>`
+      const pointsImageUrl = String(winPointsState.paymentImageUrl || '').trim();
+      const pointsCornerMarkup = paymentMethodPublicCornerMarkup(String(winPointsState.paymentCornerImageUrl || '').trim());
+      const pointsMarkup = pointsImageUrl !== ''
+        ? `<img src="${escapePaymentHtml(pointsImageUrl)}" alt="${escapePaymentHtml(winPointsState.name || 'Win Points')}" class="payment-method-public-image"><span class="payment-method-public-points-caption"><strong>${escapePaymentHtml(pointsNeedText)}</strong>${escapePaymentHtml(!winPointsState.loggedIn ? 'Inicia sesión para usarlo' : (selection.canUsePointsNow ? `Saldo actual ${formatWinPointsAmount(winPointsState.balance || 0)}` : `Saldo actual ${formatWinPointsAmount(winPointsState.balance || 0)}`))}</span><span class="visually-hidden">${escapePaymentHtml(winPointsState.name || 'Win Points')}</span>`
         : `<span class="payment-method-public-text"><span class="payment-method-public-name">${escapePaymentHtml(winPointsState.name || 'Win Points')}</span><span class="payment-method-public-meta">${escapePaymentHtml(pointsMeta)}</span></span>`;
-      const isSelected = selection.mode === 'points' && selection.canUsePointsNow;
+      const isSelected = selection.mode === 'points';
       cards.push(`
         <div class="payment-method-public-card${isSelected ? ' is-selected' : ''}${pointsDisabled ? ' is-disabled' : ''}">
-          <span class="payment-method-public-tag">Premios</span>
           <button type="button" class="payment-method-public-button" data-payment-option="points" ${pointsDisabled ? 'disabled' : ''}>${pointsMarkup}</button>
+          ${pointsCornerMarkup}
         </div>`);
     }
 
@@ -7162,10 +7329,11 @@ include __DIR__ . "/includes/header.php";
       if (selectedWinPointsTotal) {
         const requiredPoints = getPackRequiredPoints(pack, quantity);
         const hasWinPointsRedemption = Boolean(pack.redeemActive) && requiredPoints > 0;
-        selectedWinPointsTotal.textContent = hasWinPointsRedemption
+        const showWinPointsDetail = hasWinPointsRedemption && !shouldDisplayPackTotalInPoints(pack);
+        selectedWinPointsTotal.textContent = showWinPointsDetail
           ? `Canje: ${formatWinPointsAmount(requiredPoints)}`
           : '';
-        selectedWinPointsTotal.classList.toggle('d-none', !hasWinPointsRedemption);
+        selectedWinPointsTotal.classList.toggle('d-none', !showWinPointsDetail);
       }
       renderPublicPaymentMethodCatalog(pack);
     } else {
@@ -7201,12 +7369,6 @@ include __DIR__ . "/includes/header.php";
     renderPlayerFields(activePack);
     handlePlayerVerificationFieldChange();
     updateButtonState();
-    const shouldScroll = Object.prototype.hasOwnProperty.call(options, 'scroll')
-      ? options.scroll !== false
-      : !isAccountSalePack(activePack);
-    if (shouldScroll) {
-      scrollToOrderForm();
-    }
   }
 
   function focusAccountSaleEmailStep() {
@@ -7439,7 +7601,10 @@ include __DIR__ . "/includes/header.php";
                     : (button.dataset.paymentOption === 'binance' ? 'binance' : 'money');
                   const methodId = button.dataset.methodId || '';
                   storePreferredCheckoutPayment(mode, methodId);
-                  renderPublicPaymentMethodCatalog(activePack);
+                  const switchedCurrency = syncVisibleCurrencyWithPreferredPayment(activePack, { resetCoupon: true });
+                  if (!switchedCurrency) {
+                    updateResumenCompra(activePack);
+                  }
 
                   if (activePaymentOrder) {
                     setActivePaymentMode(mode, methodId, { expandSelected: shouldExpandSinglePaymentOption() });
@@ -7730,29 +7895,7 @@ include __DIR__ . "/includes/header.php";
 
               if (monedaSelect) {
                 monedaSelect.addEventListener('change', function() {
-                  const selectedOption = monedaSelect.options[monedaSelect.selectedIndex];
-                  monedaActualId = selectedOption.value;
-                  monedaActualClave = selectedOption.dataset.clave || 'USD';
-                  monedaActualTasa = parseFloat(selectedOption.dataset.tasa || '1');
-                  monedaActualMostrarDecimales = Boolean(monedas[monedaActualId] && monedas[monedaActualId].mostrar_decimales);
-                  updatePackPrices();
-
-                  if (activePack) {
-                    const selectedCard = packCards2.find((card) => card.classList.contains('neon-selected'));
-                    if (selectedCard) {
-                      activePack = buildPackStateFromCard(selectedCard);
-                      updateResumenCompra(activePack);
-                      renderPlayerFields(activePack);
-                    }
-                  } else {
-                    renderPlayerFields(null);
-                    updateResumenCompra(null);
-                  }
-
-                  if (couponInput.value.trim() !== '') {
-                    couponInput.value = '';
-                  }
-                  resetCouponState();
+                  setVisibleCurrency(monedaSelect.value, { syncSelect: false, resetCoupon: true });
                 });
               }
 
@@ -7975,11 +8118,13 @@ include __DIR__ . "/includes/header.php";
                     if (data && data.payment_difference && String(data.payment_difference.status || '').toLowerCase() === 'credit_applied') {
                       setPaymentDifferenceCreditState(null);
                     }
-                    const createdOrderTotalText = String((data && data.total_text) || '').trim() || (
-                      data && data.payment_difference && String(data.payment_difference.status || '').toLowerCase() === 'credit_applied'
-                        ? formatPaymentDifferenceMoney(pack.moneda || monedaActualClave, Number(data.payment_difference.remaining_amount || 0), pack.showDecimals)
-                        : selectedPrice.textContent
-                    );
+                    const createdOrderTotalText = shouldDisplayPackTotalInPoints(pack)
+                      ? formatWinPointsAmount(getPackRequiredPoints(pack, purchaseQuantity))
+                      : (String((data && data.total_text) || '').trim() || (
+                        data && data.payment_difference && String(data.payment_difference.status || '').toLowerCase() === 'credit_applied'
+                          ? formatPaymentDifferenceMoney(pack.moneda || monedaActualClave, Number(data.payment_difference.remaining_amount || 0), pack.showDecimals)
+                          : selectedPrice.textContent
+                      ));
                     const opened = openPaymentModal(data.order_id, data.expires_at, data.remaining_seconds, pack, userId, createdOrderTotalText, email);
                     if (opened) {
                       showToast('Pedido registrado. Completa ahora los datos del pago.', 'success');

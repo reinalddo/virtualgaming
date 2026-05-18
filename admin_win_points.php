@@ -71,8 +71,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $nextIcon = $currentIcon;
           $currentPaymentImage = store_config_get('win_points_payment_image', '');
           $nextPaymentImage = $currentPaymentImage;
+          $currentPaymentCornerImage = store_config_get('win_points_payment_corner_image', '');
+          $nextPaymentCornerImage = $currentPaymentCornerImage;
             $hasUpload = isset($_FILES['win_points_icon']) && (($_FILES['win_points_icon']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
           $hasPaymentImageUpload = isset($_FILES['win_points_payment_image']) && (($_FILES['win_points_payment_image']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
+          $hasPaymentCornerImageUpload = isset($_FILES['win_points_payment_corner_image']) && (($_FILES['win_points_payment_corner_image']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
 
             if ($programName === '') {
                 throw new RuntimeException('Debes indicar un nombre para la moneda de premios.');
@@ -102,6 +105,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               $nextPaymentImage = '';
             }
 
+            if ($hasPaymentCornerImageUpload) {
+              $paymentCornerImageUpload = win_points_store_payment_corner_image_upload($_FILES['win_points_payment_corner_image']);
+              if (!($paymentCornerImageUpload['success'] ?? false)) {
+                throw new RuntimeException((string) ($paymentCornerImageUpload['message'] ?? 'No se pudo cargar la imagen promocional del método de pago.'));
+              }
+              if (!empty($paymentCornerImageUpload['path'])) {
+                $nextPaymentCornerImage = (string) $paymentCornerImageUpload['path'];
+              }
+            } elseif (isset($_POST['remove_win_points_payment_corner_image'])) {
+              $nextPaymentCornerImage = '';
+            }
+
             store_config_upsert('win_points_name', $programName);
             store_config_upsert('win_points_badge_background_color', $badgeBackgroundColor);
             store_config_upsert('win_points_badge_text_color', $badgeTextColor);
@@ -120,11 +135,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               store_config_upsert('win_points_payment_image', $nextPaymentImage);
             }
 
+            if ($nextPaymentCornerImage === '') {
+              store_config_delete('win_points_payment_corner_image');
+            } else {
+              store_config_upsert('win_points_payment_corner_image', $nextPaymentCornerImage);
+            }
+
             if ($currentIcon !== '' && $currentIcon !== $nextIcon) {
                 win_points_delete_icon_file($currentIcon);
             }
             if ($currentPaymentImage !== '' && $currentPaymentImage !== $nextPaymentImage) {
               win_points_delete_payment_image_file($currentPaymentImage);
+            }
+            if ($currentPaymentCornerImage !== '' && $currentPaymentCornerImage !== $nextPaymentCornerImage) {
+              win_points_delete_payment_corner_image_file($currentPaymentCornerImage);
             }
 
             admin_win_points_set_flash('success', 'Configuracion global de Win Points actualizada.');
@@ -849,6 +873,11 @@ include __DIR__ . '/includes/header.php';
               <input type="file" name="win_points_payment_image" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" class="form-control bg-dark text-info border-info">
               <div class="form-text mt-2">Esta imagen se mostrará en los paquetes como método de pago Win Points. Tamaño recomendado: 1200x480 px.</div>
             </div>
+            <div class="col-md-7">
+              <label class="form-label text-info">Imagen promocional de esquina</label>
+              <input type="file" name="win_points_payment_corner_image" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" class="form-control bg-dark text-info border-info">
+              <div class="form-text mt-2">Se mostrará flotando en la esquina de la card pública de Win Points. Tamaño recomendado: 320x320 px con transparencia.</div>
+            </div>
             <div class="col-md-6">
               <label class="form-label text-info">Color de fondo del badge</label>
               <input type="color" name="win_points_badge_background_color" value="<?= htmlspecialchars($winPointsBadgeBackgroundColor, ENT_QUOTES, 'UTF-8') ?>" class="form-control form-control-color bg-dark border-info w-100" style="height:3rem;" data-win-points-badge-bg-input>
@@ -884,6 +913,16 @@ include __DIR__ . '/includes/header.php';
                 <?php endif; ?>
               </div>
             </div>
+            <div class="col-md-5">
+              <label class="form-label text-info">Vista previa promo esquina</label>
+              <div class="win-points-icon-upload-stage">
+                <?php if (!empty($winPointsConfig['payment_corner_image_url'])): ?>
+                  <img src="<?= htmlspecialchars((string) $winPointsConfig['payment_corner_image_url'], ENT_QUOTES, 'UTF-8') ?>" alt="Promo metodo de pago <?= htmlspecialchars($winPointsConfig['name'], ENT_QUOTES, 'UTF-8') ?>" style="max-width: 180px; margin-inline: auto;">
+                <?php else: ?>
+                  <span class="win-points-icon-upload-empty">Sin imagen</span>
+                <?php endif; ?>
+              </div>
+            </div>
             <div class="col-12">
               <label class="form-label text-info">Vista previa del distintivo en paquetes</label>
               <div class="win-points-badge-preview-wrap">
@@ -905,6 +944,12 @@ include __DIR__ . '/includes/header.php';
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" value="1" id="removeWinPointsPaymentImage" name="remove_win_points_payment_image">
                 <label class="form-check-label" for="removeWinPointsPaymentImage">Eliminar imagen actual del método de pago</label>
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="1" id="removeWinPointsPaymentCornerImage" name="remove_win_points_payment_corner_image">
+                <label class="form-check-label" for="removeWinPointsPaymentCornerImage">Eliminar imagen promocional actual</label>
               </div>
             </div>
             <div class="col-12 d-grid">
