@@ -1342,12 +1342,14 @@ include __DIR__ . "/includes/header.php";
     justify-content: flex-end;
     gap: 0;
     padding: 3rem 0 0;
-    text-align: left;
+    text-align: center;
   }
 
   .game-hero-title-box {
     width: 100%;
     margin-top: auto;
+    display: flex;
+    justify-content: center;
     padding: 1rem 1.5rem 1.05rem;
     border-radius: 0;
     border: 0;
