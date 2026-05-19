@@ -1885,6 +1885,46 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
                             <div class="col-md-8">
                               <div class="form-text mt-2">Estos enlaces salen de la tienda y son los que debes usar cuando PayPal te pida dónde notificar eventos o a dónde devolver al comprador. No los inventes ni los escribas manualmente si no es necesario: copia exactamente estos valores.</div>
                             </div>
+                            <div class="col-12">
+                              <div class="table-responsive mt-2">
+                                <table class="table table-dark table-striped align-middle mb-0">
+                                  <thead>
+                                    <tr>
+                                      <th>Valor de esta tienda</th>
+                                      <th>En dónde se usa dentro de PayPal</th>
+                                      <th>Campo exacto</th>
+                                      <th>Qué debes hacer exactamente</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    <tr>
+                                      <td>URL pública de la tienda</td>
+                                      <td>No va en un campo obligatorio del webhook ni de la app REST.</td>
+                                      <td>No aplica como pegado directo.</td>
+                                      <td>Úsala como referencia para comprobar que el <strong>Webhook URL</strong>, el <strong>Return URL</strong> y el <strong>Cancel URL</strong> pertenecen al mismo dominio de tu tienda.</td>
+                                    </tr>
+                                    <tr>
+                                      <td>Webhook URL</td>
+                                      <td><strong>PayPal Developer &gt; Apps &amp; Credentials &gt; tu app &gt; Webhooks &gt; Add webhook</strong>.</td>
+                                      <td>Campo <strong>Webhook URL</strong> o <strong>URL</strong> del formulario del webhook.</td>
+                                      <td>Pega allí exactamente el valor mostrado en esta tienda y luego selecciona los eventos a suscribir.</td>
+                                    </tr>
+                                    <tr>
+                                      <td>Return URL</td>
+                                      <td>No se pega manualmente en el formulario de <strong>Webhooks</strong> ni en <strong>Apps &amp; Credentials</strong> para esta integración.</td>
+                                      <td>La tienda la envía automáticamente a PayPal dentro de la orden, en <strong>experience_context.return_url</strong>.</td>
+                                      <td>No debes buscar un campo en el dashboard para pegarla. Solo verifica que esta URL sea correcta para tu dominio. Si alguna configuración adicional de PayPal te pidiera una URL de retorno, usa exactamente esta.</td>
+                                    </tr>
+                                    <tr>
+                                      <td>Cancel URL</td>
+                                      <td>No se pega manualmente en el formulario de <strong>Webhooks</strong> ni en <strong>Apps &amp; Credentials</strong> para esta integración.</td>
+                                      <td>La tienda la envía automáticamente a PayPal dentro de la orden, en <strong>experience_context.cancel_url</strong>.</td>
+                                      <td>No debes buscar un campo en el dashboard para pegarla. Solo verifica que esta URL sea correcta para tu dominio. Si alguna configuración adicional de PayPal te pidiera una URL de cancelación, usa exactamente esta.</td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1896,6 +1936,7 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
                             <li>Dentro de tu app REST en PayPal Developer, busca la sección <strong>Webhooks</strong>.</li>
                             <li>Haz clic en <strong>Add webhook</strong> o <strong>Create webhook</strong>.</li>
                             <li>En el campo de URL pega exactamente <a href="<?= htmlspecialchars($paypalWebhookUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" style="color:#7dd3fc; text-decoration:underline;"><strong><?= htmlspecialchars($paypalWebhookUrl, ENT_QUOTES, 'UTF-8') ?></strong></a>.</li>
+                            <li>En ese formulario de PayPal <strong>no</strong> debes pegar ahí el <strong>Return URL</strong> ni el <strong>Cancel URL</strong>; ese formulario solo corresponde al webhook y a sus eventos.</li>
                             <li>Guarda el webhook y luego entra al detalle del webhook creado.</li>
                             <li>Copia el <strong>Webhook ID</strong> y pégalo en el campo <strong>Webhook ID</strong> de esta tienda.</li>
                           </ol>
@@ -1933,7 +1974,7 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
                             <li>Guarda el webhook en PayPal.</li>
                             <li>Vuelve al detalle del webhook en PayPal y copia el <strong>Webhook ID</strong>.</li>
                             <li>Pega ese <strong>Webhook ID</strong> en esta tienda.</li>
-                            <li>Verifica que <strong>Return URL</strong> y <strong>Cancel URL</strong> se correspondan con esta misma tienda y dominio.</li>
+                            <li>Verifica que <strong>Return URL</strong> y <strong>Cancel URL</strong> se correspondan con esta misma tienda y dominio. En esta integración no se registran manualmente en el formulario del webhook; la tienda los envía automáticamente al crear la orden.</li>
                             <li>Guarda esta configuración en el panel.</li>
                             <li>Haz una prueba real del flujo en el entorno seleccionado antes de anunciarlo como activo.</li>
                           </ol>
