@@ -11,10 +11,17 @@ require_once __DIR__ . "/includes/home_gallery.php";
 require_once __DIR__ . "/includes/slugify.php";
 currency_ensure_schema();
 $pageTitle = store_config_get('nombre_tienda', 'TVirtualGaming') . " | " . store_config_get('nombre_tienda_subtitulo', 'Tienda de monedas digitales');
-$startupPopupTabEnabled = store_config_get('inicio_popup_tab_habilitado', '1') === '1';
-$startupPopupNormalEnabled = $startupPopupTabEnabled && store_config_get('inicio_popup_activo', '1') === '1';
-$startupPopupVideoEnabled = $startupPopupTabEnabled && store_config_get('inicio_popup_video_activo', '0') === '1';
-$startupPopupGalleryEnabled = $startupPopupTabEnabled && store_config_get('inicio_popup_galeria', '0') === '1';
+$startupPopupConfig = store_config_all();
+$startupPopupNormalEnabled = trim((string) ($startupPopupConfig['inicio_popup_activo'] ?? '1')) === '1';
+$startupPopupVideoEnabled = trim((string) ($startupPopupConfig['inicio_popup_video_activo'] ?? '0')) === '1';
+$startupPopupGalleryEnabled = trim((string) ($startupPopupConfig['inicio_popup_galeria'] ?? '0')) === '1';
+$startupPopupTabEnabled = trim((string) ($startupPopupConfig['inicio_popup_tab_habilitado'] ?? '1')) === '1'
+  || $startupPopupNormalEnabled
+  || $startupPopupVideoEnabled
+  || $startupPopupGalleryEnabled;
+$startupPopupNormalEnabled = $startupPopupTabEnabled && $startupPopupNormalEnabled;
+$startupPopupVideoEnabled = $startupPopupTabEnabled && $startupPopupVideoEnabled;
+$startupPopupGalleryEnabled = $startupPopupTabEnabled && $startupPopupGalleryEnabled;
 $startupPopupFrequency = store_config_get('inicio_popup_frecuencia', 'per_session');
 if (!in_array($startupPopupFrequency, ['always', 'per_entry', 'per_session'], true)) {
   $startupPopupFrequency = 'per_session';
