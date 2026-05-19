@@ -453,6 +453,16 @@ include __DIR__ . "/includes/header.php";
               <?php else: ?>
                 <span class="pack-card-placeholder">PK</span>
               <?php endif; ?>
+              <?php if (!empty($packFeatures)): ?>
+                <div class="pack-card-features" aria-hidden="true">
+                  <?php foreach ($packFeatures as $feature): ?>
+                    <span class="pack-card-feature-badge">
+                      <?= package_feature_render_icon((string) ($feature['icon'] ?? 'sparkles'), 'pack-card-feature-icon') ?>
+                      <span class="pack-card-feature-text"><?= htmlspecialchars((string) ($feature['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                    </span>
+                  <?php endforeach; ?>
+                </div>
+              <?php endif; ?>
             </div>
             <div class="pack-card-content">
               <p class="pack-card-name mb-0 fw-semibold"><?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?></p>
@@ -3387,6 +3397,52 @@ include __DIR__ . "/includes/header.php";
     letter-spacing: 0.18em;
   }
 
+  .pack-card-features {
+    position: absolute;
+    left: 0.6rem;
+    right: 0.6rem;
+    bottom: 0.55rem;
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    align-items: flex-end;
+    pointer-events: none;
+  }
+
+  .pack-card-feature-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    max-width: 100%;
+    min-height: 1.65rem;
+    padding: 0.28rem 0.58rem;
+    border-radius: 999px;
+    border: 1px solid rgba(var(--theme-button-primary-rgb), 0.42);
+    background: rgba(7, 14, 26, 0.82);
+    color: #f8fbff;
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28);
+    backdrop-filter: blur(3px);
+  }
+
+  .pack-card-feature-icon {
+    width: 0.82rem !important;
+    height: 0.82rem !important;
+    color: var(--theme-button-primary, #22D3EE);
+  }
+
+  .pack-card-feature-text {
+    display: inline-block;
+    max-width: 9.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.01em;
+  }
+
   .pack-card-content {
     display: grid;
     gap: 0.75rem;
@@ -3532,6 +3588,23 @@ include __DIR__ . "/includes/header.php";
       min-height: 7.3rem;
       aspect-ratio: 16 / 10;
       padding: 0;
+    }
+
+    .pack-card-features {
+      left: 0.45rem;
+      right: 0.45rem;
+      bottom: 0.42rem;
+      gap: 0.28rem;
+    }
+
+    .pack-card-feature-badge {
+      min-height: 1.5rem;
+      padding: 0.24rem 0.5rem;
+    }
+
+    .pack-card-feature-text {
+      max-width: 7.2rem;
+      font-size: 0.66rem;
     }
 
     .pack-card-content {
