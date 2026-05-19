@@ -1456,8 +1456,11 @@ include __DIR__ . "/includes/header.php";
 
   .payment-summary-feature-icon {
     display: inline-flex;
-    width: 0.82rem;
-    height: 0.82rem;
+    align-items: center;
+    justify-content: center;
+    min-width: 0.82rem;
+    min-height: 0.82rem;
+    line-height: 1;
     color: var(--theme-package-feature-text, #D8FBFF);
   }
 
@@ -3327,11 +3330,28 @@ include __DIR__ . "/includes/header.php";
     border-radius: 1.1rem;
     border: 0 !important;
     overflow: hidden;
+    isolation: isolate;
     appearance: none;
     background:
       radial-gradient(circle at top, rgba(var(--theme-button-primary-rgb), 0.18), transparent 45%),
       linear-gradient(180deg, rgba(var(--theme-button-surface-rgb), 0.98), rgba(var(--theme-bg-main-rgb), 0.98));
-    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    will-change: transform, box-shadow;
+    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s ease, border-color 0.28s ease, background 0.28s ease;
+  }
+
+  .pack-card::before {
+    content: "";
+    position: absolute;
+    inset: -22%;
+    border-radius: inherit;
+    background:
+      radial-gradient(circle at top, rgba(var(--theme-button-secondary-rgb), 0.24), transparent 48%),
+      radial-gradient(circle at bottom, rgba(var(--theme-button-primary-rgb), 0.16), transparent 52%);
+    opacity: 0;
+    transform: translate3d(0, 18px, 0) scale(0.92);
+    transition: opacity 0.28s ease, transform 0.36s cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: none;
+    z-index: 0;
   }
 
   .pack-card::after {
@@ -3343,9 +3363,17 @@ include __DIR__ . "/includes/header.php";
     pointer-events: none;
   }
 
-  .pack-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 1rem 2rem rgba(var(--theme-button-primary-rgb), 0.2);
+  .pack-card:hover,
+  .pack-card:focus-visible {
+    transform: translateY(-9px) scale(1.02);
+    box-shadow: 0 1.4rem 2.6rem rgba(var(--theme-button-primary-rgb), 0.24), 0 0 0 1px rgba(var(--theme-button-secondary-rgb), 0.28);
+    outline: none;
+  }
+
+  .pack-card:hover::before,
+  .pack-card:focus-visible::before {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
   }
 
   .pack-card .card-body {
@@ -3380,8 +3408,14 @@ include __DIR__ . "/includes/header.php";
     height: 100%;
     object-fit: cover;
     display: block;
-    transform: none;
+    transition: transform 0.36s cubic-bezier(0.22, 1, 0.36, 1), filter 0.3s ease;
     border-radius: 0;
+  }
+
+  .pack-card:hover .pack-card-image,
+  .pack-card:focus-visible .pack-card-image {
+    transform: scale(1.07);
+    filter: saturate(1.08) brightness(1.05);
   }
 
   .pack-card-glow {
@@ -3406,15 +3440,18 @@ include __DIR__ . "/includes/header.php";
     z-index: 2;
     display: flex;
     flex-wrap: wrap;
+    gap: 0.42rem;
     transition: transform 0.36s cubic-bezier(0.22, 1, 0.36, 1), filter 0.3s ease;
-    align-items: flex-end;
+    align-items: flex-start;
+    align-content: flex-start;
     pointer-events: none;
   }
 
   .pack-card-feature-badge {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
+    justify-content: flex-start;
+    gap: 0.42rem;
     max-width: 100%;
     min-height: 1.65rem;
     padding: 0.28rem 0.58rem;
@@ -3426,22 +3463,32 @@ include __DIR__ . "/includes/header.php";
     transition: transform 0.24s ease, box-shadow 0.24s ease, background 0.24s ease;
   }
 
+  .pack-card:hover .pack-card-feature-badge,
+  .pack-card:focus-visible .pack-card-feature-badge {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 32px rgba(2, 6, 23, 0.28);
+    background: rgba(7, 16, 33, 0.9);
+  }
+
   .pack-card-feature-icon {
-    transform: translateY(-7px) scale(1.02);
-    box-shadow: 0 0 0 1px rgba(var(--theme-button-primary-rgb), 1), 0 0 0 4px rgba(var(--theme-button-primary-rgb), 0.34), 0 0 24px 5px rgba(var(--theme-button-primary-rgb), 0.7), 0 0 46px 10px rgba(var(--theme-button-secondary-rgb), 0.52);
-    height: 0.82rem !important;
-    transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0.95rem;
+    min-height: 0.95rem;
+    flex: 0 0 auto;
+    line-height: 1;
+    color: var(--theme-package-feature-text, #D8FBFF);
   }
 
   .pack-card-feature-text {
-    display: inline-block;
-    box-shadow: inset 0 0 0 2px var(--theme-button-primary), inset 0 0 0 5px rgba(var(--theme-button-secondary-rgb), 0.22);
+    display: block;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 0.72rem;
     font-weight: 700;
-    line-height: 1;
+    line-height: 1.08;
     letter-spacing: 0.01em;
   }
 
@@ -3493,14 +3540,26 @@ include __DIR__ . "/includes/header.php";
   }
 
   .neon-selected {
-    box-shadow: 0 0 16px 4px rgba(var(--theme-button-primary-rgb), 0.95), 0 0 32px 8px rgba(var(--theme-button-secondary-rgb), 0.75);
+    transform: translateY(-7px) scale(1.02);
+    box-shadow: 0 0 0 1px rgba(var(--theme-button-primary-rgb), 1), 0 0 0 4px rgba(var(--theme-button-primary-rgb), 0.34), 0 0 24px 5px rgba(var(--theme-button-primary-rgb), 0.7), 0 0 46px 10px rgba(var(--theme-button-secondary-rgb), 0.52);
     background: var(--theme-surface-alt) !important;
-    transition: box-shadow 0.2s, border-color 0.2s;
+    transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
     z-index: 2;
   }
 
   .neon-selected::after {
-    box-shadow: inset 0 0 0 2px var(--theme-button-primary);
+    box-shadow: inset 0 0 0 2px var(--theme-button-primary), inset 0 0 0 5px rgba(var(--theme-button-secondary-rgb), 0.22);
+  }
+
+  .neon-selected::before {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1.02);
+  }
+
+  .neon-selected:hover,
+  .neon-selected:focus-visible {
+    transform: translateY(-10px) scale(1.025);
+    box-shadow: 0 0 0 1px rgba(var(--theme-button-primary-rgb), 1), 0 0 0 5px rgba(var(--theme-button-primary-rgb), 0.42), 0 0 32px 7px rgba(var(--theme-button-primary-rgb), 0.82), 0 0 58px 14px rgba(var(--theme-button-secondary-rgb), 0.6);
   }
 
   .neon-selected .pack-card-footer {

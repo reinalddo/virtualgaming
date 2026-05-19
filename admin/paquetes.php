@@ -385,16 +385,19 @@ function admin_package_find_api_discord_price_command(string $topupCommandKey): 
 function admin_package_feature_icon_options_html(array $iconOptions, string $selected = 'sparkles'): string {
     $selectedIcon = package_feature_normalize_icon($selected);
     $iconSymbols = [
-        'sparkles' => '✦',
-        'diamond' => '◆',
+        'sparkles' => '✨',
+        'diamond' => '💎',
         'lightning' => '⚡',
         'shield' => '🛡',
         'gift' => '🎁',
         'controller' => '🎮',
         'trophy' => '🏆',
         'rocket' => '🚀',
-        'star' => '★',
-        'layers' => '▣',
+        'star' => '⭐',
+        'layers' => '🧩',
+        'best_seller' => '🔥',
+        'limited' => '⏳',
+        'recommended' => '👑',
     ];
     $html = '';
     foreach ($iconOptions as $iconKey => $label) {

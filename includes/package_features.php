@@ -43,6 +43,9 @@ if (!function_exists('package_feature_icon_options')) {
             'rocket' => 'Impulso',
             'star' => 'Destacado',
             'layers' => 'Bundle',
+            'best_seller' => 'MAS VENDIDO',
+            'limited' => 'LIMITADO',
+            'recommended' => 'RECOMENDADO',
         ];
     }
 }
@@ -60,6 +63,9 @@ if (!function_exists('package_feature_icon_svg_map')) {
             'rocket' => '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M9.7.5c1.8.1 3.4.8 4.8 2.1 1.3 1.4 2 3 2.1 4.8l-3.4 1.7-1.5-1.5-2.3 2.3.6 2.7-2.1 2.1-.9-2.4-2.4-.9 2.1-2.1 2.7.6 2.3-2.3-1.5-1.5L9.7.5Zm2.6 3.1a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4ZM2.2 11.3c.8 0 1.5.7 1.5 1.5 0 1.2-1.9 2.7-3.2 3.2.5-1.3 2-3.2 3.2-3.2Z"/></svg>',
             'star' => '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="m8 0 2.2 4.6 5 .7-3.6 3.6.9 5.1L8 11.6 3.5 14l.9-5.1L.8 5.3l5-.7L8 0Z"/></svg>',
             'layers' => '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 1 1 4.5 8 8l7-3.5L8 1Zm-7 6 7 3.5L15 7v2L8 12.5 1 9V7Zm0 4 7 3.5 7-3.5v2L8 16 1 13v-2Z"/></svg>',
+            'best_seller' => '<span aria-hidden="true" style="display:inline-block;font-size:1.05rem;line-height:1;">🔥</span>',
+            'limited' => '<span aria-hidden="true" style="display:inline-block;font-size:1.05rem;line-height:1;">⏳</span>',
+            'recommended' => '<span aria-hidden="true" style="display:inline-block;font-size:1.05rem;line-height:1;">👑</span>',
         ];
     }
 }
@@ -101,9 +107,15 @@ if (!function_exists('package_feature_render_icon')) {
         $svgMap = package_feature_icon_svg_map();
         $normalizedIcon = package_feature_normalize_icon($icon);
         $svg = $svgMap[$normalizedIcon] ?? $svgMap['sparkles'];
-        $svg = preg_replace('/<svg\s+/i', '<svg style="width:100%;height:100%;display:block;" ', $svg, 1) ?? $svg;
+        $isSvg = stripos($svg, '<svg') !== false;
+        if ($isSvg) {
+            $svg = preg_replace('/<svg\s+/i', '<svg style="width:100%;height:100%;display:block;" ', $svg, 1) ?? $svg;
+        }
         $classAttr = trim($className) !== '' ? ' class="' . htmlspecialchars(trim($className), ENT_QUOTES, 'UTF-8') . '"' : '';
-        return '<span' . $classAttr . ' style="display:inline-flex;width:1rem;height:1rem;line-height:0;flex:0 0 auto;">' . $svg . '</span>';
+        $style = $isSvg
+            ? 'display:inline-flex;width:1rem;height:1rem;line-height:0;flex:0 0 auto;align-items:center;justify-content:center;'
+            : 'display:inline-flex;min-width:1rem;line-height:1;flex:0 0 auto;align-items:center;justify-content:center;';
+        return '<span' . $classAttr . ' style="' . $style . '">' . $svg . '</span>';
     }
 }
 
