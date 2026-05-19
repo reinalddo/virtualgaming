@@ -70,9 +70,74 @@ if (!function_exists('package_feature_icon_svg_map')) {
     }
 }
 
+if (!function_exists('package_feature_icon_aliases')) {
+    function package_feature_icon_aliases(): array {
+        return [
+            'brillo' => 'sparkles',
+            'sparkles' => 'sparkles',
+            'diamante' => 'diamond',
+            'diamond' => 'diamond',
+            'entrega inmediata' => 'lightning',
+            'entrega instantanea' => 'lightning',
+            'entrega instantánea' => 'lightning',
+            'lightning' => 'lightning',
+            'proteccion' => 'shield',
+            'protección' => 'shield',
+            'shield' => 'shield',
+            'bonus' => 'gift',
+            'gift' => 'gift',
+            'gaming' => 'controller',
+            'controller' => 'controller',
+            'premio' => 'trophy',
+            'trophy' => 'trophy',
+            'impulso' => 'rocket',
+            'rocket' => 'rocket',
+            'destacado' => 'star',
+            'star' => 'star',
+            'bundle' => 'layers',
+            'layers' => 'layers',
+            'mas vendido' => 'best_seller',
+            'más vendido' => 'best_seller',
+            'best seller' => 'best_seller',
+            'best_seller' => 'best_seller',
+            'limitado' => 'limited',
+            'limited' => 'limited',
+            'recomendado' => 'recommended',
+            'recommended' => 'recommended',
+        ];
+    }
+}
+
+if (!function_exists('package_feature_icon_visual_styles')) {
+    function package_feature_icon_visual_styles(string $icon): array {
+        $normalizedIcon = package_feature_icon_aliases()[strtolower(trim($icon))] ?? package_feature_normalize_icon($icon);
+        $styles = [
+            'sparkles' => ['color' => '#67e8f9', 'shadow' => 'rgba(103, 232, 249, 0.45)'],
+            'diamond' => ['color' => '#7dd3fc', 'shadow' => 'rgba(125, 211, 252, 0.5)'],
+            'lightning' => ['color' => '#fbbf24', 'shadow' => 'rgba(251, 191, 36, 0.58)'],
+            'shield' => ['color' => '#93c5fd', 'shadow' => 'rgba(147, 197, 253, 0.48)'],
+            'gift' => ['color' => '#f9a8d4', 'shadow' => 'rgba(249, 168, 212, 0.45)'],
+            'controller' => ['color' => '#c4b5fd', 'shadow' => 'rgba(196, 181, 253, 0.48)'],
+            'trophy' => ['color' => '#fcd34d', 'shadow' => 'rgba(252, 211, 77, 0.52)'],
+            'rocket' => ['color' => '#fb7185', 'shadow' => 'rgba(251, 113, 133, 0.48)'],
+            'star' => ['color' => '#fde68a', 'shadow' => 'rgba(253, 230, 138, 0.48)'],
+            'layers' => ['color' => '#86efac', 'shadow' => 'rgba(134, 239, 172, 0.45)'],
+            'best_seller' => ['color' => '#fb923c', 'shadow' => 'rgba(251, 146, 60, 0.5)'],
+            'limited' => ['color' => '#fca5a5', 'shadow' => 'rgba(252, 165, 165, 0.45)'],
+            'recommended' => ['color' => '#facc15', 'shadow' => 'rgba(250, 204, 21, 0.5)'],
+        ];
+
+        return $styles[$normalizedIcon] ?? $styles['sparkles'];
+    }
+}
+
 if (!function_exists('package_feature_normalize_icon')) {
     function package_feature_normalize_icon(?string $value): string {
         $normalized = strtolower(trim((string) $value));
+        $aliases = package_feature_icon_aliases();
+        if (isset($aliases[$normalized])) {
+            $normalized = $aliases[$normalized];
+        }
         $options = package_feature_icon_options();
         return array_key_exists($normalized, $options) ? $normalized : 'sparkles';
     }
@@ -106,6 +171,7 @@ if (!function_exists('package_feature_render_icon')) {
     function package_feature_render_icon(string $icon, string $className = ''): string {
         $svgMap = package_feature_icon_svg_map();
         $normalizedIcon = package_feature_normalize_icon($icon);
+        $visualStyles = package_feature_icon_visual_styles($normalizedIcon);
         $svg = $svgMap[$normalizedIcon] ?? $svgMap['sparkles'];
         $isSvg = stripos($svg, '<svg') !== false;
         if ($isSvg) {
@@ -115,6 +181,8 @@ if (!function_exists('package_feature_render_icon')) {
         $style = $isSvg
             ? 'display:inline-flex;width:1rem;height:1rem;line-height:0;flex:0 0 auto;align-items:center;justify-content:center;'
             : 'display:inline-flex;min-width:1rem;line-height:1;flex:0 0 auto;align-items:center;justify-content:center;';
+        $style .= 'color:' . htmlspecialchars((string) ($visualStyles['color'] ?? '#67e8f9'), ENT_QUOTES, 'UTF-8') . ';';
+        $style .= 'filter:drop-shadow(0 0 0.42rem ' . htmlspecialchars((string) ($visualStyles['shadow'] ?? 'rgba(103, 232, 249, 0.45)'), ENT_QUOTES, 'UTF-8') . ');';
         return '<span' . $classAttr . ' style="' . $style . '">' . $svg . '</span>';
     }
 }

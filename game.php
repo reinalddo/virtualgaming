@@ -3540,15 +3540,15 @@ include __DIR__ . "/includes/header.php";
   }
 
   .neon-selected {
-    transform: translateY(-7px) scale(1.02);
-    box-shadow: 0 0 0 1px rgba(var(--theme-button-primary-rgb), 1), 0 0 0 4px rgba(var(--theme-button-primary-rgb), 0.34), 0 0 24px 5px rgba(var(--theme-button-primary-rgb), 0.7), 0 0 46px 10px rgba(var(--theme-button-secondary-rgb), 0.52);
-    background: var(--theme-surface-alt) !important;
+    transform: translateY(-9px) scale(1.022);
+    box-shadow: 0 0 0 2px rgba(var(--theme-button-primary-rgb), 1), 0 0 0 7px rgba(var(--theme-button-primary-rgb), 0.38), 0 0 30px 8px rgba(var(--theme-button-primary-rgb), 0.74), 0 0 64px 16px rgba(var(--theme-button-secondary-rgb), 0.62);
+    background: linear-gradient(180deg, rgba(var(--theme-button-surface-rgb), 1), rgba(var(--theme-bg-main-rgb), 0.98)) !important;
     transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
-    z-index: 2;
+    z-index: 3;
   }
 
   .neon-selected::after {
-    box-shadow: inset 0 0 0 2px var(--theme-button-primary), inset 0 0 0 5px rgba(var(--theme-button-secondary-rgb), 0.22);
+    box-shadow: inset 0 0 0 3px rgba(var(--theme-button-primary-rgb), 1), inset 0 0 0 7px rgba(var(--theme-button-secondary-rgb), 0.28);
   }
 
   .neon-selected::before {
@@ -3556,10 +3556,18 @@ include __DIR__ . "/includes/header.php";
     transform: translate3d(0, 0, 0) scale(1.02);
   }
 
+  .neon-selected .pack-card-media {
+    box-shadow: inset 0 0 0 2px rgba(var(--theme-button-primary-rgb), 0.82), 0 0 24px rgba(var(--theme-button-primary-rgb), 0.24);
+  }
+
+  .neon-selected .pack-card-content {
+    background: linear-gradient(180deg, rgba(var(--theme-button-primary-rgb), 0.08), rgba(var(--theme-bg-main-rgb), 0));
+  }
+
   .neon-selected:hover,
   .neon-selected:focus-visible {
-    transform: translateY(-10px) scale(1.025);
-    box-shadow: 0 0 0 1px rgba(var(--theme-button-primary-rgb), 1), 0 0 0 5px rgba(var(--theme-button-primary-rgb), 0.42), 0 0 32px 7px rgba(var(--theme-button-primary-rgb), 0.82), 0 0 58px 14px rgba(var(--theme-button-secondary-rgb), 0.6);
+    transform: translateY(-11px) scale(1.026);
+    box-shadow: 0 0 0 2px rgba(var(--theme-button-primary-rgb), 1), 0 0 0 8px rgba(var(--theme-button-primary-rgb), 0.44), 0 0 36px 9px rgba(var(--theme-button-primary-rgb), 0.84), 0 0 72px 18px rgba(var(--theme-button-secondary-rgb), 0.66);
   }
 
   .neon-selected .pack-card-footer {
