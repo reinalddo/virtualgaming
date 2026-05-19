@@ -1956,7 +1956,13 @@ switch ($seccion) {
         require_once __DIR__ . '/includes/home_gallery.php';
         require_once __DIR__ . '/includes/payment_methods.php';
         require_once __DIR__ . '/includes/api_discord.php';
-        $startupPopupTabEnabled = store_config_get('inicio_popup_tab_habilitado', '1') === '1';
+        $startupPopupNormalEnabled = store_config_get('inicio_popup_activo', '1') === '1';
+        $startupPopupVideoEnabled = store_config_get('inicio_popup_video_activo', '0') === '1';
+        $startupPopupGalleryEnabled = store_config_get('inicio_popup_galeria', '0') === '1';
+        $startupPopupTabEnabled = store_config_get('inicio_popup_tab_habilitado', '1') === '1'
+            || $startupPopupNormalEnabled
+            || $startupPopupVideoEnabled
+            || $startupPopupGalleryEnabled;
         $binanceApiTabEnabled = store_config_get('api_binance', '0') === '1';
         $paypalTabEnabled = store_config_get('pago_paypal', '0') === '1';
         $discordApiTabEnabled = store_config_get('api_discord', '0') === '1';

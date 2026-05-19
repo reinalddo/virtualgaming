@@ -14,7 +14,13 @@ require_once __DIR__ . '/includes/api_discord.php';
 $cfg = store_config_all();
 $paymentMethodDiscountsEnabled = trim((string) ($cfg['descuento_metodo_pago'] ?? store_config_get('descuento_metodo_pago', '0'))) === '1';
 $activeTab = defined('ADMIN_CONFIG_ACTIVE_TAB') ? ADMIN_CONFIG_ACTIVE_TAB : ($_GET['tab'] ?? 'correo');
-$startupPopupTabEnabled = store_config_get('inicio_popup_tab_habilitado', '1') === '1';
+$startupPopupNormalEnabled = ($cfg['inicio_popup_activo'] ?? '1') === '1';
+$startupPopupVideoEnabled = ($cfg['inicio_popup_video_activo'] ?? '0') === '1';
+$startupPopupGalleryEnabled = ($cfg['inicio_popup_galeria'] ?? '0') === '1';
+$startupPopupTabEnabled = store_config_get('inicio_popup_tab_habilitado', '1') === '1'
+  || $startupPopupNormalEnabled
+  || $startupPopupVideoEnabled
+  || $startupPopupGalleryEnabled;
 $rechargeNotificationsTabEnabled = ($cfg['notificaciones_recargas'] ?? '0') === '1';
 $binanceApiTabEnabled = store_config_get('api_binance', '0') === '1';
 $paypalTabEnabled = store_config_get('pago_paypal', '0') === '1';
@@ -224,9 +230,6 @@ if ($paymentDifferenceConfigEnabled) {
   }
 }
 $themeFieldGroups['Textos y estados'] = ['theme_text', 'theme_text_muted', 'theme_price_text', 'theme_price_muted', 'theme_warning', 'theme_danger'];
-$startupPopupNormalEnabled = ($cfg['inicio_popup_activo'] ?? '1') === '1';
-$startupPopupVideoEnabled = ($cfg['inicio_popup_video_activo'] ?? '0') === '1';
-$startupPopupGalleryEnabled = ($cfg['inicio_popup_galeria'] ?? '0') === '1';
 $startupPopupMode = trim((string) ($cfg['inicio_popup_modo'] ?? ''));
 $startupPopupAvailableModes = ['none' => 'No mostrar ninguna ventana inicial'];
 if ($startupPopupNormalEnabled) {
