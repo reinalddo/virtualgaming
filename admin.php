@@ -411,6 +411,24 @@ function admin_extra_features_ensure_schema(): void {
         $stmt->close();
     }
 
+    store_config_upsert('pago_paypal', store_config_get('pago_paypal', '0') === '1' ? '1' : '0', $configDescriptions['pago_paypal'] ?? 'Activa o desactiva la configuración base de PayPal Checkout para este tenant.');
+    $paypalFeatureName = 'Pasarela de Pago Paypal';
+    $paypalFeatureDescription = 'Activa cobros automáticos con PayPal Checkout, webhook y recarga automática para este tenant.';
+    $paypalStmt = $mysqli->prepare(
+        "UPDATE configuracion_general
+         SET mostrar_a_cliente = 1,
+             funcion_venta = COALESCE(NULLIF(funcion_venta, ''), ?),
+             descripcion_venta = COALESCE(NULLIF(descripcion_venta, ''), ?),
+             precio = COALESCE(precio, 30),
+             comision_venta = COALESCE(comision_venta, 0)
+         WHERE clave = 'pago_paypal'"
+    );
+    if ($paypalStmt) {
+        $paypalStmt->bind_param('ss', $paypalFeatureName, $paypalFeatureDescription);
+        $paypalStmt->execute();
+        $paypalStmt->close();
+    }
+
     store_config_upsert('api_discord', store_config_get('api_discord', '0') === '1' ? '1' : '0', $configDescriptions['api_discord'] ?? 'Activa o desactiva la integración base de API Discord para enviar comandos de consulta y pruebas de recarga desde este tenant.');
     $discordFeatureName = 'API Discord';
     $discordFeatureDescription = 'Automatiza pruebas webhook y futuras integraciones de comandos de Discord para consultas de precios y recargas controladas.';
@@ -1940,11 +1958,15 @@ switch ($seccion) {
         require_once __DIR__ . '/includes/api_discord.php';
         $startupPopupTabEnabled = store_config_get('inicio_popup_tab_habilitado', '1') === '1';
         $binanceApiTabEnabled = store_config_get('api_binance', '0') === '1';
+        $paypalTabEnabled = store_config_get('pago_paypal', '0') === '1';
         $discordApiTabEnabled = store_config_get('api_discord', '0') === '1';
         $activeTab = $_GET['tab'] ?? 'correo';
         $allowedTabs = ['correo', 'cabecera', 'notificaciones-recargas', 'sociales', 'api-banco', 'api-free-fire', 'personalizar-colores', 'galeria', 'metodos-pago'];
         if ($binanceApiTabEnabled) {
             $allowedTabs[] = 'api-binance';
+        }
+        if ($paypalTabEnabled) {
+            $allowedTabs[] = 'paypal';
         }
         if ($discordApiTabEnabled) {
             $allowedTabs[] = 'api-discord';
@@ -2445,6 +2467,113 @@ switch ($seccion) {
                     store_config_delete_logo_file($currentBinanceCornerImage);
                 }
                 admin_set_flash('success', 'Configuración de Binance Pay actualizada.');
+            }
+
+            if ($activeTab === 'paypal') {
+                $environment = strtolower(trim((string) ($_POST['paypal_environment'] ?? 'sandbox')));
+                $environment = in_array($environment, ['sandbox', 'live'], true) ? $environment : 'sandbox';
+                $clientId = trim((string) ($_POST['paypal_client_id'] ?? ''));
+                $clientSecret = trim((string) ($_POST['paypal_client_secret'] ?? ''));
+                $webhookId = trim((string) ($_POST['paypal_webhook_id'] ?? ''));
+                $brandName = trim((string) ($_POST['paypal_brand_name'] ?? ''));
+
+                $currentPaypalImage = trim((string) store_config_get('paypal_image', ''));
+                $nextPaypalImage = $currentPaypalImage;
+                $currentPaypalCornerImage = trim((string) store_config_get('paypal_corner_image', ''));
+                $nextPaypalCornerImage = $currentPaypalCornerImage;
+                $currentPaypalQrImage = trim((string) store_config_get('paypal_qr_image', ''));
+                $nextPaypalQrImage = $currentPaypalQrImage;
+
+                $hasPaypalImageUpload = isset($_FILES['paypal_image'])
+                    && (($_FILES['paypal_image']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
+                $hasPaypalCornerImageUpload = isset($_FILES['paypal_corner_image'])
+                    && (($_FILES['paypal_corner_image']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
+                $hasPaypalQrImageUpload = isset($_FILES['paypal_qr_image'])
+                    && (($_FILES['paypal_qr_image']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
+
+                if ($hasPaypalImageUpload) {
+                    $upload = store_config_store_named_logo_upload($_FILES['paypal_image'], 'paypal-method');
+                    if (!($upload['success'] ?? false)) {
+                        admin_set_flash('error', (string) ($upload['message'] ?? 'No se pudo cargar la imagen de PayPal.'));
+                        define('ADMIN_CONFIG_POST_HANDLED', true);
+                        admin_redirect('configuracion', ['tab' => 'paypal']);
+                    }
+                    if (!empty($upload['path'])) {
+                        $nextPaypalImage = (string) $upload['path'];
+                    }
+                } elseif (isset($_POST['remove_paypal_image'])) {
+                    $nextPaypalImage = '';
+                }
+
+                if ($hasPaypalCornerImageUpload) {
+                    $cornerUpload = store_config_store_named_logo_upload($_FILES['paypal_corner_image'], 'paypal-corner');
+                    if (!($cornerUpload['success'] ?? false)) {
+                        if ($nextPaypalImage !== '' && $nextPaypalImage !== $currentPaypalImage) {
+                            store_config_delete_logo_file($nextPaypalImage);
+                        }
+                        admin_set_flash('error', (string) ($cornerUpload['message'] ?? 'No se pudo cargar la imagen promocional de PayPal.'));
+                        define('ADMIN_CONFIG_POST_HANDLED', true);
+                        admin_redirect('configuracion', ['tab' => 'paypal']);
+                    }
+                    if (!empty($cornerUpload['path'])) {
+                        $nextPaypalCornerImage = (string) $cornerUpload['path'];
+                    }
+                } elseif (isset($_POST['remove_paypal_corner_image'])) {
+                    $nextPaypalCornerImage = '';
+                }
+
+                if ($hasPaypalQrImageUpload) {
+                    $qrUpload = store_config_store_named_logo_upload($_FILES['paypal_qr_image'], 'paypal-qr');
+                    if (!($qrUpload['success'] ?? false)) {
+                        if ($nextPaypalImage !== '' && $nextPaypalImage !== $currentPaypalImage) {
+                            store_config_delete_logo_file($nextPaypalImage);
+                        }
+                        if ($nextPaypalCornerImage !== '' && $nextPaypalCornerImage !== $currentPaypalCornerImage) {
+                            store_config_delete_logo_file($nextPaypalCornerImage);
+                        }
+                        admin_set_flash('error', (string) ($qrUpload['message'] ?? 'No se pudo cargar el QR de PayPal.'));
+                        define('ADMIN_CONFIG_POST_HANDLED', true);
+                        admin_redirect('configuracion', ['tab' => 'paypal']);
+                    }
+                    if (!empty($qrUpload['path'])) {
+                        $nextPaypalQrImage = (string) $qrUpload['path'];
+                    }
+                } elseif (isset($_POST['remove_paypal_qr_image'])) {
+                    $nextPaypalQrImage = '';
+                }
+
+                store_config_upsert('paypal_environment', $environment);
+                store_config_upsert('paypal_client_id', $clientId);
+                store_config_upsert('paypal_client_secret', $clientSecret);
+                store_config_upsert('paypal_webhook_id', $webhookId);
+                store_config_upsert('paypal_brand_name', $brandName);
+                if ($nextPaypalImage === '') {
+                    store_config_delete('paypal_image');
+                } else {
+                    store_config_upsert('paypal_image', $nextPaypalImage);
+                }
+                if ($nextPaypalCornerImage === '') {
+                    store_config_delete('paypal_corner_image');
+                } else {
+                    store_config_upsert('paypal_corner_image', $nextPaypalCornerImage);
+                }
+                if ($nextPaypalQrImage === '') {
+                    store_config_delete('paypal_qr_image');
+                } else {
+                    store_config_upsert('paypal_qr_image', $nextPaypalQrImage);
+                }
+
+                if ($currentPaypalImage !== '' && $currentPaypalImage !== $nextPaypalImage) {
+                    store_config_delete_logo_file($currentPaypalImage);
+                }
+                if ($currentPaypalCornerImage !== '' && $currentPaypalCornerImage !== $nextPaypalCornerImage) {
+                    store_config_delete_logo_file($currentPaypalCornerImage);
+                }
+                if ($currentPaypalQrImage !== '' && $currentPaypalQrImage !== $nextPaypalQrImage) {
+                    store_config_delete_logo_file($currentPaypalQrImage);
+                }
+
+                admin_set_flash('success', 'Configuración de PayPal actualizada.');
             }
 
             if ($activeTab === 'api-discord') {

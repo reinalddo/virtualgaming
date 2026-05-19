@@ -17,10 +17,14 @@ $activeTab = defined('ADMIN_CONFIG_ACTIVE_TAB') ? ADMIN_CONFIG_ACTIVE_TAB : ($_G
 $startupPopupTabEnabled = store_config_get('inicio_popup_tab_habilitado', '1') === '1';
 $rechargeNotificationsTabEnabled = ($cfg['notificaciones_recargas'] ?? '0') === '1';
 $binanceApiTabEnabled = store_config_get('api_binance', '0') === '1';
+$paypalTabEnabled = store_config_get('pago_paypal', '0') === '1';
 $discordApiTabEnabled = store_config_get('api_discord', '0') === '1';
 $allowedTabs = ['correo', 'cabecera', 'sociales', 'api-banco', 'api-free-fire', 'personalizar-colores', 'galeria', 'metodos-pago'];
 if ($binanceApiTabEnabled) {
   $allowedTabs[] = 'api-binance';
+}
+if ($paypalTabEnabled) {
+  $allowedTabs[] = 'paypal';
 }
 if ($discordApiTabEnabled) {
   $allowedTabs[] = 'api-discord';
@@ -261,6 +265,9 @@ $apiDiscordSelectedProbeSample = $apiDiscordSelectedProbe ? api_discord_sample_c
 $apiDiscordListenerToken = api_discord_normalize_listener_token((string) ($cfg['api_discord_listener_token'] ?? ''));
 $apiDiscordListenerUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=discord_listener';
 $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
+$paypalWebhookUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=paypal_webhook';
+$paypalReturnUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=paypal_return';
+$paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=paypal_cancel';
 ?>
 <style>
   .neon-card {
@@ -1078,6 +1085,11 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
               <a href="/admin/configuracion?tab=api-binance" class="neon-tab-link <?= $activeTab === 'api-binance' ? 'active' : '' ?>">API Binance Pay</a>
             </div>
           <?php endif; ?>
+            <?php if ($paypalTabEnabled): ?>
+            <div class="neon-tabs-item">
+              <a href="/admin/configuracion?tab=paypal" class="neon-tab-link <?= $activeTab === 'paypal' ? 'active' : '' ?>">Paypal</a>
+            </div>
+            <?php endif; ?>
           <?php if ($discordApiTabEnabled): ?>
             <div class="neon-tabs-item">
               <a href="/admin/configuracion?tab=api-discord" class="neon-tab-link <?= $activeTab === 'api-discord' ? 'active' : '' ?>">API Discord</a>
@@ -1103,7 +1115,7 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
       <div class="card neon-card mb-4">
         <div class="card-header text-center py-4" style="background: linear-gradient(90deg, var(--theme-highlight) 0%, var(--theme-success) 100%); color: var(--theme-button-text-strong); border-radius: 16px 16px 0 0;">
           <h2 class="h4 fw-bold mb-0" style="font-family: 'Oxanium', 'Montserrat', 'Arial', sans-serif; letter-spacing: 0.08em;">
-            <?php if ($activeTab === 'correo'): ?>Configuración de correo corporativo<?php elseif ($activeTab === 'cabecera'): ?>Datos de cabecera<?php elseif ($activeTab === 'notificaciones-recargas'): ?>Notificaciones Recargas<?php elseif ($activeTab === 'sociales'): ?>Redes Sociales<?php elseif ($activeTab === 'api-banco'): ?>Datos conexión Banco<?php elseif ($activeTab === 'api-free-fire'): ?>Datos API<?php elseif ($activeTab === 'api-binance'): ?>API Binance Pay<?php elseif ($activeTab === 'api-discord'): ?>API Discord<?php elseif ($activeTab === 'personalizar-colores'): ?>Personalizar Colores<?php elseif ($activeTab === 'ventana-inicial'): ?>Ventana Inicial<?php elseif ($activeTab === 'galeria'): ?>Galería principal del index<?php else: ?>Métodos de Pago<?php endif; ?>
+            <?php if ($activeTab === 'correo'): ?>Configuración de correo corporativo<?php elseif ($activeTab === 'cabecera'): ?>Datos de cabecera<?php elseif ($activeTab === 'notificaciones-recargas'): ?>Notificaciones Recargas<?php elseif ($activeTab === 'sociales'): ?>Redes Sociales<?php elseif ($activeTab === 'api-banco'): ?>Datos conexión Banco<?php elseif ($activeTab === 'api-free-fire'): ?>Datos API<?php elseif ($activeTab === 'api-binance'): ?>API Binance Pay<?php elseif ($activeTab === 'paypal'): ?>Paypal<?php elseif ($activeTab === 'api-discord'): ?>API Discord<?php elseif ($activeTab === 'personalizar-colores'): ?>Personalizar Colores<?php elseif ($activeTab === 'ventana-inicial'): ?>Ventana Inicial<?php elseif ($activeTab === 'galeria'): ?>Galería principal del index<?php else: ?>Métodos de Pago<?php endif; ?>
           </h2>
         </div>
         <div class="card-body p-4">
@@ -1611,6 +1623,369 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
 
               <button type="submit" class="neon-btn w-100 py-3 mt-4">Guardar configuración de Binance Pay</button>
             </form>
+          <?php elseif ($activeTab === 'paypal'): ?>
+            <form method="post" enctype="multipart/form-data">
+              <input type="hidden" name="config_section" value="paypal">
+              <div class="config-section-note mb-4 d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between gap-3">
+                <div>Configura aquí la base de PayPal Checkout para esta tienda. Este tab solo se muestra cuando la función <strong>pago_paypal</strong> está activa en el tenant. La integración final usará webhook para confirmar el pago y disparar la recarga automática.</div>
+                <button type="button" id="paypal-docs-trigger" class="btn btn-outline-info btn-sm px-4 py-2 align-self-start align-self-lg-center" data-bs-toggle="modal" data-bs-target="#paypal-docs-modal">Instrucciones para conectar</button>
+              </div>
+
+              <div class="gallery-table-wrap mb-2">
+                <h3 class="h5 fw-bold text-info mb-3">Credenciales y enlaces PayPal</h3>
+                <div class="row g-3">
+                  <div class="col-md-4">
+                    <label class="form-label">Entorno</label>
+                    <select name="paypal_environment" class="form-select">
+                      <option value="sandbox" <?= ($cfg['paypal_environment'] ?? 'sandbox') === 'sandbox' ? 'selected' : '' ?>>Sandbox</option>
+                      <option value="live" <?= ($cfg['paypal_environment'] ?? 'sandbox') === 'live' ? 'selected' : '' ?>>Live</option>
+                    </select>
+                    <div class="form-text mt-2">Usa <strong>Sandbox</strong> para pruebas y <strong>Live</strong> solo cuando tu app real ya esté aprobada en PayPal Developer Dashboard.</div>
+                  </div>
+                  <div class="col-md-8">
+                    <label class="form-label">Brand Name</label>
+                    <input type="text" name="paypal_brand_name" value="<?= htmlspecialchars($cfg['paypal_brand_name'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="TVirtualGaming Store Local">
+                    <div class="form-text mt-2">Este nombre se envía a PayPal para que el cliente vea la marca correcta durante el checkout.</div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Client ID</label>
+                    <input type="text" name="paypal_client_id" value="<?= htmlspecialchars($cfg['paypal_client_id'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="AQ...">
+                    <div class="form-text mt-2">Consíguelo en <strong>PayPal Developer Dashboard &gt; Apps & Credentials</strong>, dentro de tu app REST.</div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Client Secret</label>
+                    <input type="password" name="paypal_client_secret" value="<?= htmlspecialchars($cfg['paypal_client_secret'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="Pega aquí tu Client Secret">
+                    <div class="form-text mt-2">Está en la misma app REST. Debe coincidir con el entorno elegido arriba: sandbox o live.</div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Webhook ID</label>
+                    <input type="text" name="paypal_webhook_id" value="<?= htmlspecialchars($cfg['paypal_webhook_id'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="8JU...">
+                    <div class="form-text mt-2">Después de crear el webhook en PayPal, copia aquí el <strong>Webhook ID</strong> para validar la firma enviada por PayPal.</div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Webhook que debes registrar en PayPal</label>
+                    <input type="text" class="form-control" value="<?= htmlspecialchars($paypalWebhookUrl, ENT_QUOTES, 'UTF-8') ?>" readonly>
+                    <div class="form-text mt-2">Pega este enlace en <strong>PayPal Developer Dashboard &gt; Webhooks</strong>. PayPal notificará aquí cuando el pago cambie a completado.</div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Return URL informativa</label>
+                    <input type="text" class="form-control" value="<?= htmlspecialchars($paypalReturnUrl, ENT_QUOTES, 'UTF-8') ?>" readonly>
+                    <div class="form-text mt-2">Esta URL se usará cuando PayPal devuelva al cliente a la tienda después de aprobar el pago.</div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Cancel URL informativa</label>
+                    <input type="text" class="form-control" value="<?= htmlspecialchars($paypalCancelUrl, ENT_QUOTES, 'UTF-8') ?>" readonly>
+                    <div class="form-text mt-2">Esta URL se usará cuando el cliente cancele el checkout desde PayPal.</div>
+                  </div>
+                  <div class="col-md-7">
+                    <label class="form-label">Imagen del método de pago</label>
+                    <input type="file" name="paypal_image" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" class="form-control">
+                    <div class="form-text mt-2">Se mostrará en la card pública de métodos de pago del paquete. Tamaño recomendado: 1200x480 px.</div>
+                    <div class="form-check mt-3">
+                      <input class="form-check-input" type="checkbox" value="1" id="removePaypalImage" name="remove_paypal_image">
+                      <label class="form-check-label" for="removePaypalImage">Eliminar imagen actual</label>
+                    </div>
+                  </div>
+                  <div class="col-md-5">
+                    <label class="form-label">Vista previa</label>
+                    <div class="config-section-note h-100 d-flex align-items-center justify-content-center p-3">
+                      <?php $paypalImagePath = trim((string) ($cfg['paypal_image'] ?? '')); ?>
+                      <?php if ($paypalImagePath !== ''): ?>
+                        <img src="<?= htmlspecialchars(app_path('/' . ltrim($paypalImagePath, '/')), ENT_QUOTES, 'UTF-8') ?>" alt="Vista previa PayPal" class="img-fluid rounded-4 border border-info-subtle">
+                      <?php else: ?>
+                        <span class="text-secondary">Sin imagen cargada</span>
+                      <?php endif; ?>
+                    </div>
+                  </div>
+                  <div class="col-md-7">
+                    <label class="form-label">Imagen promocional de esquina</label>
+                    <input type="file" name="paypal_corner_image" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" class="form-control">
+                    <div class="form-text mt-2">Aparecerá flotando sobre la card pública de PayPal para destacar promociones o campañas.</div>
+                    <div class="form-check mt-3">
+                      <input class="form-check-input" type="checkbox" value="1" id="removePaypalCornerImage" name="remove_paypal_corner_image">
+                      <label class="form-check-label" for="removePaypalCornerImage">Eliminar imagen promocional actual</label>
+                    </div>
+                  </div>
+                  <div class="col-md-5">
+                    <label class="form-label">Vista previa promo esquina</label>
+                    <div class="config-section-note h-100 d-flex align-items-center justify-content-center p-3">
+                      <?php $paypalCornerImagePath = trim((string) ($cfg['paypal_corner_image'] ?? '')); ?>
+                      <?php if ($paypalCornerImagePath !== ''): ?>
+                        <img src="<?= htmlspecialchars(app_path('/' . ltrim($paypalCornerImagePath, '/')), ENT_QUOTES, 'UTF-8') ?>" alt="Vista previa promo PayPal" class="img-fluid rounded-4 border border-info-subtle" style="max-width: 180px;">
+                      <?php else: ?>
+                        <span class="text-secondary">Sin imagen cargada</span>
+                      <?php endif; ?>
+                    </div>
+                  </div>
+                  <div class="col-md-7">
+                    <label class="form-label">QR de PayPal</label>
+                    <input type="file" name="paypal_qr_image" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" class="form-control">
+                    <div class="form-text mt-2">Úsalo si quieres mostrar un QR informativo o una pieza gráfica promocional dentro del modal de pago de PayPal.</div>
+                    <div class="form-check mt-3">
+                      <input class="form-check-input" type="checkbox" value="1" id="removePaypalQrImage" name="remove_paypal_qr_image">
+                      <label class="form-check-label" for="removePaypalQrImage">Eliminar QR actual</label>
+                    </div>
+                  </div>
+                  <div class="col-md-5">
+                    <label class="form-label">Vista previa QR</label>
+                    <div class="config-section-note h-100 d-flex align-items-center justify-content-center p-3">
+                      <?php $paypalQrImagePath = trim((string) ($cfg['paypal_qr_image'] ?? '')); ?>
+                      <?php if ($paypalQrImagePath !== ''): ?>
+                        <img src="<?= htmlspecialchars(app_path('/' . ltrim($paypalQrImagePath, '/')), ENT_QUOTES, 'UTF-8') ?>" alt="Vista previa QR PayPal" class="img-fluid rounded-4 border border-info-subtle" style="max-width: 220px;">
+                      <?php else: ?>
+                        <span class="text-secondary">Sin QR cargado</span>
+                      <?php endif; ?>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <button type="submit" class="neon-btn w-100 py-3 mt-4">Guardar configuración de Paypal</button>
+            </form>
+            <div class="modal fade" id="paypal-docs-modal" tabindex="-1" aria-hidden="true">
+              <div class="modal-dialog modal-dialog-scrollable" style="max-width:min(1480px,96vw); margin:1rem auto;">
+                <div class="modal-content" style="background:#181f2a; border:2px solid #60a5fa; color:#e6fbff; box-shadow:0 0 24px rgba(96,165,250,0.22); min-height:calc(100vh - 2rem);">
+                  <div class="modal-header" style="border-bottom:1px solid rgba(96,165,250,0.28);">
+                    <div>
+                      <h3 class="modal-title h4 fw-bold text-info mb-1">Instrucciones para conectar PayPal</h3>
+                      <p class="mb-0" style="color:#c7e9ff;">Guía completa, exacta y sin omisiones para dejar este checkout funcionando con Sandbox o Live.</p>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" data-paypal-docs-close="1" aria-label="Cerrar"></button>
+                  </div>
+                  <div class="modal-body">
+                    <div class="row g-4">
+                      <div class="col-12">
+                        <div class="gallery-table-wrap">
+                          <h4 class="h5 fw-bold text-info mb-3">0. Qué necesitas antes de empezar</h4>
+                          <ol class="mb-0" style="color:#d9f4ff; line-height:1.8;">
+                            <li>Tener una cuenta <strong>PayPal Business</strong> o una cuenta personal que luego conviertas a Business. Para cobrar en una tienda real no basta con una cuenta cualquiera sin acceso a herramientas de negocio.</li>
+                            <li>Tener acceso a <strong>PayPal Developer Dashboard</strong> con el mismo correo o con una cuenta autorizada sobre el negocio.</li>
+                            <li>Tener esta tienda publicada en una <strong>URL pública HTTPS real</strong>. No uses localhost, 127.0.0.1, IP privada o enlaces temporales que PayPal no pueda alcanzar desde internet.</li>
+                            <li>Tener claro si vas a trabajar primero en <strong>Sandbox</strong> o en <strong>Live</strong>. No mezcles credenciales de un entorno con URLs o webhooks del otro.</li>
+                          </ol>
+                        </div>
+                      </div>
+
+                      <div class="col-12 col-xl-6">
+                        <div class="gallery-table-wrap h-100">
+                          <h4 class="h5 fw-bold text-info mb-3">1. Cuándo usar Sandbox y cuándo usar Live</h4>
+                          <div class="table-responsive">
+                            <table class="table table-dark table-sm align-middle mb-0">
+                              <thead>
+                                <tr>
+                                  <th>Entorno</th>
+                                  <th>Cuándo usarlo</th>
+                                  <th>Qué ocurre</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr>
+                                  <td>Sandbox</td>
+                                  <td>Durante configuración, pruebas internas, validación de webhook y pruebas de retorno/cancelación.</td>
+                                  <td>No mueve dinero real. Usa cuentas de prueba creadas dentro de PayPal Developer.</td>
+                                </tr>
+                                <tr>
+                                  <td>Live</td>
+                                  <td>Solo cuando ya validaste todo en Sandbox y quieres cobrar a clientes reales.</td>
+                                  <td>Los pagos son reales. Un error aquí afecta órdenes reales, webhook real y dinero real.</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                          <div class="form-text mt-3">Regla exacta: si el campo <strong>Entorno</strong> de esta tienda está en <strong>Sandbox</strong>, el <strong>Client ID</strong>, el <strong>Client Secret</strong> y el <strong>Webhook ID</strong> también deben ser Sandbox. Si está en <strong>Live</strong>, todo debe venir de Live.</div>
+                        </div>
+                      </div>
+
+                      <div class="col-12 col-xl-6">
+                        <div class="gallery-table-wrap h-100">
+                          <h4 class="h5 fw-bold text-info mb-3">2. Dónde crear la app y sacar las credenciales</h4>
+                          <ol class="mb-0" style="color:#d9f4ff; line-height:1.8;">
+                            <li>Entra a <a href="https://developer.paypal.com/" target="_blank" rel="noopener noreferrer" style="color:#7dd3fc; text-decoration:underline;"><strong>https://developer.paypal.com/</strong></a> e inicia sesión.</li>
+                            <li>Abre <strong>Dashboard &gt; Apps &amp; Credentials</strong>.</li>
+                            <li>En la parte superior elige <strong>Sandbox</strong> o <strong>Live</strong>, según lo que quieras configurar en esta tienda.</li>
+                            <li>Dentro de <strong>REST API apps</strong>, pulsa <strong>Create App</strong>.</li>
+                            <li>Escribe un nombre claro, por ejemplo: <strong>TVirtualGaming Checkout</strong> o el nombre real de la tienda.</li>
+                            <li>Si estás en Sandbox, PayPal te pedirá elegir una cuenta business de pruebas. Selecciónala y crea la app.</li>
+                            <li>Al entrar a la app verás el <strong>Client ID</strong> y el botón para mostrar el <strong>Secret</strong>. Esos dos valores son los que copias a esta tienda.</li>
+                          </ol>
+                        </div>
+                      </div>
+
+                      <div class="col-12">
+                        <div class="gallery-table-wrap">
+                          <h4 class="h5 fw-bold text-info mb-3">3. Qué valores debes copiar de PayPal hacia esta tienda</h4>
+                          <div class="table-responsive">
+                            <table class="table table-dark table-sm align-middle mb-0">
+                              <thead>
+                                <tr>
+                                  <th>Campo de esta tienda</th>
+                                  <th>Qué pegas aquí</th>
+                                  <th>Dónde lo encuentras en PayPal</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr>
+                                  <td>Entorno</td>
+                                  <td><strong>Sandbox</strong> o <strong>Live</strong> según la app que abriste.</td>
+                                  <td>Se decide arriba en <strong>Apps &amp; Credentials</strong>.</td>
+                                </tr>
+                                <tr>
+                                  <td>Brand Name</td>
+                                  <td>El nombre comercial que quieres mostrar al cliente durante el checkout.</td>
+                                  <td>No siempre viene listo desde PayPal. Normalmente lo defines tú manualmente para que coincida con la tienda.</td>
+                                </tr>
+                                <tr>
+                                  <td>Client ID</td>
+                                  <td>El identificador público de la app REST.</td>
+                                  <td><strong>PayPal Developer &gt; Apps &amp; Credentials &gt; tu app &gt; Client ID</strong>.</td>
+                                </tr>
+                                <tr>
+                                  <td>Client Secret</td>
+                                  <td>La clave secreta de esa misma app REST.</td>
+                                  <td><strong>PayPal Developer &gt; Apps &amp; Credentials &gt; tu app &gt; Secret</strong>.</td>
+                                </tr>
+                                <tr>
+                                  <td>Webhook ID</td>
+                                  <td>El ID interno del webhook que crearás para esta tienda.</td>
+                                  <td>Dentro de la configuración del webhook de la app, después de guardarlo. Debes copiar el <strong>ID</strong>, no la URL.</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="col-12">
+                        <div class="gallery-table-wrap">
+                          <h4 class="h5 fw-bold text-info mb-3">4. Qué valores debes copiar de esta tienda hacia PayPal</h4>
+                          <div class="row g-3">
+                            <div class="col-md-4">
+                              <label class="form-label">URL pública de la tienda</label>
+                              <input type="text" class="form-control" value="<?= htmlspecialchars($currentPublicUrl, ENT_QUOTES, 'UTF-8') ?>" readonly>
+                              <div class="form-text mt-2"><a href="<?= htmlspecialchars($currentPublicUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" style="color:#7dd3fc; text-decoration:underline;">Abrir URL pública</a></div>
+                            </div>
+                            <div class="col-md-4">
+                              <label class="form-label">Webhook URL</label>
+                              <input type="text" class="form-control" value="<?= htmlspecialchars($paypalWebhookUrl, ENT_QUOTES, 'UTF-8') ?>" readonly>
+                              <div class="form-text mt-2"><a href="<?= htmlspecialchars($paypalWebhookUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" style="color:#7dd3fc; text-decoration:underline;">Abrir webhook URL</a></div>
+                            </div>
+                            <div class="col-md-4">
+                              <label class="form-label">Return URL</label>
+                              <input type="text" class="form-control" value="<?= htmlspecialchars($paypalReturnUrl, ENT_QUOTES, 'UTF-8') ?>" readonly>
+                              <div class="form-text mt-2"><a href="<?= htmlspecialchars($paypalReturnUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" style="color:#7dd3fc; text-decoration:underline;">Abrir return URL</a></div>
+                            </div>
+                            <div class="col-md-4">
+                              <label class="form-label">Cancel URL</label>
+                              <input type="text" class="form-control" value="<?= htmlspecialchars($paypalCancelUrl, ENT_QUOTES, 'UTF-8') ?>" readonly>
+                              <div class="form-text mt-2"><a href="<?= htmlspecialchars($paypalCancelUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" style="color:#7dd3fc; text-decoration:underline;">Abrir cancel URL</a></div>
+                            </div>
+                            <div class="col-md-8">
+                              <div class="form-text mt-2">Estos enlaces salen de la tienda y son los que debes usar cuando PayPal te pida dónde notificar eventos o a dónde devolver al comprador. No los inventes ni los escribas manualmente si no es necesario: copia exactamente estos valores.</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="col-12 col-xl-6">
+                        <div class="gallery-table-wrap h-100">
+                          <h4 class="h5 fw-bold text-info mb-3">5. Cómo crear el webhook correctamente</h4>
+                          <ol class="mb-3" style="color:#d9f4ff; line-height:1.8;">
+                            <li>Dentro de tu app REST en PayPal Developer, busca la sección <strong>Webhooks</strong>.</li>
+                            <li>Haz clic en <strong>Add webhook</strong> o <strong>Create webhook</strong>.</li>
+                            <li>En el campo de URL pega exactamente <a href="<?= htmlspecialchars($paypalWebhookUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" style="color:#7dd3fc; text-decoration:underline;"><strong><?= htmlspecialchars($paypalWebhookUrl, ENT_QUOTES, 'UTF-8') ?></strong></a>.</li>
+                            <li>Guarda el webhook y luego entra al detalle del webhook creado.</li>
+                            <li>Copia el <strong>Webhook ID</strong> y pégalo en el campo <strong>Webhook ID</strong> de esta tienda.</li>
+                          </ol>
+                          <div class="form-text">Si creas el webhook pero no copias el <strong>Webhook ID</strong> en esta tienda, PayPal puede enviar eventos, pero la tienda no podrá validar correctamente la firma.</div>
+                        </div>
+                      </div>
+
+                      <div class="col-12 col-xl-6">
+                        <div class="gallery-table-wrap h-100">
+                          <h4 class="h5 fw-bold text-info mb-3">6. Eventos recomendados para suscribir</h4>
+                          <ul class="mb-0" style="color:#d9f4ff; line-height:1.8;">
+                            <li><strong>CHECKOUT.ORDER.APPROVED</strong></li>
+                            <li><strong>CHECKOUT.ORDER.COMPLETED</strong></li>
+                            <li><strong>PAYMENT.CAPTURE.COMPLETED</strong></li>
+                            <li><strong>PAYMENT.CAPTURE.DENIED</strong></li>
+                            <li><strong>PAYMENT.CAPTURE.DECLINED</strong></li>
+                            <li><strong>PAYMENT.CAPTURE.PENDING</strong></li>
+                            <li><strong>PAYMENT.CAPTURE.REFUNDED</strong></li>
+                            <li><strong>PAYMENT.CAPTURE.REVERSED</strong></li>
+                          </ul>
+                          <div class="form-text mt-3">Con este conjunto cubres aprobación, captura exitosa, pendientes, rechazos y movimientos posteriores. La tienda usa estos eventos para sincronizar el pedido incluso si el cliente cierra la ventana del navegador.</div>
+                        </div>
+                      </div>
+
+                      <div class="col-12">
+                        <div class="gallery-table-wrap">
+                          <h4 class="h5 fw-bold text-info mb-3">7. Orden exacto para conectar sin fallar</h4>
+                          <ol class="mb-0" style="color:#d9f4ff; line-height:1.85;">
+                            <li>Primero define si vas a usar <strong>Sandbox</strong> o <strong>Live</strong>.</li>
+                            <li>Crea la app REST en ese mismo entorno dentro de PayPal Developer.</li>
+                            <li>Copia <strong>Client ID</strong> y <strong>Client Secret</strong> desde PayPal a esta tienda.</li>
+                            <li>Escribe el <strong>Brand Name</strong> que verá el cliente.</li>
+                            <li>Copia desde esta tienda el <strong>Webhook URL</strong> hacia PayPal y crea el webhook.</li>
+                            <li>Selecciona los eventos recomendados.</li>
+                            <li>Guarda el webhook en PayPal.</li>
+                            <li>Vuelve al detalle del webhook en PayPal y copia el <strong>Webhook ID</strong>.</li>
+                            <li>Pega ese <strong>Webhook ID</strong> en esta tienda.</li>
+                            <li>Verifica que <strong>Return URL</strong> y <strong>Cancel URL</strong> se correspondan con esta misma tienda y dominio.</li>
+                            <li>Guarda esta configuración en el panel.</li>
+                            <li>Haz una prueba real del flujo en el entorno seleccionado antes de anunciarlo como activo.</li>
+                          </ol>
+                        </div>
+                      </div>
+
+                      <div class="col-12 col-xl-6">
+                        <div class="gallery-table-wrap h-100">
+                          <h4 class="h5 fw-bold text-info mb-3">8. Cómo probar en Sandbox sin dejar huecos</h4>
+                          <ol class="mb-0" style="color:#d9f4ff; line-height:1.8;">
+                            <li>Deja el campo <strong>Entorno</strong> en <strong>Sandbox</strong>.</li>
+                            <li>Usa <strong>Client ID</strong>, <strong>Secret</strong> y <strong>Webhook ID</strong> de Sandbox.</li>
+                            <li>Crea o usa una <strong>Business sandbox account</strong> para la app y una <strong>Personal sandbox account</strong> para comprar.</li>
+                            <li>Desde la tienda pública, selecciona un paquete con moneda compatible y elige PayPal.</li>
+                            <li>Confirma que se abra la ventana de PayPal Sandbox.</li>
+                            <li>Aprueba el pago con la cuenta personal sandbox.</li>
+                            <li>Verifica que la orden en la tienda pase de <strong>pendiente</strong> a <strong>pagado</strong> o <strong>enviado</strong> según el tipo de producto.</li>
+                            <li>Si el cliente regresa correctamente pero la orden no cambia, revisa primero: URL pública, Webhook ID, eventos suscritos y que el entorno sea el mismo en ambos lados.</li>
+                          </ol>
+                        </div>
+                      </div>
+
+                      <div class="col-12 col-xl-6">
+                        <div class="gallery-table-wrap h-100">
+                          <h4 class="h5 fw-bold text-info mb-3">9. Cómo pasar a Live sin mezclar credenciales</h4>
+                          <ol class="mb-0" style="color:#d9f4ff; line-height:1.8;">
+                            <li>Confirma que ya probaste apertura del checkout, retorno, cancelación y webhook en Sandbox.</li>
+                            <li>En PayPal Developer cambia al entorno <strong>Live</strong>.</li>
+                            <li>Crea una app Live nueva o usa la app Live correcta del negocio.</li>
+                            <li>Crea un <strong>webhook Live</strong> nuevo. No reutilices el de Sandbox.</li>
+                            <li>Vuelve a este panel y cambia <strong>Entorno</strong> a <strong>Live</strong>.</li>
+                            <li>Pega aquí el <strong>Client ID Live</strong>, el <strong>Client Secret Live</strong> y el <strong>Webhook ID Live</strong>.</li>
+                            <li>Guarda y prueba una compra real pequeña controlada antes de abrirlo a todos los clientes.</li>
+                          </ol>
+                        </div>
+                      </div>
+
+                      <div class="col-12">
+                        <div class="gallery-table-wrap">
+                          <h4 class="h5 fw-bold text-info mb-3">10. Errores típicos que bloquean la integración</h4>
+                          <ul class="mb-0" style="color:#d9f4ff; line-height:1.8;">
+                            <li>Usar <strong>Client ID Sandbox</strong> con <strong>Entorno Live</strong> o viceversa.</li>
+                            <li>Crear el webhook pero olvidar copiar el <strong>Webhook ID</strong> a esta tienda.</li>
+                            <li>Probar desde un dominio que no es accesible públicamente o que no tiene HTTPS.</li>
+                            <li>Pegar una URL del webhook escrita manualmente en vez de copiar la que muestra esta tienda.</li>
+                            <li>Probar Live sin haber verificado antes el flujo completo en Sandbox.</li>
+                            <li>Suponer que Return URL y Cancel URL reemplazan el webhook. No lo reemplazan: el webhook sigue siendo la vía crítica para sincronización robusta.</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           <?php elseif ($activeTab === 'api-discord'): ?>
             <form method="post">
               <input type="hidden" name="config_section" value="api-discord">
@@ -2610,6 +2985,112 @@ $apiDiscordListenerExampleToken = 'TU_TOKEN_DEL_LISTENER';
     };
 
     simulateNotificationButton.addEventListener('click', showSimulation);
+  })();
+
+  (() => {
+    const paypalDocsTrigger = document.getElementById('paypal-docs-trigger');
+    const paypalDocsModal = document.getElementById('paypal-docs-modal');
+    const paypalDocsCloseButtons = paypalDocsModal ? Array.from(paypalDocsModal.querySelectorAll('[data-paypal-docs-close]')) : [];
+    if (!paypalDocsTrigger || !paypalDocsModal) {
+      return;
+    }
+
+    if (paypalDocsModal.parentElement !== document.body) {
+      document.body.appendChild(paypalDocsModal);
+    }
+
+    const showPaypalDocsFallback = () => {
+      const dialog = paypalDocsModal.querySelector('.modal-dialog');
+      const body = paypalDocsModal.querySelector('.modal-body');
+      const content = paypalDocsModal.querySelector('.modal-content');
+
+      paypalDocsModal.style.display = 'block';
+      paypalDocsModal.style.position = 'fixed';
+      paypalDocsModal.style.inset = '0';
+      paypalDocsModal.style.background = 'rgba(3, 8, 18, 0.72)';
+      paypalDocsModal.style.zIndex = '2000';
+      paypalDocsModal.style.pointerEvents = 'auto';
+      paypalDocsModal.style.overflowY = 'auto';
+      paypalDocsModal.style.padding = '1rem';
+      paypalDocsModal.removeAttribute('aria-hidden');
+      paypalDocsModal.setAttribute('aria-modal', 'true');
+      paypalDocsModal.setAttribute('role', 'dialog');
+      paypalDocsModal.classList.add('show');
+
+      if (dialog) {
+        dialog.style.pointerEvents = 'auto';
+        dialog.style.maxWidth = 'min(1480px, 96vw)';
+        dialog.style.margin = '1rem auto';
+        dialog.style.minHeight = 'calc(100vh - 2rem)';
+        dialog.style.display = 'flex';
+        dialog.style.alignItems = 'stretch';
+      }
+
+      if (content) {
+        content.style.pointerEvents = 'auto';
+        content.style.maxHeight = 'calc(100vh - 2rem)';
+      }
+
+      if (body) {
+        body.style.maxHeight = 'calc(100vh - 9rem)';
+        body.style.overflowY = 'auto';
+        body.style.pointerEvents = 'auto';
+      }
+
+      document.body.classList.add('modal-open');
+      document.body.style.overflow = 'hidden';
+    };
+
+    const hidePaypalDocsFallback = () => {
+      paypalDocsModal.classList.remove('show');
+      paypalDocsModal.setAttribute('aria-hidden', 'true');
+      paypalDocsModal.removeAttribute('aria-modal');
+      paypalDocsModal.style.display = 'none';
+      paypalDocsModal.style.removeProperty('background');
+      document.body.classList.remove('modal-open');
+      document.body.style.removeProperty('overflow');
+    };
+
+    paypalDocsTrigger.addEventListener('click', (event) => {
+      event.preventDefault();
+      if (window.bootstrap && window.bootstrap.Modal) {
+        window.bootstrap.Modal.getOrCreateInstance(paypalDocsModal).show();
+        return;
+      }
+
+      showPaypalDocsFallback();
+    });
+
+    paypalDocsCloseButtons.forEach((button) => {
+      button.addEventListener('click', (event) => {
+        if (window.bootstrap && window.bootstrap.Modal) {
+          return;
+        }
+
+        event.preventDefault();
+        hidePaypalDocsFallback();
+      });
+    });
+
+    paypalDocsModal.addEventListener('click', (event) => {
+      if (window.bootstrap && window.bootstrap.Modal) {
+        return;
+      }
+
+      if (event.target === paypalDocsModal) {
+        hidePaypalDocsFallback();
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (window.bootstrap && window.bootstrap.Modal) {
+        return;
+      }
+
+      if (event.key === 'Escape' && paypalDocsModal.classList.contains('show')) {
+        hidePaypalDocsFallback();
+      }
+    });
   })();
 
   (() => {

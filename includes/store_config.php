@@ -621,6 +621,7 @@ function store_config_descriptions(): array {
         'barra_superior' => 'Activa o desactiva la barra superior fija con buscador y reubicación del acceso principal del sitio público.',
         'api_binance' => 'Activa o desactiva la configuracion e integracion de Binance Pay via CoinPal para este tenant.',
         'api_binance_usuario' => 'Activa o desactiva el uso visible de Binance Pay para clientes y procesos automaticos de la tienda cuando el tenant ya tiene disponible api_binance.',
+        'pago_paypal' => 'Activa o desactiva la configuración base de PayPal Checkout para este tenant.',
         'descuento_metodo_pago' => 'Activa o desactiva los descuentos porcentuales por método de pago dentro del checkout público.',
         'api_discord' => 'Activa o desactiva la integración base de API Discord para enviar comandos de consulta y pruebas de recarga desde este tenant.',
         'api_discord_webhook_url' => 'Webhook de Discord usado para enviar mensajes de prueba y comandos controlados al canal configurado.',
@@ -638,6 +639,14 @@ function store_config_descriptions(): array {
         'binance_pay_image' => 'Ruta de la imagen horizontal usada para representar Binance Pay como metodo de pago en la pagina de paquetes.',
         'binance_pay_corner_image' => 'Ruta de la imagen promocional flotante usada en la esquina de la card publica de Binance Pay.',
         'binance_pay_descuento' => 'Porcentaje de descuento aplicado cuando el cliente paga usando Binance Pay.',
+        'paypal_environment' => 'Entorno de PayPal usado por la tienda. Puede ser sandbox para pruebas o live para cobros reales.',
+        'paypal_client_id' => 'Client ID de la app REST creada en PayPal Developer Dashboard.',
+        'paypal_client_secret' => 'Client Secret de la app REST creada en PayPal Developer Dashboard.',
+        'paypal_webhook_id' => 'Webhook ID entregado por PayPal para validar notificaciones firmadas del checkout.',
+        'paypal_brand_name' => 'Nombre comercial que PayPal mostrará al cliente durante el checkout.',
+        'paypal_image' => 'Ruta de la imagen horizontal usada para representar PayPal como metodo de pago en la pagina de paquetes.',
+        'paypal_corner_image' => 'Ruta de la imagen promocional flotante usada en la esquina de la card publica de PayPal.',
+        'paypal_qr_image' => 'Ruta del QR informativo o promocional mostrado dentro del modal de pago de PayPal.',
     ];
 
     foreach (store_theme_definitions() as $key => $definition) {
@@ -723,6 +732,7 @@ function store_config_defaults(): array {
         'barra_superior' => '0',
         'api_binance' => '0',
         'api_binance_usuario' => '1',
+        'pago_paypal' => '0',
         'descuento_metodo_pago' => '0',
         'api_discord' => '0',
         'api_discord_webhook_url' => '',
@@ -740,6 +750,14 @@ function store_config_defaults(): array {
         'binance_pay_image' => '',
         'binance_pay_corner_image' => '',
         'binance_pay_descuento' => '0',
+        'paypal_environment' => 'sandbox',
+        'paypal_client_id' => '',
+        'paypal_client_secret' => '',
+        'paypal_webhook_id' => '',
+        'paypal_brand_name' => '',
+        'paypal_image' => '',
+        'paypal_corner_image' => '',
+        'paypal_qr_image' => '',
     ];
 
     foreach (store_theme_definitions() as $key => $definition) {

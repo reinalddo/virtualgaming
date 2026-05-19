@@ -14,6 +14,7 @@ require_once __DIR__ . '/../includes/influencer_coupons.php';
 require_once __DIR__ . '/../includes/store_config.php';
 require_once __DIR__ . '/../includes/payment_methods.php';
 require_once __DIR__ . '/../includes/binance_pay.php';
+require_once __DIR__ . '/../includes/paypal_pay.php';
 require_once __DIR__ . '/../includes/api_discord.php';
 require_once __DIR__ . '/../includes/package_account_sales.php';
 require_once __DIR__ . '/../includes/recargas_api.php';
@@ -133,6 +134,17 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         binance_pay_paid_currency VARCHAR(20) DEFAULT NULL,
         binance_pay_ultimo_check DATETIME DEFAULT NULL,
         binance_pay_historial_json LONGTEXT DEFAULT NULL,
+        paypal_order_id VARCHAR(120) DEFAULT NULL,
+        paypal_capture_id VARCHAR(120) DEFAULT NULL,
+        paypal_payer_id VARCHAR(120) DEFAULT NULL,
+        paypal_status VARCHAR(40) DEFAULT NULL,
+        paypal_message VARCHAR(255) DEFAULT NULL,
+        paypal_checkout_url VARCHAR(255) DEFAULT NULL,
+        paypal_payload LONGTEXT DEFAULT NULL,
+        paypal_paid_amount DECIMAL(12,2) DEFAULT NULL,
+        paypal_paid_currency VARCHAR(20) DEFAULT NULL,
+        paypal_ultimo_check DATETIME DEFAULT NULL,
+        paypal_historial_json LONGTEXT DEFAULT NULL,
         estado ENUM('pendiente','pagado','enviado','cancelado') NOT NULL DEFAULT 'pendiente',
         creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         pago_expira_en DATETIME DEFAULT NULL,
@@ -144,7 +156,10 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         INDEX idx_api_discord_message_id (api_discord_message_id),
         INDEX idx_binance_pay_reference (binance_pay_reference),
         INDEX idx_binance_pay_order_no (binance_pay_order_no),
-        INDEX idx_binance_pay_status (binance_pay_status)
+        INDEX idx_binance_pay_status (binance_pay_status),
+        INDEX idx_paypal_order_id (paypal_order_id),
+        INDEX idx_paypal_capture_id (paypal_capture_id),
+        INDEX idx_paypal_status (paypal_status)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
     $mysqli->query($create);
 
@@ -214,6 +229,17 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         'binance_pay_paid_currency' => "ALTER TABLE pedidos ADD COLUMN binance_pay_paid_currency VARCHAR(20) NULL AFTER binance_pay_paid_amount",
         'binance_pay_ultimo_check' => "ALTER TABLE pedidos ADD COLUMN binance_pay_ultimo_check DATETIME NULL AFTER binance_pay_paid_currency",
         'binance_pay_historial_json' => "ALTER TABLE pedidos ADD COLUMN binance_pay_historial_json LONGTEXT NULL AFTER binance_pay_ultimo_check",
+        'paypal_order_id' => "ALTER TABLE pedidos ADD COLUMN paypal_order_id VARCHAR(120) NULL AFTER binance_pay_historial_json",
+        'paypal_capture_id' => "ALTER TABLE pedidos ADD COLUMN paypal_capture_id VARCHAR(120) NULL AFTER paypal_order_id",
+        'paypal_payer_id' => "ALTER TABLE pedidos ADD COLUMN paypal_payer_id VARCHAR(120) NULL AFTER paypal_capture_id",
+        'paypal_status' => "ALTER TABLE pedidos ADD COLUMN paypal_status VARCHAR(40) NULL AFTER paypal_payer_id",
+        'paypal_message' => "ALTER TABLE pedidos ADD COLUMN paypal_message VARCHAR(255) NULL AFTER paypal_status",
+        'paypal_checkout_url' => "ALTER TABLE pedidos ADD COLUMN paypal_checkout_url VARCHAR(255) NULL AFTER paypal_message",
+        'paypal_payload' => "ALTER TABLE pedidos ADD COLUMN paypal_payload LONGTEXT NULL AFTER paypal_checkout_url",
+        'paypal_paid_amount' => "ALTER TABLE pedidos ADD COLUMN paypal_paid_amount DECIMAL(12,2) NULL AFTER paypal_payload",
+        'paypal_paid_currency' => "ALTER TABLE pedidos ADD COLUMN paypal_paid_currency VARCHAR(20) NULL AFTER paypal_paid_amount",
+        'paypal_ultimo_check' => "ALTER TABLE pedidos ADD COLUMN paypal_ultimo_check DATETIME NULL AFTER paypal_paid_currency",
+        'paypal_historial_json' => "ALTER TABLE pedidos ADD COLUMN paypal_historial_json LONGTEXT NULL AFTER paypal_ultimo_check",
         'estado_pago_influencer' => "ALTER TABLE pedidos ADD COLUMN estado_pago_influencer ENUM('pendiente','pagado') NOT NULL DEFAULT 'pendiente' AFTER cupon",
         'estado' => "ALTER TABLE pedidos ADD COLUMN estado ENUM('pendiente','pagado','enviado','cancelado') NOT NULL DEFAULT 'pendiente' AFTER cupon",
         'creado_en' => "ALTER TABLE pedidos ADD COLUMN creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER estado",
@@ -242,6 +268,9 @@ function ensure_pedidos_table(mysqli $mysqli): void {
         'idx_binance_pay_reference' => 'ALTER TABLE pedidos ADD INDEX idx_binance_pay_reference (binance_pay_reference)',
         'idx_binance_pay_order_no' => 'ALTER TABLE pedidos ADD INDEX idx_binance_pay_order_no (binance_pay_order_no)',
         'idx_binance_pay_status' => 'ALTER TABLE pedidos ADD INDEX idx_binance_pay_status (binance_pay_status)',
+        'idx_paypal_order_id' => 'ALTER TABLE pedidos ADD INDEX idx_paypal_order_id (paypal_order_id)',
+        'idx_paypal_capture_id' => 'ALTER TABLE pedidos ADD INDEX idx_paypal_capture_id (paypal_capture_id)',
+        'idx_paypal_status' => 'ALTER TABLE pedidos ADD INDEX idx_paypal_status (paypal_status)',
     ];
     foreach ($indexes as $indexName => $sql) {
         $indexResult = $mysqli->query("SHOW INDEX FROM pedidos WHERE Key_name = '" . $mysqli->real_escape_string($indexName) . "'");
@@ -2540,7 +2569,7 @@ function resolve_order_payment_discount_base_amount(array $order): float {
 
 function resolve_order_payment_discount_snapshot(array $order, string $paymentMode, ?array $method = null): array {
     $baseAmount = resolve_order_payment_discount_base_amount($order);
-    $normalizedMode = in_array($paymentMode, ['money', 'binance'], true) ? $paymentMode : '';
+    $normalizedMode = in_array($paymentMode, ['money', 'binance', 'paypal'], true) ? $paymentMode : '';
     $percentage = 0.0;
     $methodName = '';
     $paymentMethodId = 0;
@@ -2556,6 +2585,8 @@ function resolve_order_payment_discount_snapshot(array $order, string $paymentMo
         if (payment_method_discount_feature_enabled()) {
             $percentage = payment_method_binance_discount_percentage();
         }
+    } elseif ($normalizedMode === 'paypal') {
+        $methodName = 'PayPal';
     }
 
     $discountAmount = payment_difference_normalize_amount(($baseAmount * $percentage) / 100);
@@ -3128,6 +3159,238 @@ function build_binance_checkout_response_payload(array $order): array {
     ], build_binance_checkout_money_payload($order));
 }
 
+function build_paypal_pay_webhook_url(): ?string {
+    $baseUrl = current_public_app_base_url();
+    if ($baseUrl === null) {
+        return null;
+    }
+
+    $candidate = $baseUrl . '/api/pedidos.php?action=paypal_webhook';
+    $host = parse_url($candidate, PHP_URL_HOST);
+    if (!is_string($host) || !is_public_callback_host($host)) {
+        return null;
+    }
+
+    return $candidate;
+}
+
+function build_paypal_pay_return_url(): ?string {
+    $baseUrl = current_public_app_base_url();
+    if ($baseUrl === null) {
+        return null;
+    }
+
+    $candidate = $baseUrl . '/api/pedidos.php?action=paypal_return';
+    $host = parse_url($candidate, PHP_URL_HOST);
+    if (!is_string($host) || !is_public_callback_host($host)) {
+        return null;
+    }
+
+    return $candidate;
+}
+
+function build_paypal_pay_cancel_url(): ?string {
+    $baseUrl = current_public_app_base_url();
+    if ($baseUrl === null) {
+        return null;
+    }
+
+    $candidate = $baseUrl . '/api/pedidos.php?action=paypal_cancel';
+    $host = parse_url($candidate, PHP_URL_HOST);
+    if (!is_string($host) || !is_public_callback_host($host)) {
+        return null;
+    }
+
+    return $candidate;
+}
+
+function build_paypal_checkout_response_payload(array $order): array {
+    $message = trim((string) ($order['paypal_message'] ?? ''));
+    if ($message === '') {
+        $message = 'Abre PayPal y completa el pago para continuar con tu pedido.';
+    }
+
+    $providerReference = trim((string) ($order['paypal_capture_id'] ?? ''));
+    if ($providerReference === '') {
+        $providerReference = trim((string) ($order['paypal_order_id'] ?? ''));
+    }
+
+    return [
+        'payment_mode' => 'paypal',
+        'payment_gateway' => 'paypal',
+        'provider_flow' => 'paypal_checkout',
+        'provider_status' => trim((string) ($order['paypal_status'] ?? 'created')),
+        'provider_reference' => $providerReference,
+        'provider_message' => $message,
+        'checkout_url' => trim((string) ($order['paypal_checkout_url'] ?? '')),
+        'remaining_seconds' => max(0, order_expiration_timestamp($order) - time()),
+    ];
+}
+
+function find_local_order_by_paypal_identifiers(mysqli $mysqli, ?string $paypalOrderId, ?string $paypalCaptureId = null): ?array {
+    $paypalOrderId = trim((string) $paypalOrderId);
+    $paypalCaptureId = trim((string) $paypalCaptureId);
+
+    if ($paypalOrderId !== '') {
+        $stmt = $mysqli->prepare('SELECT pedidos.*, UNIX_TIMESTAMP(creado_en) AS creado_en_ts FROM pedidos WHERE paypal_order_id = ? ORDER BY id DESC LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('s', $paypalOrderId);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            $order = $res ? $res->fetch_assoc() : null;
+            $stmt->close();
+            if ($order) {
+                return $order;
+            }
+        }
+    }
+
+    if ($paypalCaptureId !== '') {
+        $stmt = $mysqli->prepare('SELECT pedidos.*, UNIX_TIMESTAMP(creado_en) AS creado_en_ts FROM pedidos WHERE paypal_capture_id = ? ORDER BY id DESC LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('s', $paypalCaptureId);
+            $stmt->execute();
+            $res = $stmt->get_result();
+            $order = $res ? $res->fetch_assoc() : null;
+            $stmt->close();
+            if ($order) {
+                return $order;
+            }
+        }
+    }
+
+    return null;
+}
+
+function paypal_pay_append_history(?string $existingJson, string $source, array $payload, string $localStatus, int $limit = 10): string {
+    $entry = build_provider_history_entry(
+        $source,
+        paypal_pay_extract_status($payload),
+        $localStatus,
+        paypal_pay_extract_message($payload),
+        paypal_pay_extract_capture_id($payload) !== '' ? paypal_pay_extract_capture_id($payload) : paypal_pay_extract_order_id($payload),
+        paypal_pay_extract_order_id($payload)
+    );
+
+    return append_provider_history($existingJson, $entry, $limit);
+}
+
+function persist_order_paypal_checkout(mysqli $mysqli, int $orderId, array $requestPayload, array $responsePayload, string $expectedStatus = 'pendiente'): bool {
+    $order = fetch_order_by_id($mysqli, $orderId);
+    if (!$order) {
+        return false;
+    }
+
+    $paypalOrderId = paypal_pay_extract_order_id($responsePayload);
+    $paypalCaptureId = paypal_pay_extract_capture_id($responsePayload);
+    $paypalPayerId = paypal_pay_extract_payer_id($responsePayload);
+    $historyJson = paypal_pay_append_history(
+        $order['paypal_historial_json'] ?? null,
+        'checkout_create',
+        $responsePayload,
+        (string) ($order['estado'] ?? 'pendiente')
+    );
+    $payloadJson = paypal_pay_payload_json([
+        'request' => $requestPayload,
+        'response' => $responsePayload,
+    ]);
+    $status = paypal_pay_extract_status($responsePayload);
+    if ($status === '') {
+        $status = 'created';
+    }
+    $message = paypal_pay_extract_message($responsePayload);
+    if ($message === '') {
+        $message = 'Abre PayPal y completa el pago para continuar con tu pedido.';
+    }
+    $checkoutUrl = paypal_pay_extract_approval_url($responsePayload);
+    $paidAmount = paypal_pay_extract_paid_amount($responsePayload);
+    $paidCurrency = paypal_pay_extract_paid_currency($responsePayload);
+    $paidAmountText = $paidAmount !== null ? number_format($paidAmount, 2, '.', '') : null;
+
+    $stmt = $mysqli->prepare("UPDATE pedidos SET paypal_order_id = ?, paypal_capture_id = ?, paypal_payer_id = ?, paypal_status = ?, paypal_message = ?, paypal_checkout_url = ?, paypal_payload = ?, paypal_paid_amount = ?, paypal_paid_currency = ?, paypal_ultimo_check = NOW(), paypal_historial_json = ? WHERE id = ? AND estado = ? LIMIT 1");
+    if (!$stmt) {
+        return false;
+    }
+
+    $stmt->bind_param('ssssssssssis', $paypalOrderId, $paypalCaptureId, $paypalPayerId, $status, $message, $checkoutUrl, $payloadJson, $paidAmountText, $paidCurrency, $historyJson, $orderId, $expectedStatus);
+    $ok = $stmt->execute();
+    $stmt->close();
+
+    return $ok;
+}
+
+function persist_order_paypal_snapshot(mysqli $mysqli, int $orderId, array $payload, string $source = 'sync'): bool {
+    $order = fetch_order_by_id($mysqli, $orderId);
+    if (!$order) {
+        return false;
+    }
+
+    $paypalOrderId = paypal_pay_extract_order_id($payload);
+    if ($paypalOrderId === '') {
+        $paypalOrderId = trim((string) ($order['paypal_order_id'] ?? ''));
+    }
+    $paypalCaptureId = paypal_pay_extract_capture_id($payload);
+    if ($paypalCaptureId === '') {
+        $paypalCaptureId = trim((string) ($order['paypal_capture_id'] ?? ''));
+    }
+    $paypalPayerId = paypal_pay_extract_payer_id($payload);
+    if ($paypalPayerId === '') {
+        $paypalPayerId = trim((string) ($order['paypal_payer_id'] ?? ''));
+    }
+    $status = paypal_pay_extract_status($payload);
+    if ($status === '') {
+        $status = strtolower(trim((string) ($order['paypal_status'] ?? '')));
+    }
+    $message = paypal_pay_extract_message($payload);
+    if ($message === '') {
+        $message = trim((string) ($order['paypal_message'] ?? ''));
+    }
+    $checkoutUrl = paypal_pay_extract_approval_url($payload);
+    if ($checkoutUrl === '') {
+        $checkoutUrl = trim((string) ($order['paypal_checkout_url'] ?? ''));
+    }
+    $paidAmount = paypal_pay_extract_paid_amount($payload);
+    if ($paidAmount === null && isset($order['paypal_paid_amount']) && is_numeric($order['paypal_paid_amount'])) {
+        $paidAmount = round((float) $order['paypal_paid_amount'], 2);
+    }
+    $paidCurrency = paypal_pay_extract_paid_currency($payload);
+    if ($paidCurrency === '') {
+        $paidCurrency = strtoupper(trim((string) ($order['paypal_paid_currency'] ?? '')));
+    }
+    $paidAmountText = $paidAmount !== null ? number_format($paidAmount, 2, '.', '') : null;
+    $historyJson = paypal_pay_append_history(
+        $order['paypal_historial_json'] ?? null,
+        $source,
+        $payload,
+        (string) ($order['estado'] ?? 'pendiente')
+    );
+    $payloadJson = paypal_pay_payload_json($payload);
+
+    $stmt = $mysqli->prepare("UPDATE pedidos SET paypal_order_id = ?, paypal_capture_id = ?, paypal_payer_id = ?, paypal_status = ?, paypal_message = ?, paypal_checkout_url = ?, paypal_payload = ?, paypal_paid_amount = ?, paypal_paid_currency = ?, paypal_ultimo_check = NOW(), paypal_historial_json = ? WHERE id = ? LIMIT 1");
+    if (!$stmt) {
+        return false;
+    }
+
+    $stmt->bind_param('ssssssssssi', $paypalOrderId, $paypalCaptureId, $paypalPayerId, $status, $message, $checkoutUrl, $payloadJson, $paidAmountText, $paidCurrency, $historyJson, $orderId);
+    $ok = $stmt->execute();
+    $stmt->close();
+
+    return $ok;
+}
+
+function clear_order_paypal_tracking(mysqli $mysqli, int $orderId): bool {
+    $stmt = $mysqli->prepare("UPDATE pedidos SET paypal_order_id = NULL, paypal_capture_id = NULL, paypal_payer_id = NULL, paypal_status = NULL, paypal_message = NULL, paypal_checkout_url = NULL, paypal_payload = NULL, paypal_paid_amount = NULL, paypal_paid_currency = NULL, paypal_ultimo_check = NULL, paypal_historial_json = NULL WHERE id = ? AND estado = 'pendiente' LIMIT 1");
+    if (!$stmt) {
+        return false;
+    }
+
+    $stmt->bind_param('i', $orderId);
+    $ok = $stmt->execute();
+    $stmt->close();
+
+    return $ok;
+}
+
 function account_sale_feature_enabled(): bool {
     return trim((string) store_config_get('vender_cuentas', '0')) === '1';
 }
@@ -3190,6 +3453,12 @@ function build_order_status_response_payload(array $order, int $orderId): array 
     if ($providerReference === '') {
         $providerReference = trim((string) ($order['binance_pay_reference'] ?? ''));
     }
+    if ($providerReference === '') {
+        $providerReference = trim((string) ($order['paypal_capture_id'] ?? ''));
+    }
+    if ($providerReference === '') {
+        $providerReference = trim((string) ($order['paypal_order_id'] ?? ''));
+    }
     if ($providerReference === '' && order_uses_api_discord($order)) {
         $providerReference = trim((string) ($order['api_discord_message_id'] ?? ''));
     }
@@ -3197,6 +3466,9 @@ function build_order_status_response_payload(array $order, int $orderId): array 
     $providerMessage = trim((string) ($order['ff_api_mensaje'] ?? ''));
     if ($providerMessage === '') {
         $providerMessage = trim((string) ($order['binance_pay_message'] ?? ''));
+    }
+    if ($providerMessage === '') {
+        $providerMessage = trim((string) ($order['paypal_message'] ?? ''));
     }
     if ($providerMessage === '' && order_uses_api_discord($order)) {
         $providerMessage = api_discord_dispatch_response_preview($order['api_discord_response_body'] ?? null);
@@ -3209,6 +3481,9 @@ function build_order_status_response_payload(array $order, int $orderId): array 
     if ($providerStatus === '') {
         $providerStatus = trim((string) ($order['binance_pay_status'] ?? ''));
     }
+    if ($providerStatus === '') {
+        $providerStatus = trim((string) ($order['paypal_status'] ?? ''));
+    }
     if ($providerStatus === '' && order_uses_api_discord($order)) {
         $providerStatus = normalize_api_discord_order_status((string) ($order['api_discord_status'] ?? ''));
     }
@@ -3220,6 +3495,18 @@ function build_order_status_response_payload(array $order, int $orderId): array 
         || trim((string) ($order['binance_pay_request_id'] ?? '')) !== ''
     ) {
         $paymentGateway = 'binance_pay';
+    } elseif (
+        trim((string) ($order['paypal_order_id'] ?? '')) !== ''
+        || trim((string) ($order['paypal_capture_id'] ?? '')) !== ''
+    ) {
+        $paymentGateway = 'paypal';
+    }
+
+    $checkoutUrl = '';
+    if ($paymentGateway === 'binance_pay') {
+        $checkoutUrl = trim((string) ($order['binance_pay_checkout_url'] ?? ''));
+    } elseif ($paymentGateway === 'paypal') {
+        $checkoutUrl = trim((string) ($order['paypal_checkout_url'] ?? ''));
     }
 
     $payload = array_merge([
@@ -3231,7 +3518,7 @@ function build_order_status_response_payload(array $order, int $orderId): array 
         'provider_reference' => $providerReference,
         'provider_message' => $providerMessage,
         'provider_code' => (string) ($order['recargas_api_codigo_entregado'] ?? ''),
-        'checkout_url' => trim((string) ($order['binance_pay_checkout_url'] ?? '')),
+        'checkout_url' => $checkoutUrl,
         'payment_gateway' => $paymentGateway,
         'remaining_seconds' => max(0, order_expiration_timestamp($order) - time()),
     ], $paymentGateway === 'binance_pay' ? build_binance_checkout_money_payload($order) : []);
@@ -3622,6 +3909,435 @@ function sync_local_order_with_binance_payload(mysqli $mysqli, array $order, arr
     } finally {
         release_order_provider_dispatch_lock($mysqli, $orderId);
     }
+}
+
+function sync_local_order_with_paypal_payload(mysqli $mysqli, array $order, array $payload, string $source = 'sync'): array {
+    $orderId = (int) ($order['id'] ?? 0);
+    if ($orderId <= 0) {
+        return [
+            'order' => $order,
+            'local_status' => trim((string) ($order['estado'] ?? '')),
+            'provider_flow' => order_provider_flow_from_row($order),
+        ];
+    }
+
+    persist_order_paypal_snapshot($mysqli, $orderId, $payload, $source);
+    $order = fetch_order_by_id($mysqli, $orderId) ?: $order;
+
+    $paypalStatus = paypal_pay_extract_status($payload);
+    if ($paypalStatus === '') {
+        $paypalStatus = strtolower(trim((string) ($order['paypal_status'] ?? '')));
+    }
+    $reference = paypal_pay_extract_capture_id($payload);
+    if ($reference === '') {
+        $reference = trim((string) ($order['paypal_capture_id'] ?? ''));
+    }
+    if ($reference === '') {
+        $reference = paypal_pay_extract_order_id($payload);
+    }
+    if ($reference === '') {
+        $reference = trim((string) ($order['paypal_order_id'] ?? ''));
+    }
+
+    $message = trim(paypal_pay_extract_message($payload));
+    if ($message === '') {
+        $message = trim((string) ($order['paypal_message'] ?? ''));
+    }
+    if ($message === '') {
+        if (paypal_pay_is_completed_status($paypalStatus)) {
+            $message = 'Pago aprobado correctamente por PayPal.';
+        } elseif (paypal_pay_is_failed_status($paypalStatus)) {
+            $message = 'El pago fue rechazado o cancelado en PayPal.';
+        } else {
+            $message = 'El pago sigue pendiente de confirmación en PayPal.';
+        }
+    }
+
+    $localStatus = trim((string) ($order['estado'] ?? ''));
+    if ($localStatus === 'enviado' || $localStatus === 'cancelado') {
+        return [
+            'order' => $order,
+            'local_status' => $localStatus,
+            'provider_flow' => order_provider_flow_from_row($order),
+        ];
+    }
+
+    if ($paypalStatus === '' || paypal_pay_is_pending_status($paypalStatus)) {
+        return [
+            'order' => $order,
+            'local_status' => $localStatus,
+            'provider_flow' => order_provider_flow_from_row($order),
+        ];
+    }
+
+    if (paypal_pay_is_failed_status($paypalStatus)) {
+        if ($localStatus === 'pendiente') {
+            $verifiedReference = $reference !== '' ? $reference : trim((string) ($order['numero_referencia'] ?? ''));
+            $cancelStatus = 'cancelado';
+            $stmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, estado = ? WHERE id = ? AND estado = 'pendiente' LIMIT 1");
+            if ($stmt) {
+                $stmt->bind_param('ssi', $verifiedReference, $cancelStatus, $orderId);
+                $stmt->execute();
+                $stmt->close();
+            }
+            $order = fetch_order_by_id($mysqli, $orderId) ?: $order;
+        }
+
+        return [
+            'order' => $order,
+            'local_status' => trim((string) ($order['estado'] ?? 'cancelado')),
+            'provider_flow' => order_provider_flow_from_row($order),
+        ];
+    }
+
+    if (!paypal_pay_is_completed_status($paypalStatus) || $localStatus !== 'pendiente') {
+        return [
+            'order' => $order,
+            'local_status' => trim((string) ($order['estado'] ?? $localStatus)),
+            'provider_flow' => order_provider_flow_from_row($order),
+        ];
+    }
+
+    $verifiedReference = $reference !== '' ? $reference : trim((string) ($order['numero_referencia'] ?? ''));
+    $phone = substr(trim((string) ($order['telefono_contacto'] ?? '')), 0, 40);
+    $paymentMethodName = 'PayPal';
+    $updatedOrder = $order;
+    $usesCatalogApi = order_uses_catalog_api_provider($updatedOrder);
+
+    if (order_is_account_sale($updatedOrder)) {
+        try {
+            $sentOrder = mark_account_sale_as_sent($mysqli, $updatedOrder, 'pendiente', $verifiedReference, $phone);
+        } catch (Throwable $e) {
+            return [
+                'order' => fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder,
+                'local_status' => trim((string) ($updatedOrder['estado'] ?? 'pendiente')),
+                'provider_flow' => order_provider_flow_from_row($updatedOrder),
+                'sync_error' => $e->getMessage(),
+            ];
+        }
+
+        if (trim((string) ($sentOrder['estado'] ?? '')) === 'enviado') {
+            win_points_handle_order_status_change($mysqli, $orderId, 'enviado');
+            recharge_notifications_emit_for_order($mysqli, $sentOrder);
+            register_influencer_coupon_sale($mysqli, $sentOrder);
+            notify_account_sale_delivery($mysqli, $sentOrder, $paymentMethodName, $verifiedReference, $phone);
+        }
+
+        return [
+            'order' => $sentOrder,
+            'local_status' => trim((string) ($sentOrder['estado'] ?? 'enviado')),
+            'provider_flow' => order_provider_flow_from_row($sentOrder),
+        ];
+    }
+
+    if (order_uses_api_discord($updatedOrder)) {
+        $dispatchResult = execute_api_discord_order_dispatch($updatedOrder);
+        persist_api_discord_dispatch_result($mysqli, $updatedOrder, $dispatchResult, 'pagado', 'pagado', $verifiedReference, $phone);
+
+        $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+        recharge_notifications_emit_for_order($mysqli, $paidOrder);
+        register_influencer_coupon_sale($mysqli, $paidOrder);
+        if (!empty($dispatchResult['sent'])) {
+            notify_catalog_purchase_pending($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, trim((string) ($dispatchResult['provider_reference'] ?? '')), trim((string) ($dispatchResult['provider_message'] ?? '')));
+        } else {
+            notify_bank_payment_verified_paid($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone);
+        }
+
+        return [
+            'order' => $paidOrder,
+            'local_status' => trim((string) ($paidOrder['estado'] ?? 'pagado')),
+            'provider_flow' => order_provider_flow_from_row($paidOrder),
+        ];
+    }
+
+    if (!$usesCatalogApi) {
+        $paidStatus = 'pagado';
+        $stmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, estado = ? WHERE id = ? AND estado = 'pendiente' LIMIT 1");
+        if ($stmt) {
+            $stmt->bind_param('ssi', $verifiedReference, $paidStatus, $orderId);
+            $stmt->execute();
+            $stmt->close();
+        }
+
+        $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+        if (trim((string) ($paidOrder['estado'] ?? '')) === 'pagado') {
+            recharge_notifications_emit_for_order($mysqli, $paidOrder);
+            register_influencer_coupon_sale($mysqli, $paidOrder);
+            notify_bank_payment_verified_paid($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone);
+        }
+
+        return [
+            'order' => $paidOrder,
+            'local_status' => trim((string) ($paidOrder['estado'] ?? 'pagado')),
+            'provider_flow' => order_provider_flow_from_row($paidOrder),
+        ];
+    }
+
+    if (!acquire_order_provider_dispatch_lock($mysqli, $orderId, 0)) {
+        $lockedOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+        return [
+            'order' => $lockedOrder,
+            'local_status' => trim((string) ($lockedOrder['estado'] ?? $localStatus)),
+            'provider_flow' => order_provider_flow_from_row($lockedOrder),
+        ];
+    }
+
+    try {
+        $updatedOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+        $latestLocalStatus = trim((string) ($updatedOrder['estado'] ?? $localStatus));
+        if ($latestLocalStatus === 'enviado' || $latestLocalStatus === 'cancelado') {
+            return [
+                'order' => $updatedOrder,
+                'local_status' => $latestLocalStatus,
+                'provider_flow' => order_provider_flow_from_row($updatedOrder),
+            ];
+        }
+
+        $hasProviderTracking = trim((string) ($updatedOrder['recargas_api_pedido_id'] ?? '')) !== ''
+            || trim((string) ($updatedOrder['ff_api_referencia'] ?? '')) !== '';
+        if ($latestLocalStatus === 'pagado' && $hasProviderTracking) {
+            return [
+                'order' => $updatedOrder,
+                'local_status' => $latestLocalStatus,
+                'provider_flow' => order_provider_flow_from_row($updatedOrder),
+            ];
+        }
+
+        $claimStatus = 'pagado';
+        $claimStmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, telefono_contacto = ?, estado = ? WHERE id = ? AND estado = 'pendiente' LIMIT 1");
+        if ($claimStmt) {
+            $claimStmt->bind_param('sssi', $verifiedReference, $phone, $claimStatus, $orderId);
+            $claimStmt->execute();
+            $claimStmt->close();
+        }
+
+        $updatedOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+        if (trim((string) ($updatedOrder['estado'] ?? '')) !== 'pagado') {
+            return [
+                'order' => $updatedOrder,
+                'local_status' => trim((string) ($updatedOrder['estado'] ?? $latestLocalStatus)),
+                'provider_flow' => order_provider_flow_from_row($updatedOrder),
+            ];
+        }
+
+        $packageApiId = (int) ($updatedOrder['paquete_api'] ?? 0);
+        $orderPlayerFields = order_player_fields_from_json((string) ($updatedOrder['player_fields_json'] ?? ''));
+
+        try {
+            $providerResult = execute_catalog_api_purchase($packageApiId, (string) ($updatedOrder['user_identifier'] ?? ''), $orderPlayerFields, order_purchase_quantity($updatedOrder));
+        } catch (Throwable $e) {
+            $providerResult = [
+                'success' => false,
+                'accepted' => false,
+                'message' => $e->getMessage(),
+                'reference' => '',
+                'payload' => ['exception' => $e->getMessage()],
+            ];
+        }
+
+        $mysqli = ensure_mysqli_connection($mysqli);
+        $providerPayloadData = (array) ($providerResult['payload'] ?? []);
+        $providerReference = (string) ($providerResult['reference'] ?? '');
+        $providerMessage = provider_order_status_message($providerPayloadData, (string) ($providerResult['message'] ?? 'No se recibió mensaje del proveedor.'));
+        $providerPayload = json_encode($providerPayloadData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $providerOrderId = recargas_api_extract_provider_order_id($providerPayloadData);
+        $providerState = strtolower(trim((string) (($providerPayloadData['estado'] ?? ''))));
+        $providerCode = provider_delivered_code_text($providerPayloadData);
+
+        if (!empty($providerResult['success'])) {
+            $verifiedStatus = 'enviado';
+            $providerHistoryJson = append_provider_history(
+                $updatedOrder['recargas_api_historial_json'] ?? null,
+                build_provider_history_entry(
+                    'purchase',
+                    $providerState,
+                    $verifiedStatus,
+                    $providerMessage,
+                    $providerReference,
+                    $providerOrderId,
+                    $providerCode
+                )
+            );
+            $verifyStmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, ff_api_referencia = ?, ff_api_mensaje = ?, ff_api_payload = ?, recargas_api_pedido_id = ?, recargas_api_estado = ?, recargas_api_codigo_entregado = ?, recargas_api_ultimo_check = NOW(), recargas_api_historial_json = ?, estado = ? WHERE id = ? AND estado = 'pagado'");
+            if ($verifyStmt) {
+                $verifyStmt->bind_param('sssssssssi', $verifiedReference, $providerReference, $providerMessage, $providerPayload, $providerOrderId, $providerState, $providerCode, $providerHistoryJson, $verifiedStatus, $orderId);
+                $verifyStmt->execute();
+                $verifyStmt->close();
+            }
+
+            $verifiedOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+            if (trim((string) ($verifiedOrder['estado'] ?? '')) === 'enviado') {
+                win_points_handle_order_status_change($mysqli, $orderId, 'enviado');
+                recharge_notifications_emit_for_order($mysqli, $verifiedOrder);
+                ensure_provider_webhook_registration();
+                register_influencer_coupon_sale($mysqli, $verifiedOrder);
+                notify_free_fire_recharge_success($mysqli, $verifiedOrder, $paymentMethodName, $verifiedReference, $phone, $providerReference, $providerMessage);
+            }
+
+            return [
+                'order' => $verifiedOrder,
+                'local_status' => trim((string) ($verifiedOrder['estado'] ?? 'enviado')),
+                'provider_flow' => order_provider_flow_from_row($verifiedOrder),
+            ];
+        }
+
+        $inventoryShortage = recharge_availability_message_indicates_inventory_shortage($providerMessage);
+        if ($inventoryShortage) {
+            try {
+                $shortageResult = mark_order_inventory_shortage_review(
+                    $mysqli,
+                    $updatedOrder,
+                    'pagado',
+                    $verifiedReference,
+                    $phone,
+                    $providerReference,
+                    $providerMessage,
+                    $providerPayload,
+                    $providerOrderId,
+                    $providerCode
+                );
+            } catch (Throwable $e) {
+                return [
+                    'order' => fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder,
+                    'local_status' => trim((string) ($updatedOrder['estado'] ?? 'pagado')),
+                    'provider_flow' => order_provider_flow_from_row($updatedOrder),
+                    'sync_error' => $e->getMessage(),
+                ];
+            }
+
+            $paidOrder = $shortageResult['order'];
+            recharge_notifications_emit_for_order($mysqli, $paidOrder);
+            register_influencer_coupon_sale($mysqli, $paidOrder);
+            notify_provider_inventory_shortage($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerMessage, $shortageResult['lock'] ?? []);
+
+            return [
+                'order' => $paidOrder,
+                'local_status' => trim((string) ($paidOrder['estado'] ?? 'pagado')),
+                'provider_flow' => order_provider_flow_from_row($paidOrder),
+            ];
+        }
+
+        $manualProcessing = !empty($providerResult['manual_processing']);
+        $acceptedLike = !empty($providerResult['accepted'])
+            || ($manualProcessing && provider_message_indicates_pending_lookup($providerMessage));
+        $trackingFollowUp = provider_message_indicates_transport_timeout($providerMessage);
+
+        if ($trackingFollowUp || $acceptedLike) {
+            $paidStatus = 'pagado';
+            $trackedState = $providerState !== '' ? $providerState : 'pending_confirmation';
+            $providerHistoryJson = append_provider_history(
+                $updatedOrder['recargas_api_historial_json'] ?? null,
+                build_provider_history_entry(
+                    $trackingFollowUp ? 'purchase_timeout' : 'purchase',
+                    $trackedState,
+                    $paidStatus,
+                    $providerMessage,
+                    $providerReference,
+                    $providerOrderId,
+                    $providerCode
+                )
+            );
+            $paidStmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, ff_api_referencia = ?, ff_api_mensaje = ?, ff_api_payload = ?, recargas_api_pedido_id = ?, recargas_api_estado = ?, recargas_api_codigo_entregado = ?, recargas_api_ultimo_check = NOW(), recargas_api_historial_json = ?, estado = ? WHERE id = ? AND estado = 'pagado'");
+            if ($paidStmt) {
+                $paidStmt->bind_param('sssssssssi', $verifiedReference, $providerReference, $providerMessage, $providerPayload, $providerOrderId, $trackedState, $providerCode, $providerHistoryJson, $paidStatus, $orderId);
+                $paidStmt->execute();
+                $paidStmt->close();
+            }
+
+            $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+            recharge_notifications_emit_for_order($mysqli, $paidOrder);
+            ensure_provider_webhook_registration();
+            register_influencer_coupon_sale($mysqli, $paidOrder);
+            notify_catalog_purchase_pending($mysqli, $paidOrder, $paymentMethodName, $verifiedReference, $phone, $providerReference, $providerMessage);
+
+            if ($trackingFollowUp) {
+                continue_provider_follow_up_in_background($mysqli, (int) ($paidOrder['id'] ?? $orderId), 8, 8);
+            } elseif ($acceptedLike) {
+                $autoSyncAttempts = $manualProcessing ? 5 : 3;
+                $autoSyncDelaySeconds = $manualProcessing ? 4 : 2;
+                try {
+                    $autoSyncResult = try_auto_sync_provider_order($mysqli, $paidOrder, $autoSyncAttempts, $autoSyncDelaySeconds);
+                    if (is_array($autoSyncResult['order'] ?? null)) {
+                        $paidOrder = $autoSyncResult['order'];
+                    } else {
+                        $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $paidOrder;
+                    }
+                } catch (Throwable $e) {
+                    $paidOrder = fetch_order_by_id($mysqli, $orderId) ?: $paidOrder;
+                }
+            }
+
+            return [
+                'order' => $paidOrder,
+                'local_status' => trim((string) ($paidOrder['estado'] ?? 'pagado')),
+                'provider_flow' => order_provider_flow_from_row($paidOrder),
+            ];
+        }
+
+        $cancelStatus = 'cancelado';
+        $failedHistoryJson = append_provider_history(
+            $updatedOrder['recargas_api_historial_json'] ?? null,
+            build_provider_history_entry(
+                'purchase_failed',
+                $providerState,
+                $cancelStatus,
+                $providerMessage,
+                $providerReference,
+                $providerOrderId,
+                $providerCode
+            )
+        );
+        $cancelStmt = $mysqli->prepare("UPDATE pedidos SET numero_referencia = ?, ff_api_referencia = ?, ff_api_mensaje = ?, ff_api_payload = ?, recargas_api_pedido_id = ?, recargas_api_estado = ?, recargas_api_codigo_entregado = ?, recargas_api_ultimo_check = NOW(), recargas_api_historial_json = ?, estado = ? WHERE id = ? AND estado = 'pagado'");
+        if ($cancelStmt) {
+            $cancelStmt->bind_param('sssssssssi', $verifiedReference, $providerReference, $providerMessage, $providerPayload, $providerOrderId, $providerState, $providerCode, $failedHistoryJson, $cancelStatus, $orderId);
+            $cancelStmt->execute();
+            $cancelStmt->close();
+        }
+
+        $cancelledOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
+        return [
+            'order' => $cancelledOrder,
+            'local_status' => trim((string) ($cancelledOrder['estado'] ?? 'cancelado')),
+            'provider_flow' => order_provider_flow_from_row($cancelledOrder),
+        ];
+    } finally {
+        release_order_provider_dispatch_lock($mysqli, $orderId);
+    }
+}
+
+function sync_or_capture_paypal_order(mysqli $mysqli, array $order, string $source = 'sync'): array {
+    if (!paypal_pay_is_enabled()) {
+        return [
+            'order' => $order,
+            'local_status' => trim((string) ($order['estado'] ?? '')),
+            'provider_flow' => order_provider_flow_from_row($order),
+        ];
+    }
+
+    $paypalOrderId = trim((string) ($order['paypal_order_id'] ?? ''));
+    if ($paypalOrderId === '') {
+        return [
+            'order' => $order,
+            'local_status' => trim((string) ($order['estado'] ?? '')),
+            'provider_flow' => order_provider_flow_from_row($order),
+        ];
+    }
+
+    $payload = paypal_pay_get_order($paypalOrderId);
+    $status = paypal_pay_extract_status($payload);
+    if ($status === 'approved') {
+        try {
+            $payload = paypal_pay_capture_order($paypalOrderId);
+        } catch (Throwable $e) {
+            $latestPayload = paypal_pay_get_order($paypalOrderId);
+            if (paypal_pay_extract_status($latestPayload) !== 'completed') {
+                throw $e;
+            }
+            $payload = $latestPayload;
+        }
+    }
+
+    return sync_local_order_with_paypal_payload($mysqli, $order, $payload, $source);
 }
 
 function try_auto_sync_binance_order(mysqli $mysqli, array $order, string $source = 'sync'): array {
@@ -4288,6 +5004,16 @@ function order_provider_flow_from_row(array $order): string {
             return 'cancelled';
         }
         return 'binance_checkout';
+    }
+
+    $hasPaypalTracking = trim((string) ($order['paypal_order_id'] ?? '')) !== ''
+        || trim((string) ($order['paypal_capture_id'] ?? '')) !== '';
+    if ($hasPaypalTracking && $localStatus === 'pendiente') {
+        $paypalStatus = paypal_pay_extract_status(['status' => $order['paypal_status'] ?? '']);
+        if (paypal_pay_is_failed_status($paypalStatus)) {
+            return 'cancelled';
+        }
+        return 'paypal_checkout';
     }
 
     return '';
@@ -6595,6 +7321,50 @@ function notify_bank_payment_pending_mismatch(
     }
 }
 
+function paypal_popup_bridge_html(string $title, string $message, string $state = 'info', array $payload = []): string {
+    $safeTitle = htmlspecialchars($title, ENT_QUOTES, 'UTF-8');
+    $safeMessage = nl2br(htmlspecialchars($message, ENT_QUOTES, 'UTF-8'), false);
+    $safeState = in_array($state, ['success', 'danger', 'warning', 'info'], true) ? $state : 'info';
+    $payloadJson = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (!is_string($payloadJson)) {
+        $payloadJson = '{}';
+    }
+
+    return '<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+        . '<title>' . $safeTitle . '</title><style>'
+        . 'body{margin:0;font-family:Arial,sans-serif;background:#081018;color:#e2e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}'
+        . '.card{width:min(720px,100%);background:#111827;border:1px solid rgba(96,165,250,.45);border-radius:24px;padding:32px;box-shadow:0 24px 60px rgba(0,0,0,.35)}'
+        . 'h1{margin:0 0 12px;font-size:28px;color:' . ($safeState === 'success' ? '#34d399' : ($safeState === 'danger' ? '#f87171' : '#60a5fa')) . '}'
+        . 'p{margin:0 0 12px;line-height:1.7;font-size:16px}.hint{margin-top:18px;color:#94a3b8;font-size:13px}.btn{display:inline-block;margin-top:16px;padding:12px 18px;border-radius:12px;background:#0f172a;border:1px solid #334155;color:#f8fafc;text-decoration:none}'
+        . '</style></head><body><div class="card"><h1>' . $safeTitle . '</h1><p>' . $safeMessage . '</p><p class="hint">Puedes cerrar esta ventana. La tienda seguirá sincronizando el pedido automáticamente.</p><a class="btn" href="#" onclick="window.close();return false;">Cerrar ventana</a></div><script>'
+        . 'const payload=' . $payloadJson . ';'
+        . 'try{if(window.opener&&!window.opener.closed){window.opener.postMessage({source:"paypal-checkout",payload},"*");}}catch(_){ }'
+        . 'setTimeout(()=>{try{window.close();}catch(_){ }},1800);'
+        . '</script></body></html>';
+}
+
+function paypal_event_order_identifiers(array $event): array {
+    $eventType = strtoupper(trim((string) ($event['event_type'] ?? '')));
+    $resource = is_array($event['resource'] ?? null) ? $event['resource'] : [];
+    $orderId = trim((string) ($resource['supplementary_data']['related_ids']['order_id'] ?? ''));
+    $captureId = '';
+
+    if (str_starts_with($eventType, 'CHECKOUT.ORDER.')) {
+        if ($orderId === '') {
+            $orderId = trim((string) ($resource['id'] ?? ''));
+        }
+    }
+
+    if (str_starts_with($eventType, 'PAYMENT.CAPTURE.')) {
+        $captureId = trim((string) ($resource['id'] ?? ''));
+    }
+
+    return [
+        'order_id' => $orderId,
+        'capture_id' => $captureId,
+    ];
+}
+
 $action = $_POST['action'] ?? $_GET['action'] ?? null;
 if (!$action) {
     json_error('Acción no especificada', 422);
@@ -7046,7 +7816,7 @@ if ($action === 'submit_payment') {
 
     $orderId = intval($_POST['order_id'] ?? 0);
     $paymentMode = trim((string) ($_POST['payment_mode'] ?? 'money'));
-    $paymentMode = in_array($paymentMode, ['money', 'points', 'binance'], true) ? $paymentMode : 'money';
+    $paymentMode = in_array($paymentMode, ['money', 'points', 'binance', 'paypal'], true) ? $paymentMode : 'money';
     $paymentMethodId = intval($_POST['payment_method_id'] ?? 0);
     $referenceNumberRaw = trim((string) ($_POST['reference_number'] ?? ''));
     $phoneRaw = trim((string) ($_POST['phone'] ?? ''));
@@ -7069,6 +7839,10 @@ if ($action === 'submit_payment') {
 
     if ($paymentMode !== 'binance' && trim((string) ($order['binance_pay_reference'] ?? '')) !== '') {
         clear_order_binance_pay_tracking($mysqli, $orderId);
+        $order = fetch_order_by_id($mysqli, $orderId) ?: $order;
+    }
+    if ($paymentMode !== 'paypal' && trim((string) ($order['paypal_order_id'] ?? '')) !== '') {
+        clear_order_paypal_tracking($mysqli, $orderId);
         $order = fetch_order_by_id($mysqli, $orderId) ?: $order;
     }
 
@@ -7167,6 +7941,99 @@ if ($action === 'submit_payment') {
             'order_id' => $orderId,
             'estado' => 'pendiente',
         ], build_binance_checkout_response_payload($checkoutOrder)));
+    }
+
+    if ($paymentMode === 'paypal') {
+        $discountSync = persist_order_payment_selection($mysqli, $order, 'paypal');
+        $order = is_array($discountSync['order'] ?? null) ? $discountSync['order'] : $order;
+        if (!empty($discountSync['price_changed']) && trim((string) ($order['paypal_order_id'] ?? '')) !== '') {
+            clear_order_paypal_tracking($mysqli, $orderId);
+            $order = fetch_order_by_id($mysqli, $orderId) ?: $order;
+        }
+
+        if (!paypal_pay_is_enabled()) {
+            json_error('PayPal no está activo en esta tienda.', 409);
+        }
+        if (!paypal_pay_is_configured()) {
+            json_error('Faltan credenciales de PayPal para usar este método.', 409);
+        }
+
+        $orderCurrency = strtoupper(trim((string) ($order['moneda'] ?? '')));
+        if (!paypal_pay_supports_currency($orderCurrency)) {
+            json_error('PayPal no admite pagos en ' . $orderCurrency . ' para esta orden.', 409);
+        }
+
+        $existingCheckoutUrl = trim((string) ($order['paypal_checkout_url'] ?? ''));
+        $existingStatus = paypal_pay_extract_status(['status' => $order['paypal_status'] ?? '']);
+        if ($existingCheckoutUrl !== '' && trim((string) ($order['paypal_order_id'] ?? '')) !== '' && ($existingStatus === '' || paypal_pay_is_pending_status($existingStatus))) {
+            $existingOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
+            json_response(array_merge([
+                'ok' => true,
+                'message' => 'Tu checkout de PayPal sigue activo. Continúa el pago para completar tu pedido.',
+                'order_id' => $orderId,
+                'estado' => (string) ($existingOrder['estado'] ?? 'pendiente'),
+            ], build_paypal_checkout_response_payload($existingOrder)));
+        }
+
+        $returnUrl = build_paypal_pay_return_url();
+        $cancelUrl = build_paypal_pay_cancel_url();
+        if ($returnUrl === null || $cancelUrl === null) {
+            json_error('La tienda no tiene una URL pública válida para procesar el retorno de PayPal.', 409);
+        }
+
+        $orderAmount = round((float) ($order['precio'] ?? 0), 2);
+        if ($orderAmount <= 0) {
+            json_error('La orden no tiene un monto válido para PayPal.', 409);
+        }
+
+        $requestPayload = paypal_pay_build_create_order_payload([
+            'local_order_id' => $orderId,
+            'currency' => $orderCurrency,
+            'amount' => $orderAmount,
+            'description' => trim((string) ($order['juego_nombre'] ?? 'Pedido')) . ' - ' . trim((string) ($order['paquete_nombre'] ?? ('#' . $orderId))),
+            'return_url' => $returnUrl,
+            'cancel_url' => $cancelUrl,
+            'brand_name' => trim((string) store_config_get('paypal_brand_name', '')),
+        ]);
+
+        try {
+            $responsePayload = paypal_pay_api_request(
+                'POST',
+                '/v2/checkout/orders',
+                $requestPayload,
+                [
+                    'Prefer: return=representation',
+                    'PayPal-Request-Id: VG-PAYPAL-' . $orderId . '-' . time(),
+                ]
+            );
+        } catch (Throwable $e) {
+            $rawMessage = trim((string) $e->getMessage());
+            error_log('TVG PayPal checkout failed for order #' . $orderId . ': ' . $rawMessage);
+            json_error(paypal_pay_customer_message($rawMessage, $orderCurrency), 502);
+        }
+
+        if (trim((string) paypal_pay_extract_approval_url($responsePayload)) === '') {
+            json_error('PayPal no devolvió una URL válida para continuar el checkout.', 502);
+        }
+
+        if (!persist_order_paypal_checkout($mysqli, $orderId, $requestPayload, $responsePayload)) {
+            $latestOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
+            if (trim((string) ($latestOrder['estado'] ?? '')) !== 'pendiente') {
+                json_response(array_merge([
+                    'ok' => true,
+                    'message' => 'La orden cambió de estado mientras se preparaba el checkout.',
+                ], build_order_status_response_payload($latestOrder, $orderId)));
+            }
+            json_error('No se pudo registrar el checkout de PayPal en el pedido.', 500);
+        }
+
+        $checkoutOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
+        json_response(array_merge([
+            'ok' => true,
+            'message' => 'Abre PayPal y completa el pago para continuar con tu pedido.',
+            'order_id' => $orderId,
+            'estado' => 'pendiente',
+        ], build_paypal_checkout_response_payload($checkoutOrder)));
     }
 
     if ($paymentMode === 'points') {
@@ -8496,6 +9363,7 @@ if ($action === 'order_status') {
         $localStatus = trim((string) ($order['estado'] ?? ''));
         $providerOrderId = trim((string) ($order['recargas_api_pedido_id'] ?? ''));
         $binanceReference = trim((string) ($order['binance_pay_reference'] ?? ''));
+        $paypalOrderId = trim((string) ($order['paypal_order_id'] ?? ''));
 
         try {
             if ($localStatus === 'pagado' && order_provider_flow_from_row($order) !== 'inventory_shortage' && ($providerOrderId !== '' || trim((string) ($order['ff_api_referencia'] ?? '')) !== '')) {
@@ -8508,6 +9376,9 @@ if ($action === 'order_status') {
                 }
             } elseif (binance_pay_is_enabled() && $binanceReference !== '' && in_array($localStatus, ['pendiente', 'pagado'], true)) {
                 $syncResult = try_auto_sync_binance_order($mysqli, $order, 'status_poll');
+                $order = is_array($syncResult['order'] ?? null) ? $syncResult['order'] : (fetch_order_by_id($mysqli, $orderId) ?: $order);
+            } elseif (paypal_pay_is_enabled() && $paypalOrderId !== '' && in_array($localStatus, ['pendiente', 'pagado'], true)) {
+                $syncResult = sync_or_capture_paypal_order($mysqli, $order, 'status_poll');
                 $order = is_array($syncResult['order'] ?? null) ? $syncResult['order'] : (fetch_order_by_id($mysqli, $orderId) ?: $order);
             }
         } catch (Throwable $e) {
@@ -8538,6 +9409,8 @@ if ($action === 'sync_provider_status') {
     $hasBinanceTracking = trim((string) ($order['binance_pay_reference'] ?? '')) !== ''
         || trim((string) ($order['binance_pay_order_no'] ?? '')) !== ''
         || trim((string) ($order['binance_pay_request_id'] ?? '')) !== '';
+    $hasPaypalTracking = trim((string) ($order['paypal_order_id'] ?? '')) !== ''
+        || trim((string) ($order['paypal_capture_id'] ?? '')) !== '';
     $syncGateway = 'provider';
 
     try {
@@ -8551,6 +9424,12 @@ if ($action === 'sync_provider_status') {
             }
             $syncGateway = 'binance_pay';
             $syncResult = try_auto_sync_binance_order($mysqli, $order, 'admin_sync');
+        } elseif ($hasPaypalTracking) {
+            if (!paypal_pay_is_enabled()) {
+                json_error('PayPal no está activo en esta tienda.', 409);
+            }
+            $syncGateway = 'paypal';
+            $syncResult = sync_or_capture_paypal_order($mysqli, $order, 'admin_sync');
         } else {
             $syncResult = try_recover_uncertain_provider_purchase($mysqli, $order, 2, 2);
             if (!is_array($syncResult)) {
@@ -8572,6 +9451,9 @@ if ($action === 'sync_provider_status') {
     if ($resolvedProviderStatus === '') {
         $resolvedProviderStatus = trim((string) ($syncedOrder['binance_pay_status'] ?? ''));
     }
+    if ($resolvedProviderStatus === '') {
+        $resolvedProviderStatus = trim((string) ($syncedOrder['paypal_status'] ?? ''));
+    }
 
     $resolvedProviderReference = trim((string) ($syncResult['provider_reference'] ?? ''));
     if ($resolvedProviderReference === '') {
@@ -8579,6 +9461,12 @@ if ($action === 'sync_provider_status') {
     }
     if ($resolvedProviderReference === '') {
         $resolvedProviderReference = trim((string) ($syncedOrder['binance_pay_reference'] ?? ''));
+    }
+    if ($resolvedProviderReference === '') {
+        $resolvedProviderReference = trim((string) ($syncedOrder['paypal_capture_id'] ?? ''));
+    }
+    if ($resolvedProviderReference === '') {
+        $resolvedProviderReference = trim((string) ($syncedOrder['paypal_order_id'] ?? ''));
     }
 
     $resolvedProviderMessage = trim((string) ($syncResult['provider_message'] ?? ''));
@@ -8588,6 +9476,9 @@ if ($action === 'sync_provider_status') {
     if ($resolvedProviderMessage === '') {
         $resolvedProviderMessage = trim((string) ($syncedOrder['binance_pay_message'] ?? ''));
     }
+    if ($resolvedProviderMessage === '') {
+        $resolvedProviderMessage = trim((string) ($syncedOrder['paypal_message'] ?? ''));
+    }
 
     $resolvedProviderCode = trim((string) ($syncResult['provider_code'] ?? ''));
     if ($resolvedProviderCode === '') {
@@ -8595,13 +9486,23 @@ if ($action === 'sync_provider_status') {
     }
 
     $resolvedPaymentGateway = $syncGateway === 'binance_pay' ? 'binance_pay' : '';
+    if ($resolvedPaymentGateway === '' && $syncGateway === 'paypal') {
+        $resolvedPaymentGateway = 'paypal';
+    }
     if ($resolvedPaymentGateway === '' && $hasBinanceTracking && $resolvedProviderOrderId === '') {
         $resolvedPaymentGateway = 'binance_pay';
+    }
+    if ($resolvedPaymentGateway === '' && $hasPaypalTracking && $resolvedProviderOrderId === '') {
+        $resolvedPaymentGateway = 'paypal';
     }
 
     if ($syncGateway === 'binance_pay') {
         if ($resolvedProviderStatus === '' && $resolvedProviderReference === '' && $resolvedProviderMessage === '') {
             json_error('No se pudo obtener una respuesta util de Binance Pay para este pedido.', 404);
+        }
+    } elseif ($syncGateway === 'paypal') {
+        if ($resolvedProviderStatus === '' && $resolvedProviderReference === '' && $resolvedProviderMessage === '') {
+            json_error('No se pudo obtener una respuesta útil de PayPal para este pedido.', 404);
         }
     } elseif ($resolvedProviderOrderId === '' && $resolvedProviderStatus === '' && $resolvedProviderReference === '') {
         json_error('Aun no se encontro un pedido externo asociado a esta orden para sincronizar.', 404);
@@ -8621,7 +9522,9 @@ if ($action === 'sync_provider_status') {
         'refund_amount' => $syncResult['refund_amount'] ?? null,
         'provider_flow' => order_provider_flow_from_row($syncedOrder),
         'payment_gateway' => $resolvedPaymentGateway,
-        'checkout_url' => trim((string) ($syncedOrder['binance_pay_checkout_url'] ?? '')),
+        'checkout_url' => $resolvedPaymentGateway === 'paypal'
+            ? trim((string) ($syncedOrder['paypal_checkout_url'] ?? ''))
+            : trim((string) ($syncedOrder['binance_pay_checkout_url'] ?? '')),
     ]);
 }
 
@@ -9073,6 +9976,148 @@ if ($action === 'provider_webhook') {
         'order_id' => (int) ($order['id'] ?? 0),
         'estado' => $syncResult['local_status'],
     ]);
+}
+
+if ($action === 'paypal_webhook') {
+    if (!paypal_pay_is_enabled()) {
+        http_response_code(503);
+        header('Content-Type: text/plain; charset=UTF-8');
+        echo 'disabled';
+        exit;
+    }
+
+    $rawBody = file_get_contents('php://input');
+    $event = json_decode((string) $rawBody, true);
+    if (!is_array($event)) {
+        http_response_code(422);
+        header('Content-Type: text/plain; charset=UTF-8');
+        echo 'invalid';
+        exit;
+    }
+
+    try {
+        $headers = paypal_pay_webhook_headers_from_server($_SERVER);
+        if (!paypal_pay_verify_webhook_signature($headers, $event)) {
+            throw new RuntimeException('Invalid PayPal webhook signature.');
+        }
+    } catch (Throwable $e) {
+        error_log('TVG PayPal webhook signature failed: ' . $e->getMessage());
+        http_response_code(422);
+        header('Content-Type: text/plain; charset=UTF-8');
+        echo 'invalid';
+        exit;
+    }
+
+    $identifiers = paypal_event_order_identifiers($event);
+    $order = find_local_order_by_paypal_identifiers($mysqli, $identifiers['order_id'] ?? '', $identifiers['capture_id'] ?? '');
+    if (!$order) {
+        http_response_code(404);
+        header('Content-Type: text/plain; charset=UTF-8');
+        echo 'missing';
+        exit;
+    }
+
+    try {
+        sync_or_capture_paypal_order($mysqli, $order, 'webhook');
+        http_response_code(200);
+        header('Content-Type: text/plain; charset=UTF-8');
+        echo 'success';
+    } catch (Throwable $e) {
+        error_log('TVG PayPal webhook failed for order #' . (int) ($order['id'] ?? 0) . ': ' . $e->getMessage());
+        http_response_code(500);
+        header('Content-Type: text/plain; charset=UTF-8');
+        echo 'error';
+    }
+    exit;
+}
+
+if ($action === 'paypal_return') {
+    header('Content-Type: text/html; charset=UTF-8');
+
+    $paypalOrderId = trim((string) ($_GET['token'] ?? ''));
+    if ($paypalOrderId === '') {
+        http_response_code(400);
+        echo paypal_popup_bridge_html('Retorno inválido', 'PayPal no devolvió un token de orden válido.', 'danger', [
+            'state' => 'error',
+        ]);
+        exit;
+    }
+
+    $order = find_local_order_by_paypal_identifiers($mysqli, $paypalOrderId, null);
+    if (!$order) {
+        http_response_code(404);
+        echo paypal_popup_bridge_html('Pedido no encontrado', 'No se encontró una orden local asociada al retorno de PayPal.', 'danger', [
+            'state' => 'error',
+            'paypal_order_id' => $paypalOrderId,
+        ]);
+        exit;
+    }
+
+    try {
+        $syncResult = sync_or_capture_paypal_order($mysqli, $order, 'return');
+        $updatedOrder = is_array($syncResult['order'] ?? null) ? $syncResult['order'] : (fetch_order_by_id($mysqli, (int) ($order['id'] ?? 0)) ?: $order);
+        $localStatus = trim((string) ($syncResult['local_status'] ?? ($updatedOrder['estado'] ?? 'pendiente')));
+        $message = trim((string) ($updatedOrder['paypal_message'] ?? ''));
+        if ($message === '') {
+            $message = $localStatus === 'cancelado'
+                ? 'El pago fue cancelado o rechazado en PayPal.'
+                : ($localStatus === 'pendiente'
+                    ? 'La orden fue aprobada en PayPal y seguimos confirmando el resultado final.'
+                    : 'El pago con PayPal fue procesado correctamente.');
+        }
+        echo paypal_popup_bridge_html(
+            $localStatus === 'cancelado' ? 'Pago cancelado' : ($localStatus === 'pendiente' ? 'Pago aprobado en PayPal' : 'Pago procesado'),
+            $message,
+            $localStatus === 'cancelado' ? 'danger' : ($localStatus === 'pendiente' ? 'info' : 'success'),
+            [
+                'state' => $localStatus,
+                'order_id' => (int) ($updatedOrder['id'] ?? 0),
+                'paypal_order_id' => $paypalOrderId,
+            ]
+        );
+    } catch (Throwable $e) {
+        error_log('TVG PayPal return failed for order #' . (int) ($order['id'] ?? 0) . ': ' . $e->getMessage());
+        http_response_code(500);
+        echo paypal_popup_bridge_html('No se pudo confirmar el pago', paypal_pay_customer_message($e->getMessage(), (string) ($order['moneda'] ?? '')), 'danger', [
+            'state' => 'error',
+            'order_id' => (int) ($order['id'] ?? 0),
+            'paypal_order_id' => $paypalOrderId,
+        ]);
+    }
+    exit;
+}
+
+if ($action === 'paypal_cancel') {
+    header('Content-Type: text/html; charset=UTF-8');
+
+    $paypalOrderId = trim((string) ($_GET['token'] ?? ''));
+    $order = $paypalOrderId !== '' ? find_local_order_by_paypal_identifiers($mysqli, $paypalOrderId, null) : null;
+
+    if ($order && trim((string) ($order['estado'] ?? '')) === 'pendiente') {
+        $cancelStatus = 'cancelado';
+        $paypalStatus = 'cancelled';
+        $paypalMessage = 'El cliente canceló el checkout desde PayPal.';
+        $stmt = $mysqli->prepare("UPDATE pedidos SET paypal_status = ?, paypal_message = ?, estado = ? WHERE id = ? AND estado = 'pendiente' LIMIT 1");
+        if ($stmt) {
+            $orderId = (int) ($order['id'] ?? 0);
+            $stmt->bind_param('sssi', $paypalStatus, $paypalMessage, $cancelStatus, $orderId);
+            $stmt->execute();
+            $stmt->close();
+            $order = fetch_order_by_id($mysqli, $orderId) ?: $order;
+        }
+    }
+
+    echo paypal_popup_bridge_html(
+        'Pago cancelado',
+        'Cancelaste el checkout de PayPal. Puedes volver a la tienda y elegir otro método si lo deseas.',
+        'warning',
+        [
+            'state' => 'cancelado',
+            'order_id' => (int) ($order['id'] ?? 0),
+            'paypal_order_id' => $paypalOrderId,
+        ]
+    );
+    exit;
 }
 
 if ($action === 'binance_notify') {
