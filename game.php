@@ -3369,7 +3369,8 @@ include __DIR__ . "/includes/header.php";
     justify-content: center;
     position: relative;
     overflow: hidden;
-    border-radius: calc(1.1rem - 1px) calc(1.1rem - 1px) 0 0;
+    will-change: transform, box-shadow;
+    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s ease, border-color 0.28s ease, background 0.28s ease;
     background: linear-gradient(180deg, rgba(var(--theme-bg-main-rgb), 0.45), rgba(var(--theme-bg-main-rgb), 0.05));
     flex-shrink: 0;
   }
@@ -3405,7 +3406,7 @@ include __DIR__ . "/includes/header.php";
     z-index: 2;
     display: flex;
     flex-wrap: wrap;
-    gap: 0.35rem;
+    transition: transform 0.36s cubic-bezier(0.22, 1, 0.36, 1), filter 0.3s ease;
     align-items: flex-end;
     pointer-events: none;
   }
@@ -3422,18 +3423,19 @@ include __DIR__ . "/includes/header.php";
     background: rgba(7, 14, 26, 0.82);
     color: #f8fbff;
     box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28);
-    backdrop-filter: blur(3px);
+    transition: transform 0.24s ease, box-shadow 0.24s ease, background 0.24s ease;
   }
 
   .pack-card-feature-icon {
-    width: 0.82rem !important;
+    transform: translateY(-7px) scale(1.02);
+    box-shadow: 0 0 0 1px rgba(var(--theme-button-primary-rgb), 1), 0 0 0 4px rgba(var(--theme-button-primary-rgb), 0.34), 0 0 24px 5px rgba(var(--theme-button-primary-rgb), 0.7), 0 0 46px 10px rgba(var(--theme-button-secondary-rgb), 0.52);
     height: 0.82rem !important;
-    color: var(--theme-button-primary, #22D3EE);
+    transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
   }
 
   .pack-card-feature-text {
     display: inline-block;
-    max-width: 9.5rem;
+    box-shadow: inset 0 0 0 2px var(--theme-button-primary), inset 0 0 0 5px rgba(var(--theme-button-secondary-rgb), 0.22);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -3916,6 +3918,7 @@ include __DIR__ . "/includes/header.php";
   const gameUsesCatalogApi = <?= $usesCatalogApi ? 'true' : 'false' ?>;
   const paymentHeaderMinimalEnabled = <?= $paymentHeaderMinimalEnabled ? 'true' : 'false' ?>;
   const packageFeatureIconSvgMap = <?= json_encode(package_feature_icon_svg_map(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+  const packGrid = document.getElementById('pack-grid');
   const packCards2 = Array.from(document.querySelectorAll('.pack-card'));
   const packAccountPreviewButtons = Array.from(document.querySelectorAll('.pack-account-preview-btn'));
   const selectedPack = document.getElementById("selected-pack");
@@ -6804,7 +6807,91 @@ include __DIR__ . "/includes/header.php";
     }
 
     window.setTimeout(() => {
-      orderForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      scrollViewportToElement(orderForm, { duration: 520, offset: 18 });
+    }, 120);
+  }
+
+  let activeViewportScrollFrame = null;
+
+  function easeViewportScroll(progress) {
+    if (progress <= 0) {
+      return 0;
+    }
+    if (progress >= 1) {
+      return 1;
+    }
+    return progress < 0.5
+      ? 4 * progress * progress * progress
+      : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+  }
+
+  function scrollViewportToElement(targetElement, options = {}) {
+    if (!(targetElement instanceof HTMLElement)) {
+      return;
+    }
+
+    const scrollRoot = document.scrollingElement || document.documentElement;
+    const startY = window.pageYOffset || scrollRoot.scrollTop || 0;
+    const offset = Number.isFinite(Number(options.offset)) ? Number(options.offset) : 0;
+    const maxScrollY = Math.max(0, scrollRoot.scrollHeight - window.innerHeight);
+    const targetRect = targetElement.getBoundingClientRect();
+    const targetY = Math.min(maxScrollY, Math.max(0, startY + targetRect.top - offset));
+    const distance = targetY - startY;
+    const duration = Math.max(260, Number.isFinite(Number(options.duration)) ? Number(options.duration) : 520);
+
+    if (Math.abs(distance) < 2) {
+      window.scrollTo(0, targetY);
+      return;
+    }
+
+    if (activeViewportScrollFrame !== null) {
+      window.cancelAnimationFrame(activeViewportScrollFrame);
+      activeViewportScrollFrame = null;
+    }
+
+    const animationStart = window.performance && typeof window.performance.now === 'function'
+      ? window.performance.now()
+      : Date.now();
+
+    const step = (timestamp) => {
+      const now = Number.isFinite(timestamp) ? timestamp : Date.now();
+      const elapsed = now - animationStart;
+      const progress = Math.min(1, elapsed / duration);
+      const easedProgress = easeViewportScroll(progress);
+      window.scrollTo(0, startY + (distance * easedProgress));
+
+      if (progress < 1) {
+        activeViewportScrollFrame = window.requestAnimationFrame(step);
+      } else {
+        activeViewportScrollFrame = null;
+        window.scrollTo(0, targetY);
+      }
+    };
+
+    activeViewportScrollFrame = window.requestAnimationFrame(step);
+  }
+
+  function scrollToPackageSelectionDetails() {
+    const scrollTarget = purchaseQuantityPanel && !purchaseQuantityPanel.classList.contains('d-none')
+      ? purchaseQuantityPanel
+      : (purchaseSummaryLayout || orderForm);
+    if (!scrollTarget) {
+      return;
+    }
+
+    window.setTimeout(() => {
+      scrollViewportToElement(scrollTarget, { duration: 620, offset: 18 });
+    }, 120);
+  }
+
+  function scrollToPackPricingSection() {
+    const scrollTarget = packGrid || purchaseSummaryLayout;
+    if (!scrollTarget) {
+      return;
+    }
+
+    window.setTimeout(() => {
+      scrollViewportToElement(scrollTarget, { duration: 560, offset: 18 });
     }, 120);
   }
 
@@ -8336,6 +8423,9 @@ include __DIR__ . "/includes/header.php";
     renderPlayerFields(activePack);
     handlePlayerVerificationFieldChange();
     updateButtonState();
+    if (options.scroll !== false) {
+      scrollToPackageSelectionDetails();
+    }
   }
 
   function focusAccountSaleEmailStep() {
@@ -8576,10 +8666,14 @@ include __DIR__ . "/includes/header.php";
                       ? 'binance'
                       : (button.dataset.paymentOption === 'paypal' ? 'paypal' : 'money'));
                   const methodId = button.dataset.methodId || '';
+                  const previousCurrencyCode = String(monedaActualClave || '').trim().toUpperCase();
                   storePreferredCheckoutPayment(mode, methodId);
                   const switchedCurrency = syncVisibleCurrencyWithPreferredPayment(activePack, { resetCoupon: true });
+                  const nextCurrencyCode = String(monedaActualClave || '').trim().toUpperCase();
                   if (!switchedCurrency) {
                     updateResumenCompra(activePack);
+                  } else if (previousCurrencyCode !== nextCurrencyCode && nextCurrencyCode !== '') {
+                    scrollToPackPricingSection();
                   }
 
                   if (activePaymentOrder) {
