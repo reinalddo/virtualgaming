@@ -145,6 +145,13 @@ function ensure_juegos_slug_column(mysqli $mysqli): void {
     }
 }
 
+function ensure_juegos_imagen_hero_column(mysqli $mysqli): void {
+    $result = $mysqli->query("SHOW COLUMNS FROM juegos LIKE 'imagen_hero'");
+    if (!($result instanceof mysqli_result) || $result->num_rows === 0) {
+        $mysqli->query("ALTER TABLE juegos ADD COLUMN imagen_hero VARCHAR(255) NULL AFTER imagen");
+    }
+}
+
 function admin_game_next_order(mysqli $mysqli): int {
     $result = $mysqli->query("SELECT COALESCE(MAX(orden), 0) + 1 AS next_order FROM juegos");
     $row = $result instanceof mysqli_result ? $result->fetch_assoc() : null;
@@ -178,6 +185,7 @@ ensure_juegos_categoria_api_column($mysqli);
 ensure_juegos_categoria_api_discord_column($mysqli);
 ensure_juegos_orden_column($mysqli);
 ensure_juegos_slug_column($mysqli);
+ensure_juegos_imagen_hero_column($mysqli);
 
 $adminGamesUrl = app_path('/admin/juegos');
 $adminPackagesBaseUrl = app_path('/admin/paquetes');
@@ -267,14 +275,20 @@ if (isset($_GET['eliminar'])) {
     $stmt->bind_param('i', $del_id);
     $stmt->execute();
     // Eliminar imagen del juego
-    $stmt_img = $mysqli->prepare("SELECT imagen FROM juegos WHERE id=?");
+    $stmt_img = $mysqli->prepare("SELECT imagen, imagen_hero, imagen_paquete FROM juegos WHERE id=?");
     $stmt_img->bind_param('i', $del_id);
     $stmt_img->execute();
-    $stmt_img->bind_result($img_juego);
+    $stmt_img->bind_result($img_juego, $img_juego_hero, $img_juego_paquete);
     $stmt_img->fetch();
     $stmt_img->close();
     if ($img_juego) {
         admin_game_delete_upload((string) $img_juego);
+    }
+    if ($img_juego_hero) {
+        admin_game_delete_upload((string) $img_juego_hero);
+    }
+    if ($img_juego_paquete) {
+        admin_game_delete_upload((string) $img_juego_paquete);
     }
     // Eliminar el juego
     $stmt = $mysqli->prepare("DELETE FROM juegos WHERE id=?");
@@ -288,7 +302,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_juego_submit'], 
     $edit_id = intval($_POST['edit_juego_id']);
     $currentGame = null;
     if ($edit_id > 0) {
-        $currentGameStmt = $mysqli->prepare("SELECT categoria_api_discord FROM juegos WHERE id = ? LIMIT 1");
+        $currentGameStmt = $mysqli->prepare("SELECT categoria_api_discord, imagen, imagen_paquete, imagen_hero FROM juegos WHERE id = ? LIMIT 1");
         if ($currentGameStmt) {
             $currentGameStmt->bind_param('i', $edit_id);
             $currentGameStmt->execute();
@@ -312,20 +326,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_juego_submit'], 
     $edit_activo = isset($_POST['edit_activo']) ? 1 : 0;
     $edit_moneda_fija_id = isset($_POST['edit_moneda_fija_id']) && $_POST['edit_moneda_fija_id'] !== '' ? intval($_POST['edit_moneda_fija_id']) : null;
     $edit_imagen = admin_game_store_upload($_FILES['edit_imagen'] ?? [], 'juego_');
+    $edit_imagen_hero = admin_game_store_upload($_FILES['edit_imagen_hero'] ?? [], 'juegohero_');
     $edit_imagen_paquete = admin_game_store_upload($_FILES['edit_imagen_paquete'] ?? [], 'juegopaq_');
-    if ($edit_imagen && $edit_imagen_paquete) {
-        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, slug=?, imagen=?, imagen_paquete=?, popular=?, api_free_fire=?, categoria_api=?, categoria_api_discord=?, activo=?, moneda_fija_id=? WHERE id=?");
-        $stmt->bind_param('sssssiissiii', $edit_nombre, $edit_descripcion, $edit_slug, $edit_imagen, $edit_imagen_paquete, $edit_popular, $edit_api_free_fire, $edit_categoria_api, $edit_categoria_api_discord, $edit_activo, $edit_moneda_fija_id, $edit_id);
-    } elseif ($edit_imagen) {
-        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, slug=?, imagen=?, popular=?, api_free_fire=?, categoria_api=?, categoria_api_discord=?, activo=?, moneda_fija_id=? WHERE id=?");
-        $stmt->bind_param('ssssiissiii', $edit_nombre, $edit_descripcion, $edit_slug, $edit_imagen, $edit_popular, $edit_api_free_fire, $edit_categoria_api, $edit_categoria_api_discord, $edit_activo, $edit_moneda_fija_id, $edit_id);
-    } elseif ($edit_imagen_paquete) {
-        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, slug=?, imagen_paquete=?, popular=?, api_free_fire=?, categoria_api=?, categoria_api_discord=?, activo=?, moneda_fija_id=? WHERE id=?");
-        $stmt->bind_param('ssssiissiii', $edit_nombre, $edit_descripcion, $edit_slug, $edit_imagen_paquete, $edit_popular, $edit_api_free_fire, $edit_categoria_api, $edit_categoria_api_discord, $edit_activo, $edit_moneda_fija_id, $edit_id);
-    } else {
-        $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, slug=?, popular=?, api_free_fire=?, categoria_api=?, categoria_api_discord=?, activo=?, moneda_fija_id=? WHERE id=?");
-        $stmt->bind_param('sssiissiii', $edit_nombre, $edit_descripcion, $edit_slug, $edit_popular, $edit_api_free_fire, $edit_categoria_api, $edit_categoria_api_discord, $edit_activo, $edit_moneda_fija_id, $edit_id);
+    $remove_edit_imagen_hero = isset($_POST['remove_edit_imagen_hero']);
+    $currentImage = (string) ($currentGame['imagen'] ?? '');
+    $currentHeroImage = (string) ($currentGame['imagen_hero'] ?? '');
+    $currentPackageImage = (string) ($currentGame['imagen_paquete'] ?? '');
+
+    if ($edit_imagen !== null && $currentImage !== '') {
+        admin_game_delete_upload($currentImage);
     }
+    if ($edit_imagen_hero !== null && $currentHeroImage !== '') {
+        admin_game_delete_upload($currentHeroImage);
+    }
+    if ($edit_imagen_paquete !== null && $currentPackageImage !== '') {
+        admin_game_delete_upload($currentPackageImage);
+    }
+    if ($remove_edit_imagen_hero && $currentHeroImage !== '' && $edit_imagen_hero === null) {
+        admin_game_delete_upload($currentHeroImage);
+    }
+
+    $nextImage = $edit_imagen ?? $currentImage;
+    $nextHeroImage = $remove_edit_imagen_hero ? '' : ($edit_imagen_hero ?? $currentHeroImage);
+    $nextPackageImage = $edit_imagen_paquete ?? $currentPackageImage;
+
+    $stmt = $mysqli->prepare("UPDATE juegos SET nombre=?, descripcion=?, slug=?, imagen=?, imagen_hero=?, imagen_paquete=?, popular=?, api_free_fire=?, categoria_api=?, categoria_api_discord=?, activo=?, moneda_fija_id=? WHERE id=?");
+    $stmt->bind_param('ssssssiissiii', $edit_nombre, $edit_descripcion, $edit_slug, $nextImage, $nextHeroImage, $nextPackageImage, $edit_popular, $edit_api_free_fire, $edit_categoria_api, $edit_categoria_api_discord, $edit_activo, $edit_moneda_fija_id, $edit_id);
     $stmt->execute();
     admin_games_redirect($adminGamesUrl);
 }
@@ -347,9 +373,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nombre'], $_POST['des
     $activo = isset($_POST['activo']) ? 1 : 0;
     $orden = admin_game_next_order($mysqli);
     $imagen = admin_game_store_upload($_FILES['imagen'] ?? [], 'juego_');
+    $imagen_hero = admin_game_store_upload($_FILES['imagen_hero'] ?? [], 'juegohero_');
     $imagen_paquete = admin_game_store_upload($_FILES['imagen_paquete'] ?? [], 'juegopaq_');
-    $stmt = $mysqli->prepare("INSERT INTO juegos (nombre, imagen, imagen_paquete, descripcion, slug, moneda_fija_id, popular, api_free_fire, categoria_api, categoria_api_discord, activo, orden) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param('sssssiiissii', $nombre, $imagen, $imagen_paquete, $descripcion, $slug, $moneda_fija_id, $popular, $api_free_fire, $categoria_api, $categoria_api_discord, $activo, $orden);
+    $stmt = $mysqli->prepare("INSERT INTO juegos (nombre, imagen, imagen_hero, imagen_paquete, descripcion, slug, moneda_fija_id, popular, api_free_fire, categoria_api, categoria_api_discord, activo, orden) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param('ssssssiiissii', $nombre, $imagen, $imagen_hero, $imagen_paquete, $descripcion, $slug, $moneda_fija_id, $popular, $api_free_fire, $categoria_api, $categoria_api_discord, $activo, $orden);
     $stmt->execute();
     $juego_id = $mysqli->insert_id;
     // Características seleccionadas del select múltiple
@@ -478,6 +505,19 @@ if ($resPaquetes instanceof mysqli_result) {
                 <input type="file" name="edit_imagen" accept="image/*" class="form-control mt-2" style="background:#222c3a;color:#00fff7;border:1px solid #00fff7;">
             </div>
             <div class="mb-3">
+                <label class="form-label text-neon">Imagen hero del juego:</label><br>
+                <?php if (!empty($juego_edit['imagen_hero'])): ?>
+                    <img src="/<?= htmlspecialchars($juego_edit['imagen_hero']) ?>" alt="Imagen hero actual" class="mb-2 rounded" style="max-width:180px;max-height:120px;border:2px solid #00fff7;background:#222c3a;box-shadow:0 0 8px #00fff7;object-fit:cover;">
+                <?php else: ?>
+                    <div class="small mb-2" style="color:#8be9fd;">Si no cargas una imagen hero, se usará la imagen principal del juego.</div>
+                <?php endif; ?>
+                <input type="file" name="edit_imagen_hero" accept="image/*" class="form-control mt-2" style="background:#222c3a;color:#00fff7;border:1px solid #00fff7;">
+                <div class="form-check mt-2">
+                    <input type="checkbox" name="remove_edit_imagen_hero" class="form-check-input" id="removeEditHeroImage">
+                    <label class="form-check-label text-neon" for="removeEditHeroImage">Usar la imagen principal como hero</label>
+                </div>
+            </div>
+            <div class="mb-3">
                 <label class="form-label text-neon">Imagen común para paquetes:</label><br>
                 <?php if ($juego_edit['imagen_paquete']): ?>
                     <img src="/<?= htmlspecialchars($juego_edit['imagen_paquete']) ?>" alt="Imagen paquete actual" class="mb-2 rounded" style="max-width:80px;max-height:80px;border:2px solid #00fff7;background:#222c3a;box-shadow:0 0 8px #00fff7;">
@@ -543,6 +583,14 @@ if ($resPaquetes instanceof mysqli_result) {
             <input type="file" name="imagen" accept="image/*" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;" onchange="previewImagenJuego(event)">
             <div class="text-center mt-2">
                 <img id="preview-juego-img" src="#" alt="Previsualización" style="display:none;max-width:180px;max-height:180px;border-radius:0.75rem;box-shadow:0 0 0.5rem #00fff7; border:2px solid #00fff7;" />
+            </div>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" style="color:#00fff7;">Imagen hero del juego</label>
+            <input type="file" name="imagen_hero" accept="image/*" class="form-control" style="background:#222c3a; color:#00fff7; border:1px solid #00fff7;" onchange="previewImagenHeroJuego(event)">
+            <div class="form-text mt-2" style="color:#8be9fd;">Si queda vacía, al entrar al juego se mostrará la imagen principal como hero.</div>
+            <div class="text-center mt-2">
+                <img id="preview-juego-hero-img" src="#" alt="Previsualización Hero" style="display:none;max-width:220px;max-height:140px;border-radius:0.75rem;box-shadow:0 0 0.5rem #00fff7; border:2px solid #00fff7;object-fit:cover;" />
             </div>
         </div>
         <div class="col-md-6">
@@ -828,6 +876,20 @@ if ($resPaquetes instanceof mysqli_result) {
             <div class="flex justify-center my-2">
                 <img id="preview-edit-juego-img" src="#" alt="Previsualización" style="display:none;max-width:180px;max-height:180px;border-radius:0.75rem;box-shadow:0 0 0.5rem #22d3ee55;" />
             </div>
+            <label class="block text-slate-300 mb-1">Imagen hero del juego:</label>
+            <?php if (!empty($juego_edit['imagen_hero'])): ?>
+                <img src="/<?= htmlspecialchars($juego_edit['imagen_hero']) ?>" alt="Imagen Hero" class="mb-2 rounded-lg" style="max-height:120px;max-width:220px;object-fit:cover;">
+            <?php else: ?>
+                <div class="text-xs text-slate-400 mb-2">Si no tiene hero, se usará la imagen principal del juego.</div>
+            <?php endif; ?>
+            <input type="file" name="edit_imagen_hero" accept="image/*" class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white mb-2" onchange="previewEditHeroJuegoImg(event)">
+            <label class="inline-flex items-center mb-2">
+                <input type="checkbox" name="remove_edit_imagen_hero" class="form-checkbox h-5 w-5 text-emerald-500">
+                <span class="ml-2 text-slate-300">Usar la imagen principal como hero</span>
+            </label>
+            <div class="flex justify-center my-2">
+                <img id="preview-edit-juego-hero-img" src="#" alt="Previsualización Hero" style="display:none;max-width:220px;max-height:140px;border-radius:0.75rem;box-shadow:0 0 0.5rem #22d3ee55;object-fit:cover;" />
+            </div>
             <label class="block text-slate-300 mb-1">Imagen común para paquetes:</label>
             <input type="file" name="edit_imagen_paquete" accept="image/*" class="w-full rounded-lg px-3 py-2 bg-slate-800 text-white mb-2" onchange="previewEditImagenPaqueteJuego(event)">
             <?php if ($juego_edit['imagen_paquete']): ?>
@@ -922,6 +984,44 @@ function addCarField() {
 function previewImagenJuego(event) {
     const input = event.target;
     const img = document.getElementById('preview-juego-img');
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            img.src = e.target.result;
+            img.style.display = 'block';
+        };
+        reader.readAsDataURL(input.files[0]);
+    } else {
+        img.src = '#';
+        img.style.display = 'none';
+    }
+}
+
+function previewImagenHeroJuego(event) {
+    const input = event.target;
+    const img = document.getElementById('preview-juego-hero-img');
+    if (!img) {
+        return;
+    }
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            img.src = e.target.result;
+            img.style.display = 'block';
+        };
+        reader.readAsDataURL(input.files[0]);
+    } else {
+        img.src = '#';
+        img.style.display = 'none';
+    }
+}
+
+function previewEditHeroJuegoImg(event) {
+    const input = event.target;
+    const img = document.getElementById('preview-edit-juego-hero-img');
+    if (!img) {
+        return;
+    }
     if (input.files && input.files[0]) {
         const reader = new FileReader();
         reader.onload = function(e) {

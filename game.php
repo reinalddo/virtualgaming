@@ -277,6 +277,13 @@ if ($paymentSuccessTitle === '') {
 $paymentSuccessExtraMessage = trim((string) store_config_get('ventana_pago_exitoso_mensaje_extra', ''));
 
 $scriptDir = app_base_path();
+$gameHeroImagePath = trim((string) ($game['imagen_hero'] ?? ''));
+if ($gameHeroImagePath === '') {
+  $gameHeroImagePath = trim((string) ($game['imagen'] ?? ''));
+}
+$gameHeroImageUrl = $gameHeroImagePath !== ''
+  ? app_path('/' . ltrim($gameHeroImagePath, '/'))
+  : '';
 $pageTitle = store_config_get('nombre_tienda', 'TVirtualGaming') . " | " . ($game["nombre"] ?? "Juego");
 include __DIR__ . "/includes/header.php";
 ?>
@@ -285,8 +292,8 @@ include __DIR__ . "/includes/header.php";
 <section class="container mt-5 mb-4">
   <div class="game-hero-card shadow">
     <div class="game-hero-media" aria-hidden="true">
-      <?php if (!empty($game['imagen'])): ?>
-        <img src="<?= htmlspecialchars(app_path('/' . ltrim((string) ($game["imagen"] ?? ''), '/')), ENT_QUOTES, "UTF-8") ?>" alt="<?= htmlspecialchars($game["nombre"] ?? '', ENT_QUOTES, "UTF-8") ?>" class="game-hero-image" />
+      <?php if ($gameHeroImageUrl !== ''): ?>
+        <img src="<?= htmlspecialchars($gameHeroImageUrl, ENT_QUOTES, "UTF-8") ?>" alt="<?= htmlspecialchars($game["nombre"] ?? '', ENT_QUOTES, "UTF-8") ?>" class="game-hero-image" />
       <?php else: ?>
         <div class="game-hero-fallback"></div>
       <?php endif; ?>
@@ -1321,7 +1328,7 @@ include __DIR__ . "/includes/header.php";
 
   .game-hero-overlay {
     background:
-      linear-gradient(180deg, rgba(4, 9, 19, 0.12) 0%, rgba(4, 9, 19, 0.36) 46%, rgba(4, 9, 19, 0.82) 100%),
+      linear-gradient(180deg, rgba(4, 9, 19, 0.08) 0%, rgba(4, 9, 19, 0.18) 42%, rgba(4, 9, 19, 0.78) 100%),
       radial-gradient(circle at center, rgba(34, 211, 238, 0.14), transparent 56%);
   }
 
@@ -1331,32 +1338,33 @@ include __DIR__ . "/includes/header.php";
     min-height: inherit;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
     justify-content: flex-end;
-    gap: 1rem;
-    padding: 3.1rem 1.4rem 1rem;
-    text-align: center;
+    gap: 0;
+    padding: 3rem 0 0;
+    text-align: left;
   }
 
   .game-hero-title-box {
-    width: min(100%, 46rem);
-    padding: 1rem 1.4rem;
-    border-radius: 1.35rem;
-    border: 1px solid rgba(125, 211, 252, 0.44);
-    background: linear-gradient(180deg, rgba(11, 19, 37, 0.18), rgba(11, 19, 37, 0.3));
-    backdrop-filter: blur(9px);
-    box-shadow: 0 18px 38px rgba(0, 0, 0, 0.26), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    width: 100%;
+    margin-top: auto;
+    padding: 1rem 1.5rem 1.05rem;
+    border-radius: 0;
+    border: 0;
+    border-top: 1px solid rgba(125, 211, 252, 0.34);
+    background: linear-gradient(180deg, rgba(7, 14, 26, 0.18), rgba(7, 14, 26, 0.92) 38%, rgba(7, 14, 26, 0.98) 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   }
 
   .game-hero-title {
     margin: 0;
     color: #ffffff;
-    font-size: clamp(1.5rem, 3.4vw, 2.65rem);
+    font-size: clamp(1.35rem, 3vw, 2.2rem);
     font-weight: 900;
-    line-height: 1.05;
-    letter-spacing: 0.08em;
-    text-shadow: 0 2px 0 rgba(4, 10, 24, 0.98), 0 0 12px rgba(34, 211, 238, 0.2), 0 10px 28px rgba(0, 0, 0, 0.55);
-    -webkit-text-stroke: 1px rgba(6, 16, 34, 0.92);
+    line-height: 1.1;
+    letter-spacing: 0.05em;
+    text-shadow: 0 1px 0 rgba(4, 10, 24, 0.98), 0 8px 24px rgba(0, 0, 0, 0.44);
+    -webkit-text-stroke: 0;
   }
 
   .game-hero-features {
@@ -1453,19 +1461,18 @@ include __DIR__ . "/includes/header.php";
     }
 
     .game-hero-content {
-      padding: 3.2rem 0.95rem 0.85rem;
-      gap: 0.8rem;
+      padding: 3rem 0 0;
+      gap: 0;
     }
 
     .game-hero-title-box {
-      padding: 0.85rem 1rem;
-      border-radius: 1rem;
+      padding: 0.85rem 1rem 0.95rem;
     }
 
     .game-hero-title {
-      font-size: clamp(1.2rem, 6.1vw, 1.85rem);
+      font-size: clamp(1.05rem, 4.8vw, 1.55rem);
       letter-spacing: 0.05em;
-      -webkit-text-stroke: 0.8px rgba(6, 16, 34, 0.95);
+      -webkit-text-stroke: 0;
     }
 
     .game-hero-features {
