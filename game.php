@@ -651,7 +651,7 @@ include __DIR__ . "/includes/header.php";
     <div class="payment-method-catalog-panel">
       <div class="payment-method-catalog-head">
         <h3 class="payment-method-catalog-title mb-0">Métodos de pago disponibles</h3>
-        <p id="payment-method-catalog-copy" class="payment-method-catalog-copy mb-0">Selecciona un paquete para mostrar los métodos activos.</p>
+        <p id="payment-method-catalog-copy" class="payment-method-catalog-copy mb-0">Selecciona cómo quieres pagar y mostraremos los precios en esa moneda incluso antes de elegir el paquete.</p>
       </div>
       <div id="payment-method-catalog-grid" class="payment-method-catalog-grid"></div>
     </div>
@@ -3981,7 +3981,7 @@ include __DIR__ . "/includes/header.php";
   let couponValue = '';
   let activePaymentOrder = null;
   let paymentTimerInterval = null;
-  let preferredCheckoutPaymentMode = 'money';
+  let preferredCheckoutPaymentMode = '';
   let preferredCheckoutMethodId = '';
   let paymentDifferenceTicker = null;
   let gameEntryWindowAccepted = !gameEntryWindowEnabled;
@@ -4155,7 +4155,12 @@ include __DIR__ . "/includes/header.php";
     }
 
     if (mode === 'paypal') {
-      return String(pack && pack.moneda ? pack.moneda : '').trim().toUpperCase();
+      if (pack && pack.moneda) {
+        return String(pack.moneda).trim().toUpperCase();
+      }
+
+      const preferredEntry = resolvePreferredPayPalCurrencyEntry();
+      return String(preferredEntry && preferredEntry.clave ? preferredEntry.clave : '').trim().toUpperCase();
     }
 
     return '';
@@ -4189,6 +4194,37 @@ include __DIR__ . "/includes/header.php";
     }
 
     return currencyEntries.find((entry) => normalizeCurrencyAlias(entry && entry.clave ? entry.clave : '') !== 'VES') || currencyEntries[0] || null;
+  }
+
+  function resolvePreferredPayPalCurrencyEntry() {
+    if (!Array.isArray(paypalSupportedCurrencies) || !paypalSupportedCurrencies.length) {
+      return null;
+    }
+
+    const currentEntry = findCurrencyEntryByCode(monedaActualClave || '');
+    if (currentEntry && paypalSupportedCurrencies.includes(String(currentEntry.clave || '').trim().toUpperCase())) {
+      return currentEntry;
+    }
+
+    for (const preferredCode of ['USD', 'EUR', 'GBP', 'BRL', 'MXN', 'COP', 'CLP', 'PEN']) {
+      if (!paypalSupportedCurrencies.includes(preferredCode)) {
+        continue;
+      }
+
+      const entry = findCurrencyEntryByCode(preferredCode);
+      if (entry) {
+        return entry;
+      }
+    }
+
+    for (const supportedCode of paypalSupportedCurrencies) {
+      const entry = findCurrencyEntryByCode(supportedCode);
+      if (entry) {
+        return entry;
+      }
+    }
+
+    return null;
   }
 
   function convertCurrencyAmountBetweenCodes(amount, fromCode, toCode) {
@@ -5607,21 +5643,44 @@ include __DIR__ . "/includes/header.php";
   }
 
   function storePreferredCheckoutPayment(mode, methodId = '') {
-    preferredCheckoutPaymentMode = mode === 'points'
-      ? 'points'
-      : (mode === 'binance' ? 'binance' : (mode === 'paypal' ? 'paypal' : 'money'));
-    preferredCheckoutMethodId = preferredCheckoutPaymentMode === 'money' ? String(methodId || '') : '';
+    const normalizedMethodId = String(methodId || '');
+    if (mode === 'points') {
+      preferredCheckoutPaymentMode = 'points';
+      preferredCheckoutMethodId = '';
+      return;
+    }
+    if (mode === 'binance') {
+      preferredCheckoutPaymentMode = 'binance';
+      preferredCheckoutMethodId = '';
+      return;
+    }
+    if (mode === 'paypal') {
+      preferredCheckoutPaymentMode = 'paypal';
+      preferredCheckoutMethodId = '';
+      return;
+    }
+    if (mode === 'money' && normalizedMethodId !== '') {
+      preferredCheckoutPaymentMode = 'money';
+      preferredCheckoutMethodId = normalizedMethodId;
+      return;
+    }
+
+    preferredCheckoutPaymentMode = '';
+    preferredCheckoutMethodId = '';
   }
 
   function resolvePreferredCheckoutSelection(pack) {
+    const hasPack = Boolean(pack);
     const methodsCurrencyCode = String((pack && (pack.baseCurrency || pack.moneda)) || '').trim();
     const methods = getPaymentMethodsForCurrency(methodsCurrencyCode);
-    const hasPointsRule = Boolean(pack && pack.redeemActive && getPackRequiredPoints(pack) > 0);
+    const hasPointsRule = Boolean(hasPack && pack.redeemActive && getPackRequiredPoints(pack) > 0);
     const requiredPoints = hasPointsRule ? getPackRequiredPoints(pack) : 0;
-    const canUsePointsNow = Boolean(pack && canRedeemPackWithPoints(pack));
-    const showPointsOption = Boolean(pack && winPointsState.enabled && hasPointsRule);
-    const canUseBinance = Boolean(pack && canUseBinanceCheckout(pack));
-    const canUsePayPal = Boolean(pack && canUsePayPalCheckout(pack));
+    const canUsePointsNow = Boolean(hasPack && canRedeemPackWithPoints(pack));
+    const showPointsOption = Boolean(hasPack && winPointsState.enabled && hasPointsRule);
+    const canUseBinance = hasPack ? Boolean(canUseBinanceCheckout(pack)) : Boolean(binancePayCheckoutEnabled);
+    const canUsePayPal = hasPack
+      ? Boolean(canUsePayPalCheckout(pack))
+      : Boolean(paypalPayCheckoutEnabled && resolvePreferredPayPalCurrencyEntry());
     let nextMode = preferredCheckoutPaymentMode;
     let nextMethodId = preferredCheckoutMethodId;
 
@@ -5643,20 +5702,6 @@ include __DIR__ . "/includes/header.php";
 
     if (nextMode === 'points' && !showPointsOption) {
       nextMode = '';
-    }
-
-    if (nextMode === '') {
-      const defaultMethod = methods[0] || null;
-      if (defaultMethod) {
-        nextMode = 'money';
-        nextMethodId = String(defaultMethod.id);
-      } else if (canUseBinance) {
-        nextMode = 'binance';
-        nextMethodId = '';
-      } else if (canUsePayPal) {
-        nextMode = 'paypal';
-        nextMethodId = '';
-      }
     }
 
     return {
@@ -5701,12 +5746,7 @@ include __DIR__ . "/includes/header.php";
       return;
     }
 
-    if (!pack) {
-      paymentMethodCatalogGrid.innerHTML = '';
-      paymentMethodCatalogCopy.textContent = 'Selecciona un paquete para mostrar los métodos activos.';
-      return;
-    }
-
+    const hasPack = Boolean(pack);
     const selection = resolvePreferredCheckoutSelection(pack);
     const cards = [];
 
@@ -5792,8 +5832,10 @@ include __DIR__ . "/includes/header.php";
     }
 
     if (!cards.length) {
-      paymentMethodCatalogGrid.innerHTML = '<div class="payment-method-public-card is-disabled"><div class="payment-method-public-text"><div class="payment-method-public-name">Sin métodos activos</div><div class="payment-method-public-meta">Este paquete no tiene métodos de pago disponibles en este momento.</div></div></div>';
-      paymentMethodCatalogCopy.textContent = 'No hay métodos activos disponibles para la moneda del paquete seleccionado.';
+      paymentMethodCatalogGrid.innerHTML = '<div class="payment-method-public-card is-disabled"><div class="payment-method-public-text"><div class="payment-method-public-name">Sin métodos activos</div><div class="payment-method-public-meta">No hay métodos de pago activos disponibles en este momento.</div></div></div>';
+      paymentMethodCatalogCopy.textContent = hasPack
+        ? 'No hay métodos activos disponibles para la moneda del paquete seleccionado.'
+        : 'No hay métodos activos configurados para esta tienda en este momento.';
       return;
     }
 
@@ -5802,18 +5844,26 @@ include __DIR__ . "/includes/header.php";
     if (selection.mode === 'money' && selection.methodId !== '') {
       const method = selection.methods.find((item) => String(item.id) === String(selection.methodId));
       paymentMethodCatalogCopy.textContent = method
-        ? `Seleccionado: ${method.nombre}. Esta opción se abrirá marcada al pagar.`
-        : 'Selecciona cómo quieres pagar esta orden.';
+        ? (hasPack
+          ? `Seleccionado: ${method.nombre}. Esta opción se abrirá marcada al pagar.`
+          : `Seleccionado: ${method.nombre}. Mostraremos los precios en ${method.moneda_clave || 'la moneda elegida'} mientras eliges el paquete.`)
+        : (hasPack
+          ? 'Selecciona un método de pago para mostrar el resumen de esta orden.'
+          : 'Selecciona un método para ver los precios en su moneda antes de elegir el paquete.');
       return;
     }
 
     if (selection.mode === 'binance') {
-      paymentMethodCatalogCopy.textContent = 'Seleccionado: Binance Pay. El checkout externo se abrirá ya preparado al confirmar la orden.';
+      paymentMethodCatalogCopy.textContent = hasPack
+        ? 'Seleccionado: Binance Pay. El checkout externo se abrirá ya preparado al confirmar la orden.'
+        : 'Seleccionado: Binance Pay. Mostraremos los precios en la moneda preferida para este checkout mientras eliges el paquete.';
       return;
     }
 
     if (selection.mode === 'paypal') {
-      paymentMethodCatalogCopy.textContent = 'Seleccionado: PayPal. Al confirmar, abriremos el checkout oficial para autorizar y capturar el pago.';
+      paymentMethodCatalogCopy.textContent = hasPack
+        ? 'Seleccionado: PayPal. Al confirmar, abriremos el checkout oficial para autorizar y capturar el pago.'
+        : 'Seleccionado: PayPal. Mostraremos los precios en una moneda compatible con PayPal mientras eliges el paquete.';
       return;
     }
 
@@ -5826,7 +5876,9 @@ include __DIR__ . "/includes/header.php";
       return;
     }
 
-    paymentMethodCatalogCopy.textContent = 'Selecciona cómo quieres pagar esta orden.';
+    paymentMethodCatalogCopy.textContent = hasPack
+      ? 'Selecciona un método de pago para mostrar el resumen de esta orden.'
+      : 'Selecciona cómo quieres pagar y mostraremos los precios en esa moneda antes de elegir el paquete.';
   }
 
   function paymentMethodAccordionMarkup(method) {
@@ -8041,6 +8093,10 @@ include __DIR__ . "/includes/header.php";
 
   function openPaymentModal(orderId, expiresAt, remainingSeconds, pack, userId, totalText, orderEmail) {
     const preferredSelection = resolvePreferredCheckoutSelection(pack);
+    if (!preferredSelection.mode) {
+      showToast('Selecciona un metodo de pago antes de continuar.', 'error');
+      return false;
+    }
     const currentMethod = renderPaymentMethodsByCurrency(pack.moneda || '');
     const canUsePoints = canRedeemPackWithPoints(pack);
     const canUseBinance = canUseBinanceCheckout(pack);
@@ -8127,12 +8183,16 @@ include __DIR__ . "/includes/header.php";
       selectedPack.style.color = "";
       selectedPack.textContent = activePack.name;
     }
+    const paymentSelection = activePack ? resolvePreferredCheckoutSelection(activePack) : null;
+    const hasPaymentSelection = Boolean(paymentSelection && paymentSelection.mode);
     const needsPlayerVerification = requiresVerifiedPlayerForCheckout();
     const paymentDifferenceBlocked = activePack ? getPaymentDifferenceBreakdown(activePack, selectedTotalValue).blocksSelection : false;
     const blockedByGameEntryWindow = !gameEntryWindowAccepted;
-    buyButton.disabled = !activePack || !requiredFilled || needsPlayerVerification || paymentDifferenceBlocked || blockedByGameEntryWindow;
+    buyButton.disabled = !activePack || !requiredFilled || !hasPaymentSelection || needsPlayerVerification || paymentDifferenceBlocked || blockedByGameEntryWindow;
     if (paymentDifferenceBlocked) {
       buyButton.textContent = paymentDifferenceBlockedBuyButtonLabel;
+    } else if (activePack && !hasPaymentSelection) {
+      buyButton.textContent = 'Selecciona un metodo de pago';
     } else if (blockedByGameEntryWindow) {
       buyButton.textContent = defaultBuyButtonLabel;
     } else {
@@ -8324,6 +8384,10 @@ include __DIR__ . "/includes/header.php";
   syncOrderQuantityInput(1);
   renderPlayerFields(null);
   setAccountSaleNote(null);
+  if (!activePack) {
+    updateResumenCompra(null);
+  }
+  updateButtonState();
   if (verifyPlayerButton) {
     verifyPlayerButton.addEventListener('click', verifyCurrentPlayer);
   }
@@ -8426,7 +8490,9 @@ include __DIR__ . "/includes/header.php";
 
                   const mode = button.dataset.paymentOption === 'points'
                     ? 'points'
-                    : (button.dataset.paymentOption === 'binance' ? 'binance' : 'money');
+                    : (button.dataset.paymentOption === 'binance'
+                      ? 'binance'
+                      : (button.dataset.paymentOption === 'paypal' ? 'paypal' : 'money'));
                   const methodId = button.dataset.methodId || '';
                   storePreferredCheckoutPayment(mode, methodId);
                   const switchedCurrency = syncVisibleCurrencyWithPreferredPayment(activePack, { resetCoupon: true });
@@ -8856,6 +8922,11 @@ include __DIR__ . "/includes/header.php";
 
                 if (!pack) {
                   showToast('Debes seleccionar un paquete.', 'error');
+                  return;
+                }
+                const paymentSelection = resolvePreferredCheckoutSelection(pack);
+                if (!paymentSelection.mode) {
+                  showToast('Selecciona un metodo de pago antes de continuar.', 'error');
                   return;
                 }
                 const paymentMethods = getPaymentMethodsForCurrency(pack.moneda || '');
