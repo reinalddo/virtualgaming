@@ -321,7 +321,7 @@ include __DIR__ . "/includes/header.php";
 <section class="container mt-4">
   <div class="row mb-2 align-items-center">
     <div class="col">
-      <h2 class="page-step-title text-info mb-0">PASO 1: Selecciona el paquete</h2>
+      <h2 class="page-step-title text-info mb-0">PASO 1: Seleccione su paquete</h2>
     </div>
     <div class="col-auto">
       <span class="text-uppercase text-secondary small">elige uno</span>
@@ -614,7 +614,7 @@ include __DIR__ . "/includes/header.php";
 
 
 <section class="container mt-4 mb-3">
-  <h2 class="page-step-title text-info mb-0">PASO 2: Coloca tu información de Jugador</h2>
+  <h2 class="page-step-title text-info mb-0">PASO 2: Ingrese su información de jugador</h2>
 </section>
 
 
@@ -654,7 +654,7 @@ include __DIR__ . "/includes/header.php";
 </section>
 
 <section class="container mt-3 mb-5">
-  <h2 class="page-step-title text-info mb-0">PASO 3: Procede a pagar</h2>
+  <h2 class="page-step-title text-info mb-0">PASO 3: Configure su pago y continúe con la compra</h2>
   <div class="payment-coupon-shell mt-4">
     <div class="payment-coupon-panel">
       <label class="form-label text-info mb-2">Cupón</label>
