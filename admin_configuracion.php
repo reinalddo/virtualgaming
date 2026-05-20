@@ -1634,6 +1634,12 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
                 <button type="button" id="paypal-docs-trigger" class="btn btn-outline-info btn-sm px-4 py-2 align-self-start align-self-lg-center" data-bs-toggle="modal" data-bs-target="#paypal-docs-modal">Instrucciones para conectar</button>
               </div>
 
+              <div class="alert alert-warning rounded-4 mb-4" role="alert">
+                <div class="fw-semibold mb-2">Si el sitio público sigue mostrando errores viejos después de un push</div>
+                <div class="mb-3">Usa este refresco para invalidar <strong>game.php</strong> y los helpers de pago en el servidor publicado. Es útil cuando Hostinger sigue sirviendo una versión vieja del checkout de PayPal o Binance.</div>
+                <button type="submit" name="refresh_runtime_code" value="1" class="btn btn-outline-warning fw-bold px-4 py-2">Refrescar código publicado ahora</button>
+              </div>
+
               <div class="gallery-table-wrap mb-2">
                 <h3 class="h5 fw-bold text-info mb-3">Credenciales y enlaces PayPal</h3>
                 <div class="row g-3">

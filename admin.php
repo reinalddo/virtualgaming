@@ -221,6 +221,63 @@ function admin_json_response(array $payload, int $statusCode = 200): void {
     exit();
 }
 
+function admin_runtime_refresh_targets(): array {
+    return [
+        __DIR__ . '/game.php',
+        __DIR__ . '/api/pedidos.php',
+        __DIR__ . '/includes/paypal_pay.php',
+        __DIR__ . '/includes/binance_pay.php',
+        __DIR__ . '/includes/store_config.php',
+        __DIR__ . '/includes/tenant.php',
+    ];
+}
+
+function admin_refresh_runtime_code(): array {
+    $targets = [];
+    foreach (admin_runtime_refresh_targets() as $path) {
+        $realPath = realpath($path);
+        if (is_string($realPath) && $realPath !== '' && is_file($realPath)) {
+            $targets[$realPath] = $realPath;
+        }
+    }
+
+    $invalidatedFiles = [];
+    foreach ($targets as $path) {
+        clearstatcache(true, $path);
+        if (function_exists('opcache_invalidate')) {
+            @opcache_invalidate($path, true);
+        }
+        $invalidatedFiles[] = basename($path);
+    }
+
+    $opcacheResetResult = null;
+    if (function_exists('opcache_reset')) {
+        $opcacheResetResult = @opcache_reset();
+    }
+
+    $message = 'Se solicitó el refresco del código publicado';
+    if ($opcacheResetResult === true) {
+        $message .= ' y OPcache fue reiniciado.';
+    } elseif ($opcacheResetResult === false) {
+        $message .= '. OPcache no permitió un reinicio global, pero se invalidaron los archivos clave.';
+    } else {
+        $message .= '. El servidor no expone opcache_reset(), pero se invalidaron los archivos clave.';
+    }
+
+    if (!empty($invalidatedFiles)) {
+        $message .= ' Archivos: ' . implode(', ', $invalidatedFiles) . '.';
+    }
+
+    return [
+        'ok' => !empty($invalidatedFiles),
+        'message' => !empty($invalidatedFiles)
+            ? $message
+            : 'No se encontraron archivos PHP válidos para invalidar en este tenant.',
+        'invalidated_files' => $invalidatedFiles,
+        'opcache_reset' => $opcacheResetResult,
+    ];
+}
+
 function admin_startup_popup_gallery_images(): array {
     return store_config_startup_popup_gallery_images((string) store_config_get('inicio_popup_galeria_imagenes', '[]'));
 }
@@ -2107,6 +2164,17 @@ switch ($seccion) {
             $activeTab = $_POST['config_section'] ?? $activeTab;
             if (!in_array($activeTab, $allowedTabs, true)) {
                 $activeTab = 'correo';
+            }
+
+            if (isset($_POST['refresh_runtime_code'])) {
+                if (!admin_has_full_access($adminUserRole)) {
+                    admin_set_flash('error', 'No tienes permisos para refrescar el código publicado.');
+                } else {
+                    $refreshResult = admin_refresh_runtime_code();
+                    admin_set_flash($refreshResult['ok'] ? 'success' : 'error', (string) ($refreshResult['message'] ?? 'No se pudo refrescar el código publicado.'));
+                }
+                define('ADMIN_CONFIG_POST_HANDLED', true);
+                admin_redirect('configuracion', ['tab' => $activeTab]);
             }
 
             if ($activeTab === 'correo') {
