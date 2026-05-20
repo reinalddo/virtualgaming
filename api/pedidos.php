@@ -3154,7 +3154,7 @@ function build_binance_checkout_response_payload(array $order): array {
         'provider_status' => trim((string) ($order['binance_pay_status'] ?? 'created')),
         'provider_reference' => trim((string) ($order['binance_pay_reference'] ?? '')),
         'provider_message' => $message,
-        'checkout_url' => trim((string) ($order['binance_pay_checkout_url'] ?? '')),
+        'checkout_url' => binance_pay_normalize_checkout_url((string) ($order['binance_pay_checkout_url'] ?? '')),
         'remaining_seconds' => max(0, order_expiration_timestamp($order) - time()),
     ], build_binance_checkout_money_payload($order));
 }
@@ -3504,7 +3504,7 @@ function build_order_status_response_payload(array $order, int $orderId): array 
 
     $checkoutUrl = '';
     if ($paymentGateway === 'binance_pay') {
-        $checkoutUrl = trim((string) ($order['binance_pay_checkout_url'] ?? ''));
+        $checkoutUrl = binance_pay_normalize_checkout_url((string) ($order['binance_pay_checkout_url'] ?? ''));
     } elseif ($paymentGateway === 'paypal') {
         $checkoutUrl = trim((string) ($order['paypal_checkout_url'] ?? ''));
     }
@@ -7861,7 +7861,7 @@ if ($action === 'submit_payment') {
             json_error('Faltan credenciales de CoinPal para usar Binance Pay.', 409);
         }
 
-        $existingCheckoutUrl = trim((string) ($order['binance_pay_checkout_url'] ?? ''));
+        $existingCheckoutUrl = binance_pay_normalize_checkout_url((string) ($order['binance_pay_checkout_url'] ?? ''));
         $existingStatus = binance_pay_normalize_status($order['binance_pay_status'] ?? '');
         if (binance_pay_is_coinpal_checkout_url($existingCheckoutUrl) && ($existingStatus === '' || binance_pay_is_pending_status($existingStatus))) {
             $existingOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
@@ -9524,7 +9524,7 @@ if ($action === 'sync_provider_status') {
         'payment_gateway' => $resolvedPaymentGateway,
         'checkout_url' => $resolvedPaymentGateway === 'paypal'
             ? trim((string) ($syncedOrder['paypal_checkout_url'] ?? ''))
-            : trim((string) ($syncedOrder['binance_pay_checkout_url'] ?? '')),
+            : binance_pay_normalize_checkout_url((string) ($syncedOrder['binance_pay_checkout_url'] ?? '')),
     ]);
 }
 

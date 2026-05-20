@@ -4728,7 +4728,7 @@ include __DIR__ . "/includes/header.php";
   }
 
   function navigateBinanceCheckoutPopup(popup, checkoutUrl) {
-    const targetUrl = String(checkoutUrl || '').trim();
+    const targetUrl = normalizeCoinpalCheckoutUrl(checkoutUrl);
     if (!targetUrl) {
       return false;
     }
@@ -4779,8 +4779,28 @@ include __DIR__ . "/includes/header.php";
     return false;
   }
 
-  function isCoinpalCheckoutUrl(checkoutUrl) {
+  function normalizeCoinpalCheckoutUrl(checkoutUrl) {
     const targetUrl = String(checkoutUrl || '').trim();
+    if (!targetUrl) {
+      return '';
+    }
+
+    try {
+      const parsed = new URL(targetUrl, window.location.origin);
+      const host = String(parsed.hostname || '').toLowerCase();
+      const path = String(parsed.pathname || '').toLowerCase();
+      if ((host === 'pay.coinpal.io' || host.endsWith('.coinpal.io')) && path.includes('/cashier/')) {
+        parsed.protocol = 'https:';
+        parsed.hostname = 'pay.coinpal.io';
+      }
+      return parsed.toString();
+    } catch (_) {
+      return targetUrl;
+    }
+  }
+
+  function isCoinpalCheckoutUrl(checkoutUrl) {
+    const targetUrl = normalizeCoinpalCheckoutUrl(checkoutUrl);
     if (!targetUrl) {
       return false;
     }
@@ -4789,7 +4809,7 @@ include __DIR__ . "/includes/header.php";
       const parsed = new URL(targetUrl, window.location.origin);
       const host = String(parsed.hostname || '').toLowerCase();
       const path = String(parsed.pathname || '').toLowerCase();
-      return (host === 'pay.coinpal.io' || host.endsWith('.coinpal.io')) && path.includes('/cashier/');
+      return host === 'pay.coinpal.io' && path.includes('/cashier/');
     } catch (_) {
       return false;
     }
@@ -4797,9 +4817,10 @@ include __DIR__ . "/includes/header.php";
 
   async function reopenBinanceCheckout(checkoutUrl, reference, totalText) {
     const popup = openBinanceCheckoutPopup();
+    const normalizedCheckoutUrl = normalizeCoinpalCheckoutUrl(checkoutUrl);
 
-    if (isCoinpalCheckoutUrl(checkoutUrl)) {
-      const opened = navigateBinanceCheckoutPopup(popup, checkoutUrl);
+    if (isCoinpalCheckoutUrl(normalizedCheckoutUrl)) {
+      const opened = navigateBinanceCheckoutPopup(popup, normalizedCheckoutUrl);
       if (opened) {
         return;
       }
@@ -4828,7 +4849,7 @@ include __DIR__ . "/includes/header.php";
         throw new Error((data && data.message) ? data.message : 'No se pudo reabrir el checkout de Binance Pay.');
       }
 
-      const refreshedCheckoutUrl = String((data && data.checkout_url) || '').trim();
+      const refreshedCheckoutUrl = normalizeCoinpalCheckoutUrl((data && data.checkout_url) || '');
       if (!isCoinpalCheckoutUrl(refreshedCheckoutUrl)) {
         throw new Error('CoinPal no devolvió una URL válida del cashier para Binance Pay.');
       }
@@ -7958,7 +7979,7 @@ include __DIR__ . "/includes/header.php";
   function renderBinancePaymentDetails(data, reference, totalText) {
     clearPaymentSupportUi();
 
-    const checkoutUrl = String((data && data.checkout_url) || '').trim();
+    const checkoutUrl = normalizeCoinpalCheckoutUrl((data && data.checkout_url) || '');
     const resolvedTotalText = String((data && data.binance_total_text) || totalText || '').trim();
     const reasons = filterBinanceReasons(data);
     const title = 'Completa el pago en Binance Pay';
@@ -8910,14 +8931,16 @@ include __DIR__ . "/includes/header.php";
                     setOverlayVisible(loadingModal, false);
 
                     if ((paymentMode === 'binance' || paymentMode === 'paypal') && checkoutWindow && !checkoutWindow.closed) {
-                      const checkoutUrl = String((data && data.checkout_url) || '').trim();
+                      const checkoutUrl = paymentMode === 'binance'
+                        ? normalizeCoinpalCheckoutUrl((data && data.checkout_url) || '')
+                        : String((data && data.checkout_url) || '').trim();
                       if (checkoutUrl === '') {
                         checkoutWindow.close();
                       }
                     }
 
                     if (paymentMode === 'binance') {
-                      const checkoutUrl = String((data && data.checkout_url) || '').trim();
+                      const checkoutUrl = normalizeCoinpalCheckoutUrl((data && data.checkout_url) || '');
                       if (checkoutUrl !== '') {
                         const opened = navigateBinanceCheckoutPopup(checkoutWindow, checkoutUrl);
                         if (!opened) {

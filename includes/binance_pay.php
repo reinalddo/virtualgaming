@@ -412,12 +412,49 @@ function binance_pay_extract_order_no(array $payload): string {
     return trim((string) ($payload['orderNo'] ?? ''));
 }
 
+function binance_pay_canonical_checkout_host(): string {
+    return 'pay.coinpal.io';
+}
+
+function binance_pay_normalize_checkout_url(?string $url): string {
+    $url = trim((string) $url);
+    if ($url === '') {
+        return '';
+    }
+
+    $parts = parse_url($url);
+    if (!is_array($parts)) {
+        return $url;
+    }
+
+    $host = strtolower(trim((string) ($parts['host'] ?? '')));
+    $path = trim((string) ($parts['path'] ?? ''));
+    if ($host === '' || $path === '') {
+        return $url;
+    }
+
+    $isCoinpalHost = $host === binance_pay_canonical_checkout_host() || str_ends_with($host, '.coinpal.io');
+    if (!$isCoinpalHost || !str_contains(strtolower($path), '/cashier/')) {
+        return $url;
+    }
+
+    $normalized = 'https://' . binance_pay_canonical_checkout_host() . $path;
+    if (isset($parts['query']) && trim((string) $parts['query']) !== '') {
+        $normalized .= '?' . (string) $parts['query'];
+    }
+    if (isset($parts['fragment']) && trim((string) $parts['fragment']) !== '') {
+        $normalized .= '#' . (string) $parts['fragment'];
+    }
+
+    return $normalized;
+}
+
 function binance_pay_extract_checkout_url(array $payload): string {
-    return trim((string) ($payload['nextStepContent'] ?? ''));
+    return binance_pay_normalize_checkout_url((string) ($payload['nextStepContent'] ?? ''));
 }
 
 function binance_pay_is_coinpal_checkout_url(?string $url): bool {
-    $url = trim((string) $url);
+    $url = binance_pay_normalize_checkout_url($url);
     if ($url === '') {
         return false;
     }
@@ -429,7 +466,7 @@ function binance_pay_is_coinpal_checkout_url(?string $url): bool {
         return false;
     }
 
-    $isCoinpalHost = $host === 'pay.coinpal.io' || str_ends_with($host, '.coinpal.io');
+    $isCoinpalHost = $host === binance_pay_canonical_checkout_host();
     if (!$isCoinpalHost) {
         return false;
     }
