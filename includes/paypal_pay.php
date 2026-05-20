@@ -453,7 +453,12 @@ function paypal_pay_extract_status(array $payload): string {
 }
 
 function paypal_pay_extract_approval_url(array $payload): string {
-    return paypal_pay_extract_link($payload, 'approve');
+    $approvalUrl = paypal_pay_extract_link($payload, 'approve');
+    if ($approvalUrl !== '') {
+        return $approvalUrl;
+    }
+
+    return paypal_pay_extract_link($payload, 'payer-action');
 }
 
 function paypal_pay_extract_capture_id(array $payload): string {
