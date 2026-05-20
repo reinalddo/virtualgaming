@@ -96,7 +96,7 @@ function paypal_pay_request_timeout_seconds(): int {
     return 60;
 }
 
-function paypal_pay_encode_json(array $payload): string {
+function paypal_pay_encode_json($payload): string {
     $encoded = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     return is_string($encoded) ? $encoded : '{}';
 }
@@ -308,7 +308,7 @@ function paypal_pay_access_token(?array $config = null): string {
 function paypal_pay_api_request(
     string $method,
     string $path,
-    ?array $payload = null,
+    $payload = null,
     array $extraHeaders = [],
     ?array $config = null
 ): array {
@@ -419,7 +419,7 @@ function paypal_pay_capture_order(string $orderId, ?array $config = null): array
         throw new InvalidArgumentException('El ID de la orden PayPal es obligatorio para capturar.');
     }
 
-    return paypal_pay_api_request('POST', '/v2/checkout/orders/' . rawurlencode($orderId) . '/capture', new stdClass() instanceof stdClass ? [] : [], [], $config);
+    return paypal_pay_api_request('POST', '/v2/checkout/orders/' . rawurlencode($orderId) . '/capture', (object) [], [], $config);
 }
 
 function paypal_pay_extract_link(array $payload, string $rel): string {
