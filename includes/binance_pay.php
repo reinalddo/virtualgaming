@@ -242,6 +242,86 @@ function binance_pay_http_post_form(string $url, array $payload, array $headers 
     return $data;
 }
 
+function binance_pay_http_head(string $url, int $timeout = 15, bool $verifySsl = true): array {
+    $status = null;
+    $responseHeaders = [];
+    $connectTimeout = min(binance_pay_connect_timeout_seconds(), max(1, $timeout));
+
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_CONNECTTIMEOUT => $connectTimeout,
+            CURLOPT_TIMEOUT => $timeout,
+            CURLOPT_NOBODY => true,
+            CURLOPT_SSL_VERIFYPEER => $verifySsl,
+            CURLOPT_SSL_VERIFYHOST => $verifySsl ? 2 : 0,
+            CURLOPT_HEADERFUNCTION => static function ($curl, string $headerLine) use (&$responseHeaders): int {
+                $length = strlen($headerLine);
+                $parts = explode(':', $headerLine, 2);
+                if (count($parts) === 2) {
+                    $name = strtolower(trim($parts[0]));
+                    $value = trim($parts[1]);
+                    if ($name !== '') {
+                        $responseHeaders[$name] = $value;
+                    }
+                }
+
+                return $length;
+            },
+        ]);
+
+        $response = curl_exec($ch);
+        $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($response === false) {
+            throw new RuntimeException('No se pudo validar el checkout de CoinPal: ' . $error);
+        }
+    } else {
+        $context = stream_context_create([
+            'http' => [
+                'method' => 'HEAD',
+                'timeout' => $timeout,
+                'ignore_errors' => true,
+            ],
+            'ssl' => [
+                'verify_peer' => $verifySsl,
+                'verify_peer_name' => $verifySsl,
+            ],
+        ]);
+        $response = @file_get_contents($url, false, $context);
+        if ($response === false && empty($http_response_header)) {
+            throw new RuntimeException('No se pudo validar el checkout de CoinPal.');
+        }
+
+        if (isset($http_response_header) && is_array($http_response_header)) {
+            foreach ($http_response_header as $headerLine) {
+                if (preg_match('#^HTTP/\S+\s+(\d{3})#', $headerLine, $matches) === 1) {
+                    $status = (int) $matches[1];
+                    continue;
+                }
+
+                $parts = explode(':', $headerLine, 2);
+                if (count($parts) === 2) {
+                    $name = strtolower(trim($parts[0]));
+                    $value = trim($parts[1]);
+                    if ($name !== '') {
+                        $responseHeaders[$name] = $value;
+                    }
+                }
+            }
+        }
+    }
+
+    return [
+        'status' => $status ?? 0,
+        'headers' => $responseHeaders,
+    ];
+}
+
 function binance_pay_generate_request_id(): string {
     return 'Q' . date('YmdHis') . uniqid();
 }
@@ -472,6 +552,37 @@ function binance_pay_is_coinpal_checkout_url(?string $url): bool {
     }
 
     return str_contains($path, '/cashier/');
+}
+
+function binance_pay_checkout_issue_message(?string $url): string {
+    $url = binance_pay_normalize_checkout_url($url);
+    if ($url === '' || !binance_pay_is_coinpal_checkout_url($url)) {
+        return 'CoinPal no devolvió una URL válida del checkout para Binance Pay.';
+    }
+
+    try {
+        $head = binance_pay_http_head($url, 12, true);
+    } catch (Throwable $e) {
+        try {
+            $head = binance_pay_http_head($url, 12, false);
+        } catch (Throwable $fallbackError) {
+            return '';
+        }
+    }
+
+    $status = (int) ($head['status'] ?? 0);
+    $location = trim((string) (($head['headers']['location'] ?? '')));
+    $locationHost = strtolower(trim((string) parse_url($location, PHP_URL_HOST)));
+
+    if ($locationHost === 'cashier-pro.coinpal.io') {
+        return 'Binance Pay no está disponible temporalmente porque CoinPal está redirigiendo el checkout a cashier-pro.coinpal.io, un host caído con Error 1016. Usa otro método de pago o contacta al administrador.';
+    }
+
+    if ($status >= 500) {
+        return 'Binance Pay no está disponible temporalmente porque CoinPal devolvió HTTP ' . $status . ' al abrir el checkout. Usa otro método de pago o contacta al administrador.';
+    }
+
+    return '';
 }
 
 function binance_pay_extract_message(array $payload): string {

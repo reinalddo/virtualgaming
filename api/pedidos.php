@@ -7873,6 +7873,12 @@ if ($action === 'submit_payment') {
                     $stmt->close();
                 }
             }
+
+            $existingCheckoutIssue = binance_pay_checkout_issue_message($existingCheckoutUrl);
+            if ($existingCheckoutIssue !== '') {
+                clear_order_binance_pay_tracking($mysqli, $orderId);
+                $order = fetch_order_by_id($mysqli, $orderId) ?: $order;
+            } else {
             $existingOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
             json_response(array_merge([
                 'ok' => true,
@@ -7880,6 +7886,7 @@ if ($action === 'submit_payment') {
                 'order_id' => $orderId,
                 'estado' => (string) ($existingOrder['estado'] ?? 'pendiente'),
             ], build_binance_checkout_response_payload($existingOrder)));
+            }
         }
 
         $notifyUrl = build_binance_pay_notify_url();
@@ -7930,6 +7937,13 @@ if ($action === 'submit_payment') {
             $statusCode = (str_contains($loweredMessage, 'signature verification failed') || str_contains($loweredMessage, 'payment in this currency is not supported')) ? 409 : 502;
             error_log('TVG Binance Pay checkout failed for order #' . $orderId . ': ' . $rawMessage);
             json_error($customerMessage, $statusCode);
+        }
+
+        $checkoutIssue = binance_pay_checkout_issue_message(binance_pay_extract_checkout_url($responsePayload));
+        if ($checkoutIssue !== '') {
+            clear_order_binance_pay_tracking($mysqli, $orderId);
+            error_log('TVG Binance Pay checkout unavailable for order #' . $orderId . ': ' . $checkoutIssue);
+            json_error($checkoutIssue, 502);
         }
 
         if (!persist_order_binance_pay_checkout($mysqli, $orderId, $requestPayload, $responsePayload)) {
