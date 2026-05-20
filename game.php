@@ -7617,6 +7617,58 @@ include __DIR__ . "/includes/header.php";
     ]);
   }
 
+  function canSwitchFromBinanceToOtherPaymentMode() {
+    if (!activePaymentOrder) {
+      return false;
+    }
+
+    const availableModes = [
+      !!activePaymentOrder.canUseMoney,
+      !!activePaymentOrder.canUseBinance,
+      !!activePaymentOrder.canUsePayPal,
+      !!activePaymentOrder.canUsePoints,
+    ].filter(Boolean).length;
+
+    return availableModes > 1;
+  }
+
+  function switchFromBinanceToOtherPaymentMode() {
+    if (!activePaymentOrder) {
+      return;
+    }
+
+    clearPaymentStatusPolling();
+    setOverlayVisible(paymentStatusModal, false);
+    setPaymentFormDisabled(false);
+    clearPaymentSupportUi();
+
+    const currentMode = String(activePaymentOrder.paymentMode || 'money');
+    let nextMode = currentMode;
+
+    if (currentMode !== 'money' && activePaymentOrder.canUseMoney) {
+      nextMode = 'money';
+    } else if (currentMode !== 'paypal' && activePaymentOrder.canUsePayPal) {
+      nextMode = 'paypal';
+    } else if (currentMode !== 'binance' && activePaymentOrder.canUseBinance) {
+      nextMode = 'binance';
+    } else if (currentMode !== 'points' && activePaymentOrder.canUsePoints) {
+      nextMode = 'points';
+    }
+
+    setActivePaymentMode(nextMode, activePaymentOrder.selectedMethodId, { expandSelected: true });
+    setCancelOrderButtonMode('cancel');
+    setPaymentAlert('', 'info');
+    scrollPaymentSubmitIntoView();
+  }
+
+  function openBinanceCancellationFlow() {
+    clearPaymentStatusPolling();
+    setOverlayVisible(paymentStatusModal, false);
+    if (activePaymentOrder && paymentCancelConfirmModal) {
+      setOverlayVisible(paymentCancelConfirmModal, true);
+    }
+  }
+
   function normalizeProviderReasonsForDisplay(providerFlow, reasons) {
     const flow = String(providerFlow || '').toLowerCase();
     const list = Array.isArray(reasons) ? reasons.slice() : [];
