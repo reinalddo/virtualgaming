@@ -281,7 +281,7 @@ function order_binance_detail_lines(array $order): array {
     $lines[] = 'Ultimo check Binance: ' . $checkedAt;
   }
 
-  $checkoutUrl = trim((string) ($order['binance_pay_checkout_url'] ?? ''));
+  $checkoutUrl = binance_pay_normalize_checkout_url((string) ($order['binance_pay_checkout_url'] ?? ''));
   if ($checkoutUrl !== '') {
     $lines[] = 'Checkout Binance activo';
   }

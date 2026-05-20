@@ -3026,7 +3026,7 @@ function persist_order_binance_pay_snapshot(mysqli $mysqli, int $orderId, array 
     }
     $checkoutUrl = binance_pay_extract_checkout_url($payload);
     if ($checkoutUrl === '' || !binance_pay_is_coinpal_checkout_url($checkoutUrl)) {
-        $checkoutUrl = trim((string) ($order['binance_pay_checkout_url'] ?? ''));
+        $checkoutUrl = binance_pay_normalize_checkout_url((string) ($order['binance_pay_checkout_url'] ?? ''));
     }
     $paidAmount = binance_pay_extract_paid_amount($payload);
     if ($paidAmount === null && isset($order['binance_pay_paid_amount']) && is_numeric($order['binance_pay_paid_amount'])) {
@@ -7861,9 +7861,18 @@ if ($action === 'submit_payment') {
             json_error('Faltan credenciales de CoinPal para usar Binance Pay.', 409);
         }
 
-        $existingCheckoutUrl = binance_pay_normalize_checkout_url((string) ($order['binance_pay_checkout_url'] ?? ''));
+        $storedCheckoutUrl = trim((string) ($order['binance_pay_checkout_url'] ?? ''));
+        $existingCheckoutUrl = binance_pay_normalize_checkout_url($storedCheckoutUrl);
         $existingStatus = binance_pay_normalize_status($order['binance_pay_status'] ?? '');
         if (binance_pay_is_coinpal_checkout_url($existingCheckoutUrl) && ($existingStatus === '' || binance_pay_is_pending_status($existingStatus))) {
+            if ($existingCheckoutUrl !== '' && $existingCheckoutUrl !== $storedCheckoutUrl) {
+                $stmt = $mysqli->prepare("UPDATE pedidos SET binance_pay_checkout_url = ? WHERE id = ? LIMIT 1");
+                if ($stmt) {
+                    $stmt->bind_param('si', $existingCheckoutUrl, $orderId);
+                    $stmt->execute();
+                    $stmt->close();
+                }
+            }
             $existingOrder = fetch_order_by_id($mysqli, $orderId) ?: $order;
             json_response(array_merge([
                 'ok' => true,
