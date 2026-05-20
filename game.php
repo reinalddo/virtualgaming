@@ -4634,74 +4634,6 @@ include __DIR__ . "/includes/header.php";
       return;
     }
 
-    activePaymentOrder.expiresAtMs = Date.now() + (safeRemainingSeconds * 1000);
-    updatePaymentTimer();
-  }
-
-  function filterBinanceReasons(data) {
-    return extractPaymentReasons(data).filter((reason) => {
-      const normalized = String(reason || '').trim().toLowerCase();
-      return normalized !== '' && !['success', 'created', 'pending'].includes(normalized);
-    });
-  }
-
-  function filterPayPalReasons(data) {
-    return extractPaymentReasons(data).filter((reason) => {
-      const normalized = String(reason || '').trim().toLowerCase();
-      return normalized !== '' && !['success', 'created', 'pending', 'approved', 'completed'].includes(normalized);
-    });
-  }
-
-  function canSwitchFromBinanceToOtherPaymentMode() {
-    if (!activePaymentOrder) {
-      return false;
-    }
-
-    return !!activePaymentOrder.canUseMoney || !!activePaymentOrder.canUsePoints;
-  }
-
-  function switchFromBinanceToOtherPaymentMode() {
-    if (!activePaymentOrder) {
-      return;
-    }
-
-    clearPaymentStatusPolling();
-    setOverlayVisible(paymentStatusModal, false);
-    setPaymentFormDisabled(false);
-      clearPaymentSupportUi();
-
-    const nextMode = activePaymentOrder.canUseMoney ? 'money' : (activePaymentOrder.canUsePoints ? 'points' : 'binance');
-    setActivePaymentMode(nextMode, activePaymentOrder.selectedMethodId, { expandSelected: true });
-    setCancelOrderButtonMode('cancel');
-      setPaymentAlert('', 'info');
-    scrollPaymentSubmitIntoView();
-  }
-
-  function openBinanceCancellationFlow() {
-    clearPaymentStatusPolling();
-    setOverlayVisible(paymentStatusModal, false);
-    if (activePaymentOrder && paymentCancelConfirmModal) {
-      setOverlayVisible(paymentCancelConfirmModal, true);
-    }
-  }
-
-  function buildBinancePopupLoaderHtml() {
-    return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Abriendo Binance Pay...</title><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0;font-family:Arial,sans-serif;background:#081018;color:#e2e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}.card{max-width:480px;width:100%;background:#111827;border:1px solid #22d3ee;border-radius:18px;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.35)}h1{margin:0 0 12px;font-size:24px;color:#22d3ee}p{margin:0 0 12px;line-height:1.6}.spinner{width:44px;height:44px;border-radius:999px;border:4px solid rgba(34,211,238,.18);border-top-color:#22d3ee;animation:spin .9s linear infinite;margin:0 0 20px}@keyframes spin{to{transform:rotate(360deg)}}</style></head><body><div class="card"><div class="spinner"></div><h1>Abriendo Binance Pay...</h1><p>Estamos conectando tu orden con CoinPal para mostrar el checkout de Binance Pay.</p><p>Si el redireccionamiento tarda unos segundos, deja esta ventana abierta.</p></div></body></html>`;
-  }
-
-  function buildPayPalPopupLoaderHtml() {
-    return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Abriendo PayPal...</title><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0;font-family:Arial,sans-serif;background:#081018;color:#e2e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}.card{max-width:480px;width:100%;background:#111827;border:1px solid #60a5fa;border-radius:18px;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.35)}h1{margin:0 0 12px;font-size:24px;color:#60a5fa}p{margin:0 0 12px;line-height:1.6}.spinner{width:44px;height:44px;border-radius:999px;border:4px solid rgba(96,165,250,.18);border-top-color:#60a5fa;animation:spin .9s linear infinite;margin:0 0 20px}@keyframes spin{to{transform:rotate(360deg)}}</style></head><body><div class="card"><div class="spinner"></div><h1>Abriendo PayPal...</h1><p>Estamos preparando tu orden para mostrar el checkout oficial de PayPal.</p><p>Si el redireccionamiento tarda unos segundos, deja esta ventana abierta.</p></div></body></html>`;
-  }
-
-  function openBinanceCheckoutPopup() {
-    const popup = window.open('', '_blank');
-    if (!popup) {
-      return null;
-    }
-
-    try {
-      popup.opener = null;
-      popup.document.open();
       popup.document.write(buildBinancePopupLoaderHtml());
       popup.document.close();
     } catch (_) {
@@ -8065,6 +7997,67 @@ include __DIR__ . "/includes/header.php";
 
         renderPaymentActionButtons(actions, { hideDefaultStatusAccept: true });
       }
+      actions.push({
+        label: 'Pagar con otro método',
+        className: 'btn-outline-light',
+        onClick: () => {
+          switchFromBinanceToOtherPaymentMode();
+        },
+      });
+    }
+
+    actions.push({
+      label: 'Cancelar operación',
+      className: 'btn-danger',
+      onClick: () => {
+        openBinanceCancellationFlow();
+      },
+    });
+
+    const whatsappUrl = buildPaymentSupportWhatsappUrl(activePaymentOrder ? activePaymentOrder.orderId : '', reference, resolvedTotalText);
+    if (whatsappUrl) {
+      actions.push({
+        label: 'Contactar por WhatsApp',
+        className: 'btn-outline-info',
+        onClick: () => {
+          window.open(whatsappUrl, '_blank', 'noopener');
+        },
+      });
+    }
+
+    renderPaymentActionButtons(actions, { hideDefaultStatusAccept: true });
+    scrollPaymentModalToTop();
+  }
+
+  function renderPayPalPaymentDetails(data, reference, totalText) {
+    clearPaymentSupportUi();
+
+    const checkoutUrl = String((data && data.checkout_url) || '').trim();
+    const resolvedTotalText = String(totalText || getConfirmedPaymentTotalText() || '').trim();
+    const reasons = filterPayPalReasons(data);
+    const title = 'Completa el pago en PayPal';
+    const summary = 'Abrimos el checkout oficial de PayPal para que autorices el pago mientras esta ventana sigue consultando la confirmación.';
+    const steps = [
+      'Abre la ventana de PayPal y autoriza el pago con tu cuenta, saldo o tarjeta.',
+      'Mantén esta ventana abierta: el sistema seguirá revisando la confirmación automáticamente.',
+      'Si ya aprobaste el pago y el estado no cambia de inmediato, espera unos segundos mientras llega la sincronización o el webhook.'
+    ];
+
+    renderSupportCard(paymentModalReasons, title, summary, steps, reasons);
+    renderSupportCard(paymentStatusModalReasons, title, summary, steps, reasons);
+
+    const actions = [];
+    if (checkoutUrl !== '') {
+      actions.push({
+        label: 'Abrir PayPal',
+        className: 'btn-info',
+        onClick: () => {
+          reopenPayPalCheckout(checkoutUrl, reference, resolvedTotalText);
+        },
+      });
+    }
+
+    if (canSwitchFromBinanceToOtherPaymentMode()) {
       actions.push({
         label: 'Pagar con otro método',
         className: 'btn-outline-light',
