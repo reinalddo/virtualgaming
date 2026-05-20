@@ -7581,6 +7581,42 @@ include __DIR__ . "/includes/header.php";
     return reasons;
   }
 
+  function filterCheckoutReasons(data, genericPatterns = []) {
+    const checkoutUrl = String((data && data.checkout_url) || '').trim();
+    const normalizedPatterns = Array.isArray(genericPatterns)
+      ? genericPatterns.filter((pattern) => pattern instanceof RegExp)
+      : [];
+
+    return extractPaymentReasons(data).filter((reason) => {
+      const normalizedReason = String(reason || '').trim();
+      if (normalizedReason === '') {
+        return false;
+      }
+
+      if (checkoutUrl !== '' && normalizedReason === checkoutUrl) {
+        return false;
+      }
+
+      return !normalizedPatterns.some((pattern) => pattern.test(normalizedReason));
+    });
+  }
+
+  function filterBinanceReasons(data) {
+    return filterCheckoutReasons(data, [
+      /completa el pago en binance pay/i,
+      /checkout externo de coinpal/i,
+      /abrir binance pay/i,
+    ]);
+  }
+
+  function filterPayPalReasons(data) {
+    return filterCheckoutReasons(data, [
+      /completa el pago en paypal/i,
+      /checkout oficial de paypal/i,
+      /abrir paypal/i,
+    ]);
+  }
+
   function normalizeProviderReasonsForDisplay(providerFlow, reasons) {
     const flow = String(providerFlow || '').toLowerCase();
     const list = Array.isArray(reasons) ? reasons.slice() : [];
