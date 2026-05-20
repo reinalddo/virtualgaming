@@ -4670,7 +4670,6 @@ include __DIR__ . "/includes/header.php";
     }
 
     try {
-      popup.opener = null;
       popup.document.open();
       popup.document.write(buildPayPalPopupLoaderHtml());
       popup.document.close();
@@ -4720,12 +4719,8 @@ include __DIR__ . "/includes/header.php";
       }
     }
 
-    const reopened = window.open(targetUrl, '_blank', 'noopener');
+    const reopened = window.open(targetUrl, '_blank');
     if (reopened) {
-      try {
-        reopened.opener = null;
-      } catch (_) {
-      }
       return true;
     }
 
@@ -7333,6 +7328,42 @@ include __DIR__ . "/includes/header.php";
     }
   }
 
+  function triggerPayPalReturnSync(payload = {}) {
+    if (!activePaymentOrder || !activePaymentOrder.orderId) {
+      return;
+    }
+
+    const safePayload = payload && typeof payload === 'object' ? payload : {};
+    const payloadOrderId = Number(safePayload.order_id || 0);
+    if (payloadOrderId > 0 && payloadOrderId !== Number(activePaymentOrder.orderId)) {
+      return;
+    }
+
+    const bridgeState = String(safePayload.state || '').trim().toLowerCase();
+    if (bridgeState === 'cancelado') {
+      setPaymentAlert('PayPal informó que el checkout fue cancelado. Estamos actualizando el pedido.', 'warning');
+    } else {
+      setPaymentAlert('PayPal devolvió el checkout. Estamos confirmando el resultado final del pago.', 'info');
+    }
+
+    clearPaymentStatusPolling();
+    setPaymentStatusWaiting(true);
+    pollOrderResolution(
+      String(safePayload.paypal_order_id || activePaymentOrder.orderId || '').trim(),
+      String(activePaymentOrder.confirmedTotalText || getConfirmedPaymentTotalText() || '').trim(),
+      1
+    );
+  }
+
+  window.addEventListener('message', (event) => {
+    const message = event && event.data && typeof event.data === 'object' ? event.data : null;
+    if (!message || String(message.source || '').trim() !== 'paypal-checkout') {
+      return;
+    }
+
+    triggerPayPalReturnSync(message.payload && typeof message.payload === 'object' ? message.payload : {});
+  });
+
   function showToast(msg, type) {
     const toast = document.createElement('div');
     toast.textContent = msg;
@@ -7614,6 +7645,8 @@ include __DIR__ . "/includes/header.php";
       /completa el pago en paypal/i,
       /checkout oficial de paypal/i,
       /abrir paypal/i,
+      /payer_action_required/i,
+      /la orden de paypal qued[oó] en estado payer_action_required\./i,
     ]);
   }
 
