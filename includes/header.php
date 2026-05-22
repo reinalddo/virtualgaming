@@ -479,6 +479,82 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
       top: calc(var(--site-topbar-height) + 0.45rem) !important;
       max-height: calc(100vh - var(--site-topbar-height) - 1.2rem) !important;
     }
+    .site-topbar-mobile-search-toggle {
+      display: none;
+      width: 44px;
+      height: 44px;
+      flex: 0 0 44px;
+      border-color: var(--theme-topbar-search-border) !important;
+      background: rgba(var(--theme-topbar-search-bg-rgb), 0.92) !important;
+      color: var(--theme-topbar-search-text) !important;
+      box-shadow: 0 0 18px rgba(var(--theme-primary-rgb), 0.14);
+    }
+    .site-topbar-mobile-search-toggle:hover,
+    .site-topbar-mobile-search-toggle:focus {
+      box-shadow: 0 0 0 3px rgba(var(--theme-topbar-search-border-rgb), 0.14), 0 0 18px rgba(var(--theme-topbar-search-border-rgb), 0.12);
+    }
+    .site-topbar-search-modal-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1060;
+      background: rgba(3, 9, 17, 0.7);
+      backdrop-filter: blur(8px);
+    }
+    .site-topbar-search-modal {
+      position: fixed;
+      left: 50%;
+      top: calc(var(--site-topbar-height) + 0.55rem);
+      transform: translateX(-50%);
+      width: min(92vw, 420px);
+      max-width: 92vw;
+      max-height: calc(100dvh - var(--site-topbar-height) - 1rem);
+      overflow-y: auto;
+      z-index: 1065;
+      padding: 1rem;
+      border-radius: 1.35rem;
+      border: 1px solid rgba(var(--theme-topbar-search-border-rgb), 0.44);
+      background: rgba(var(--theme-topbar-bg-rgb), 0.98);
+      box-shadow: 0 20px 40px rgba(6, 12, 18, 0.34), 0 0 18px rgba(var(--theme-primary-rgb), 0.12);
+      backdrop-filter: blur(20px);
+    }
+    .site-topbar-search-modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.85rem;
+    }
+    .site-topbar-search-modal-title {
+      color: var(--theme-topbar-text);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      opacity: 0.72;
+    }
+    .site-topbar-search-modal-close {
+      width: 40px;
+      height: 40px;
+      flex: 0 0 40px;
+    }
+    .site-topbar-search-modal .site-topbar-search {
+      display: block !important;
+      min-width: 0;
+      max-width: none;
+      margin-left: 0;
+    }
+    .site-topbar-search-modal .site-topbar-search-dropdown {
+      position: static;
+      left: auto;
+      right: auto;
+      top: auto;
+      margin-top: 0.6rem;
+      max-height: min(54vh, 24rem);
+      overflow-y: auto;
+    }
+    body.site-mobile-search-open {
+      overflow: hidden;
+    }
     .site-topbar-mobile-search,
     .site-topbar-mobile-auth {
       display: none;
@@ -625,6 +701,11 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
       .site-topbar-enabled .site-topbar-search {
         display: none;
       }
+      .site-topbar-mobile-search-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
       .site-topbar-enabled .site-auth-container {
         display: none;
       }
@@ -639,7 +720,7 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
       body.site-topbar-enabled.site-user-authenticated #user-trigger {
         width: auto;
         min-width: 0 !important;
-        max-width: calc(100vw - 92px);
+        max-width: calc(100vw - 148px);
         padding: 0.55rem 0.9rem !important;
         gap: 0.7rem !important;
       }
@@ -653,12 +734,8 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
         width: 34px !important;
         height: 34px !important;
       }
-      .site-topbar-mobile-search,
       .site-topbar-mobile-auth {
         display: grid;
-      }
-      .site-topbar-mobile-search {
-        margin-top: 1rem;
       }
       .site-topbar-enabled #auth-menu,
       .site-topbar-enabled #user-menu {
@@ -716,6 +793,38 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
       var menuPanel = document.getElementById('menu-panel');
       var menuOverlay = document.getElementById('menu-overlay');
       var menuClose = document.getElementById('menu-close');
+      var mobileSearchToggle = document.getElementById('mobile-search-toggle');
+      var mobileSearchOverlay = document.getElementById('mobile-search-overlay');
+      var mobileSearchModal = document.getElementById('mobile-search-modal');
+      var mobileSearchClose = document.getElementById('mobile-search-close');
+      var openMobileSearchModal = function() {
+        if (!mobileSearchOverlay || !mobileSearchModal) {
+          return;
+        }
+        if (menuPanel) {
+          menuPanel.classList.add('d-none');
+        }
+        if (menuOverlay) {
+          menuOverlay.classList.add('d-none');
+        }
+        mobileSearchOverlay.classList.remove('d-none');
+        mobileSearchModal.classList.remove('d-none');
+        document.body.classList.add('site-mobile-search-open');
+        var modalSearchInput = mobileSearchModal.querySelector('[data-public-search-input]');
+        if (modalSearchInput) {
+          window.setTimeout(function() {
+            modalSearchInput.focus();
+          }, 40);
+        }
+      };
+      var closeMobileSearchModal = function() {
+        if (!mobileSearchOverlay || !mobileSearchModal) {
+          return;
+        }
+        mobileSearchOverlay.classList.add('d-none');
+        mobileSearchModal.classList.add('d-none');
+        document.body.classList.remove('site-mobile-search-open');
+      };
       if (menuToggle && menuPanel && menuOverlay) {
         menuToggle.addEventListener('click', function() {
           menuPanel.classList.remove('d-none');
@@ -732,6 +841,21 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
           menuOverlay.classList.add('d-none');
         });
       }
+      if (mobileSearchToggle) {
+        mobileSearchToggle.addEventListener('click', function() {
+          openMobileSearchModal();
+        });
+      }
+      if (mobileSearchOverlay) {
+        mobileSearchOverlay.addEventListener('click', function() {
+          closeMobileSearchModal();
+        });
+      }
+      if (mobileSearchClose) {
+        mobileSearchClose.addEventListener('click', function() {
+          closeMobileSearchModal();
+        });
+      }
 
       var siteTopbar = document.querySelector('[data-site-topbar="1"]');
       if (siteTopbar) {
@@ -746,8 +870,7 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
         window.addEventListener('scroll', updateTopbarOpacity, { passive: true });
       }
 
-      var searchRoot = document.querySelector('[data-public-search]');
-      if (searchRoot) {
+      Array.prototype.forEach.call(document.querySelectorAll('[data-public-search]'), function(searchRoot) {
         var searchForm = searchRoot.querySelector('[data-public-search-form]');
         var searchInput = searchRoot.querySelector('[data-public-search-input]');
         var searchDropdown = searchRoot.querySelector('[data-public-search-results]');
@@ -929,7 +1052,13 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
             hideSearchDropdown();
           }
         });
-      }
+      });
+
+      document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+          closeMobileSearchModal();
+        }
+      });
     });
   </script>
 </head>
@@ -1062,6 +1191,13 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
             </div>
           <?php endif; ?>
         </div>
+        <?php if ($topBarEnabled): ?>
+        <button id="mobile-search-toggle" type="button" class="site-topbar-mobile-search-toggle btn btn-outline-info rounded-circle d-md-none" aria-label="Abrir búsqueda">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0 1 14 0Z" />
+          </svg>
+        </button>
+        <?php endif; ?>
       </header>
 
       <?php
@@ -1093,16 +1229,6 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
           <p class="small text-uppercase text-secondary mb-0" style="letter-spacing:0.35em;">Menu</p>
         </div>
         <?php if ($topBarEnabled): ?>
-          <div class="site-topbar-mobile-search d-md-none">
-            <form method="get" action="<?php echo htmlspecialchars($searchResultsUrl, ENT_QUOTES, 'UTF-8'); ?>" class="site-topbar-mobile-search-form">
-              <input type="search" name="q" class="site-topbar-mobile-search-input" placeholder="Buscar juegos o paquetes" autocomplete="off">
-              <span class="site-topbar-mobile-search-icon" aria-hidden="true">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0Z" />
-                </svg>
-              </span>
-            </form>
-          </div>
           <?php if (!$authUser): ?>
             <div class="site-topbar-mobile-auth d-md-none">
               <button type="button" class="btn btn-info neon-btn-info rounded-3 border fw-bold text-uppercase shadow-sm" data-auth-open="login">Iniciar sesión</button>
@@ -1144,6 +1270,34 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
           <?php endif; ?>
         </div>
       </nav>
+
+      <?php if ($topBarEnabled): ?>
+      <div id="mobile-search-overlay" class="site-topbar-search-modal-overlay d-none d-md-none"></div>
+      <div id="mobile-search-modal" class="site-topbar-search-modal d-none d-md-none" role="dialog" aria-modal="true" aria-labelledby="mobile-search-title">
+        <div class="site-topbar-search-modal-head">
+          <div id="mobile-search-title" class="site-topbar-search-modal-title">Buscar</div>
+          <button id="mobile-search-close" type="button" class="site-topbar-search-modal-close btn btn-outline-info rounded-circle d-inline-flex align-items-center justify-content-center" aria-label="Cerrar búsqueda">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
+            </svg>
+          </button>
+        </div>
+        <div class="site-topbar-search" data-public-search>
+          <form method="get" action="<?php echo htmlspecialchars($searchResultsUrl, ENT_QUOTES, 'UTF-8'); ?>" class="site-topbar-search-form" data-public-search-form>
+            <input type="search" name="q" class="site-topbar-search-input" data-public-search-input placeholder="Buscar juegos o paquetes" autocomplete="off">
+            <span class="site-topbar-search-icon" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0 1 14 0Z" />
+              </svg>
+            </span>
+          </form>
+          <div class="site-topbar-search-dropdown" data-public-search-results>
+            <div class="site-topbar-search-status" data-public-search-status>Escribe al menos 2 letras para buscar juegos o paquetes.</div>
+            <div class="site-topbar-search-list" data-public-search-list></div>
+          </div>
+        </div>
+      </div>
+      <?php endif; ?>
 
       <div id="auth-modal" class="position-fixed top-0 start-0 w-100 h-100 d-none d-flex align-items-center justify-content-center px-4" style="z-index:13000;" data-auth-initial-mode="<?php echo htmlspecialchars($authModalInitialMode, ENT_QUOTES, 'UTF-8'); ?>">
         <div class="position-absolute top-0 start-0 w-100 h-100" style="background:var(--theme-overlay-soft);backdrop-filter:blur(6px);box-shadow:var(--theme-shadow-primary), var(--theme-shadow-secondary);z-index:11000;" data-auth-close></div>

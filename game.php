@@ -1433,6 +1433,23 @@ include __DIR__ . "/includes/header.php";
     box-shadow: inset 0 0 0 1px rgba(var(--theme-game-feature-border-rgb, 22, 78, 99), 0.14);
   }
 
+  @media (max-width: 767.98px) {
+    .game-hero-card {
+      min-height: 0;
+      aspect-ratio: 16 / 10;
+    }
+
+    .game-hero-media {
+      background: rgba(2, 6, 23, 0.94);
+    }
+
+    .game-hero-image {
+      object-fit: contain;
+      transform: none;
+      background: rgba(2, 6, 23, 0.96);
+    }
+  }
+
   .payment-summary-features {
     display: flex;
     flex-wrap: wrap;
