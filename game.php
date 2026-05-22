@@ -2749,6 +2749,31 @@ include __DIR__ . "/includes/header.php";
     grid-template-columns: 32rem;
   }
 
+  @media (max-width: 767.98px) {
+    .purchase-summary-layout,
+    .purchase-summary-layout-single {
+      grid-template-columns: minmax(0, 1fr);
+      justify-content: stretch;
+    }
+
+    .purchase-summary-column-result {
+      width: 100%;
+    }
+
+    .purchase-summary-pack-card {
+      padding: 0.95rem 1rem;
+    }
+
+    .purchase-summary-pack-name,
+    .purchase-quantity-help {
+      overflow-wrap: anywhere;
+    }
+
+    .purchase-quantity-panel {
+      max-width: none;
+    }
+  }
+
   .email-disclaimer-card {
     min-height: 100%;
     padding: 0.95rem 1rem;
@@ -3580,6 +3605,23 @@ include __DIR__ . "/includes/header.php";
       justify-content: stretch;
     }
 
+    .purchase-summary-column-result {
+      width: 100%;
+    }
+
+    .purchase-summary-pack-card {
+      padding: 0.85rem 0.9rem;
+      gap: 0.65rem;
+    }
+
+    .purchase-summary-pack-name {
+      font-size: clamp(0.98rem, 4.2vw, 1.18rem);
+    }
+
+    .purchase-summary-total-value {
+      font-size: clamp(1.35rem, 6.4vw, 1.75rem);
+    }
+
     .payment-coupon-panel {
       width: 100%;
       padding: 0.9rem 0.95rem;
@@ -3649,6 +3691,12 @@ include __DIR__ . "/includes/header.php";
       font-size: 1.45rem;
     }
 
+    .purchase-quantity-help {
+      font-size: 0.78rem;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+
     .pack-card {
       min-height: 13.75rem;
     }
@@ -3676,6 +3724,54 @@ include __DIR__ . "/includes/header.php";
       font-size: 0.66rem;
     }
 
+
+  @media (max-width: 399.98px) {
+    .purchase-summary-pack-card {
+      padding: 0.8rem 0.8rem 0.9rem;
+    }
+
+    .purchase-summary-card-label {
+      font-size: 0.72rem;
+    }
+
+    .purchase-summary-total-block {
+      padding-top: 0.7rem;
+    }
+
+    .purchase-quantity-panel {
+      padding: 0.72rem;
+    }
+
+    .purchase-quantity-label {
+      font-size: 0.76rem;
+      margin-bottom: 0.45rem;
+    }
+
+    .purchase-quantity-stepper {
+      grid-template-columns: 2.6rem minmax(0, 1fr) 2.6rem;
+      gap: 0.35rem;
+    }
+
+    .purchase-quantity-btn,
+    .purchase-quantity-input {
+      min-height: 3rem;
+      border-radius: 0.8rem;
+    }
+
+    .purchase-quantity-btn {
+      font-size: 1.5rem;
+    }
+
+    .purchase-quantity-input {
+      padding: 0.45rem 0.5rem;
+      font-size: 1.2rem;
+    }
+
+    .purchase-quantity-help {
+      margin-top: 0.45rem;
+      font-size: 0.74rem;
+    }
+  }
     .pack-card-content {
       padding: 0.8rem 0.8rem 0.9rem;
       gap: 0.55rem;
