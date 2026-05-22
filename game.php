@@ -453,17 +453,17 @@ include __DIR__ . "/includes/header.php";
               <?php else: ?>
                 <span class="pack-card-placeholder">PK</span>
               <?php endif; ?>
-              <?php if (!empty($packFeatures)): ?>
-                <div class="pack-card-features" aria-hidden="true">
-                  <?php foreach ($packFeatures as $feature): ?>
-                    <span class="pack-card-feature-badge">
-                      <?= package_feature_render_icon((string) ($feature['icon'] ?? 'sparkles'), 'pack-card-feature-icon') ?>
-                      <span class="pack-card-feature-text"><?= htmlspecialchars((string) ($feature['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
-                    </span>
-                  <?php endforeach; ?>
-                </div>
-              <?php endif; ?>
             </div>
+            <?php if (!empty($packFeatures)): ?>
+              <div class="pack-card-features" aria-hidden="true">
+                <?php foreach ($packFeatures as $feature): ?>
+                  <span class="pack-card-feature-badge">
+                    <?= package_feature_render_icon((string) ($feature['icon'] ?? 'sparkles'), 'pack-card-feature-icon') ?>
+                    <span class="pack-card-feature-text"><?= htmlspecialchars((string) ($feature['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                  </span>
+                <?php endforeach; ?>
+              </div>
+            <?php endif; ?>
             <div class="pack-card-content">
               <p class="pack-card-name mb-0 fw-semibold"><?= htmlspecialchars($pack['nombre'], ENT_QUOTES, 'UTF-8') ?></p>
               <?php if ($packIsAccountSale): ?>
@@ -3354,12 +3354,13 @@ include __DIR__ . "/includes/header.php";
     padding: 0;
     border-radius: 1.1rem;
     border: 0 !important;
-    overflow: hidden;
+    overflow: visible;
     isolation: isolate;
     appearance: none;
     background:
       radial-gradient(circle at top, rgba(var(--theme-button-primary-rgb), 0.18), transparent 45%),
       linear-gradient(180deg, rgba(var(--theme-button-surface-rgb), 0.98), rgba(var(--theme-bg-main-rgb), 0.98));
+    box-shadow: 0 0 0 1px rgba(var(--theme-button-primary-rgb), 0.1), 0 0 20px rgba(var(--theme-button-primary-rgb), 0.12), 0 0 38px rgba(var(--theme-button-secondary-rgb), 0.06);
     will-change: transform, box-shadow;
     transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s ease, border-color 0.28s ease, background 0.28s ease;
   }
@@ -3384,14 +3385,14 @@ include __DIR__ . "/includes/header.php";
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    box-shadow: inset 0 0 0 1px rgba(var(--theme-button-primary-rgb), 0.95);
+    box-shadow: inset 0 0 0 1px rgba(var(--theme-button-primary-rgb), 1), 0 0 18px rgba(var(--theme-button-primary-rgb), 0.16), 0 0 30px rgba(var(--theme-button-secondary-rgb), 0.08);
     pointer-events: none;
   }
 
   .pack-card:hover,
   .pack-card:focus-visible {
     transform: translateY(-9px) scale(1.02);
-    box-shadow: 0 1.4rem 2.6rem rgba(var(--theme-button-primary-rgb), 0.24), 0 0 0 1px rgba(var(--theme-button-secondary-rgb), 0.28);
+    box-shadow: 0 1.4rem 2.6rem rgba(var(--theme-button-primary-rgb), 0.24), 0 0 0 1px rgba(var(--theme-button-secondary-rgb), 0.3), 0 0 28px rgba(var(--theme-button-primary-rgb), 0.2), 0 0 48px rgba(var(--theme-button-secondary-rgb), 0.12);
     outline: none;
   }
 
@@ -3405,6 +3406,8 @@ include __DIR__ . "/includes/header.php";
     min-height: 100%;
     display: flex;
     flex-direction: column;
+    position: relative;
+    border-radius: inherit;
   }
 
   .pack-card {
@@ -3422,6 +3425,7 @@ include __DIR__ . "/includes/header.php";
     justify-content: center;
     position: relative;
     overflow: hidden;
+    border-radius: calc(1.1rem - 1px) calc(1.1rem - 1px) 0 0;
     will-change: transform, box-shadow;
     transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s ease, border-color 0.28s ease, background 0.28s ease;
     background: linear-gradient(180deg, rgba(var(--theme-bg-main-rgb), 0.45), rgba(var(--theme-bg-main-rgb), 0.05));
@@ -3459,16 +3463,18 @@ include __DIR__ . "/includes/header.php";
 
   .pack-card-features {
     position: absolute;
-    left: 0.6rem;
-    right: 0.6rem;
-    bottom: 0.55rem;
-    z-index: 2;
+    top: -0.72rem;
+    right: -0.55rem;
+    left: auto;
+    z-index: 4;
     display: flex;
     flex-wrap: wrap;
     gap: 0.42rem;
+    justify-content: flex-end;
     transition: transform 0.36s cubic-bezier(0.22, 1, 0.36, 1), filter 0.3s ease;
     align-items: flex-start;
     align-content: flex-start;
+    max-width: calc(100% - 1.2rem);
     pointer-events: none;
   }
 
@@ -3479,20 +3485,20 @@ include __DIR__ . "/includes/header.php";
     gap: 0.42rem;
     max-width: 100%;
     min-height: 1.65rem;
-    padding: 0.28rem 0.58rem;
+    padding: 0.3rem 0.62rem;
     border-radius: 999px;
-    border: 1px solid rgba(var(--theme-button-primary-rgb), 0.42);
-    background: rgba(7, 14, 26, 0.82);
+    border: 1px solid rgba(var(--theme-button-primary-rgb), 0.72);
+    background: linear-gradient(135deg, rgba(9, 18, 34, 0.96), rgba(15, 23, 42, 0.9));
     color: #f8fbff;
-    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28);
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.34), 0 0 18px rgba(var(--theme-button-primary-rgb), 0.24), 0 0 32px rgba(var(--theme-button-secondary-rgb), 0.14), inset 0 0 12px rgba(var(--theme-button-primary-rgb), 0.12);
     transition: transform 0.24s ease, box-shadow 0.24s ease, background 0.24s ease;
   }
 
   .pack-card:hover .pack-card-feature-badge,
   .pack-card:focus-visible .pack-card-feature-badge {
     transform: translateY(-2px);
-    box-shadow: 0 14px 32px rgba(2, 6, 23, 0.28);
-    background: rgba(7, 16, 33, 0.9);
+    box-shadow: 0 16px 34px rgba(2, 6, 23, 0.34), 0 0 20px rgba(var(--theme-button-primary-rgb), 0.32), 0 0 40px rgba(var(--theme-button-secondary-rgb), 0.18), inset 0 0 14px rgba(var(--theme-button-primary-rgb), 0.14);
+    background: linear-gradient(135deg, rgba(10, 22, 40, 0.98), rgba(17, 30, 55, 0.92));
   }
 
   .pack-card-feature-icon {
@@ -3708,10 +3714,11 @@ include __DIR__ . "/includes/header.php";
     }
 
     .pack-card-features {
-      left: 0.45rem;
-      right: 0.45rem;
-      bottom: 0.42rem;
+      top: -0.55rem;
+      right: -0.38rem;
+      left: auto;
       gap: 0.28rem;
+      max-width: calc(100% - 0.9rem);
     }
 
     .pack-card-feature-badge {
