@@ -129,6 +129,10 @@ $adminInfluencerInstructionsUrl = app_path('/admin/instrucciones-influencer');
 $influencerJoinUrl = app_path('/quiero-unirme');
 $topBarEnabled = trim((string) store_config_get('barra_superior', '0')) === '1';
 $showMenuToggle = !$topBarEnabled || !$authUser || in_array($authUserRole, ['admin', 'root'], true);
+$mobileOnlyMenuToggle = $topBarEnabled && $authUser && !in_array($authUserRole, ['admin', 'root'], true);
+if ($mobileOnlyMenuToggle) {
+  $showMenuToggle = true;
+}
 $searchEndpointUrl = app_path('/api/search_catalog.php');
 $searchResultsUrl = app_path('/buscar');
 $influencerInstructionsEnabled = store_config_get('instrucciones_influencer', '0') === '1';
@@ -475,6 +479,47 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
       top: calc(var(--site-topbar-height) + 0.45rem) !important;
       max-height: calc(100vh - var(--site-topbar-height) - 1.2rem) !important;
     }
+    .site-topbar-mobile-search,
+    .site-topbar-mobile-auth {
+      display: none;
+    }
+    .site-topbar-mobile-search-form {
+      position: relative;
+    }
+    .site-topbar-mobile-search-input {
+      width: 100%;
+      min-height: 46px;
+      padding: 0.8rem 2.9rem 0.8rem 0.95rem;
+      border-radius: 999px;
+      border: 1px solid var(--theme-topbar-search-border);
+      background: rgba(var(--theme-topbar-search-bg-rgb), 0.94);
+      color: var(--theme-topbar-search-text);
+      outline: none;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 0 0 1px rgba(var(--theme-topbar-search-border-rgb), 0.08);
+    }
+    .site-topbar-mobile-search-input::placeholder {
+      color: rgba(var(--theme-topbar-search-text-rgb), 0.64);
+    }
+    .site-topbar-mobile-search-icon {
+      position: absolute;
+      right: 0.95rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--theme-topbar-search-text);
+      opacity: 0.75;
+      pointer-events: none;
+    }
+    .site-topbar-mobile-auth {
+      gap: 0.65rem;
+    }
+    .site-topbar-mobile-auth .btn {
+      width: 100%;
+    }
+    @media (min-width: 768px) {
+      .site-mobile-only-toggle {
+        display: none !important;
+      }
+    }
     #menu-panel {
       scrollbar-width: thin;
       scrollbar-color: rgba(var(--theme-primary-rgb), 0.45) transparent;
@@ -543,6 +588,92 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
       .site-topbar-enabled .site-auth-trigger,
       .site-topbar-enabled #user-trigger {
         width: 100%;
+      }
+    }
+    @media (max-width: 767.98px) {
+      .site-topbar-enabled {
+        --site-topbar-height: 84px;
+      }
+      .site-topbar-enabled .store-shell {
+        padding-top: calc(var(--site-topbar-height) + 1rem) !important;
+      }
+      .site-header-topbar {
+        flex-wrap: nowrap;
+        gap: 0.7rem;
+        padding: 0.7rem 0.8rem;
+        align-items: center;
+      }
+      .site-topbar-enabled .site-brand {
+        flex: 1 1 auto;
+        min-width: 0;
+        gap: 0.7rem !important;
+      }
+      .site-topbar-enabled .site-brand-logo {
+        width: 40px;
+        height: 40px;
+      }
+      .site-topbar-enabled .site-brand-copy {
+        text-align: left !important;
+      }
+      .site-topbar-enabled .site-brand-copy p {
+        display: none;
+      }
+      .site-topbar-enabled .site-brand-copy h1 {
+        font-size: 0.96rem !important;
+        line-height: 1.15;
+      }
+      .site-topbar-enabled .site-topbar-search {
+        display: none;
+      }
+      .site-topbar-enabled .site-auth-container {
+        display: none;
+      }
+      body.site-topbar-enabled.site-user-authenticated .site-brand {
+        display: none !important;
+      }
+      body.site-topbar-enabled.site-user-authenticated .site-auth-container {
+        display: block;
+        margin-left: auto;
+        flex: 0 1 auto;
+      }
+      body.site-topbar-enabled.site-user-authenticated #user-trigger {
+        width: auto;
+        min-width: 0 !important;
+        max-width: calc(100vw - 92px);
+        padding: 0.55rem 0.9rem !important;
+        gap: 0.7rem !important;
+      }
+      body.site-topbar-enabled.site-user-authenticated #user-trigger .small {
+        display: none;
+      }
+      body.site-topbar-enabled.site-user-authenticated #user-trigger-name {
+        max-width: 150px;
+      }
+      body.site-topbar-enabled.site-user-authenticated #user-trigger-initials {
+        width: 34px !important;
+        height: 34px !important;
+      }
+      .site-topbar-mobile-search,
+      .site-topbar-mobile-auth {
+        display: grid;
+      }
+      .site-topbar-mobile-search {
+        margin-top: 1rem;
+      }
+      .site-topbar-enabled #auth-menu,
+      .site-topbar-enabled #user-menu {
+        position: fixed !important;
+        left: 50% !important;
+        right: auto !important;
+        top: calc(var(--site-topbar-height) + 0.55rem) !important;
+        transform: translateX(-50%) !important;
+        width: min(92vw, 360px) !important;
+        min-width: min(92vw, 320px) !important;
+        max-width: 92vw !important;
+        max-height: calc(100dvh - var(--site-topbar-height) - 1rem) !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
       }
     }
   </style>
@@ -802,7 +933,7 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
     });
   </script>
 </head>
-<body class="bg-dark text-light min-vh-100<?php echo $renderPublicMediaBackground ? ' site-media-background-active' : ''; ?><?php echo $topBarEnabled ? ' site-topbar-enabled' : ''; ?>">
+<body class="bg-dark text-light min-vh-100<?php echo $renderPublicMediaBackground ? ' site-media-background-active' : ''; ?><?php echo $topBarEnabled ? ' site-topbar-enabled' : ''; ?><?php echo $authUser ? ' site-user-authenticated' : ''; ?>">
   <?php if ($renderPublicMediaBackground): ?>
   <div class="site-media-background" aria-hidden="true">
     <?php if ($publicBackgroundMediaType === 'video'): ?>
@@ -830,7 +961,7 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
     <div class="container-lg store-shell position-relative pb-5 pt-4" data-tenant="<?php echo htmlspecialchars($tenantSlugAttr, ENT_QUOTES, "UTF-8"); ?>">
       <header class="site-header d-flex align-items-center justify-content-between gap-3<?php echo $topBarEnabled ? ' site-header-topbar' : ''; ?>"<?php echo $topBarEnabled ? ' data-site-topbar="1"' : ''; ?>>
         <?php if ($showMenuToggle): ?>
-        <button id="menu-toggle" class="btn btn-outline-info rounded-circle d-flex align-items-center justify-content-center" style="width:44px;height:44px;" aria-label="Abrir menú">
+        <button id="menu-toggle" class="btn btn-outline-info rounded-circle d-flex align-items-center justify-content-center<?php echo $mobileOnlyMenuToggle ? ' site-mobile-only-toggle' : ''; ?>" style="width:44px;height:44px;" aria-label="Abrir menú">
           <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" class="bi bi-list" viewBox="0 0 16 16">
             <path fill-rule="evenodd" d="M2.5 12.5a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1h-10a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1h-10a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1h-10a.5.5 0 0 1-.5-.5z"/>
           </svg>
@@ -961,6 +1092,24 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
         <div class="d-flex align-items-center justify-content-between">
           <p class="small text-uppercase text-secondary mb-0" style="letter-spacing:0.35em;">Menu</p>
         </div>
+        <?php if ($topBarEnabled): ?>
+          <div class="site-topbar-mobile-search d-md-none">
+            <form method="get" action="<?php echo htmlspecialchars($searchResultsUrl, ENT_QUOTES, 'UTF-8'); ?>" class="site-topbar-mobile-search-form">
+              <input type="search" name="q" class="site-topbar-mobile-search-input" placeholder="Buscar juegos o paquetes" autocomplete="off">
+              <span class="site-topbar-mobile-search-icon" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0Z" />
+                </svg>
+              </span>
+            </form>
+          </div>
+          <?php if (!$authUser): ?>
+            <div class="site-topbar-mobile-auth d-md-none">
+              <button type="button" class="btn btn-info neon-btn-info rounded-3 border fw-bold text-uppercase shadow-sm" data-auth-open="login">Iniciar sesión</button>
+              <button type="button" class="btn btn-warning neon-btn rounded-3 border fw-bold text-uppercase shadow-sm" data-auth-open="register">Registrarse</button>
+            </div>
+          <?php endif; ?>
+        <?php endif; ?>
         <div class="mt-4 d-grid gap-2">
           <a href="<?php echo htmlspecialchars($homeUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-dark border rounded-3 px-4 py-3 fw-semibold">Inicio</a>
           <a href="<?php echo htmlspecialchars($popularUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-dark border rounded-3 px-4 py-3 fw-semibold">Juegos populares</a>

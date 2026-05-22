@@ -581,6 +581,7 @@ $menuScript = <<<'SCRIPT'
     button.addEventListener("click", (event) => {
       event.preventDefault();
       const mode = button.dataset.authOpen;
+      closeMenu();
       hideAuthMenu();
       openAuthModal(mode);
     });
