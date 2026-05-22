@@ -1671,14 +1671,35 @@ function store_config_startup_popup_gallery_images(?string $rawJson = null): arr
 
     $items = [];
     foreach ($decoded as $item) {
-        $path = trim((string) $item);
+        $path = '';
+        $linkUrl = '';
+        $linkTarget = '_self';
+
+        if (is_array($item)) {
+            $path = trim((string) ($item['path'] ?? ''));
+            $linkUrl = trim((string) ($item['link_url'] ?? ''));
+            $rawTarget = trim((string) ($item['link_target'] ?? '_self'));
+            $linkTarget = $rawTarget === '_blank' ? '_blank' : '_self';
+        } else {
+            $path = trim((string) $item);
+        }
+
         if ($path === '') {
             continue;
         }
-        $items[] = $path;
+
+        if (isset($items[$path])) {
+            continue;
+        }
+
+        $items[$path] = [
+            'path' => $path,
+            'link_url' => $linkUrl,
+            'link_target' => $linkTarget,
+        ];
     }
 
-    return array_values(array_unique($items));
+    return array_values($items);
 }
 
 function store_config_store_named_logo_upload(array $file, string $prefix = 'store-logo'): array {

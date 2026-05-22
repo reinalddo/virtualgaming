@@ -437,9 +437,13 @@ $accentMap = [
           opacity: 0;
           transition: opacity 0.35s ease;
           pointer-events: none;
+          display: block;
+          color: inherit;
+          text-decoration: none;
         }
         .startup-popup-gallery-slide.is-active {
           opacity: 1;
+          pointer-events: auto;
         }
         .startup-popup-gallery-slide img {
           width: 100%;
@@ -751,9 +755,14 @@ $accentMap = [
               <div class="startup-popup-card startup-popup-card-gallery">
                 <div class="startup-popup-gallery-viewport">
                   <?php foreach ($startupPopupGalleryImages as $galleryIndex => $galleryImage): ?>
-                    <div class="startup-popup-gallery-slide<?= $galleryIndex === 0 ? ' is-active' : '' ?>" data-startup-gallery-slide>
-                      <img src="<?= htmlspecialchars($galleryImage, ENT_QUOTES, 'UTF-8') ?>" alt="Imagen <?= $galleryIndex + 1 ?> de la ventana inicial">
-                    </div>
+                    <?php
+                      $galleryImagePath = trim((string) ($galleryImage['path'] ?? ''));
+                      $galleryLinkUrl = trim((string) ($galleryImage['link_url'] ?? ''));
+                      $galleryLinkTarget = trim((string) ($galleryImage['link_target'] ?? '_self')) === '_blank' ? '_blank' : '_self';
+                    ?>
+                    <<?= $galleryLinkUrl !== '' ? 'a' : 'div' ?> class="startup-popup-gallery-slide<?= $galleryIndex === 0 ? ' is-active' : '' ?>" data-startup-gallery-slide<?= $galleryLinkUrl !== '' ? ' href="' . htmlspecialchars($galleryLinkUrl, ENT_QUOTES, 'UTF-8') . '" target="' . htmlspecialchars($galleryLinkTarget, ENT_QUOTES, 'UTF-8') . '"' . ($galleryLinkTarget === '_blank' ? ' rel="noopener noreferrer"' : '') : '' ?>>
+                      <img src="<?= htmlspecialchars($galleryImagePath, ENT_QUOTES, 'UTF-8') ?>" alt="Imagen <?= $galleryIndex + 1 ?> de la ventana inicial">
+                    </<?= $galleryLinkUrl !== '' ? 'a' : 'div' ?>>
                   <?php endforeach; ?>
                   <?php if (count($startupPopupGalleryImages) > 1): ?>
                     <div class="startup-popup-gallery-dots" aria-label="Indicadores de la galería inicial">

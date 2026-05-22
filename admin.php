@@ -282,17 +282,67 @@ function admin_startup_popup_gallery_images(): array {
     return store_config_startup_popup_gallery_images((string) store_config_get('inicio_popup_galeria_imagenes', '[]'));
 }
 
+function admin_normalize_startup_popup_gallery_url($value): string {
+    $url = trim((string) $value);
+    if ($url === '') {
+        return '';
+    }
+
+    if (preg_match('#^https?://#i', $url) === 1) {
+        return filter_var($url, FILTER_VALIDATE_URL) ? $url : '';
+    }
+
+    if (str_starts_with($url, '/')) {
+        return $url;
+    }
+
+    return '';
+}
+
+function admin_normalize_startup_popup_gallery_target($value): string {
+    return trim((string) $value) === '_blank' ? '_blank' : '_self';
+}
+
+function admin_startup_popup_gallery_item_path($item): string {
+    if (is_array($item)) {
+        return trim((string) ($item['path'] ?? ''));
+    }
+
+    return trim((string) $item);
+}
+
+function admin_startup_popup_gallery_find_index_by_path(array $images, string $path): ?int {
+    foreach ($images as $index => $image) {
+        if (admin_startup_popup_gallery_item_path($image) === $path) {
+            return $index;
+        }
+    }
+
+    return null;
+}
+
 function admin_startup_popup_gallery_save(array $images): bool {
     $normalized = [];
     foreach ($images as $image) {
-        $path = trim((string) $image);
+        $path = admin_startup_popup_gallery_item_path($image);
         if ($path === '') {
             continue;
         }
-        $normalized[] = $path;
+
+        if (isset($normalized[$path])) {
+            continue;
+        }
+
+        $normalized[$path] = [
+            'path' => $path,
+            'link_url' => is_array($image) ? admin_normalize_startup_popup_gallery_url($image['link_url'] ?? '') : '',
+            'link_target' => is_array($image)
+                ? admin_normalize_startup_popup_gallery_target($image['link_target'] ?? '_self')
+                : '_self',
+        ];
     }
 
-    $normalized = array_values(array_unique($normalized));
+    $normalized = array_values($normalized);
     $json = json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     if (!is_string($json)) {
         return false;
@@ -304,11 +354,23 @@ function admin_startup_popup_gallery_save(array $images): bool {
 function admin_startup_popup_gallery_payload(array $images): array {
     $items = [];
     foreach (array_values($images) as $index => $image) {
+        $path = admin_startup_popup_gallery_item_path($image);
+        if ($path === '') {
+            continue;
+        }
+
+        $linkUrl = is_array($image) ? admin_normalize_startup_popup_gallery_url($image['link_url'] ?? '') : '';
+        $linkTarget = is_array($image)
+            ? admin_normalize_startup_popup_gallery_target($image['link_target'] ?? '_self')
+            : '_self';
+
         $items[] = [
-            'path' => $image,
-            'url' => $image,
-            'name' => basename($image),
+            'path' => $path,
+            'url' => $path,
+            'name' => basename($path),
             'order' => $index + 1,
+            'link_url' => $linkUrl,
+            'link_target' => $linkTarget,
         ];
     }
 
@@ -2063,11 +2125,18 @@ switch ($seccion) {
                     admin_json_response(['ok' => false, 'message' => (string) ($upload['message'] ?? 'No se pudieron subir las imágenes seleccionadas.')], 422);
                 }
 
-                $newImages = array_values(array_filter(array_map('strval', $upload['paths'] ?? [])));
+                $newImages = [];
+                foreach (array_values(array_filter(array_map('strval', $upload['paths'] ?? []))) as $newImagePath) {
+                    $newImages[] = [
+                        'path' => $newImagePath,
+                        'link_url' => '',
+                        'link_target' => '_self',
+                    ];
+                }
                 $galleryImages = array_values(array_merge($galleryImages, $newImages));
                 if (!admin_startup_popup_gallery_save($galleryImages)) {
                     foreach ($newImages as $newImage) {
-                        store_config_delete_startup_popup_gallery_file($newImage);
+                        store_config_delete_startup_popup_gallery_file((string) ($newImage['path'] ?? ''));
                     }
                     admin_json_response(['ok' => false, 'message' => 'No se pudo guardar la galería de la ventana inicial.'], 500);
                 }
@@ -2076,19 +2145,38 @@ switch ($seccion) {
             }
 
             $galleryImagePath = trim((string) ($_POST['startup_popup_gallery_image'] ?? ''));
-            $galleryIndex = array_search($galleryImagePath, $galleryImages, true);
-            if ($galleryImagePath === '' || $galleryIndex === false) {
+            $galleryIndex = $galleryImagePath !== '' ? admin_startup_popup_gallery_find_index_by_path($galleryImages, $galleryImagePath) : null;
+            if ($galleryImagePath === '' || $galleryIndex === null) {
                 admin_json_response(['ok' => false, 'message' => 'La imagen seleccionada no existe dentro de la galería actual.'], 404);
             }
 
+            if ($galleryAction === 'update-meta') {
+                $rawLinkUrl = trim((string) ($_POST['startup_popup_gallery_link_url'] ?? ''));
+                $normalizedLinkUrl = admin_normalize_startup_popup_gallery_url($rawLinkUrl);
+                if ($rawLinkUrl !== '' && $normalizedLinkUrl === '') {
+                    admin_json_response(['ok' => false, 'message' => 'El enlace debe comenzar con https://, http:// o / para una ruta interna válida.'], 422);
+                }
+
+                $galleryImages[$galleryIndex]['path'] = $galleryImagePath;
+                $galleryImages[$galleryIndex]['link_url'] = $normalizedLinkUrl;
+                $galleryImages[$galleryIndex]['link_target'] = admin_normalize_startup_popup_gallery_target($_POST['startup_popup_gallery_link_target'] ?? '_self');
+
+                if (!admin_startup_popup_gallery_save($galleryImages)) {
+                    admin_json_response(['ok' => false, 'message' => 'No se pudo guardar el enlace de esta imagen.'], 500);
+                }
+
+                admin_json_response(admin_startup_popup_gallery_payload($galleryImages));
+            }
+
             if ($galleryAction === 'delete') {
+                $galleryItem = $galleryImages[$galleryIndex];
                 unset($galleryImages[$galleryIndex]);
                 $galleryImages = array_values($galleryImages);
                 if (!admin_startup_popup_gallery_save($galleryImages)) {
                     admin_json_response(['ok' => false, 'message' => 'No se pudo actualizar la galería de la ventana inicial.'], 500);
                 }
 
-                store_config_delete_startup_popup_gallery_file($galleryImagePath);
+                store_config_delete_startup_popup_gallery_file(admin_startup_popup_gallery_item_path($galleryItem));
                 admin_json_response(admin_startup_popup_gallery_payload($galleryImages));
             }
 

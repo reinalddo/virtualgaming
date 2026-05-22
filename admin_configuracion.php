@@ -791,6 +791,34 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
     background: rgba(34, 211, 238, 0.12);
     color: #ffffff;
   }
+  .startup-popup-gallery-link-fields {
+    display: grid;
+    gap: 0.45rem;
+  }
+  .startup-popup-gallery-link-input,
+  .startup-popup-gallery-target-select {
+    min-height: 36px;
+    font-size: 0.78rem;
+  }
+  .startup-popup-gallery-save {
+    width: 100%;
+    min-height: 36px;
+    border: 1px solid rgba(34, 211, 238, 0.28);
+    border-radius: 10px;
+    background: rgba(8, 145, 178, 0.18);
+    color: #d8fbff;
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+  .startup-popup-gallery-save:hover {
+    background: rgba(34, 211, 238, 0.18);
+    color: #ffffff;
+  }
+  .startup-popup-gallery-link-hint {
+    color: rgba(216, 251, 255, 0.68);
+    font-size: 0.72rem;
+    line-height: 1.35;
+  }
   .startup-popup-gallery-empty {
     border: 1px dashed rgba(34, 211, 238, 0.24);
     border-radius: 18px;
@@ -2510,20 +2538,34 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
                             <label class="form-label d-block">Imágenes actuales</label>
                             <div class="startup-popup-gallery-grid" id="startupPopupGalleryGrid" data-endpoint="<?= htmlspecialchars(app_path('/admin/configuracion?tab=ventana-inicial'), ENT_QUOTES, 'UTF-8') ?>" data-count-target="startupPopupGallerySummaryCount">
                               <?php foreach ($startupPopupGalleryImages as $galleryIndex => $galleryImage): ?>
-                                <div class="startup-popup-gallery-card" data-gallery-path="<?= htmlspecialchars($galleryImage, ENT_QUOTES, 'UTF-8') ?>">
-                                  <button type="button" class="startup-popup-gallery-delete" data-gallery-action="delete" data-gallery-path="<?= htmlspecialchars($galleryImage, ENT_QUOTES, 'UTF-8') ?>" aria-label="Eliminar imagen">X</button>
+                                <?php
+                                  $galleryImagePath = trim((string) ($galleryImage['path'] ?? ''));
+                                  $galleryLinkUrl = trim((string) ($galleryImage['link_url'] ?? ''));
+                                  $galleryLinkTarget = trim((string) ($galleryImage['link_target'] ?? '_self')) === '_blank' ? '_blank' : '_self';
+                                ?>
+                                <div class="startup-popup-gallery-card" data-gallery-path="<?= htmlspecialchars($galleryImagePath, ENT_QUOTES, 'UTF-8') ?>">
+                                  <button type="button" class="startup-popup-gallery-delete" data-gallery-action="delete" data-gallery-path="<?= htmlspecialchars($galleryImagePath, ENT_QUOTES, 'UTF-8') ?>" aria-label="Eliminar imagen">X</button>
                                   <div class="startup-popup-gallery-thumb">
-                                    <img src="<?= htmlspecialchars($galleryImage, ENT_QUOTES, 'UTF-8') ?>" alt="Imagen <?= $galleryIndex + 1 ?> de la galería inicial">
+                                    <img src="<?= htmlspecialchars($galleryImagePath, ENT_QUOTES, 'UTF-8') ?>" alt="Imagen <?= $galleryIndex + 1 ?> de la galería inicial">
                                   </div>
                                   <div class="startup-popup-gallery-meta">
-                                    <div class="startup-popup-gallery-name"><?= htmlspecialchars(basename($galleryImage), ENT_QUOTES, 'UTF-8') ?></div>
+                                    <div class="startup-popup-gallery-name"><?= htmlspecialchars(basename($galleryImagePath), ENT_QUOTES, 'UTF-8') ?></div>
                                     <div class="startup-popup-gallery-controls">
                                       <span class="startup-popup-gallery-order">Orden <?= $galleryIndex + 1 ?></span>
                                       <div class="startup-popup-gallery-move-group">
-                                        <button type="button" class="startup-popup-gallery-move" data-gallery-action="move" data-gallery-direction="left" data-gallery-path="<?= htmlspecialchars($galleryImage, ENT_QUOTES, 'UTF-8') ?>" aria-label="Mover a la izquierda">←</button>
-                                        <button type="button" class="startup-popup-gallery-move" data-gallery-action="move" data-gallery-direction="right" data-gallery-path="<?= htmlspecialchars($galleryImage, ENT_QUOTES, 'UTF-8') ?>" aria-label="Mover a la derecha">→</button>
+                                        <button type="button" class="startup-popup-gallery-move" data-gallery-action="move" data-gallery-direction="left" data-gallery-path="<?= htmlspecialchars($galleryImagePath, ENT_QUOTES, 'UTF-8') ?>" aria-label="Mover a la izquierda">←</button>
+                                        <button type="button" class="startup-popup-gallery-move" data-gallery-direction="right" data-gallery-action="move" data-gallery-path="<?= htmlspecialchars($galleryImagePath, ENT_QUOTES, 'UTF-8') ?>" aria-label="Mover a la derecha">→</button>
                                       </div>
                                     </div>
+                                    <div class="startup-popup-gallery-link-fields">
+                                      <input type="text" class="form-control form-control-sm startup-popup-gallery-link-input" data-gallery-link-url placeholder="https://... o /ruta-interna" value="<?= htmlspecialchars($galleryLinkUrl, ENT_QUOTES, 'UTF-8') ?>">
+                                      <select class="form-select form-select-sm startup-popup-gallery-target-select" data-gallery-link-target>
+                                        <option value="_self" <?= $galleryLinkTarget === '_self' ? 'selected' : '' ?>>Abrir en la misma pestaña</option>
+                                        <option value="_blank" <?= $galleryLinkTarget === '_blank' ? 'selected' : '' ?>>Abrir en una pestaña nueva</option>
+                                      </select>
+                                    </div>
+                                    <button type="button" class="startup-popup-gallery-save" data-gallery-action="update-meta" data-gallery-path="<?= htmlspecialchars($galleryImagePath, ENT_QUOTES, 'UTF-8') ?>">Guardar enlace</button>
+                                    <div class="startup-popup-gallery-link-hint">Opcional. Acepta `https://...`, `http://...` o una ruta interna que empiece por `/`.</div>
                                   </div>
                                 </div>
                               <?php endforeach; ?>
@@ -3234,11 +3276,18 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
     const endpoint = grid.dataset.endpoint || window.location.href;
     let busy = false;
 
+    const escapeHtml = (value) => String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
     const setBusy = (nextBusy) => {
       busy = nextBusy;
       uploadButton.disabled = nextBusy;
-      grid.querySelectorAll('button').forEach((button) => {
-        button.disabled = nextBusy;
+      grid.querySelectorAll('button, input, select').forEach((field) => {
+        field.disabled = nextBusy;
       });
     };
 
@@ -3259,23 +3308,38 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
 
       emptyState.classList.add('d-none');
       items.forEach((item) => {
+        const path = String(item.path || '').trim();
+        const imageUrl = String(item.url || path || '').trim();
+        const fileName = String(item.name || '').trim();
+        const order = Number(item.order || 0) || 0;
+        const linkUrl = String(item.link_url || '').trim();
+        const linkTarget = String(item.link_target || '').trim() === '_blank' ? '_blank' : '_self';
         const card = document.createElement('div');
         card.className = 'startup-popup-gallery-card';
-        card.dataset.galleryPath = item.path || '';
+        card.dataset.galleryPath = path;
         card.innerHTML = `
-          <button type="button" class="startup-popup-gallery-delete" data-gallery-action="delete" data-gallery-path="${item.path || ''}" aria-label="Eliminar imagen">X</button>
+          <button type="button" class="startup-popup-gallery-delete" data-gallery-action="delete" data-gallery-path="${escapeHtml(path)}" aria-label="Eliminar imagen">X</button>
           <div class="startup-popup-gallery-thumb">
-            <img src="${item.url || ''}" alt="Imagen ${item.order || 0} de la galería inicial">
+            <img src="${escapeHtml(imageUrl)}" alt="Imagen ${order} de la galería inicial">
           </div>
           <div class="startup-popup-gallery-meta">
-            <div class="startup-popup-gallery-name">${item.name || ''}</div>
+            <div class="startup-popup-gallery-name">${escapeHtml(fileName)}</div>
             <div class="startup-popup-gallery-controls">
-              <span class="startup-popup-gallery-order">Orden ${item.order || 0}</span>
+              <span class="startup-popup-gallery-order">Orden ${order}</span>
               <div class="startup-popup-gallery-move-group">
-                <button type="button" class="startup-popup-gallery-move" data-gallery-action="move" data-gallery-direction="left" data-gallery-path="${item.path || ''}" aria-label="Mover a la izquierda">←</button>
-                <button type="button" class="startup-popup-gallery-move" data-gallery-action="move" data-gallery-direction="right" data-gallery-path="${item.path || ''}" aria-label="Mover a la derecha">→</button>
+                <button type="button" class="startup-popup-gallery-move" data-gallery-action="move" data-gallery-direction="left" data-gallery-path="${escapeHtml(path)}" aria-label="Mover a la izquierda">←</button>
+                <button type="button" class="startup-popup-gallery-move" data-gallery-action="move" data-gallery-direction="right" data-gallery-path="${escapeHtml(path)}" aria-label="Mover a la derecha">→</button>
               </div>
             </div>
+            <div class="startup-popup-gallery-link-fields">
+              <input type="text" class="form-control form-control-sm startup-popup-gallery-link-input" data-gallery-link-url placeholder="https://... o /ruta-interna" value="${escapeHtml(linkUrl)}">
+              <select class="form-select form-select-sm startup-popup-gallery-target-select" data-gallery-link-target>
+                <option value="_self"${linkTarget === '_self' ? ' selected' : ''}>Abrir en la misma pestaña</option>
+                <option value="_blank"${linkTarget === '_blank' ? ' selected' : ''}>Abrir en una pestaña nueva</option>
+              </select>
+            </div>
+            <button type="button" class="startup-popup-gallery-save" data-gallery-action="update-meta" data-gallery-path="${escapeHtml(path)}">Guardar enlace</button>
+            <div class="startup-popup-gallery-link-hint">Opcional. Acepta https://..., http://... o una ruta interna que empiece por /.</div>
           </div>
         `;
         grid.appendChild(card);
@@ -3350,16 +3414,31 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
       formData.append('startup_popup_gallery_action', action);
       formData.append('startup_popup_gallery_image', path);
       formData.append('ajax', '1');
+      if (action === 'update-meta') {
+        const card = button.closest('.startup-popup-gallery-card');
+        const linkInput = card ? card.querySelector('[data-gallery-link-url]') : null;
+        const targetSelect = card ? card.querySelector('[data-gallery-link-target]') : null;
+        formData.append('startup_popup_gallery_link_url', linkInput ? linkInput.value : '');
+        formData.append('startup_popup_gallery_link_target', targetSelect ? targetSelect.value : '_self');
+      }
       if (action === 'move') {
         formData.append('startup_popup_gallery_direction', button.dataset.galleryDirection || '');
       }
 
       setBusy(true);
-      setStatus(action === 'delete' ? 'Eliminando imagen...' : 'Reordenando galería...');
+      setStatus(
+        action === 'delete'
+          ? 'Eliminando imagen...'
+          : (action === 'update-meta' ? 'Guardando enlace de la imagen...' : 'Reordenando galería...')
+      );
       try {
         const payload = await sendGalleryRequest(formData);
         renderItems(payload.items || []);
-        setStatus(action === 'delete' ? 'Imagen eliminada de la galería.' : 'Orden de la galería actualizado.');
+        setStatus(
+          action === 'delete'
+            ? 'Imagen eliminada de la galería.'
+            : (action === 'update-meta' ? 'Enlace de la imagen actualizado.' : 'Orden de la galería actualizado.')
+        );
       } catch (error) {
         setStatus(error.message, true);
       } finally {
