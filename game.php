@@ -1436,17 +1436,69 @@ include __DIR__ . "/includes/header.php";
   @media (max-width: 767.98px) {
     .game-hero-card {
       min-height: 0;
-      aspect-ratio: 16 / 10;
+      aspect-ratio: auto;
+      background: transparent;
     }
 
     .game-hero-media {
-      background: rgba(2, 6, 23, 0.94);
+      position: relative;
+      inset: auto;
+      min-height: 180px;
+      background: transparent;
     }
 
     .game-hero-image {
+      display: block;
       object-fit: contain;
+      object-position: center center;
+      height: auto;
       transform: none;
-      background: rgba(2, 6, 23, 0.96);
+      background: transparent;
+    }
+
+    .game-hero-content {
+      position: absolute;
+      inset: 0;
+      min-height: 0;
+      padding: 0;
+      justify-content: flex-end;
+    }
+
+    .game-hero-title-box {
+      margin-top: 0;
+      padding: 0.45rem 0.72rem 0.58rem;
+      border-top: 0;
+      background: linear-gradient(180deg, rgba(7, 14, 26, 0) 0%, rgba(7, 14, 26, 0.64) 40%, rgba(7, 14, 26, 0.92) 100%);
+      box-shadow: none;
+    }
+
+    .game-hero-title {
+      font-size: clamp(0.9rem, 3.8vw, 1.2rem);
+      line-height: 1.06;
+      letter-spacing: 0.02em;
+      text-wrap: balance;
+    }
+
+    .game-hero-features {
+      top: 0.55rem;
+      left: 0.55rem;
+      gap: 0.36rem;
+      width: min(calc(100% - 5.1rem), 16rem);
+      z-index: 3;
+    }
+
+    .game-feature-badge {
+      padding: 0.24rem 0.54rem;
+      font-size: 0.64rem;
+      line-height: 1.02;
+    }
+
+    .game-hero-popular {
+      top: 0.55rem;
+      right: 0.55rem;
+      padding: 0.28rem 0.52rem;
+      font-size: 0.62rem;
+      letter-spacing: 0.04em;
     }
   }
 
@@ -1488,37 +1540,32 @@ include __DIR__ . "/includes/header.php";
 
   @media (max-width: 575.98px) {
     .game-hero-card {
-      min-height: 190px;
+      min-height: 0;
       border-radius: 1.35rem;
     }
 
-    .game-hero-content {
-      padding: 3rem 0 0;
-      gap: 0;
-    }
-
     .game-hero-title-box {
-      padding: 0.85rem 1rem 0.95rem;
+      padding: 0.38rem 0.56rem 0.5rem;
     }
 
     .game-hero-title {
-      font-size: clamp(1.05rem, 4.8vw, 1.55rem);
-      letter-spacing: 0.05em;
+      font-size: clamp(0.78rem, 3.7vw, 0.98rem);
+      letter-spacing: 0.02em;
       -webkit-text-stroke: 0;
     }
 
     .game-hero-features {
-      top: 0.8rem;
-      left: 0.8rem;
-      gap: 0.45rem;
-      width: min(calc(100% - 6.3rem), 17rem);
+      top: 0.5rem;
+      left: 0.5rem;
+      gap: 0.3rem;
+      width: min(calc(100% - 4.6rem), 14rem);
     }
 
     .game-hero-popular {
-      top: 0.8rem;
-      right: 0.8rem;
-      padding: 0.38rem 0.64rem;
-      font-size: 0.74rem;
+      top: 0.5rem;
+      right: 0.5rem;
+      padding: 0.24rem 0.46rem;
+      font-size: 0.58rem;
     }
   }
 
@@ -3656,7 +3703,42 @@ include __DIR__ . "/includes/header.php";
     }
 
     .payment-method-catalog-grid {
-      grid-template-columns: 1fr;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.65rem;
+    }
+
+    .payment-method-public-card {
+      min-height: 82px;
+      border-radius: 0.82rem;
+    }
+
+    .payment-method-public-corner-badge {
+      top: -0.62rem;
+      right: -0.22rem;
+      width: clamp(42px, 15vw, 56px);
+    }
+
+    .payment-method-public-text {
+      padding: 0.72rem 0.75rem;
+    }
+
+    .payment-method-public-name {
+      font-size: 0.84rem;
+    }
+
+    .payment-method-public-meta {
+      font-size: 0.68rem;
+      line-height: 1.22;
+    }
+
+    .payment-method-public-points-caption {
+      padding: 0.5rem 0.58rem 0.56rem;
+      font-size: 0.64rem;
+      line-height: 1.22;
+    }
+
+    .payment-method-public-points-caption strong {
+      font-size: 0.7rem;
     }
 
     .payment-order-summary-panel {
