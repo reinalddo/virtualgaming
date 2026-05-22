@@ -5670,14 +5670,12 @@ include __DIR__ . "/includes/header.php";
   }
 
   function canUsePayPalCheckout(pack) {
-    const currencyCode = String((pack && pack.moneda) || '').trim().toUpperCase();
+    const preferredPayPalCurrency = resolvePreferredPayPalCurrencyEntry();
     return Boolean(
       paypalPayCheckoutEnabled
       && pack
       && getPackTotalPrice(pack) > 0
-      && currencyCode !== ''
-      && Array.isArray(paypalSupportedCurrencies)
-      && paypalSupportedCurrencies.includes(currencyCode)
+      && preferredPayPalCurrency
     );
   }
 
