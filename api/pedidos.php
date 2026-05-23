@@ -2584,7 +2584,7 @@ function resolve_order_payment_discount_snapshot(array $order, string $paymentMo
             $percentage = payment_methods_normalize_discount_percentage($method['descuento_porcentaje'] ?? 0);
         }
     } elseif ($normalizedMode === 'binance_pagonorte') {
-        $methodName = 'Binance PagoNorte';
+        $methodName = 'Binance';
         if (payment_method_discount_feature_enabled()) {
             $percentage = payment_methods_normalize_discount_percentage(store_config_get('binance_pagonorte_descuento', '0'));
         }
@@ -5728,7 +5728,7 @@ function fetch_bank_movements(array $config): array {
 function fetch_binance_pagonorte_movements(array $config): array {
     $token = trim((string) ($config['binance_pagonorte_token'] ?? ''));
     if ($token === '') {
-        throw new RuntimeException('La conexión automática para Binance PagoNorte no está configurada completamente.');
+        throw new RuntimeException('La conexión automática para Binance no está configurada completamente.');
     }
 
     $url = store_config_build_binance_pagonorte_movements_url($token);
@@ -5740,7 +5740,7 @@ function fetch_binance_pagonorte_movements(array $config): array {
 
     $movements = $data['movimientos'] ?? null;
     if (!is_array($movements)) {
-        throw new RuntimeException('La API Binance de PagoNorte no devolvió la lista de movimientos esperada.');
+        throw new RuntimeException('La API de Binance no devolvió la lista de movimientos esperada.');
     }
 
     $normalized = [];
@@ -8560,10 +8560,10 @@ if ($action === 'submit_payment') {
 
     if ($binancePagonorteMode) {
         if (!binance_pagonorte_payment_enabled()) {
-            json_error('Binance PagoNorte no está activo en esta tienda.', 409);
+            json_error('Binance no está activo en esta tienda.', 409);
         }
         if (!binance_pagonorte_is_configured()) {
-            json_error('Falta configurar el token de Binance PagoNorte para usar este método.', 409);
+            json_error('Falta configurar el token de Binance para usar este método.', 409);
         }
     }
 
@@ -8584,7 +8584,7 @@ if ($action === 'submit_payment') {
         $usdtCurrency = currency_find_by_code('USDT');
         $method = [
             'id' => 0,
-            'nombre' => 'Binance PagoNorte',
+            'nombre' => 'Binance',
             'moneda_nombre' => (string) ($usdtCurrency['nombre'] ?? 'Tether USD'),
             'moneda_clave' => 'USDT',
             'referencia_digitos' => 0,
@@ -8604,7 +8604,7 @@ if ($action === 'submit_payment') {
     $currencyMatchesOrder = strcasecmp($methodCurrencyCode, $orderCurrencyCode) === 0;
 
     if ($binancePagonorteMode && $orderCurrencyCode !== 'USDT') {
-        json_error('El pedido debe estar en USDT para usar Binance PagoNorte.', 409);
+        json_error('El pedido debe estar en USDT para usar Binance.', 409);
     }
 
     if ($orderSupportsBankApi && !$currencyMatchesOrder) {

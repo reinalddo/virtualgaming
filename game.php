@@ -4207,7 +4207,7 @@ include __DIR__ . "/includes/header.php";
   const binancePayButtonLabel = 'Binance Pay';
   const binancePayImageUrl = <?= json_encode($binancePayImageUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const binancePayCornerImageUrl = <?= json_encode($binancePayCornerImageUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-  const binancePagonorteButtonLabel = 'Binance PagoNorte';
+  const binancePagonorteButtonLabel = 'Binance';
   const binancePagonorteImageUrl = <?= json_encode($binancePagonorteImageUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const binancePagonorteCornerImageUrl = <?= json_encode($binancePagonorteCornerImageUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const binancePagonorteQrImageUrl = <?= json_encode($binancePagonorteQrImageUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
@@ -5914,7 +5914,7 @@ include __DIR__ . "/includes/header.php";
     const methodName = mode === 'binance'
       ? String(binancePayButtonLabel || 'Binance Pay')
       : (mode === 'binance_pagonorte'
-        ? String(binancePagonorteButtonLabel || 'Binance PagoNorte')
+        ? String(binancePagonorteButtonLabel || 'Binance')
       : (mode === 'paypal'
         ? String(paypalPayButtonLabel || 'PayPal')
         : String(options.method && options.method.nombre ? options.method.nombre : 'Metodo de pago')));
@@ -6277,8 +6277,8 @@ include __DIR__ . "/includes/header.php";
 
     if (selection.mode === 'binance_pagonorte') {
       paymentMethodCatalogCopy.textContent = hasPack
-        ? 'Seleccionado: Binance PagoNorte. Confirmarás con referencia y teléfono después de ver los datos y el QR en USDT.'
-        : 'Seleccionado: Binance PagoNorte. Mostraremos los precios en USDT mientras eliges el paquete.';
+        ? 'Seleccionado: Binance. Confirmarás con referencia y teléfono después de ver los datos y el QR en USDT.'
+        : 'Seleccionado: Binance. Mostraremos los precios en USDT mientras eliges el paquete.';
       return;
     }
 
@@ -6500,16 +6500,16 @@ include __DIR__ . "/includes/header.php";
 
   function resolveWinPointsRewardsCopy(canUseBinancePagonorte, canUseBinance, canUsePayPal) {
     if (canUseBinancePagonorte && canUseBinance && canUsePayPal) {
-      return 'Elige si deseas completar esta orden con transferencia, Binance PagoNorte, Binance Pay, PayPal o con tus premios acumulados.';
+      return 'Elige si deseas completar esta orden con transferencia, Binance, Binance Pay, PayPal o con tus premios acumulados.';
     }
     if (canUseBinancePagonorte && canUseBinance) {
-      return 'Elige si deseas completar esta orden con transferencia, Binance PagoNorte, Binance Pay o con tus premios acumulados.';
+      return 'Elige si deseas completar esta orden con transferencia, Binance o Binance Pay o con tus premios acumulados.';
     }
     if (canUseBinancePagonorte && canUsePayPal) {
-      return 'Elige si deseas completar esta orden con transferencia, Binance PagoNorte, PayPal o con tus premios acumulados.';
+      return 'Elige si deseas completar esta orden con transferencia, Binance o PayPal o con tus premios acumulados.';
     }
     if (canUseBinancePagonorte) {
-      return 'Elige si deseas completar esta orden con transferencia, Binance PagoNorte o con tus premios acumulados.';
+      return 'Elige si deseas completar esta orden con transferencia, Binance o con tus premios acumulados.';
     }
     if (canUseBinance && canUsePayPal) {
       return 'Elige si deseas completar esta orden con transferencia, Binance Pay, PayPal o con tus premios acumulados.';
@@ -6526,16 +6526,16 @@ include __DIR__ . "/includes/header.php";
 
   function resolveWinPointsManualCopy(canUseBinancePagonorte, canUseBinance, canUsePayPal) {
     if (canUseBinancePagonorte && canUseBinance && canUsePayPal) {
-      return 'Elige si deseas completar esta orden manualmente, con Binance PagoNorte, Binance Pay o con PayPal.';
+      return 'Elige si deseas completar esta orden manualmente, con Binance, Binance Pay o con PayPal.';
     }
     if (canUseBinancePagonorte && canUseBinance) {
-      return 'Elige si deseas completar esta orden manualmente, con Binance PagoNorte o con Binance Pay.';
+      return 'Elige si deseas completar esta orden manualmente, con Binance o con Binance Pay.';
     }
     if (canUseBinancePagonorte && canUsePayPal) {
-      return 'Elige si deseas completar esta orden manualmente, con Binance PagoNorte o con PayPal.';
+      return 'Elige si deseas completar esta orden manualmente, con Binance o con PayPal.';
     }
     if (canUseBinancePagonorte) {
-      return 'Elige si deseas completar esta orden manualmente o con Binance PagoNorte.';
+      return 'Elige si deseas completar esta orden manualmente o con Binance.';
     }
     if (canUseBinance && canUsePayPal) {
       return 'Elige si deseas completar esta orden manualmente, con Binance Pay o con PayPal.';
@@ -6690,7 +6690,7 @@ include __DIR__ . "/includes/header.php";
       return 'Estamos creando el checkout externo de Binance Pay. No cierres esta ventana.';
     }
     if (mode === 'binance_pagonorte') {
-      return 'Estamos validando tu referencia y comparando los movimientos de Binance PagoNorte. No cierres esta ventana.';
+      return 'Estamos validando tu referencia y comparando los movimientos de Binance. No cierres esta ventana.';
     }
     if (mode === 'paypal') {
       return 'Estamos creando el checkout oficial de PayPal. No cierres esta ventana.';
@@ -8757,7 +8757,7 @@ include __DIR__ . "/includes/header.php";
 
     if (mode === 'binance_pagonorte') {
       const pricing = resolvePaymentPricing('binance_pagonorte', null);
-      paymentMethodTitle.textContent = String(binancePagonorteButtonLabel || 'Binance PagoNorte');
+      paymentMethodTitle.textContent = String(binancePagonorteButtonLabel || 'Binance');
       paymentMethodCurrency.textContent = pricing.totalText ? `Total esperado en USDT: ${pricing.totalText}` : 'Pago en USDT con verificación automática';
       paymentMethodDetails.classList.add('payment-method-details-rich');
       paymentMethodDetails.innerHTML = `
@@ -8765,9 +8765,9 @@ include __DIR__ . "/includes/header.php";
           <p>${escapePaymentHtml(String(binancePagonorteTransferData || 'Realiza tu transferencia en Binance, luego confirma la referencia para validar el movimiento automáticamente.')).replace(/\n/g, '<br>')}</p>
           <p class="mt-2 mb-0">Después de pagar, escribe tu referencia y tu teléfono de contacto para comparar el movimiento y aprobar la recarga.</p>
         </div>`;
-      setPaymentMethodQrState(String(binancePagonorteQrImageUrl || '').trim(), 'QR para Binance PagoNorte');
+      setPaymentMethodQrState(String(binancePagonorteQrImageUrl || '').trim(), 'QR para Binance');
       paymentReferenceInput.placeholder = 'Inserte su número de referencia para comprobar el pago';
-      paymentReferenceHelp.textContent = 'Inserte su número de referencia para comprobar el pago en Binance PagoNorte.';
+      paymentReferenceHelp.textContent = 'Inserte su número de referencia para comprobar el pago en Binance.';
       paymentReferenceInput.maxLength = 120;
       paymentReferenceInput.dataset.requiredDigits = '0';
       return;
@@ -9460,7 +9460,7 @@ include __DIR__ . "/includes/header.php";
                     return;
                   }
                   if (paymentMode === 'binance_pagonorte' && !activePaymentOrder.canUseBinancePagonorte) {
-                    setPaymentAlert('Binance PagoNorte no está disponible para esta orden.', 'danger');
+                    setPaymentAlert('Binance no está disponible para esta orden.', 'danger');
                     return;
                   }
                   if (paymentMode === 'paypal' && !activePaymentOrder.canUsePayPal) {

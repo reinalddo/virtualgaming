@@ -535,7 +535,7 @@ function admin_extra_features_ensure_schema(): void {
         store_config_get('api_binance_pagonorte', '0') === '1' ? '1' : '0',
         $configDescriptions['api_binance_pagonorte'] ?? 'Api para verificar movimientos en Binance'
     );
-    $binancePagonorteFeatureName = 'Binance PagoNorte';
+    $binancePagonorteFeatureName = 'Binance';
     $binancePagonorteFeatureDescription = 'Api para verificar movimientos en Binance';
     $binancePagonorteStmt = $mysqli->prepare(
         "UPDATE configuracion_general
@@ -1672,7 +1672,7 @@ function admin_display_movement_reference(string $reference): string {
 function admin_fetch_binance_pagonorte_movements_from_api(array $config): array {
     $token = trim((string) ($config['binance_pagonorte_token'] ?? ''));
     if ($token === '') {
-        throw new RuntimeException('El token de Binance PagoNorte no está configurado.');
+        throw new RuntimeException('El token de Binance no está configurado.');
     }
 
     $url = store_config_build_binance_pagonorte_movements_url($token);
@@ -1682,7 +1682,7 @@ function admin_fetch_binance_pagonorte_movements_from_api(array $config): array 
 
     $movements = $data['movimientos'] ?? null;
     if (!is_array($movements)) {
-        throw new RuntimeException('La API Binance de PagoNorte no devolvió la lista de movimientos esperada.');
+        throw new RuntimeException('La API de Binance no devolvió la lista de movimientos esperada.');
     }
 
     $normalized = [];
@@ -1714,7 +1714,7 @@ function admin_fetch_binance_pagonorte_movements_from_api(array $config): array 
 function admin_fetch_binance_pagonorte_balance_from_api(array $config): array {
     $token = trim((string) ($config['binance_pagonorte_token'] ?? ''));
     if ($token === '') {
-        throw new RuntimeException('El token de Binance PagoNorte no está configurado.');
+        throw new RuntimeException('El token de Binance no está configurado.');
     }
 
     $url = store_config_build_binance_pagonorte_balance_url($token);
@@ -2772,7 +2772,7 @@ switch ($seccion) {
                 if ($hasBinancePagonorteImageUpload) {
                     $upload = store_config_store_named_logo_upload($_FILES['binance_pagonorte_image'], 'binance-pagonorte-method');
                     if (!($upload['success'] ?? false)) {
-                        admin_set_flash('error', (string) ($upload['message'] ?? 'No se pudo cargar la imagen de Binance PagoNorte.'));
+                        admin_set_flash('error', (string) ($upload['message'] ?? 'No se pudo cargar la imagen de Binance.'));
                         define('ADMIN_CONFIG_POST_HANDLED', true);
                         admin_redirect('configuracion', ['tab' => 'verificacion-binance']);
                     }
@@ -2789,7 +2789,7 @@ switch ($seccion) {
                         if ($nextBinancePagonorteImage !== '' && $nextBinancePagonorteImage !== $currentBinancePagonorteImage) {
                             store_config_delete_logo_file($nextBinancePagonorteImage);
                         }
-                        admin_set_flash('error', (string) ($cornerUpload['message'] ?? 'No se pudo cargar la imagen promocional de Binance PagoNorte.'));
+                        admin_set_flash('error', (string) ($cornerUpload['message'] ?? 'No se pudo cargar la imagen promocional de Binance.'));
                         define('ADMIN_CONFIG_POST_HANDLED', true);
                         admin_redirect('configuracion', ['tab' => 'verificacion-binance']);
                     }
@@ -2809,7 +2809,7 @@ switch ($seccion) {
                         if ($nextBinancePagonorteCornerImage !== '' && $nextBinancePagonorteCornerImage !== $currentBinancePagonorteCornerImage) {
                             store_config_delete_logo_file($nextBinancePagonorteCornerImage);
                         }
-                        admin_set_flash('error', (string) ($qrUpload['message'] ?? 'No se pudo cargar el QR de Binance PagoNorte.'));
+                        admin_set_flash('error', (string) ($qrUpload['message'] ?? 'No se pudo cargar el QR de Binance.'));
                         define('ADMIN_CONFIG_POST_HANDLED', true);
                         admin_redirect('configuracion', ['tab' => 'verificacion-binance']);
                     }
@@ -2855,7 +2855,7 @@ switch ($seccion) {
                             'binance_pagonorte_token' => $binancePagonorteToken,
                         ]);
                     } catch (Throwable $e) {
-                        $balanceWarning = ' No se pudo consultar el saldo de Binance PagoNorte en este momento.';
+                        $balanceWarning = ' No se pudo consultar el saldo de Binance en este momento.';
                     }
                 }
 

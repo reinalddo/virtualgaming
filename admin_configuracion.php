@@ -1473,7 +1473,7 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
                   <div class="col-12">
                     <label class="form-label">Enlace base API banco</label>
                     <input type="url" name="ff_bank_api_base_url" value="<?= htmlspecialchars($cfg['ff_bank_api_base_url'] ?? 'https://pagonorte.net', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="https://pagonorte.net">
-                    <div class="form-text">Por defecto usa Pagonorte, pero aquí puedes colocar la IP o dominio base del servidor bancario.</div>
+                    <div class="form-text">Aquí puedes colocar la IP o el dominio base del servidor bancario.</div>
                   </div>
                   <div class="col-md-4">
                     <label class="form-label">Posicion</label>
@@ -1679,7 +1679,7 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
             ?>
             <form method="post" enctype="multipart/form-data">
               <input type="hidden" name="config_section" value="verificacion-binance">
-              <div class="config-section-note mb-4">Configura aquí el token, la presentación pública y los datos de cobro de Binance PagoNorte. Este tab solo se muestra cuando la función <strong>api_binance_pagonorte</strong> está activa para el tenant.</div>
+              <div class="config-section-note mb-4">Configura aquí el token, la presentación pública y los datos de cobro de Binance. Este tab solo se muestra cuando la función <strong>api_binance_pagonorte</strong> está activa para el tenant.</div>
 
               <?php if ($binancePagonorteAvailableDays !== '' || $binancePagonorteCutoffDate !== ''): ?>
                 <div class="alert alert-info rounded-4 mb-4" role="status">
@@ -1703,13 +1703,13 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
                     <input type="hidden" name="binance_pagonorte_activo_present" value="1">
                     <div class="form-check form-switch mt-1">
                       <input class="form-check-input" type="checkbox" role="switch" id="binancePagonorteEnabled" name="binance_pagonorte_activo" value="1" <?= $binancePagonorteEnabled ? 'checked' : '' ?>>
-                      <label class="form-check-label fw-semibold" for="binancePagonorteEnabled">Activar método de pago Binance PagoNorte en la web pública</label>
+                      <label class="form-check-label fw-semibold" for="binancePagonorteEnabled">Activar método de pago Binance en la web pública</label>
                     </div>
                     <div class="form-text mt-2">Cuando esté activo, este método aparecerá en los juegos y permitirá cobrar en USDT con validación automática por referencia.</div>
                   </div>
                   <div class="col-md-8">
                     <label class="form-label">Token</label>
-                    <input type="text" id="binance-pagonorte-token" name="binance_pagonorte_token" value="<?= htmlspecialchars($binancePagonorteToken, ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="Pega aquí el token de PagoNorte para Binance">
+                    <input type="text" id="binance-pagonorte-token" name="binance_pagonorte_token" value="<?= htmlspecialchars($binancePagonorteToken, ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="Pega aquí el token de Binance">
                   </div>
                   <div class="col-md-4">
                     <label class="form-label">Descuento (%)</label>
@@ -1732,7 +1732,7 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
                   <div class="col-md-7">
                     <label class="form-label">Imagen del método de pago</label>
                     <input type="file" name="binance_pagonorte_image" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" class="form-control">
-                    <div class="form-text mt-2">Se mostrará en la card pública del método Binance PagoNorte. Tamaño recomendado: 1200x480 px.</div>
+                    <div class="form-text mt-2">Se mostrará en la card pública del método Binance. Tamaño recomendado: 1200x480 px.</div>
                     <div class="form-check mt-3">
                       <input class="form-check-input" type="checkbox" value="1" id="removeBinancePagonorteImage" name="remove_binance_pagonorte_image">
                       <label class="form-check-label" for="removeBinancePagonorteImage">Eliminar imagen actual</label>
@@ -1742,7 +1742,7 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
                     <label class="form-label">Vista previa</label>
                     <div class="config-section-note h-100 d-flex align-items-center justify-content-center p-3">
                       <?php if ($binancePagonorteImagePath !== ''): ?>
-                        <img src="<?= htmlspecialchars(app_path('/' . ltrim($binancePagonorteImagePath, '/')), ENT_QUOTES, 'UTF-8') ?>" alt="Vista previa Binance PagoNorte" class="img-fluid rounded-4 border border-info-subtle">
+                        <img src="<?= htmlspecialchars(app_path('/' . ltrim($binancePagonorteImagePath, '/')), ENT_QUOTES, 'UTF-8') ?>" alt="Vista previa Binance" class="img-fluid rounded-4 border border-info-subtle">
                       <?php else: ?>
                         <span class="text-secondary">Sin imagen cargada</span>
                       <?php endif; ?>
@@ -1761,7 +1761,7 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
                     <label class="form-label">Vista previa promo esquina</label>
                     <div class="config-section-note h-100 d-flex align-items-center justify-content-center p-3">
                       <?php if ($binancePagonorteCornerImagePath !== ''): ?>
-                        <img src="<?= htmlspecialchars(app_path('/' . ltrim($binancePagonorteCornerImagePath, '/')), ENT_QUOTES, 'UTF-8') ?>" alt="Vista previa promo Binance PagoNorte" class="img-fluid rounded-4 border border-info-subtle" style="max-width: 180px;">
+                        <img src="<?= htmlspecialchars(app_path('/' . ltrim($binancePagonorteCornerImagePath, '/')), ENT_QUOTES, 'UTF-8') ?>" alt="Vista previa promo Binance" class="img-fluid rounded-4 border border-info-subtle" style="max-width: 180px;">
                       <?php else: ?>
                         <span class="text-secondary">Sin imagen cargada</span>
                       <?php endif; ?>
@@ -1780,7 +1780,7 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
                     <label class="form-label">Vista previa QR</label>
                     <div class="config-section-note h-100 d-flex align-items-center justify-content-center p-3">
                       <?php if ($binancePagonorteQrImagePath !== ''): ?>
-                        <img src="<?= htmlspecialchars(app_path('/' . ltrim($binancePagonorteQrImagePath, '/')), ENT_QUOTES, 'UTF-8') ?>" alt="Vista previa QR Binance PagoNorte" class="img-fluid rounded-4 border border-info-subtle" style="max-width: 220px;">
+                        <img src="<?= htmlspecialchars(app_path('/' . ltrim($binancePagonorteQrImagePath, '/')), ENT_QUOTES, 'UTF-8') ?>" alt="Vista previa QR Binance" class="img-fluid rounded-4 border border-info-subtle" style="max-width: 220px;">
                       <?php else: ?>
                         <span class="text-secondary">Sin QR cargado</span>
                       <?php endif; ?>
