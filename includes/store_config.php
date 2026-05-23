@@ -620,6 +620,7 @@ function store_config_descriptions(): array {
         'vender_cuentas' => 'Activa o desactiva la venta de cuentas en lugar de recargas para los paquetes marcados con esa modalidad.',
         'barra_superior' => 'Activa o desactiva la barra superior fija con buscador y reubicación del acceso principal del sitio público.',
         'api_binance' => 'Activa o desactiva la configuracion e integracion de Binance Pay via CoinPal para este tenant.',
+        'api_binance_pagonorte' => 'Activa o desactiva la verificación de movimientos Binance vía PagoNorte para este tenant.',
         'api_binance_usuario' => 'Activa o desactiva el uso visible de Binance Pay para clientes y procesos automaticos de la tienda cuando el tenant ya tiene disponible api_binance.',
         'pago_paypal' => 'Activa o desactiva la configuración base de PayPal Checkout para este tenant.',
         'descuento_metodo_pago' => 'Activa o desactiva los descuentos porcentuales por método de pago dentro del checkout público.',
@@ -639,6 +640,9 @@ function store_config_descriptions(): array {
         'binance_pay_image' => 'Ruta de la imagen horizontal usada para representar Binance Pay como metodo de pago en la pagina de paquetes.',
         'binance_pay_corner_image' => 'Ruta de la imagen promocional flotante usada en la esquina de la card publica de Binance Pay.',
         'binance_pay_descuento' => 'Porcentaje de descuento aplicado cuando el cliente paga usando Binance Pay.',
+        'binance_pagonorte_token' => 'Token usado para consultar movimientos y saldo en la API Binance de PagoNorte.',
+        'binance_pagonorte_dias_disponibles' => 'Dias disponibles reportados por la API Binance de PagoNorte al consultar movimientos.',
+        'binance_pagonorte_descuento' => 'Porcentaje de descuento aplicado cuando se use la verificación Binance de PagoNorte.',
         'paypal_environment' => 'Entorno de PayPal usado por la tienda. Puede ser sandbox para pruebas o live para cobros reales.',
         'paypal_client_id' => 'Client ID de la app REST creada en PayPal Developer Dashboard.',
         'paypal_client_secret' => 'Client Secret de la app REST creada en PayPal Developer Dashboard.',
@@ -731,6 +735,7 @@ function store_config_defaults(): array {
         'vender_cuentas' => '0',
         'barra_superior' => '0',
         'api_binance' => '0',
+        'api_binance_pagonorte' => '0',
         'api_binance_usuario' => '1',
         'pago_paypal' => '0',
         'descuento_metodo_pago' => '0',
@@ -750,6 +755,9 @@ function store_config_defaults(): array {
         'binance_pay_image' => '',
         'binance_pay_corner_image' => '',
         'binance_pay_descuento' => '0',
+        'binance_pagonorte_token' => '',
+        'binance_pagonorte_dias_disponibles' => '',
+        'binance_pagonorte_descuento' => '0',
         'paypal_environment' => 'sandbox',
         'paypal_client_id' => '',
         'paypal_client_secret' => '',
@@ -1439,6 +1447,18 @@ function store_config_build_bank_movements_url(string $baseUrl, array $queryPara
         : ($normalizedBaseUrl . '/recargas/movimientos.jsp');
 
     return $endpointUrl . '?' . http_build_query($queryParams);
+}
+
+function store_config_build_binance_pagonorte_movements_url(string $token): string {
+    return 'https://apicentral.pro/apis/movimientos_binance.jsp?' . http_build_query([
+        'token' => trim($token),
+    ]);
+}
+
+function store_config_build_binance_pagonorte_balance_url(string $token): string {
+    return 'https://apicentral.pro/apis/saldo_binance.jsp?' . http_build_query([
+        'token' => trim($token),
+    ]);
 }
 
 function store_config_extract_youtube_video_id(string $value): string {

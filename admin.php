@@ -41,7 +41,7 @@ function admin_user_can_access_section(string $role, string $section): bool {
     }
 
     if ($role === 'empleado') {
-        return in_array($section, ['dashboard', 'pedidos', 'movimientos'], true);
+        return in_array($section, ['dashboard', 'pedidos', 'movimientos', 'movimientos-binance'], true);
     }
 
     if ($role === 'influencer') {
@@ -528,6 +528,28 @@ function admin_extra_features_ensure_schema(): void {
         $stmt->bind_param('ss', $featureName, $featureDescription);
         $stmt->execute();
         $stmt->close();
+    }
+
+    store_config_upsert(
+        'api_binance_pagonorte',
+        store_config_get('api_binance_pagonorte', '0') === '1' ? '1' : '0',
+        $configDescriptions['api_binance_pagonorte'] ?? 'Api para verificar movimientos en Binance'
+    );
+    $binancePagonorteFeatureName = 'Binance PagoNorte';
+    $binancePagonorteFeatureDescription = 'Api para verificar movimientos en Binance';
+    $binancePagonorteStmt = $mysqli->prepare(
+        "UPDATE configuracion_general
+         SET mostrar_a_cliente = 1,
+             funcion_venta = COALESCE(NULLIF(funcion_venta, ''), ?),
+             descripcion_venta = COALESCE(NULLIF(descripcion_venta, ''), ?),
+             precio = COALESCE(precio, 70),
+             comision_venta = COALESCE(comision_venta, 0)
+         WHERE clave = 'api_binance_pagonorte'"
+    );
+    if ($binancePagonorteStmt) {
+        $binancePagonorteStmt->bind_param('ss', $binancePagonorteFeatureName, $binancePagonorteFeatureDescription);
+        $binancePagonorteStmt->execute();
+        $binancePagonorteStmt->close();
     }
 
     store_config_upsert('pago_paypal', store_config_get('pago_paypal', '0') === '1' ? '1' : '0', $configDescriptions['pago_paypal'] ?? 'Activa o desactiva la configuración base de PayPal Checkout para este tenant.');
@@ -1625,6 +1647,70 @@ function admin_fetch_bank_movements_from_api(array $config): array {
     return $normalized;
 }
 
+function admin_binance_pagonorte_reference_prefix(): string {
+    return 'BINANCE:';
+}
+
+function admin_store_binance_pagonorte_reference(string $reference): string {
+    $trimmed = trim($reference);
+    if ($trimmed === '') {
+        return '';
+    }
+
+    return admin_binance_pagonorte_reference_prefix() . $trimmed;
+}
+
+function admin_display_movement_reference(string $reference): string {
+    $prefix = admin_binance_pagonorte_reference_prefix();
+    if (strncmp($reference, $prefix, strlen($prefix)) === 0) {
+        return substr($reference, strlen($prefix));
+    }
+
+    return $reference;
+}
+
+function admin_fetch_binance_pagonorte_movements_from_api(array $config): array {
+    $token = trim((string) ($config['binance_pagonorte_token'] ?? ''));
+    if ($token === '') {
+        throw new RuntimeException('El token de Binance PagoNorte no está configurado.');
+    }
+
+    $url = store_config_build_binance_pagonorte_movements_url($token);
+    $data = admin_http_get_json($url, 20, false);
+    $availableDays = isset($data['dias_disponibles']) ? max(0, (int) $data['dias_disponibles']) : null;
+    store_config_upsert('binance_pagonorte_dias_disponibles', $availableDays !== null ? (string) $availableDays : '');
+
+    $movements = $data['movimientos'] ?? null;
+    if (!is_array($movements)) {
+        throw new RuntimeException('La API Binance de PagoNorte no devolvió la lista de movimientos esperada.');
+    }
+
+    $normalized = [];
+    foreach ($movements as $movement) {
+        if (!is_array($movement)) {
+            continue;
+        }
+
+        $reference = trim((string) ($movement['referencia'] ?? ''));
+        if ($reference === '') {
+            continue;
+        }
+
+        $normalized[] = [
+            'referencia' => substr(admin_store_binance_pagonorte_reference($reference), 0, 120),
+            'descripcion' => substr(trim((string) ($movement['descripcion'] ?? '')), 0, 255),
+            'fecha_raw' => substr(trim((string) ($movement['fecha'] ?? '')), 0, 120),
+            'fecha_movimiento' => admin_parse_bank_movement_datetime((string) ($movement['fecha'] ?? '')),
+            'tipo' => substr(trim((string) ($movement['tipo'] ?? '')), 0, 80),
+            'monto' => admin_normalize_bank_amount($movement['monto'] ?? 0),
+            'moneda' => 'USDT',
+            'payload_json' => json_encode($movement, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ];
+    }
+
+    return $normalized;
+}
+
 function admin_sync_bank_movements(PDO $pdo, array $movements): array {
     if (empty($movements)) {
         return [
@@ -2083,12 +2169,16 @@ switch ($seccion) {
             || $startupPopupVideoEnabled
             || $startupPopupGalleryEnabled;
         $binanceApiTabEnabled = store_config_get('api_binance', '0') === '1';
+        $binancePagonorteTabEnabled = store_config_get('api_binance_pagonorte', '0') === '1';
         $paypalTabEnabled = store_config_get('pago_paypal', '0') === '1';
         $discordApiTabEnabled = store_config_get('api_discord', '0') === '1';
         $activeTab = $_GET['tab'] ?? 'correo';
         $allowedTabs = ['correo', 'cabecera', 'notificaciones-recargas', 'sociales', 'api-banco', 'api-free-fire', 'personalizar-colores', 'galeria', 'metodos-pago'];
         if ($binanceApiTabEnabled) {
             $allowedTabs[] = 'api-binance';
+        }
+        if ($binancePagonorteTabEnabled) {
+            $allowedTabs[] = 'verificacion-binance';
         }
         if ($paypalTabEnabled) {
             $allowedTabs[] = 'paypal';
@@ -2631,6 +2721,22 @@ switch ($seccion) {
                 admin_set_flash('success', 'Configuración de Binance Pay actualizada.');
             }
 
+            if ($activeTab === 'verificacion-binance') {
+                $binancePagonorteToken = trim((string) ($_POST['binance_pagonorte_token'] ?? ''));
+                $binancePagonorteDiscountRaw = trim((string) ($_POST['binance_pagonorte_descuento'] ?? '0'));
+
+                if ($binancePagonorteDiscountRaw !== '' && !is_numeric(str_replace(',', '.', $binancePagonorteDiscountRaw))) {
+                    admin_set_flash('error', 'El descuento de Verificación Binance debe ser numérico.');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'verificacion-binance']);
+                }
+
+                $binancePagonorteDiscount = max(0, min(100, payment_methods_normalize_discount_percentage($binancePagonorteDiscountRaw)));
+                store_config_upsert('binance_pagonorte_token', $binancePagonorteToken);
+                store_config_upsert('binance_pagonorte_descuento', rtrim(rtrim(number_format($binancePagonorteDiscount, 2, '.', ''), '0'), '.'));
+                admin_set_flash('success', 'Configuración de Verificación Binance actualizada.');
+            }
+
             if ($activeTab === 'paypal') {
                 $environment = strtolower(trim((string) ($_POST['paypal_environment'] ?? 'sandbox')));
                 $environment = in_array($environment, ['sandbox', 'live'], true) ? $environment : 'sandbox';
@@ -3092,20 +3198,33 @@ switch ($seccion) {
         define('ADMIN_CONFIG_POST_HANDLED', true);
 
     case 'movimientos':
+    case 'movimientos-binance':
         require_once __DIR__ . '/includes/db.php';
         require_once __DIR__ . '/includes/store_config.php';
-        if ($seccion === 'movimientos') {
+        $isBinanceMovementsSection = $seccion === 'movimientos-binance';
+        if ($isBinanceMovementsSection && store_config_get('api_binance_pagonorte', '0') !== '1') {
+            admin_set_flash('error', 'La verificación Binance no está activa en esta tienda.');
+            admin_redirect(admin_default_section_for_role($adminUserRole));
+        }
+
+        if ($seccion === 'movimientos' || $seccion === 'movimientos-binance') {
             if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['actualizar_movimientos_api'])) {
                 $redirectQuery = admin_movement_query_from_input($_POST);
 
                 try {
-                    $bankConfig = [
-                        'ff_bank_api_base_url' => store_config_get('ff_bank_api_base_url', 'https://pagonorte.net'),
-                        'ff_bank_posicion' => store_config_get('ff_bank_posicion', ''),
-                        'ff_bank_token' => store_config_get('ff_bank_token', ''),
-                        'ff_bank_clave' => store_config_get('ff_bank_clave', ''),
-                    ];
-                    $movements = admin_fetch_bank_movements_from_api($bankConfig);
+                    if ($isBinanceMovementsSection) {
+                        $movements = admin_fetch_binance_pagonorte_movements_from_api([
+                            'binance_pagonorte_token' => store_config_get('binance_pagonorte_token', ''),
+                        ]);
+                    } else {
+                        $bankConfig = [
+                            'ff_bank_api_base_url' => store_config_get('ff_bank_api_base_url', 'https://pagonorte.net'),
+                            'ff_bank_posicion' => store_config_get('ff_bank_posicion', ''),
+                            'ff_bank_token' => store_config_get('ff_bank_token', ''),
+                            'ff_bank_clave' => store_config_get('ff_bank_clave', ''),
+                        ];
+                        $movements = admin_fetch_bank_movements_from_api($bankConfig);
+                    }
                     $syncSummary = admin_sync_bank_movements($pdo, $movements);
                     $hasNewMovements = (int) ($syncSummary['inserted'] ?? 0) > 0;
                     $hasUpdatedMovements = (int) ($syncSummary['updated'] ?? 0) > 0;
@@ -3120,7 +3239,7 @@ switch ($seccion) {
 
                     if (admin_is_ajax_request()) {
                         header('Content-Type: application/json; charset=utf-8');
-                        $availableDays = trim((string) store_config_get('ff_bank_dias_disponibles', ''));
+                        $availableDays = trim((string) store_config_get($isBinanceMovementsSection ? 'binance_pagonorte_dias_disponibles' : 'ff_bank_dias_disponibles', ''));
                         echo json_encode([
                             'ok' => true,
                             'has_sync_changes' => $hasSyncChanges,
@@ -3134,9 +3253,9 @@ switch ($seccion) {
                         exit();
                     }
 
-                    $availableDays = trim((string) store_config_get('ff_bank_dias_disponibles', ''));
+                    $availableDays = trim((string) store_config_get($isBinanceMovementsSection ? 'binance_pagonorte_dias_disponibles' : 'ff_bank_dias_disponibles', ''));
                     $daysSuffix = $availableDays !== ''
-                        ? ' La API bancaria reporta ' . $availableDays . ' dias disponibles.'
+                        ? ' La API ' . ($isBinanceMovementsSection ? 'Binance' : 'bancaria') . ' reporta ' . $availableDays . ' dias disponibles.'
                         : '';
 
                     if ($hasSyncChanges) {
@@ -3158,7 +3277,7 @@ switch ($seccion) {
                     admin_set_flash('error', $e->getMessage());
                 }
 
-                admin_redirect('movimientos', $redirectQuery);
+                admin_redirect($isBinanceMovementsSection ? 'movimientos-binance' : 'movimientos', $redirectQuery);
             }
             if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verificar_movimiento'])) {
                 $movementId = (int) ($_POST['movimiento_id'] ?? 0);
@@ -3222,7 +3341,7 @@ switch ($seccion) {
                     admin_set_flash('error', 'Movimiento inválido para verificar.');
                 }
 
-                admin_redirect('movimientos', $redirectQuery);
+                admin_redirect($isBinanceMovementsSection ? 'movimientos-binance' : 'movimientos', $redirectQuery);
             }
             break;
         }
@@ -3261,7 +3380,10 @@ require_once __DIR__ . '/includes/header.php';
             <p class="mb-4">Selecciona una sección para comenzar.</p>
             <div class="d-flex flex-wrap justify-content-center gap-3">
                 <a href="/admin/pedidos" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>📋</span>Pedidos</a>
-                <a href="/admin/movimientos" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>💳</span>Movimientos</a>
+                <a href="/admin/movimientos" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>💳</span>Movimientos Bancarios</a>
+                <?php if (store_config_get('api_binance_pagonorte', '0') === '1'): ?>
+                <a href="/admin/movimientos-binance" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>🟡</span>Movimientos Binance</a>
+                <?php endif; ?>
                 <?php if (admin_has_full_access($adminUserRole)): ?>
                 <a href="/admin/usuarios" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>👤</span>Usuarios</a>
                 <a href="/admin/juegos" class="btn btn-outline-info btn-lg d-flex align-items-center gap-2"><span>🎮</span>Juegos</a>
@@ -4383,7 +4505,13 @@ require_once __DIR__ . '/includes/header.php';
                 <?php
                 break;
             case 'movimientos':
+            case 'movimientos-binance':
                 require_once __DIR__ . '/includes/db.php';
+                $isBinanceMovementsSection = $seccion === 'movimientos-binance';
+                $movementSourceTitle = $isBinanceMovementsSection ? 'Movimientos Binance' : 'Movimientos Bancarios';
+                $movementSourceLabel = $isBinanceMovementsSection ? 'Binance' : 'bancaria';
+                $movementFixedCurrency = $isBinanceMovementsSection ? 'USDT' : 'VES';
+                $movementAvailableDaysKey = $isBinanceMovementsSection ? 'binance_pagonorte_dias_disponibles' : 'ff_bank_dias_disponibles';
                 $movementReference = trim((string) ($_GET['referencia'] ?? ''));
                 $movementDateFrom = admin_normalize_date_filter($_GET['fecha_desde'] ?? null);
                 $movementDateTo = admin_normalize_date_filter($_GET['fecha_hasta'] ?? null);
@@ -4398,10 +4526,11 @@ require_once __DIR__ . '/includes/header.php';
                     $movementCurrency = '';
                 }
 
-                $currencies = $pdo->query("SELECT DISTINCT moneda FROM movimientos WHERE moneda IS NOT NULL AND moneda <> '' ORDER BY moneda ASC")->fetchAll(PDO::FETCH_COLUMN);
+                $currencies = [$movementFixedCurrency];
 
                 $movementBaseSql = ' FROM movimientos m LEFT JOIN pedidos p ON p.id = m.pedido_id WHERE 1=1';
-                $movementParams = [];
+                $movementParams = [$movementFixedCurrency];
+                $movementBaseSql .= ' AND m.moneda = ?';
                 if ($movementReference !== '') {
                     $movementBaseSql .= ' AND m.referencia LIKE ?';
                     $movementParams[] = '%' . $movementReference . '%';
@@ -4496,10 +4625,10 @@ require_once __DIR__ . '/includes/header.php';
                 ];
                 $movementRangeStart = $movementTotal > 0 ? $movementOffset + 1 : 0;
                 $movementRangeEnd = $movementTotal > 0 ? min($movementOffset + count($movimientos), $movementTotal) : 0;
-                $adminMovementsPath = app_path('/admin/movimientos');
+                $adminMovementsPath = app_path($isBinanceMovementsSection ? '/admin/movimientos-binance' : '/admin/movimientos');
                 $adminOrdersPath = app_path('/admin/pedidos');
 
-                echo '<h2 class="display-6 fw-bold text-info mb-3">Movimientos Bancarios</h2>';
+                echo '<h2 class="display-6 fw-bold text-info mb-3">' . htmlspecialchars($movementSourceTitle, ENT_QUOTES, 'UTF-8') . '</h2>';
                 echo '<p class="text-secondary mb-4">Listado de movimientos registrados en la tabla movimientos.</p>';
 
                 echo '<form method="GET" action="' . htmlspecialchars($adminMovementsPath) . '" class="row g-3 mb-4 align-items-end" data-movement-filter-form="1" style="background:#181f2a; border-radius:16px; border:2px solid #00fff7; box-shadow:0 0 24px #00fff733; padding:1.5rem;">';
@@ -4580,10 +4709,10 @@ require_once __DIR__ . '/includes/header.php';
 
                 echo '<div data-movements-refresh-root="1">';
 
-                $bankAvailableDays = trim((string) store_config_get('ff_bank_dias_disponibles', ''));
+                $bankAvailableDays = trim((string) store_config_get($movementAvailableDaysKey, ''));
                 if ($bankAvailableDays !== '') {
                     echo '<div class="alert alert-info rounded-4 mb-4" role="status" data-bank-available-days="' . htmlspecialchars($bankAvailableDays, ENT_QUOTES, 'UTF-8') . '" style="border:1px solid rgba(34,211,238,0.32); background:rgba(8,145,178,0.14); color:#cffafe;">';
-                    echo 'La API bancaria reporta actualmente <strong>' . htmlspecialchars($bankAvailableDays, ENT_QUOTES, 'UTF-8') . ' días disponibles</strong> en la consulta de movimientos.';
+                    echo 'La API ' . htmlspecialchars($movementSourceLabel, ENT_QUOTES, 'UTF-8') . ' reporta actualmente <strong>' . htmlspecialchars($bankAvailableDays, ENT_QUOTES, 'UTF-8') . ' días disponibles</strong> en la consulta de movimientos.';
                     echo '</div>';
                 }
 
@@ -4591,7 +4720,7 @@ require_once __DIR__ . '/includes/header.php';
                 echo '<div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">';
                 echo '<div>';
                 echo '<div class="text-uppercase small fw-semibold" style="color:#7dd3fc; letter-spacing:0.08em;">Sincronización manual</div>';
-                echo '<div class="text-secondary small">Consulta la API bancaria e inserta solo los movimientos nuevos en la tabla.</div>';
+                echo '<div class="text-secondary small">Consulta la API ' . htmlspecialchars($movementSourceLabel, ENT_QUOTES, 'UTF-8') . ' e inserta solo los movimientos nuevos en la tabla.</div>';
                 echo '</div>';
                 echo '<form method="POST" action="' . htmlspecialchars($adminMovementsPath) . '" class="m-0" data-sync-movements-form="1">';
                 echo '<input type="hidden" name="actualizar_movimientos_api" value="1">';
@@ -4691,7 +4820,7 @@ require_once __DIR__ . '/includes/header.php';
                     $relatedTab = in_array($relatedOrderStatus, ['pendiente', 'pagado', 'enviado', 'cancelado'], true) ? $relatedOrderStatus : 'pendiente';
                     $relatedOrderHref = $adminOrdersPath . '?pedido=' . $relatedOrderId . '&order_search=' . urlencode((string) $relatedOrderId) . '&tab=' . urlencode($relatedTab) . '#pedido-' . $relatedOrderId;
                     echo '<tr data-movement-row="' . (int) ($movimiento['id'] ?? 0) . '" data-movement-checked="' . ($isChecked ? '1' : '0') . '" style="' . $rowStyle . ' color:#fff;">';
-                    echo '<td data-movement-cell="reference" style="background:' . $cellBackground . '; color:' . ($isChecked ? '#d9ffe8' : '#00fff7') . '; font-weight:600;">' . htmlspecialchars(admin_display_value($movimiento['referencia'] ?? null)) . '</td>';
+                    echo '<td data-movement-cell="reference" style="background:' . $cellBackground . '; color:' . ($isChecked ? '#d9ffe8' : '#00fff7') . '; font-weight:600;">' . htmlspecialchars(admin_display_value(admin_display_movement_reference((string) ($movimiento['referencia'] ?? '')))) . '</td>';
                     echo '<td data-movement-cell="description" style="background:' . $cellBackground . '; color:' . ($isChecked ? '#ecfff2' : '#fff') . ';">' . htmlspecialchars(admin_display_value($movimiento['descripcion'] ?? null)) . '</td>';
                     echo '<td data-movement-cell="date" style="background:' . $cellBackground . '; color:' . ($isChecked ? '#d7ffe6' : '#b2f6ff') . ';">' . htmlspecialchars(admin_display_value($movimiento['fecha_movimiento'] ?? null)) . '</td>';
                     echo '<td data-movement-cell="amount" style="background:' . $cellBackground . '; color:#9effbd; font-weight:bold;">' . htmlspecialchars(admin_format_money($movimiento['monto'] ?? 0)) . '</td>';
@@ -4738,7 +4867,7 @@ require_once __DIR__ . '/includes/header.php';
                     echo '<div style="display:grid; grid-template-columns:1fr; gap:0.75rem;">';
                     echo '<div style="padding-bottom:0.6rem; border-bottom:1px solid rgba(0,255,247,0.18);">';
                     echo '<div style="font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em; color:#7dd3fc;">Referencia</div>';
-                    echo '<div style="font-weight:700; color:#00fff7; word-break:break-word;">' . htmlspecialchars(admin_display_value($movimiento['referencia'] ?? null)) . '</div>';
+                    echo '<div style="font-weight:700; color:#00fff7; word-break:break-word;">' . htmlspecialchars(admin_display_value(admin_display_movement_reference((string) ($movimiento['referencia'] ?? '')))) . '</div>';
                     echo '</div>';
                     echo '<div style="padding-bottom:0.6rem; border-bottom:1px solid rgba(0,255,247,0.18);">';
                     echo '<div style="font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em; color:#7dd3fc;">Descripción</div>';
@@ -5329,7 +5458,7 @@ require_once __DIR__ . '/includes/header.php';
                 submitButton.style.opacity = '0.75';
             }
 
-            setSyncStatus('loading', 'Consultando API bancaria', 'Buscando nuevos movimientos y registrando cambios en la tabla movimientos...', true);
+            setSyncStatus('loading', 'Consultando API', 'Buscando nuevos movimientos y registrando cambios en la tabla movimientos...', true);
 
             try {
                 const response = await fetch(target.action, {
@@ -5364,7 +5493,7 @@ require_once __DIR__ . '/includes/header.php';
                     syncStatus.classList.add('d-none');
                 }
             } catch (error) {
-                setSyncStatus('error', 'No se pudo actualizar', error.message || 'Ocurrió un error al consultar la API bancaria.', false);
+                setSyncStatus('error', 'No se pudo actualizar', error.message || 'Ocurrió un error al consultar la API.', false);
             } finally {
                 if (submitButton) {
                     submitButton.disabled = false;

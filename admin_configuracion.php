@@ -23,11 +23,15 @@ $startupPopupTabEnabled = store_config_get('inicio_popup_tab_habilitado', '1') =
   || $startupPopupGalleryEnabled;
 $rechargeNotificationsTabEnabled = ($cfg['notificaciones_recargas'] ?? '0') === '1';
 $binanceApiTabEnabled = store_config_get('api_binance', '0') === '1';
+$binancePagonorteTabEnabled = store_config_get('api_binance_pagonorte', '0') === '1';
 $paypalTabEnabled = store_config_get('pago_paypal', '0') === '1';
 $discordApiTabEnabled = store_config_get('api_discord', '0') === '1';
 $allowedTabs = ['correo', 'cabecera', 'sociales', 'api-banco', 'api-free-fire', 'personalizar-colores', 'galeria', 'metodos-pago'];
 if ($binanceApiTabEnabled) {
   $allowedTabs[] = 'api-binance';
+}
+if ($binancePagonorteTabEnabled) {
+  $allowedTabs[] = 'verificacion-binance';
 }
 if ($paypalTabEnabled) {
   $allowedTabs[] = 'paypal';
@@ -1116,6 +1120,11 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
               <a href="/admin/configuracion?tab=api-binance" class="neon-tab-link <?= $activeTab === 'api-binance' ? 'active' : '' ?>">API Binance Pay</a>
             </div>
           <?php endif; ?>
+          <?php if ($binancePagonorteTabEnabled): ?>
+            <div class="neon-tabs-item">
+              <a href="/admin/configuracion?tab=verificacion-binance" class="neon-tab-link <?= $activeTab === 'verificacion-binance' ? 'active' : '' ?>">Verificación Binance</a>
+            </div>
+          <?php endif; ?>
             <?php if ($paypalTabEnabled): ?>
             <div class="neon-tabs-item">
               <a href="/admin/configuracion?tab=paypal" class="neon-tab-link <?= $activeTab === 'paypal' ? 'active' : '' ?>">Paypal</a>
@@ -1146,7 +1155,7 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
       <div class="card neon-card mb-4">
         <div class="card-header text-center py-4" style="background: linear-gradient(90deg, var(--theme-highlight) 0%, var(--theme-success) 100%); color: var(--theme-button-text-strong); border-radius: 16px 16px 0 0;">
           <h2 class="h4 fw-bold mb-0" style="font-family: 'Oxanium', 'Montserrat', 'Arial', sans-serif; letter-spacing: 0.08em;">
-            <?php if ($activeTab === 'correo'): ?>Configuración de correo corporativo<?php elseif ($activeTab === 'cabecera'): ?>Datos de cabecera<?php elseif ($activeTab === 'notificaciones-recargas'): ?>Notificaciones Recargas<?php elseif ($activeTab === 'sociales'): ?>Redes Sociales<?php elseif ($activeTab === 'api-banco'): ?>Datos conexión Banco<?php elseif ($activeTab === 'api-free-fire'): ?>Datos API<?php elseif ($activeTab === 'api-binance'): ?>API Binance Pay<?php elseif ($activeTab === 'paypal'): ?>Paypal<?php elseif ($activeTab === 'api-discord'): ?>API Discord<?php elseif ($activeTab === 'personalizar-colores'): ?>Personalizar Colores<?php elseif ($activeTab === 'ventana-inicial'): ?>Ventana Inicial<?php elseif ($activeTab === 'galeria'): ?>Galería principal del index<?php else: ?>Métodos de Pago<?php endif; ?>
+            <?php if ($activeTab === 'correo'): ?>Configuración de correo corporativo<?php elseif ($activeTab === 'cabecera'): ?>Datos de cabecera<?php elseif ($activeTab === 'notificaciones-recargas'): ?>Notificaciones Recargas<?php elseif ($activeTab === 'sociales'): ?>Redes Sociales<?php elseif ($activeTab === 'api-banco'): ?>Datos conexión Banco<?php elseif ($activeTab === 'api-free-fire'): ?>Datos API<?php elseif ($activeTab === 'api-binance'): ?>API Binance Pay<?php elseif ($activeTab === 'verificacion-binance'): ?>Verificación Binance<?php elseif ($activeTab === 'paypal'): ?>Paypal<?php elseif ($activeTab === 'api-discord'): ?>API Discord<?php elseif ($activeTab === 'personalizar-colores'): ?>Personalizar Colores<?php elseif ($activeTab === 'ventana-inicial'): ?>Ventana Inicial<?php elseif ($activeTab === 'galeria'): ?>Galería principal del index<?php else: ?>Métodos de Pago<?php endif; ?>
           </h2>
         </div>
         <div class="card-body p-4">
@@ -1654,6 +1663,75 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
 
               <button type="submit" class="neon-btn w-100 py-3 mt-4">Guardar configuración de Binance Pay</button>
             </form>
+          <?php elseif ($activeTab === 'verificacion-binance'): ?>
+            <?php
+              $binancePagonorteToken = trim((string) ($cfg['binance_pagonorte_token'] ?? ''));
+              $binancePagonorteMovementsUrl = store_config_build_binance_pagonorte_movements_url($binancePagonorteToken);
+              $binancePagonorteBalanceUrl = store_config_build_binance_pagonorte_balance_url($binancePagonorteToken);
+              $binancePagonorteAvailableDays = trim((string) ($cfg['binance_pagonorte_dias_disponibles'] ?? ''));
+              $binancePagonorteDiscount = trim((string) ($cfg['binance_pagonorte_descuento'] ?? '0'));
+            ?>
+            <form method="post">
+              <input type="hidden" name="config_section" value="verificacion-binance">
+              <div class="config-section-note mb-4">Configura aquí el token de Binance PagoNorte para consultar movimientos y saldo. Este tab solo se muestra cuando la función <strong>api_binance_pagonorte</strong> está activa para el tenant.</div>
+
+              <?php if ($binancePagonorteAvailableDays !== ''): ?>
+                <div class="alert alert-info rounded-4 mb-4" role="status">
+                  La API Binance reporta actualmente <strong><?= htmlspecialchars($binancePagonorteAvailableDays, ENT_QUOTES, 'UTF-8') ?> días disponibles</strong> en la consulta de movimientos. Este dato se actualiza cuando se sincronizan movimientos manualmente.
+                </div>
+              <?php endif; ?>
+
+              <div class="gallery-table-wrap mb-2">
+                <h3 class="h5 fw-bold text-info mb-3">Datos de verificación Binance</h3>
+                <div class="row g-3">
+                  <div class="col-md-8">
+                    <label class="form-label">Token</label>
+                    <input type="text" id="binance-pagonorte-token" name="binance_pagonorte_token" value="<?= htmlspecialchars($binancePagonorteToken, ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="Pega aquí el token de PagoNorte para Binance">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Descuento (%)</label>
+                    <input type="number" name="binance_pagonorte_descuento" min="0" max="100" step="0.01" value="<?= htmlspecialchars($binancePagonorteDiscount, ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="0.00">
+                    <div class="form-text mt-2">Porcentaje que se descontará al usar este método de pago.</div>
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label">Enlace para verificar movimientos</label>
+                    <input type="text" id="binance-pagonorte-movements-url" value="<?= htmlspecialchars($binancePagonorteMovementsUrl, ENT_QUOTES, 'UTF-8') ?>" class="form-control" readonly onclick="this.select()">
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label">Enlace para verificar saldo</label>
+                    <input type="text" id="binance-pagonorte-balance-url" value="<?= htmlspecialchars($binancePagonorteBalanceUrl, ENT_QUOTES, 'UTF-8') ?>" class="form-control" readonly onclick="this.select()">
+                  </div>
+                </div>
+              </div>
+
+              <button type="submit" class="neon-btn w-100 py-3 mt-4">Guardar configuración de Verificación Binance</button>
+            </form>
+            <script>
+              (function() {
+                const tokenInput = document.getElementById('binance-pagonorte-token');
+                const movementsUrlInput = document.getElementById('binance-pagonorte-movements-url');
+                const balanceUrlInput = document.getElementById('binance-pagonorte-balance-url');
+
+                if (!tokenInput || !movementsUrlInput || !balanceUrlInput) {
+                  return;
+                }
+
+                const buildUrl = function(endpoint, token) {
+                  const query = new URLSearchParams({ token: String(token || '').trim() });
+                  return `https://apicentral.pro/apis/${endpoint}?${query.toString()}`;
+                };
+
+                const syncUrls = function() {
+                  const token = String(tokenInput.value || '').trim();
+                  movementsUrlInput.value = buildUrl('movimientos_binance.jsp', token);
+                  balanceUrlInput.value = buildUrl('saldo_binance.jsp', token);
+                };
+
+                tokenInput.addEventListener('input', syncUrls);
+                tokenInput.addEventListener('change', syncUrls);
+                syncUrls();
+              })();
+            </script>
           <?php elseif ($activeTab === 'paypal'): ?>
             <form method="post" enctype="multipart/form-data">
               <input type="hidden" name="config_section" value="paypal">

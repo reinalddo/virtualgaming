@@ -8,6 +8,7 @@ RewriteRule ^comprar-funciones-extra$ ../admin.php?seccion=comprar-funciones-ext
 RewriteRule ^ventana-inicial-juegos$ ../admin.php?seccion=ventana-inicial-juegos [L,QSA]
 RewriteRule ^configuracion$ ../admin.php?seccion=configuracion [L,QSA]
 RewriteRule ^movimientos$ ../admin.php?seccion=movimientos [L,QSA]
+RewriteRule ^movimientos-binance$ ../admin.php?seccion=movimientos-binance [L,QSA]
 RewriteRule ^monedas$ monedas.php [L,QSA]
 RewriteRule ^juegos$ juegos.php [L,QSA]
 RewriteRule ^paquetes/?([0-9]*)$ paquetes.php [L,QSA]
