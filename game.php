@@ -8394,7 +8394,7 @@ include __DIR__ . "/includes/header.php";
         message: 'Pago exitoso. Tu recarga fue procesada automáticamente y ya quedó enviada al proveedor.',
         steps: [
           'No necesitas volver a pagar ni repetir el proceso.',
-          'Solo espera unos instantes mientras recibimos la confirmación final automática.'
+          'La recarga llegará al instante luego de unos segundos al confirmar el pedido.'
         ],
         reasons: [],
         reasonCaption: '¿Qué significa este estado?',
