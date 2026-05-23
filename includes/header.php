@@ -634,7 +634,7 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
         flex-wrap: nowrap;
         gap: 0.75rem;
         align-items: center;
-        justify-content: flex-start;
+        justify-content: flex-start !important;
       }
       .site-topbar-enabled #menu-toggle,
       .site-topbar-enabled .site-header-topbar > div[aria-hidden="true"] {
@@ -645,14 +645,16 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
       }
       .site-topbar-enabled .site-brand {
         order: 1;
-        flex: 1 1 auto;
+        flex: 0 1 auto;
+        flex-grow: 0 !important;
         min-width: 0;
         margin-right: auto;
+        justify-content: flex-start !important;
       }
       .site-topbar-enabled .site-auth-container {
         order: 3;
-        flex: 0 1 auto;
-        margin-left: 0;
+        flex: 0 0 auto;
+        margin-left: 0 !important;
         display: block;
       }
       .site-topbar-mobile-search-toggle {
@@ -660,7 +662,8 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
         align-items: center;
         justify-content: center;
         order: 2;
-        margin-left: 0;
+        margin-left: 0 !important;
+        flex: 0 0 44px;
       }
       .site-topbar-enabled .site-auth-trigger,
       .site-topbar-enabled #user-trigger {
@@ -673,16 +676,20 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
         padding-left: 0.75rem;
         padding-right: 0.75rem;
         gap: 0.55rem;
+        justify-content: flex-start !important;
       }
       .site-topbar-enabled .site-brand {
         flex: 0 1 auto;
+        flex-grow: 0 !important;
         margin-right: auto;
+        justify-content: flex-start !important;
       }
       .site-topbar-enabled .site-auth-container {
         flex: 0 0 auto;
+        margin-left: 0 !important;
       }
       .site-topbar-mobile-search-toggle {
-        margin-left: auto;
+        margin-left: 0 !important;
         flex: 0 0 44px;
       }
       .site-topbar-search-input {
@@ -1223,6 +1230,13 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
             </div>
           </div>
         <?php endif; ?>
+        <?php if ($topBarEnabled): ?>
+        <button id="mobile-search-toggle" type="button" class="site-topbar-mobile-search-toggle btn btn-outline-info rounded-circle" aria-label="Abrir búsqueda">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m1.85-5.15a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" />
+          </svg>
+        </button>
+        <?php endif; ?>
         <div id="auth-container" class="site-auth-container position-relative">
           <?php if (!$authUser): ?>
             <button id="auth-trigger" type="button" class="site-auth-trigger d-flex align-items-center gap-2 neon-btn border border-info bg-dark px-2 py-1 text-uppercase fw-bold text-info shadow-sm" style="font-size:11px;box-shadow:0 0 8px rgba(var(--theme-primary-rgb),0.8), 0 0 2px rgba(var(--theme-secondary-rgb),0.8);transition:box-shadow 0.2s;min-width:120px;">
@@ -1289,13 +1303,6 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
             </div>
           <?php endif; ?>
         </div>
-        <?php if ($topBarEnabled): ?>
-        <button id="mobile-search-toggle" type="button" class="site-topbar-mobile-search-toggle btn btn-outline-info rounded-circle" aria-label="Abrir búsqueda">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0 1 14 0Z" />
-          </svg>
-        </button>
-        <?php endif; ?>
       </header>
 
       <?php
