@@ -1966,6 +1966,10 @@ include __DIR__ . "/includes/header.php";
     white-space: nowrap;
   }
 
+  .payment-transfer-copy-btn {
+    justify-self: end;
+  }
+
   .payment-transfer-copy-actions {
     margin-top: 0.85rem;
   }
@@ -2575,9 +2579,12 @@ include __DIR__ . "/includes/header.php";
       padding: 0.72rem 0.75rem;
     }
 
-    .payment-transfer-copy-btn,
     .payment-transfer-copy-all-btn {
       width: 100%;
+    }
+
+    .payment-transfer-copy-btn {
+      justify-self: end;
     }
 
     .payment-transfer-copy-line {
@@ -4334,6 +4341,7 @@ include __DIR__ . "/includes/header.php";
   }
 
   .account-sale-copy-btn {
+    margin-top: 0.75rem;
     justify-self: start;
   }
 
@@ -8559,6 +8567,10 @@ include __DIR__ . "/includes/header.php";
   bindPaymentSummaryCopyButton(paymentSummaryTotalCopyButton);
   bindPaymentSummaryCopyButton(paymentSummaryMinimalTotalCopyButton);
 
+  function paymentSummaryCopyIconMarkup() {
+    return '<span class="payment-summary-copy-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" role="img"><rect x="9" y="7" width="10" height="12" rx="2"></rect><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"></path></svg></span>';
+  }
+
   function encodePaymentCopyText(value) {
     return encodeURIComponent(String(value || ''));
   }
@@ -8654,7 +8666,7 @@ include __DIR__ . "/includes/header.php";
       return `
         <div class="payment-transfer-copy-row">
           <div class="payment-transfer-copy-line">${escapePaymentHtml(line)}</div>
-          <button type="button" class="btn btn-outline-info fw-bold payment-transfer-copy-btn" data-payment-copy-text="${escapePaymentHtml(encodePaymentCopyText(copyValue))}">Copiar</button>
+          <button type="button" class="payment-summary-copy-btn payment-transfer-copy-btn" aria-label="Copiar dato" title="Copiar dato" data-copy-tooltip="Copiar dato" data-payment-copy-text="${escapePaymentHtml(encodePaymentCopyText(copyValue))}">${paymentSummaryCopyIconMarkup()}</button>
         </div>`;
     }).join('');
 
@@ -8714,7 +8726,7 @@ include __DIR__ . "/includes/header.php";
       <div class="payment-reasons-title">${escapePaymentHtml(codes.length > 1 ? 'Codigos entregados' : 'Codigo entregado')}</div>
       <div class="payment-reasons-summary">Guarda esta informacion exactamente como aparece.</div>
       <ul>${codes.map((code) => `<li>${escapePaymentHtml(code)}</li>`).join('')}</ul>
-      <button type="button" class="btn btn-info fw-bold w-100 mt-2 payment-copy-code-btn">${escapePaymentHtml(copyLabel)}</button>
+      <button type="button" class="payment-summary-copy-btn payment-copy-code-btn" aria-label="${escapePaymentHtml(copyLabel)}" title="${escapePaymentHtml(copyLabel)}" data-copy-tooltip="${escapePaymentHtml(copyLabel)}">${paymentSummaryCopyIconMarkup()}</button>
     `;
 
     const copyButton = container.querySelector('.payment-copy-code-btn');
@@ -8747,7 +8759,7 @@ include __DIR__ . "/includes/header.php";
       <div class="payment-reasons-summary">Guarda esta información. La cuenta ya quedó disponible para ti.</div>
       <div class="account-sale-delivery-card">
         ${accountText !== '' ? `<div class="account-sale-delivery-copy">${escapePaymentHtml(accountText)}</div>` : ''}
-        ${accountText !== '' ? '<button type="button" class="btn btn-info fw-bold account-sale-copy-btn">Copiar datos de la cuenta</button>' : ''}
+        ${accountText !== '' ? '<button type="button" class="payment-summary-copy-btn account-sale-copy-btn" aria-label="Copiar datos de la cuenta" title="Copiar datos de la cuenta" data-copy-tooltip="Copiar datos de la cuenta">' + paymentSummaryCopyIconMarkup() + '</button>' : ''}
         ${gallery.length ? `<div class="account-sale-delivery-gallery">${gallery.map((item) => `
           <div class="account-sale-delivery-gallery-item">
             <img src="${escapePaymentHtml(item.imageUrl)}" alt="Vista de la cuenta">
