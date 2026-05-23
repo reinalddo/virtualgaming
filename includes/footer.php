@@ -812,17 +812,16 @@ $rechargeNotificationsScript = <<<'SCRIPT'
       const article = document.createElement("article");
       article.className = "live-recharge-toast";
       const imageUrl = String((item && item.image_url) || logoPath || "").trim();
+      const titleLabel = String((item && item.title) || "Recarga Exitosa").replace(/\s*✅+\s*/g, " ").trim() || "Recarga Exitosa";
       const userLabel = String((item && item.user_label) || "").trim();
-      const detailLabel = String((item && item.detail) || "").trim();
-      const summaryMarkup = detailLabel !== ""
-        ? `<div class="live-recharge-toast__summary">${imageUrl ? `<span class="live-recharge-toast__thumb-wrap"><img src="${escapeHtml(imageUrl)}" alt="Paquete" class="live-recharge-toast__thumb"></span>` : ""}<span class="live-recharge-toast__detail">${escapeHtml(detailLabel)}</span></div>`
-        : "";
+      const rechargeLabel = String((item && item.recharge_label) || (item && item.detail) || "").trim();
       article.innerHTML = `
         <div class="live-recharge-toast__pulse" aria-hidden="true"></div>
+        <div class="live-recharge-toast__media">${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="Juego" class="live-recharge-toast__thumb">` : ""}</div>
         <div class="live-recharge-toast__body">
-          <div class="live-recharge-toast__title">${escapeHtml(item.title || "Recarga Exitosa ✅")}</div>
+          <div class="live-recharge-toast__title">${escapeHtml(titleLabel)}</div>
           ${userLabel !== "" ? `<div class="live-recharge-toast__user">${escapeHtml(userLabel)}</div>` : ""}
-          ${summaryMarkup}
+          ${rechargeLabel !== "" ? `<div class="live-recharge-toast__detail">${escapeHtml(rechargeLabel)}</div>` : ""}
         </div>`;
 
       container.appendChild(article);
@@ -1013,10 +1012,11 @@ $rechargeNotificationsScript = str_replace('__LIVE_RECHARGE_ENABLED__', $recharg
     }
     .live-recharge-toast {
       display: grid;
-      grid-template-columns: auto 1fr;
-      align-items: start;
-      gap: 0.75rem;
-      padding: 0.78rem 0.9rem;
+      grid-template-columns: auto 52px minmax(0, 1fr);
+      align-items: stretch;
+      gap: 0.65rem;
+      padding: 0.72rem 0.82rem 0.72rem 0.68rem;
+      min-height: 74px;
       border-radius: 18px;
       border: 1px solid rgba(var(--theme-live-notification-border-rgb), 0.72);
       background: linear-gradient(135deg, rgba(var(--theme-live-notification-bg-rgb), 0.98), rgba(var(--theme-live-notification-border-rgb), 0.16));
@@ -1036,17 +1036,32 @@ $rechargeNotificationsScript = str_replace('__LIVE_RECHARGE_ENABLED__', $recharg
       transform: translate3d(var(--live-recharge-enter-x), var(--live-recharge-enter-y), 0);
     }
     .live-recharge-toast__pulse {
-      width: 10px;
-      height: 10px;
+      width: 9px;
+      height: 9px;
+      align-self: center;
       border-radius: 999px;
       background: var(--theme-live-notification-accent);
       box-shadow: 0 0 0 0 rgba(var(--theme-live-notification-accent-rgb), 0.56);
       animation: live-recharge-pulse 1.9s ease-out infinite;
     }
+    .live-recharge-toast__media {
+      width: 52px;
+      min-height: 100%;
+      border-radius: 12px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(var(--theme-live-notification-border-rgb), 0.34);
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03);
+    }
     .live-recharge-toast__body {
       min-width: 0;
       display: grid;
-      gap: 0.16rem;
+      grid-template-rows: repeat(3, auto);
+      align-content: center;
+      gap: 0.1rem;
     }
     .live-recharge-toast__title {
       color: var(--theme-live-notification-text);
@@ -1054,6 +1069,9 @@ $rechargeNotificationsScript = str_replace('__LIVE_RECHARGE_ENABLED__', $recharg
       font-weight: 800;
       line-height: 1.2;
       letter-spacing: 0.01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .live-recharge-toast__user {
       color: #f8fafc;
@@ -1064,25 +1082,6 @@ $rechargeNotificationsScript = str_replace('__LIVE_RECHARGE_ENABLED__', $recharg
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .live-recharge-toast__summary {
-      display: grid;
-      grid-template-columns: auto 1fr;
-      align-items: center;
-      gap: 0.48rem;
-      min-width: 0;
-    }
-    .live-recharge-toast__thumb-wrap {
-      width: 36px;
-      height: 36px;
-      border-radius: 10px;
-      overflow: hidden;
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(var(--theme-live-notification-border-rgb), 0.34);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
     .live-recharge-toast__thumb {
       width: 100%;
       height: 100%;
@@ -1092,12 +1091,11 @@ $rechargeNotificationsScript = str_replace('__LIVE_RECHARGE_ENABLED__', $recharg
     .live-recharge-toast__detail {
       color: var(--theme-live-notification-muted);
       font-size: 0.78rem;
-      line-height: 1.35;
+      line-height: 1.25;
       min-width: 0;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
+      white-space: nowrap;
       overflow: hidden;
+      text-overflow: ellipsis;
     }
     @keyframes live-recharge-pulse {
       0% {
@@ -1149,13 +1147,19 @@ $rechargeNotificationsScript = str_replace('__LIVE_RECHARGE_ENABLED__', $recharg
         top: 50%;
       }
       .live-recharge-toast {
-        padding: 0.42rem 0.48rem;
-        gap: 0.42rem;
+        grid-template-columns: auto 28px minmax(0, 1fr);
+        padding: 0.42rem 0.46rem 0.42rem 0.4rem;
+        gap: 0.36rem;
+        min-height: 44px;
         border-radius: 12px;
       }
       .live-recharge-toast__pulse {
         width: 6px;
         height: 6px;
+      }
+      .live-recharge-toast__media {
+        width: 28px;
+        border-radius: 8px;
       }
       .live-recharge-toast__title {
         font-size: 0.6rem;
@@ -1171,19 +1175,11 @@ $rechargeNotificationsScript = str_replace('__LIVE_RECHARGE_ENABLED__', $recharg
         overflow: hidden;
         text-overflow: ellipsis;
       }
-      .live-recharge-toast__summary {
-        gap: 0.34rem;
-      }
-      .live-recharge-toast__thumb-wrap {
-        width: 22px;
-        height: 22px;
-        border-radius: 7px;
-      }
       .live-recharge-toast__detail {
         font-size: 0.52rem;
         line-height: 1.12;
         overflow: hidden;
-        -webkit-line-clamp: 2;
+        text-overflow: ellipsis;
       }
     }
   </style>

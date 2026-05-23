@@ -848,13 +848,18 @@ include __DIR__ . "/includes/header.php";
               <div class="payment-summary-minimal-user">ID Jugador: <strong id="payment-summary-minimal-user">-</strong></div>
             </div>
             <div class="payment-summary-minimal-price">
-              <div id="payment-summary-minimal-total" class="payment-summary-minimal-total">-</div>
+              <div class="payment-summary-minimal-total-wrap">
+                <div id="payment-summary-minimal-total" class="payment-summary-minimal-total">-</div>
+                <button type="button" id="payment-summary-minimal-total-copy" class="payment-summary-copy-btn" aria-label="Copiar monto" title="Copiar monto" data-copy-tooltip="Copiar monto" disabled>
+                  <span class="payment-summary-copy-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" role="img"><rect x="9" y="7" width="10" height="12" rx="2"></rect><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"></path></svg></span>
+                </button>
+              </div>
             </div>
           </div>
           <h3 class="payment-summary-card-title h5 fw-bold text-white mb-3">Resumen de Pago</h3>
           <div class="payment-summary-row"><span>ID Jugador:</span><strong id="payment-summary-user">-</strong></div>
           <div class="payment-summary-row"><span>Producto:</span><strong id="payment-summary-product">-</strong></div>
-          <div class="payment-summary-row payment-summary-total"><span>Total a pagar:</span><strong id="payment-summary-total">-</strong></div>
+          <div class="payment-summary-row payment-summary-total"><span>Total a pagar:</span><span class="payment-summary-total-actions"><strong id="payment-summary-total">-</strong><button type="button" id="payment-summary-total-copy" class="payment-summary-copy-btn" aria-label="Copiar monto" title="Copiar monto" data-copy-tooltip="Copiar monto" disabled><span class="payment-summary-copy-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" role="img"><rect x="9" y="7" width="10" height="12" rx="2"></rect><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"></path></svg></span></button></span></div>
           <div id="payment-summary-discount" class="payment-summary-discount d-none"></div>
         </div>
         <div id="payment-win-points-card" class="payment-win-points-card d-none">
@@ -920,7 +925,7 @@ include __DIR__ . "/includes/header.php";
     display: none;
     position: fixed;
     inset: 0;
-    z-index: 1080;
+    z-index: 13200;
     opacity: 0;
     align-items: center;
     justify-content: center;
@@ -938,15 +943,15 @@ include __DIR__ . "/includes/header.php";
   }
 
   #loading-modal {
-    z-index: 1105;
+    z-index: 13225;
   }
 
   #payment-status-modal {
-    z-index: 1110;
+    z-index: 13230;
   }
 
   .game-entry-window-modal {
-    z-index: 1125;
+    z-index: 13240;
   }
 
   .game-entry-window-modal .modal-dialog {
@@ -1308,6 +1313,14 @@ include __DIR__ . "/includes/header.php";
     padding-top: 0.15rem;
   }
 
+  .payment-summary-minimal-total-wrap,
+  .payment-summary-total-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-width: 0;
+  }
+
   .payment-summary-minimal-total {
     color: #22d3ee;
     font-size: 1.35rem;
@@ -1609,6 +1622,16 @@ include __DIR__ . "/includes/header.php";
       text-align: left;
       font-size: 1.22rem;
     }
+
+    .payment-summary-minimal-total-wrap,
+    .payment-summary-total-actions {
+      gap: 0.35rem;
+    }
+
+    .payment-summary-copy-btn {
+      width: 1.78rem;
+      height: 1.78rem;
+    }
   }
 
   .payment-summary-row {
@@ -1633,6 +1656,79 @@ include __DIR__ . "/includes/header.php";
   .payment-summary-total strong {
     color: #22d3ee;
     font-size: 1.2rem;
+  }
+
+  .payment-summary-copy-btn {
+    position: relative;
+    width: 1.95rem;
+    height: 1.95rem;
+    padding: 0;
+    border-radius: 999px;
+    border: 1px solid rgba(34, 211, 238, 0.36);
+    background: rgba(8, 15, 24, 0.72);
+    color: #7dd3fc;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03);
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
+  }
+
+  .payment-summary-copy-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 0.88rem;
+    height: 0.88rem;
+  }
+
+  .payment-summary-copy-icon svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .payment-summary-copy-btn::after {
+    content: attr(data-copy-tooltip);
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 0.45rem);
+    transform: translate(-50%, 4px);
+    padding: 0.28rem 0.46rem;
+    border-radius: 0.45rem;
+    background: rgba(8, 15, 24, 0.96);
+    border: 1px solid rgba(34, 211, 238, 0.28);
+    color: #f8fafc;
+    font-size: 0.66rem;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    box-shadow: 0 10px 24px rgba(2, 6, 23, 0.28);
+    transition: opacity 0.16s ease, transform 0.16s ease;
+  }
+
+  .payment-summary-copy-btn:hover:not(:disabled),
+  .payment-summary-copy-btn:focus-visible:not(:disabled) {
+    transform: translateY(-1px);
+    border-color: rgba(34, 211, 238, 0.78);
+    color: #ffffff;
+    box-shadow: 0 0 14px rgba(34, 211, 238, 0.2);
+    outline: none;
+  }
+
+  .payment-summary-copy-btn:hover:not(:disabled)::after,
+  .payment-summary-copy-btn:focus-visible:not(:disabled)::after {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
+  .payment-summary-copy-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    box-shadow: none;
   }
 
   .payment-summary-discount {
@@ -4398,10 +4494,12 @@ include __DIR__ . "/includes/header.php";
   const paymentSummaryUser = document.getElementById('payment-summary-user');
   const paymentSummaryProduct = document.getElementById('payment-summary-product');
   const paymentSummaryTotal = document.getElementById('payment-summary-total');
+  const paymentSummaryTotalCopyButton = document.getElementById('payment-summary-total-copy');
   const paymentSummaryDiscount = document.getElementById('payment-summary-discount');
   const paymentSummaryMinimalUser = document.getElementById('payment-summary-minimal-user');
   const paymentSummaryMinimalProduct = document.getElementById('payment-summary-minimal-product');
   const paymentSummaryMinimalTotal = document.getElementById('payment-summary-minimal-total');
+  const paymentSummaryMinimalTotalCopyButton = document.getElementById('payment-summary-minimal-total-copy');
   const paymentSummaryImage = document.getElementById('payment-summary-image');
   const paymentSummaryImagePlaceholder = document.getElementById('payment-summary-image-placeholder');
   const paymentSummaryFeatures = document.getElementById('payment-summary-features');
@@ -5541,6 +5639,7 @@ include __DIR__ . "/includes/header.php";
     paymentSummaryUser.textContent = safeUser;
     paymentSummaryProduct.textContent = safeProduct;
     paymentSummaryTotal.textContent = safeTotal;
+    updatePaymentSummaryCopyButtons(safeTotal);
 
     if (!paymentHeaderMinimalEnabled || !paymentSummaryCard) {
       return;
@@ -8322,6 +8421,86 @@ include __DIR__ . "/includes/header.php";
 
     return copied;
   }
+
+  function resolveCopyableAmountValue(totalText) {
+    const rawText = String(totalText || '').trim();
+    if (rawText === '') {
+      return '';
+    }
+
+    const matches = rawText.match(/\d[\d.,]*/g);
+    const numericChunk = Array.isArray(matches) && matches.length > 0
+      ? String(matches[matches.length - 1] || '').trim()
+      : '';
+    if (numericChunk === '') {
+      return '';
+    }
+
+    const sanitized = numericChunk.replace(/[^\d.,]/g, '');
+    if (sanitized === '') {
+      return '';
+    }
+
+    const lastComma = sanitized.lastIndexOf(',');
+    const lastDot = sanitized.lastIndexOf('.');
+    const separatorIndex = Math.max(lastComma, lastDot);
+    const digitsOnly = sanitized.replace(/\D+/g, '');
+    if (separatorIndex === -1) {
+      return digitsOnly;
+    }
+
+    const fractionPart = sanitized.slice(separatorIndex + 1).replace(/\D+/g, '');
+    const integerPart = sanitized.slice(0, separatorIndex).replace(/\D+/g, '');
+    const commaCount = (sanitized.match(/,/g) || []).length;
+    const dotCount = (sanitized.match(/\./g) || []).length;
+    const hasMixedSeparators = commaCount > 0 && dotCount > 0;
+    const shouldKeepDecimals = fractionPart !== '' && (hasMixedSeparators || fractionPart.length <= 2);
+
+    if (!shouldKeepDecimals) {
+      return digitsOnly;
+    }
+
+    return `${integerPart !== '' ? integerPart : '0'}.${fractionPart}`;
+  }
+
+  function updatePaymentSummaryCopyButtons(totalText) {
+    const copyValue = resolveCopyableAmountValue(totalText);
+    [paymentSummaryTotalCopyButton, paymentSummaryMinimalTotalCopyButton].forEach((button) => {
+      if (!(button instanceof HTMLButtonElement)) {
+        return;
+      }
+      button.dataset.paymentCopyAmount = copyValue;
+      button.disabled = copyValue === '';
+    });
+  }
+
+  function bindPaymentSummaryCopyButton(button) {
+    if (!(button instanceof HTMLButtonElement) || button.dataset.copyBound === '1') {
+      return;
+    }
+
+    button.dataset.copyBound = '1';
+    button.addEventListener('click', async () => {
+      const copyValue = String(button.dataset.paymentCopyAmount || '').trim();
+      if (copyValue === '') {
+        return;
+      }
+
+      try {
+        const copied = await copyTextToClipboard(copyValue);
+        if (typeof showToast === 'function') {
+          showToast(copied ? 'Monto copiado.' : 'No se pudo copiar el monto.', copied ? 'success' : 'danger');
+        }
+      } catch (_) {
+        if (typeof showToast === 'function') {
+          showToast('No se pudo copiar el monto.', 'danger');
+        }
+      }
+    });
+  }
+
+  bindPaymentSummaryCopyButton(paymentSummaryTotalCopyButton);
+  bindPaymentSummaryCopyButton(paymentSummaryMinimalTotalCopyButton);
 
   function encodePaymentCopyText(value) {
     return encodeURIComponent(String(value || ''));
