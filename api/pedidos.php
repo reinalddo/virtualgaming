@@ -64,6 +64,9 @@ if (!function_exists('ensure_mysqli_connection')) {
 }
 
 currency_ensure_schema();
+if (trim((string) store_config_get('binance_pagonorte_activo', '0')) === '1') {
+    currency_ensure_code('USDT', 'Tether USD', 1.0, true, true);
+}
 payment_methods_ensure_table();
 recharge_availability_ensure_columns($mysqli);
 package_account_sales_ensure_schema($mysqli);
@@ -2569,7 +2572,7 @@ function resolve_order_payment_discount_base_amount(array $order): float {
 
 function resolve_order_payment_discount_snapshot(array $order, string $paymentMode, ?array $method = null): array {
     $baseAmount = resolve_order_payment_discount_base_amount($order);
-    $normalizedMode = in_array($paymentMode, ['money', 'binance', 'paypal'], true) ? $paymentMode : '';
+    $normalizedMode = in_array($paymentMode, ['money', 'binance_pagonorte', 'binance', 'paypal'], true) ? $paymentMode : '';
     $percentage = 0.0;
     $methodName = '';
     $paymentMethodId = 0;
@@ -2579,6 +2582,11 @@ function resolve_order_payment_discount_snapshot(array $order, string $paymentMo
         $paymentMethodId = max(0, (int) ($method['id'] ?? 0));
         if (payment_method_discount_feature_enabled()) {
             $percentage = payment_methods_normalize_discount_percentage($method['descuento_porcentaje'] ?? 0);
+        }
+    } elseif ($normalizedMode === 'binance_pagonorte') {
+        $methodName = 'Binance PagoNorte';
+        if (payment_method_discount_feature_enabled()) {
+            $percentage = payment_methods_normalize_discount_percentage(store_config_get('binance_pagonorte_descuento', '0'));
         }
     } elseif ($normalizedMode === 'binance') {
         $methodName = 'Binance Pay';
@@ -4381,6 +4389,27 @@ function fetch_active_payment_method(mysqli $mysqli, int $methodId): ?array {
     return $method ?: null;
 }
 
+function binance_pagonorte_payment_enabled(): bool {
+    return trim((string) store_config_get('binance_pagonorte_activo', '0')) === '1';
+}
+
+function binance_pagonorte_is_configured(): bool {
+    return trim((string) store_config_get('binance_pagonorte_token', '')) !== '';
+}
+
+function binance_pagonorte_reference_prefix(): string {
+    return 'BINANCE:';
+}
+
+function binance_pagonorte_store_reference(string $reference): string {
+    $trimmed = trim($reference);
+    if ($trimmed === '') {
+        return '';
+    }
+
+    return binance_pagonorte_reference_prefix() . $trimmed;
+}
+
 function normalize_currency_code(?string $currencyCode): string {
     $normalized = strtoupper(trim((string) $currencyCode));
     if ($normalized === '') {
@@ -5696,8 +5725,58 @@ function fetch_bank_movements(array $config): array {
     return $normalized;
 }
 
+function fetch_binance_pagonorte_movements(array $config): array {
+    $token = trim((string) ($config['binance_pagonorte_token'] ?? ''));
+    if ($token === '') {
+        throw new RuntimeException('La conexión automática para Binance PagoNorte no está configurada completamente.');
+    }
+
+    $url = store_config_build_binance_pagonorte_movements_url($token);
+    $data = http_get_json($url, 20, false);
+    $availableDays = isset($data['dias_disponibles']) ? max(0, (int) $data['dias_disponibles']) : null;
+    $cutoffDate = trim((string) ($data['fecha_corte'] ?? ''));
+    store_config_upsert('binance_pagonorte_dias_disponibles', $availableDays !== null ? (string) $availableDays : '');
+    store_config_upsert('binance_pagonorte_fecha_corte', $cutoffDate);
+
+    $movements = $data['movimientos'] ?? null;
+    if (!is_array($movements)) {
+        throw new RuntimeException('La API Binance de PagoNorte no devolvió la lista de movimientos esperada.');
+    }
+
+    $normalized = [];
+    foreach ($movements as $movement) {
+        if (!is_array($movement)) {
+            continue;
+        }
+
+        $reference = trim((string) ($movement['referencia'] ?? ''));
+        if ($reference === '') {
+            continue;
+        }
+
+        $normalized[] = [
+            'referencia' => substr(binance_pagonorte_store_reference($reference), 0, 120),
+            'descripcion' => sanitize_str((string) ($movement['descripcion'] ?? ''), 255),
+            'fecha_raw' => sanitize_str((string) ($movement['fecha'] ?? ''), 120),
+            'fecha_movimiento' => parse_bank_movement_datetime((string) ($movement['fecha'] ?? '')),
+            'tipo' => sanitize_str((string) ($movement['tipo'] ?? ''), 80),
+            'monto' => normalize_bank_amount($movement['monto'] ?? 0),
+            'moneda' => 'USDT',
+            'payload_json' => json_encode($movement, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ];
+    }
+
+    return $normalized;
+}
+
 function fetch_and_sync_bank_movements(mysqli $mysqli, array $config): array {
     $movements = fetch_bank_movements($config);
+    sync_bank_movements($mysqli, $movements);
+    return $movements;
+}
+
+function fetch_and_sync_binance_pagonorte_movements(mysqli $mysqli, array $config): array {
+    $movements = fetch_binance_pagonorte_movements($config);
     sync_bank_movements($mysqli, $movements);
     return $movements;
 }
@@ -6071,6 +6150,56 @@ function find_matching_bank_movement_with_retry(
     for ($attempt = 1; $attempt <= $attempts; $attempt++) {
         if ($attempt > 1 || empty($latestMovements)) {
             $latestMovements = fetch_and_sync_bank_movements($mysqli, $bankConfig);
+        }
+
+        $match = find_matching_bank_movement(
+            $mysqli,
+            $latestMovements,
+            $reportedReference,
+            $orderAmount,
+            $requiredDigits,
+            $orderId
+        );
+
+        if ($match !== null) {
+            return [
+                'match' => $match,
+                'movements' => $latestMovements,
+                'attempts' => $attempt,
+            ];
+        }
+
+        if ($attempt < $attempts && $delaySeconds > 0) {
+            sleep($delaySeconds);
+        }
+    }
+
+    return [
+        'match' => null,
+        'movements' => $latestMovements,
+        'attempts' => $attempts,
+    ];
+}
+
+function find_matching_binance_pagonorte_movement_with_retry(
+    mysqli $mysqli,
+    array $config,
+    string $reportedReference,
+    float $orderAmount,
+    int $requiredDigits,
+    int $orderId,
+    int $attempts = 2,
+    int $delaySeconds = 8,
+    ?array $initialMovements = null
+): array {
+    $attempts = max(1, $attempts);
+    $delaySeconds = max(0, $delaySeconds);
+    $latestMovements = is_array($initialMovements) ? $initialMovements : [];
+    $match = null;
+
+    for ($attempt = 1; $attempt <= $attempts; $attempt++) {
+        if ($attempt > 1 || empty($latestMovements)) {
+            $latestMovements = fetch_and_sync_binance_pagonorte_movements($mysqli, $config);
         }
 
         $match = find_matching_bank_movement(
@@ -7816,7 +7945,7 @@ if ($action === 'submit_payment') {
 
     $orderId = intval($_POST['order_id'] ?? 0);
     $paymentMode = trim((string) ($_POST['payment_mode'] ?? 'money'));
-    $paymentMode = in_array($paymentMode, ['money', 'points', 'binance', 'paypal'], true) ? $paymentMode : 'money';
+    $paymentMode = in_array($paymentMode, ['money', 'points', 'binance_pagonorte', 'binance', 'paypal'], true) ? $paymentMode : 'money';
     $paymentMethodId = intval($_POST['payment_method_id'] ?? 0);
     $referenceNumberRaw = trim((string) ($_POST['reference_number'] ?? ''));
     $phoneRaw = trim((string) ($_POST['phone'] ?? ''));
@@ -8427,7 +8556,18 @@ if ($action === 'submit_payment') {
         ]);
     }
 
-    if ($paymentMethodId <= 0) {
+    $binancePagonorteMode = $paymentMode === 'binance_pagonorte';
+
+    if ($binancePagonorteMode) {
+        if (!binance_pagonorte_payment_enabled()) {
+            json_error('Binance PagoNorte no está activo en esta tienda.', 409);
+        }
+        if (!binance_pagonorte_is_configured()) {
+            json_error('Falta configurar el token de Binance PagoNorte para usar este método.', 409);
+        }
+    }
+
+    if (!$binancePagonorteMode && $paymentMethodId <= 0) {
         json_error('Debes seleccionar un método de pago.');
     }
     if ($referenceNumberRaw === '') {
@@ -8440,9 +8580,21 @@ if ($action === 'submit_payment') {
         json_error('El número de referencia solo puede contener dígitos.');
     }
 
-    $method = fetch_active_payment_method($mysqli, $paymentMethodId);
-    if (!$method) {
-        json_error('El método de pago seleccionado no está disponible.');
+    if ($binancePagonorteMode) {
+        $usdtCurrency = currency_find_by_code('USDT');
+        $method = [
+            'id' => 0,
+            'nombre' => 'Binance PagoNorte',
+            'moneda_nombre' => (string) ($usdtCurrency['nombre'] ?? 'Tether USD'),
+            'moneda_clave' => 'USDT',
+            'referencia_digitos' => 0,
+            'descuento_porcentaje' => payment_methods_normalize_discount_percentage(store_config_get('binance_pagonorte_descuento', '0')),
+        ];
+    } else {
+        $method = fetch_active_payment_method($mysqli, $paymentMethodId);
+        if (!$method) {
+            json_error('El método de pago seleccionado no está disponible.');
+        }
     }
 
     $orderCurrencyCode = normalize_currency_code((string) ($order['moneda'] ?? ''));
@@ -8451,22 +8603,28 @@ if ($action === 'submit_payment') {
     $methodSupportsBankApi = order_currency_uses_bank_api($methodCurrencyCode);
     $currencyMatchesOrder = strcasecmp($methodCurrencyCode, $orderCurrencyCode) === 0;
 
+    if ($binancePagonorteMode && $orderCurrencyCode !== 'USDT') {
+        json_error('El pedido debe estar en USDT para usar Binance PagoNorte.', 409);
+    }
+
     if ($orderSupportsBankApi && !$currencyMatchesOrder) {
         json_error('El método de pago no corresponde a la moneda del pedido.');
     }
 
-    $referenceDigitsLimit = max(0, (int) ($method['referencia_digitos'] ?? 0));
+    $referenceDigitsLimit = $binancePagonorteMode ? 0 : max(0, (int) ($method['referencia_digitos'] ?? 0));
     if ($referenceDigitsLimit > 0 && strlen($referenceNumberRaw) !== $referenceDigitsLimit) {
         json_error('La referencia debe contener exactamente ' . $referenceDigitsLimit . ' dígitos.');
     }
 
-    $discountSync = persist_order_payment_selection($mysqli, $order, 'money', $method);
+    $discountSync = persist_order_payment_selection($mysqli, $order, $binancePagonorteMode ? 'binance_pagonorte' : 'money', $binancePagonorteMode ? null : $method);
     $order = is_array($discountSync['order'] ?? null) ? $discountSync['order'] : $order;
 
     $phone = substr($phoneRaw, 0, 40);
     $referenceNumber = substr($referenceNumberRaw, 0, 120);
+    $referenceMatchDigits = $binancePagonorteMode ? strlen($referenceNumber) : $referenceDigitsLimit;
     $bankFlowRequested = $orderSupportsBankApi || $methodSupportsBankApi;
     $usesBankValidation = $orderSupportsBankApi && $methodSupportsBankApi && $currencyMatchesOrder;
+    $usesBinancePagonorteValidation = $binancePagonorteMode && $currencyMatchesOrder && $methodCurrencyCode === 'USDT';
     $paymentDifferenceEnabled = payment_difference_feature_enabled() && $usesBankValidation;
     $overpaymentAmount = 0.0;
 
@@ -8476,16 +8634,21 @@ if ($action === 'submit_payment') {
         'ff_bank_token' => store_config_get('ff_bank_token', ''),
         'ff_bank_clave' => store_config_get('ff_bank_clave', ''),
     ];
+    $binancePagonorteConfig = [
+        'binance_pagonorte_token' => store_config_get('binance_pagonorte_token', ''),
+    ];
     $bankMovements = [];
 
-    if ($bankFlowRequested) {
+    if ($bankFlowRequested || $usesBinancePagonorteValidation) {
         try {
-            $bankMovements = fetch_and_sync_bank_movements($mysqli, $bankConfig);
+            $bankMovements = $usesBinancePagonorteValidation
+                ? fetch_and_sync_binance_pagonorte_movements($mysqli, $binancePagonorteConfig)
+                : fetch_and_sync_bank_movements($mysqli, $bankConfig);
         } catch (Throwable $e) {
             json_error('Su Pago está en proceso, Espere 1 min y vuelva a intentar', 502);
         }
 
-        if (!$usesBankValidation) {
+        if ($bankFlowRequested && !$usesBankValidation && !$usesBinancePagonorteValidation) {
             error_log('TVG bank validation skipped for order #' . $orderId
                 . ' order_currency=' . ($order['moneda'] ?? '')
                 . ' normalized_order_currency=' . $orderCurrencyCode
@@ -8496,13 +8659,13 @@ if ($action === 'submit_payment') {
     }
 
     $preselectedMatchingMovement = null;
-    if ($usesBankValidation) {
+    if ($usesBankValidation || $usesBinancePagonorteValidation) {
         $preselectedMatchingMovement = $paymentDifferenceEnabled
             ? find_bank_movement_by_reference(
                 $mysqli,
                 $bankMovements,
                 $referenceNumber,
-                $referenceDigitsLimit,
+                $referenceMatchDigits,
                 $orderId
             )
             : find_matching_bank_movement(
@@ -8510,13 +8673,13 @@ if ($action === 'submit_payment') {
                 $bankMovements,
                 $referenceNumber,
                 (float) ($order['precio'] ?? 0),
-                $referenceDigitsLimit,
+                $referenceMatchDigits,
                 $orderId
             );
     }
 
     $referenceConflict = null;
-    if ($usesBankValidation) {
+    if ($usesBankValidation || $usesBinancePagonorteValidation) {
         if ($preselectedMatchingMovement !== null) {
             $referenceConflict = find_reference_reuse_conflict(
                 $mysqli,
@@ -8558,7 +8721,7 @@ if ($action === 'submit_payment') {
     $brandingImages = email_branding_embedded_images();
     $usesCatalogApi = order_uses_catalog_api_provider($updatedOrder);
 
-    if ($usesBankValidation) {
+    if ($usesBankValidation || $usesBinancePagonorteValidation) {
         $matchingMovement = $preselectedMatchingMovement;
 
         if ($matchingMovement === null) {
@@ -8568,23 +8731,35 @@ if ($action === 'submit_payment') {
                         $mysqli,
                         $bankConfig,
                         $referenceNumber,
-                        $referenceDigitsLimit,
+                        $referenceMatchDigits,
                         $orderId,
                         3,
                         5,
                         $bankMovements
                     )
-                    : find_matching_bank_movement_with_retry(
-                        $mysqli,
-                        $bankConfig,
-                        $referenceNumber,
-                        (float) ($updatedOrder['precio'] ?? 0),
-                        $referenceDigitsLimit,
-                        $orderId,
-                        3,
-                        5,
-                        $bankMovements
-                    );
+                    : ($usesBinancePagonorteValidation
+                        ? find_matching_binance_pagonorte_movement_with_retry(
+                            $mysqli,
+                            $binancePagonorteConfig,
+                            $referenceNumber,
+                            (float) ($updatedOrder['precio'] ?? 0),
+                            $referenceMatchDigits,
+                            $orderId,
+                            3,
+                            5,
+                            $bankMovements
+                        )
+                        : find_matching_bank_movement_with_retry(
+                            $mysqli,
+                            $bankConfig,
+                            $referenceNumber,
+                            (float) ($updatedOrder['precio'] ?? 0),
+                            $referenceMatchDigits,
+                            $orderId,
+                            3,
+                            5,
+                            $bankMovements
+                        ));
                 $matchingMovement = $retryResult['match'];
                 $bankMovements = $retryResult['movements'];
                 error_log('TVG bank validation attempts for order #' . $orderId . ': ' . (int) ($retryResult['attempts'] ?? 1));
@@ -8594,7 +8769,7 @@ if ($action === 'submit_payment') {
         }
 
         if ($matchingMovement === null) {
-            $expiredReference = find_expired_bank_movement_by_reference($bankMovements, $referenceNumber, $referenceDigitsLimit);
+            $expiredReference = find_expired_bank_movement_by_reference($bankMovements, $referenceNumber, $referenceMatchDigits);
             if ($expiredReference !== null) {
                 $expiredDayLabel = format_bank_movement_business_day((string) ($expiredReference['movement_day'] ?? ''));
                 $expiredReasons = [];
@@ -9024,7 +9199,7 @@ if ($action === 'submit_payment') {
             });
         }
 
-        $mismatch = explain_bank_movement_mismatch($bankMovements, $referenceNumber, (float) ($updatedOrder['precio'] ?? 0), $referenceDigitsLimit);
+        $mismatch = explain_bank_movement_mismatch($bankMovements, $referenceNumber, (float) ($updatedOrder['precio'] ?? 0), $referenceMatchDigits);
         $pendingOrder = fetch_order_by_id($mysqli, $orderId) ?: $updatedOrder;
         json_response([
             'ok' => true,

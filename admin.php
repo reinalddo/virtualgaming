@@ -1711,6 +1711,27 @@ function admin_fetch_binance_pagonorte_movements_from_api(array $config): array 
     return $normalized;
 }
 
+function admin_fetch_binance_pagonorte_balance_from_api(array $config): array {
+    $token = trim((string) ($config['binance_pagonorte_token'] ?? ''));
+    if ($token === '') {
+        throw new RuntimeException('El token de Binance PagoNorte no está configurado.');
+    }
+
+    $url = store_config_build_binance_pagonorte_balance_url($token);
+    $data = admin_http_get_json($url, 20, false);
+    $availableDays = isset($data['dias_disponibles']) ? max(0, (int) $data['dias_disponibles']) : null;
+    $cutoffDate = trim((string) ($data['fecha_corte'] ?? ''));
+
+    store_config_upsert('binance_pagonorte_dias_disponibles', $availableDays !== null ? (string) $availableDays : '');
+    store_config_upsert('binance_pagonorte_fecha_corte', $cutoffDate);
+
+    return [
+        'dias_disponibles' => $availableDays,
+        'fecha_corte' => $cutoffDate,
+        'payload' => $data,
+    ];
+}
+
 function admin_sync_bank_movements(PDO $pdo, array $movements): array {
     if (empty($movements)) {
         return [
@@ -2722,19 +2743,133 @@ switch ($seccion) {
             }
 
             if ($activeTab === 'verificacion-binance') {
+                $paymentMethodDiscountsEnabled = trim((string) store_config_get('descuento_metodo_pago', '0')) === '1';
+                $binancePagonorteEnabled = isset($_POST['binance_pagonorte_activo_present'])
+                    ? (isset($_POST['binance_pagonorte_activo']) && (string) $_POST['binance_pagonorte_activo'] === '1' ? '1' : '0')
+                    : trim((string) store_config_get('binance_pagonorte_activo', '0'));
                 $binancePagonorteToken = trim((string) ($_POST['binance_pagonorte_token'] ?? ''));
+                $binancePagonorteData = trim((string) ($_POST['binance_pagonorte_datos'] ?? ''));
                 $binancePagonorteDiscountRaw = trim((string) ($_POST['binance_pagonorte_descuento'] ?? '0'));
+                $currentBinancePagonorteImage = trim((string) store_config_get('binance_pagonorte_image', ''));
+                $nextBinancePagonorteImage = $currentBinancePagonorteImage;
+                $currentBinancePagonorteCornerImage = trim((string) store_config_get('binance_pagonorte_corner_image', ''));
+                $nextBinancePagonorteCornerImage = $currentBinancePagonorteCornerImage;
+                $currentBinancePagonorteQrImage = trim((string) store_config_get('binance_pagonorte_qr_image', ''));
+                $nextBinancePagonorteQrImage = $currentBinancePagonorteQrImage;
+                $hasBinancePagonorteImageUpload = isset($_FILES['binance_pagonorte_image'])
+                    && (($_FILES['binance_pagonorte_image']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
+                $hasBinancePagonorteCornerImageUpload = isset($_FILES['binance_pagonorte_corner_image'])
+                    && (($_FILES['binance_pagonorte_corner_image']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
+                $hasBinancePagonorteQrImageUpload = isset($_FILES['binance_pagonorte_qr_image'])
+                    && (($_FILES['binance_pagonorte_qr_image']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE);
 
-                if ($binancePagonorteDiscountRaw !== '' && !is_numeric(str_replace(',', '.', $binancePagonorteDiscountRaw))) {
+                if ($paymentMethodDiscountsEnabled && $binancePagonorteDiscountRaw !== '' && !is_numeric(str_replace(',', '.', $binancePagonorteDiscountRaw))) {
                     admin_set_flash('error', 'El descuento de Verificación Binance debe ser numérico.');
                     define('ADMIN_CONFIG_POST_HANDLED', true);
                     admin_redirect('configuracion', ['tab' => 'verificacion-binance']);
                 }
 
-                $binancePagonorteDiscount = max(0, min(100, payment_methods_normalize_discount_percentage($binancePagonorteDiscountRaw)));
+                if ($hasBinancePagonorteImageUpload) {
+                    $upload = store_config_store_named_logo_upload($_FILES['binance_pagonorte_image'], 'binance-pagonorte-method');
+                    if (!($upload['success'] ?? false)) {
+                        admin_set_flash('error', (string) ($upload['message'] ?? 'No se pudo cargar la imagen de Binance PagoNorte.'));
+                        define('ADMIN_CONFIG_POST_HANDLED', true);
+                        admin_redirect('configuracion', ['tab' => 'verificacion-binance']);
+                    }
+                    if (!empty($upload['path'])) {
+                        $nextBinancePagonorteImage = (string) $upload['path'];
+                    }
+                } elseif (isset($_POST['remove_binance_pagonorte_image'])) {
+                    $nextBinancePagonorteImage = '';
+                }
+
+                if ($hasBinancePagonorteCornerImageUpload) {
+                    $cornerUpload = store_config_store_named_logo_upload($_FILES['binance_pagonorte_corner_image'], 'binance-pagonorte-corner');
+                    if (!($cornerUpload['success'] ?? false)) {
+                        if ($nextBinancePagonorteImage !== '' && $nextBinancePagonorteImage !== $currentBinancePagonorteImage) {
+                            store_config_delete_logo_file($nextBinancePagonorteImage);
+                        }
+                        admin_set_flash('error', (string) ($cornerUpload['message'] ?? 'No se pudo cargar la imagen promocional de Binance PagoNorte.'));
+                        define('ADMIN_CONFIG_POST_HANDLED', true);
+                        admin_redirect('configuracion', ['tab' => 'verificacion-binance']);
+                    }
+                    if (!empty($cornerUpload['path'])) {
+                        $nextBinancePagonorteCornerImage = (string) $cornerUpload['path'];
+                    }
+                } elseif (isset($_POST['remove_binance_pagonorte_corner_image'])) {
+                    $nextBinancePagonorteCornerImage = '';
+                }
+
+                if ($hasBinancePagonorteQrImageUpload) {
+                    $qrUpload = store_config_store_named_logo_upload($_FILES['binance_pagonorte_qr_image'], 'binance-pagonorte-qr');
+                    if (!($qrUpload['success'] ?? false)) {
+                        if ($nextBinancePagonorteImage !== '' && $nextBinancePagonorteImage !== $currentBinancePagonorteImage) {
+                            store_config_delete_logo_file($nextBinancePagonorteImage);
+                        }
+                        if ($nextBinancePagonorteCornerImage !== '' && $nextBinancePagonorteCornerImage !== $currentBinancePagonorteCornerImage) {
+                            store_config_delete_logo_file($nextBinancePagonorteCornerImage);
+                        }
+                        admin_set_flash('error', (string) ($qrUpload['message'] ?? 'No se pudo cargar el QR de Binance PagoNorte.'));
+                        define('ADMIN_CONFIG_POST_HANDLED', true);
+                        admin_redirect('configuracion', ['tab' => 'verificacion-binance']);
+                    }
+                    if (!empty($qrUpload['path'])) {
+                        $nextBinancePagonorteQrImage = (string) $qrUpload['path'];
+                    }
+                } elseif (isset($_POST['remove_binance_pagonorte_qr_image'])) {
+                    $nextBinancePagonorteQrImage = '';
+                }
+
+                $binancePagonorteDiscount = $paymentMethodDiscountsEnabled
+                    ? max(0, min(100, payment_methods_normalize_discount_percentage($binancePagonorteDiscountRaw)))
+                    : 0.0;
                 store_config_upsert('binance_pagonorte_token', $binancePagonorteToken);
+                store_config_upsert('binance_pagonorte_activo', $binancePagonorteEnabled);
+                store_config_upsert('binance_pagonorte_datos', $binancePagonorteData);
+                if ($nextBinancePagonorteImage === '') {
+                    store_config_delete('binance_pagonorte_image');
+                } else {
+                    store_config_upsert('binance_pagonorte_image', $nextBinancePagonorteImage);
+                }
+                if ($nextBinancePagonorteCornerImage === '') {
+                    store_config_delete('binance_pagonorte_corner_image');
+                } else {
+                    store_config_upsert('binance_pagonorte_corner_image', $nextBinancePagonorteCornerImage);
+                }
+                if ($nextBinancePagonorteQrImage === '') {
+                    store_config_delete('binance_pagonorte_qr_image');
+                } else {
+                    store_config_upsert('binance_pagonorte_qr_image', $nextBinancePagonorteQrImage);
+                }
                 store_config_upsert('binance_pagonorte_descuento', rtrim(rtrim(number_format($binancePagonorteDiscount, 2, '.', ''), '0'), '.'));
-                admin_set_flash('success', 'Configuración de Verificación Binance actualizada.');
+
+                if ($binancePagonorteToken === '') {
+                    store_config_upsert('binance_pagonorte_dias_disponibles', '');
+                    store_config_upsert('binance_pagonorte_fecha_corte', '');
+                }
+
+                $balanceWarning = '';
+                if ($binancePagonorteToken !== '') {
+                    try {
+                        admin_fetch_binance_pagonorte_balance_from_api([
+                            'binance_pagonorte_token' => $binancePagonorteToken,
+                        ]);
+                    } catch (Throwable $e) {
+                        $balanceWarning = ' No se pudo consultar el saldo de Binance PagoNorte en este momento.';
+                    }
+                }
+
+                if ($currentBinancePagonorteImage !== '' && $currentBinancePagonorteImage !== $nextBinancePagonorteImage) {
+                    store_config_delete_logo_file($currentBinancePagonorteImage);
+                }
+                if ($currentBinancePagonorteCornerImage !== '' && $currentBinancePagonorteCornerImage !== $nextBinancePagonorteCornerImage) {
+                    store_config_delete_logo_file($currentBinancePagonorteCornerImage);
+                }
+                if ($currentBinancePagonorteQrImage !== '' && $currentBinancePagonorteQrImage !== $nextBinancePagonorteQrImage) {
+                    store_config_delete_logo_file($currentBinancePagonorteQrImage);
+                }
+
+                admin_set_flash('success', 'Configuración de Verificación Binance actualizada.' . $balanceWarning);
             }
 
             if ($activeTab === 'paypal') {

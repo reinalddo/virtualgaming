@@ -81,6 +81,44 @@ function currency_find_by_code(string $code): ?array {
     return $currency ?: null;
 }
 
+function currency_ensure_code(string $code, string $name = '', float $rate = 1.0, bool $showDecimals = true, bool $active = true): ?array {
+    currency_ensure_schema();
+
+    $normalizedCode = currency_normalize_code($code);
+    if ($normalizedCode === '') {
+        return null;
+    }
+
+    $existing = currency_find_by_code($normalizedCode);
+    $mysqli = currency_db();
+    $activeFlag = $active ? 1 : 0;
+    $showDecimalsFlag = $showDecimals ? 1 : 0;
+
+    if ($existing === null) {
+        $resolvedName = trim($name) !== '' ? trim($name) : $normalizedCode;
+        $stmt = $mysqli->prepare('INSERT INTO monedas (nombre, clave, tasa, es_base, activo, mostrar_decimales) VALUES (?, ?, ?, 0, ?, ?)');
+        if ($stmt) {
+            $stmt->bind_param('ssdii', $resolvedName, $normalizedCode, $rate, $activeFlag, $showDecimalsFlag);
+            $stmt->execute();
+            $stmt->close();
+        }
+
+        return currency_find_by_code($normalizedCode);
+    }
+
+    $currencyId = isset($existing['id']) ? (int) $existing['id'] : 0;
+    if ($currencyId > 0 && ((int) ($existing['activo'] ?? 1) !== $activeFlag || (int) ($existing['mostrar_decimales'] ?? 1) !== $showDecimalsFlag)) {
+        $stmt = $mysqli->prepare('UPDATE monedas SET activo = ?, mostrar_decimales = ? WHERE id = ? LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('iii', $activeFlag, $showDecimalsFlag, $currencyId);
+            $stmt->execute();
+            $stmt->close();
+        }
+    }
+
+    return currency_find_by_code($normalizedCode);
+}
+
 function currency_should_show_decimals(?array $currency): bool {
     if (!is_array($currency)) {
         return true;

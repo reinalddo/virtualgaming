@@ -1669,21 +1669,44 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
               $binancePagonorteMovementsUrl = store_config_build_binance_pagonorte_movements_url($binancePagonorteToken);
               $binancePagonorteBalanceUrl = store_config_build_binance_pagonorte_balance_url($binancePagonorteToken);
               $binancePagonorteAvailableDays = trim((string) ($cfg['binance_pagonorte_dias_disponibles'] ?? ''));
+              $binancePagonorteCutoffDate = trim((string) ($cfg['binance_pagonorte_fecha_corte'] ?? ''));
+              $binancePagonorteEnabled = trim((string) ($cfg['binance_pagonorte_activo'] ?? '0')) === '1';
               $binancePagonorteDiscount = trim((string) ($cfg['binance_pagonorte_descuento'] ?? '0'));
+              $binancePagonorteData = trim((string) ($cfg['binance_pagonorte_datos'] ?? ''));
+              $binancePagonorteImagePath = trim((string) ($cfg['binance_pagonorte_image'] ?? ''));
+              $binancePagonorteCornerImagePath = trim((string) ($cfg['binance_pagonorte_corner_image'] ?? ''));
+              $binancePagonorteQrImagePath = trim((string) ($cfg['binance_pagonorte_qr_image'] ?? ''));
             ?>
-            <form method="post">
+            <form method="post" enctype="multipart/form-data">
               <input type="hidden" name="config_section" value="verificacion-binance">
-              <div class="config-section-note mb-4">Configura aquí el token de Binance PagoNorte para consultar movimientos y saldo. Este tab solo se muestra cuando la función <strong>api_binance_pagonorte</strong> está activa para el tenant.</div>
+              <div class="config-section-note mb-4">Configura aquí el token, la presentación pública y los datos de cobro de Binance PagoNorte. Este tab solo se muestra cuando la función <strong>api_binance_pagonorte</strong> está activa para el tenant.</div>
 
-              <?php if ($binancePagonorteAvailableDays !== ''): ?>
+              <?php if ($binancePagonorteAvailableDays !== '' || $binancePagonorteCutoffDate !== ''): ?>
                 <div class="alert alert-info rounded-4 mb-4" role="status">
-                  La API Binance reporta actualmente <strong><?= htmlspecialchars($binancePagonorteAvailableDays, ENT_QUOTES, 'UTF-8') ?> días disponibles</strong> en la consulta de movimientos. Este dato se actualiza cuando se sincronizan movimientos manualmente.
+                  <?php if ($binancePagonorteAvailableDays !== ''): ?>
+                    La API Binance reporta actualmente <strong><?= htmlspecialchars($binancePagonorteAvailableDays, ENT_QUOTES, 'UTF-8') ?> días disponibles</strong>
+                  <?php else: ?>
+                    La API Binance ya respondió el último estado de saldo de esta integración
+                  <?php endif; ?>
+                  <?php if ($binancePagonorteCutoffDate !== ''): ?>
+                    y la <strong>fecha de corte</strong> registrada es <strong><?= htmlspecialchars($binancePagonorteCutoffDate, ENT_QUOTES, 'UTF-8') ?></strong>.
+                  <?php else: ?>
+                    para esta integración.
+                  <?php endif; ?>
                 </div>
               <?php endif; ?>
 
               <div class="gallery-table-wrap mb-2">
                 <h3 class="h5 fw-bold text-info mb-3">Datos de verificación Binance</h3>
                 <div class="row g-3">
+                  <div class="col-12">
+                    <input type="hidden" name="binance_pagonorte_activo_present" value="1">
+                    <div class="form-check form-switch mt-1">
+                      <input class="form-check-input" type="checkbox" role="switch" id="binancePagonorteEnabled" name="binance_pagonorte_activo" value="1" <?= $binancePagonorteEnabled ? 'checked' : '' ?>>
+                      <label class="form-check-label fw-semibold" for="binancePagonorteEnabled">Activar método de pago Binance PagoNorte en la web pública</label>
+                    </div>
+                    <div class="form-text mt-2">Cuando esté activo, este método aparecerá en los juegos y permitirá cobrar en USDT con validación automática por referencia.</div>
+                  </div>
                   <div class="col-md-8">
                     <label class="form-label">Token</label>
                     <input type="text" id="binance-pagonorte-token" name="binance_pagonorte_token" value="<?= htmlspecialchars($binancePagonorteToken, ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="Pega aquí el token de PagoNorte para Binance">
@@ -1694,12 +1717,74 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
                     <div class="form-text mt-2">Porcentaje que se descontará al usar este método de pago.</div>
                   </div>
                   <div class="col-12">
+                    <label class="form-label">Datos de transferencia</label>
+                    <textarea name="binance_pagonorte_datos" rows="5" class="form-control" placeholder="Ejemplo:&#10;Correo Binance: ...&#10;ID Binance Pay: ...&#10;Nombre del beneficiario: ..."><?= htmlspecialchars($binancePagonorteData, ENT_QUOTES, 'UTF-8') ?></textarea>
+                    <div class="form-text mt-2">Estos datos se mostrarán junto al QR dentro de la ventana de pago, tal como ocurre con los pagos manuales en Bs.</div>
+                  </div>
+                  <div class="col-12">
                     <label class="form-label">Enlace para verificar movimientos</label>
                     <input type="text" id="binance-pagonorte-movements-url" value="<?= htmlspecialchars($binancePagonorteMovementsUrl, ENT_QUOTES, 'UTF-8') ?>" class="form-control" readonly onclick="this.select()">
                   </div>
                   <div class="col-12">
                     <label class="form-label">Enlace para verificar saldo</label>
                     <input type="text" id="binance-pagonorte-balance-url" value="<?= htmlspecialchars($binancePagonorteBalanceUrl, ENT_QUOTES, 'UTF-8') ?>" class="form-control" readonly onclick="this.select()">
+                  </div>
+                  <div class="col-md-7">
+                    <label class="form-label">Imagen del método de pago</label>
+                    <input type="file" name="binance_pagonorte_image" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" class="form-control">
+                    <div class="form-text mt-2">Se mostrará en la card pública del método Binance PagoNorte. Tamaño recomendado: 1200x480 px.</div>
+                    <div class="form-check mt-3">
+                      <input class="form-check-input" type="checkbox" value="1" id="removeBinancePagonorteImage" name="remove_binance_pagonorte_image">
+                      <label class="form-check-label" for="removeBinancePagonorteImage">Eliminar imagen actual</label>
+                    </div>
+                  </div>
+                  <div class="col-md-5">
+                    <label class="form-label">Vista previa</label>
+                    <div class="config-section-note h-100 d-flex align-items-center justify-content-center p-3">
+                      <?php if ($binancePagonorteImagePath !== ''): ?>
+                        <img src="<?= htmlspecialchars(app_path('/' . ltrim($binancePagonorteImagePath, '/')), ENT_QUOTES, 'UTF-8') ?>" alt="Vista previa Binance PagoNorte" class="img-fluid rounded-4 border border-info-subtle">
+                      <?php else: ?>
+                        <span class="text-secondary">Sin imagen cargada</span>
+                      <?php endif; ?>
+                    </div>
+                  </div>
+                  <div class="col-md-7">
+                    <label class="form-label">Imagen promocional de esquina</label>
+                    <input type="file" name="binance_pagonorte_corner_image" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" class="form-control">
+                    <div class="form-text mt-2">Aparecerá flotando sobre la card pública para destacar promociones o campañas activas.</div>
+                    <div class="form-check mt-3">
+                      <input class="form-check-input" type="checkbox" value="1" id="removeBinancePagonorteCornerImage" name="remove_binance_pagonorte_corner_image">
+                      <label class="form-check-label" for="removeBinancePagonorteCornerImage">Eliminar imagen promocional actual</label>
+                    </div>
+                  </div>
+                  <div class="col-md-5">
+                    <label class="form-label">Vista previa promo esquina</label>
+                    <div class="config-section-note h-100 d-flex align-items-center justify-content-center p-3">
+                      <?php if ($binancePagonorteCornerImagePath !== ''): ?>
+                        <img src="<?= htmlspecialchars(app_path('/' . ltrim($binancePagonorteCornerImagePath, '/')), ENT_QUOTES, 'UTF-8') ?>" alt="Vista previa promo Binance PagoNorte" class="img-fluid rounded-4 border border-info-subtle" style="max-width: 180px;">
+                      <?php else: ?>
+                        <span class="text-secondary">Sin imagen cargada</span>
+                      <?php endif; ?>
+                    </div>
+                  </div>
+                  <div class="col-md-7">
+                    <label class="form-label">Imagen QR</label>
+                    <input type="file" name="binance_pagonorte_qr_image" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" class="form-control">
+                    <div class="form-text mt-2">Este QR se mostrará al cliente junto con los datos de transferencia durante el checkout.</div>
+                    <div class="form-check mt-3">
+                      <input class="form-check-input" type="checkbox" value="1" id="removeBinancePagonorteQrImage" name="remove_binance_pagonorte_qr_image">
+                      <label class="form-check-label" for="removeBinancePagonorteQrImage">Eliminar QR actual</label>
+                    </div>
+                  </div>
+                  <div class="col-md-5">
+                    <label class="form-label">Vista previa QR</label>
+                    <div class="config-section-note h-100 d-flex align-items-center justify-content-center p-3">
+                      <?php if ($binancePagonorteQrImagePath !== ''): ?>
+                        <img src="<?= htmlspecialchars(app_path('/' . ltrim($binancePagonorteQrImagePath, '/')), ENT_QUOTES, 'UTF-8') ?>" alt="Vista previa QR Binance PagoNorte" class="img-fluid rounded-4 border border-info-subtle" style="max-width: 220px;">
+                      <?php else: ?>
+                        <span class="text-secondary">Sin QR cargado</span>
+                      <?php endif; ?>
+                    </div>
                   </div>
                 </div>
               </div>
