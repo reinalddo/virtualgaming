@@ -634,27 +634,56 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
         flex-wrap: nowrap;
         gap: 0.75rem;
         align-items: center;
+        justify-content: flex-start;
+      }
+      .site-topbar-enabled #menu-toggle,
+      .site-topbar-enabled .site-header-topbar > div[aria-hidden="true"] {
+        display: none !important;
       }
       .site-topbar-enabled .site-topbar-search {
         display: none;
       }
       .site-topbar-enabled .site-brand {
+        order: 1;
         flex: 1 1 auto;
+        min-width: 0;
+        margin-right: auto;
       }
       .site-topbar-enabled .site-auth-container {
+        order: 3;
         flex: 0 1 auto;
-        margin-left: auto;
+        margin-left: 0;
+        display: block;
       }
       .site-topbar-mobile-search-toggle {
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        order: 2;
+        margin-left: 0;
+      }
+      .site-topbar-enabled .site-auth-trigger,
+      .site-topbar-enabled #user-trigger {
+        width: auto;
+        min-width: 0 !important;
       }
     }
-    @media (max-width: 575.98px) {
+    @media (max-width: 576px) {
       .site-header-topbar {
         padding-left: 0.75rem;
         padding-right: 0.75rem;
+        gap: 0.55rem;
+      }
+      .site-topbar-enabled .site-brand {
+        flex: 0 1 auto;
+        margin-right: auto;
+      }
+      .site-topbar-enabled .site-auth-container {
+        flex: 0 0 auto;
+      }
+      .site-topbar-mobile-search-toggle {
+        margin-left: auto;
+        flex: 0 0 44px;
       }
       .site-topbar-search-input {
         min-height: 44px;
@@ -662,7 +691,18 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
       }
       .site-topbar-enabled .site-auth-trigger,
       .site-topbar-enabled #user-trigger {
-        width: 100%;
+        width: auto;
+        min-width: 0 !important;
+      }
+      body.site-topbar-enabled:not(.site-user-authenticated) .site-auth-trigger {
+        width: 44px;
+        height: 44px;
+        min-width: 44px !important;
+        padding: 0 !important;
+        justify-content: center;
+      }
+      body.site-topbar-enabled:not(.site-user-authenticated) .site-auth-label {
+        display: none;
       }
     }
     @media (max-width: 767.98px) {
@@ -701,7 +741,9 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
         display: none;
       }
       .site-topbar-enabled .site-auth-container {
-        display: none;
+        display: block;
+        margin-left: 0;
+        flex: 0 1 auto;
       }
       body.site-topbar-enabled.site-user-authenticated .site-brand {
         display: inline-flex !important;
@@ -730,8 +772,16 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
         width: 34px !important;
         height: 34px !important;
       }
+      .site-topbar-enabled .site-auth-trigger {
+        padding: 0.55rem 0.78rem !important;
+        min-width: 0 !important;
+      }
+      .site-topbar-enabled .site-auth-label {
+        font-size: 0.7rem;
+        white-space: nowrap;
+      }
       .site-topbar-mobile-auth {
-        display: grid;
+        display: none;
       }
       .site-topbar-enabled #auth-menu,
       .site-topbar-enabled #user-menu {
@@ -749,7 +799,7 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
         -webkit-overflow-scrolling: touch;
       }
     }
-    @media (max-width: 575.98px) {
+    @media (max-width: 576px) {
       body.site-topbar-enabled.site-user-authenticated .site-mobile-only-toggle {
         display: none !important;
       }
@@ -773,6 +823,16 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
       }
     }
     @media (max-width: 399.98px) {
+      .site-topbar-enabled .site-brand {
+        flex: 0 1 auto;
+      }
+      .site-topbar-enabled .site-brand-copy {
+        display: none !important;
+      }
+      .site-topbar-enabled .site-brand-logo {
+        width: 42px;
+        height: 42px;
+      }
       body.site-topbar-enabled.site-user-authenticated #user-trigger {
         max-width: calc(100vw - 118px);
         gap: 0.55rem !important;
@@ -784,6 +844,11 @@ $authModalLoginEmail = trim((string) ($authModalState['email'] ?? ''));
       body.site-topbar-enabled.site-user-authenticated #user-trigger-initials {
         width: 32px !important;
         height: 32px !important;
+      }
+      body.site-topbar-enabled:not(.site-user-authenticated) .site-auth-trigger {
+        width: 42px;
+        height: 42px;
+        min-width: 42px !important;
       }
     }
   </style>
