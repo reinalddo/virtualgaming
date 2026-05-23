@@ -4729,12 +4729,12 @@ include __DIR__ . "/includes/header.php";
     }
 
     if (mode === 'paypal') {
-      if (pack && pack.moneda) {
-        return String(pack.moneda).trim().toUpperCase();
+      const preferredEntry = resolvePreferredPayPalCurrencyEntry();
+      if (preferredEntry && preferredEntry.clave) {
+        return String(preferredEntry.clave).trim().toUpperCase();
       }
 
-      const preferredEntry = resolvePreferredPayPalCurrencyEntry();
-      return String(preferredEntry && preferredEntry.clave ? preferredEntry.clave : '').trim().toUpperCase();
+      return String(pack && pack.moneda ? pack.moneda : '').trim().toUpperCase();
     }
 
     return '';
@@ -6054,8 +6054,9 @@ include __DIR__ . "/includes/header.php";
 
   function resolvePaymentPricing(mode = null, method = null) {
     const pack = activePaymentOrder && activePaymentOrder.pack ? activePaymentOrder.pack : activePack;
+    const resolvedMode = mode || (activePaymentOrder ? activePaymentOrder.paymentMode : 'money');
     const quantity = normalizeOrderQuantity(activePaymentOrder && activePaymentOrder.purchaseQuantity ? activePaymentOrder.purchaseQuantity : (pack && pack.purchaseQuantity ? pack.purchaseQuantity : getOrderQuantity()));
-    if ((mode || (activePaymentOrder ? activePaymentOrder.paymentMode : 'money')) === 'points' && pack && getPackRequiredPoints(pack, quantity) > 0) {
+    if (resolvedMode === 'points' && pack && getPackRequiredPoints(pack, quantity) > 0) {
       const pointsRequired = getPackRequiredPoints(pack, quantity);
       const pointsText = formatWinPointsAmount(pointsRequired);
       return {
@@ -6074,15 +6075,16 @@ include __DIR__ . "/includes/header.php";
       };
     }
 
-    const currencyCode = String((activePaymentOrder && activePaymentOrder.currency) || (pack && pack.moneda) || monedaActualClave || '').trim().toUpperCase();
+    const preferredCurrencyCode = resolvePreferredDisplayCurrencyCode(resolvedMode, method && method.id ? String(method.id) : '', pack);
+    const currencyCode = String(preferredCurrencyCode || (activePaymentOrder && activePaymentOrder.currency) || (pack && pack.moneda) || monedaActualClave || '').trim().toUpperCase();
     const showDecimals = Boolean(pack && pack.showDecimals);
     const baseAmount = normalizeCurrencyAmount(Number(activePaymentOrder && activePaymentOrder.baseAmount !== undefined ? activePaymentOrder.baseAmount : selectedTotalValue), showDecimals);
-    const discountPercentage = resolvePaymentModeDiscountPercentage(mode || (activePaymentOrder ? activePaymentOrder.paymentMode : 'money'), method);
+    const discountPercentage = resolvePaymentModeDiscountPercentage(resolvedMode, method);
     const discountAmount = discountPercentage > 0
       ? normalizeCurrencyAmount((baseAmount * discountPercentage) / 100, showDecimals)
       : 0;
     const subtotalAmount = normalizeCurrencyAmount(Math.max(0, baseAmount - discountAmount), showDecimals);
-    const taxPercentage = resolvePaymentModeTaxPercentage(mode || (activePaymentOrder ? activePaymentOrder.paymentMode : 'money'));
+    const taxPercentage = resolvePaymentModeTaxPercentage(resolvedMode);
     const taxAmount = taxPercentage > 0
       ? normalizeCurrencyAmount((subtotalAmount * taxPercentage) / 100, showDecimals)
       : 0;
