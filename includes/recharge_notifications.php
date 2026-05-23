@@ -104,9 +104,9 @@ if (!function_exists('recharge_notifications_recharge_label')) {
 if (!function_exists('recharge_notifications_image_url')) {
     function recharge_notifications_image_url(array $order): string {
         $candidates = [
-            (string) ($order['paquete_imagen_icono'] ?? ''),
-            (string) ($order['juego_imagen_paquete'] ?? ''),
             (string) ($order['juego_imagen'] ?? ''),
+            (string) ($order['juego_imagen_paquete'] ?? ''),
+            (string) ($order['paquete_imagen_icono'] ?? ''),
         ];
 
         foreach ($candidates as $candidate) {
