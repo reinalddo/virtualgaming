@@ -1847,6 +1847,11 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
                     <input type="text" name="paypal_brand_name" value="<?= htmlspecialchars($cfg['paypal_brand_name'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="TVirtualGaming Store Local">
                     <div class="form-text mt-2">Este nombre se envía a PayPal para que el cliente vea la marca correcta durante el checkout.</div>
                   </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Impuesto Paypal</label>
+                    <input type="number" name="paypal_impuesto" min="0" max="100" step="0.01" value="<?= htmlspecialchars($cfg['paypal_impuesto'] ?? '0', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="0.00">
+                    <div class="form-text mt-2">Porcentaje extra que se sumará al total cuando el cliente elija PayPal. Ejemplo: si el juego cuesta 100 y aquí colocas 10, PayPal mostrará 110.</div>
+                  </div>
                   <div class="col-md-6">
                     <label class="form-label">Client ID</label>
                     <input type="text" name="paypal_client_id" value="<?= htmlspecialchars($cfg['paypal_client_id'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="AQ...">

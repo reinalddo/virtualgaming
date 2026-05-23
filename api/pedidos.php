@@ -2561,6 +2561,10 @@ function payment_method_binance_discount_percentage(): float {
     return payment_methods_normalize_discount_percentage(store_config_get('binance_pay_descuento', '0'));
 }
 
+function payment_method_paypal_tax_percentage(): float {
+    return max(0, min(100, payment_methods_normalize_discount_percentage(store_config_get('paypal_impuesto', '0'))));
+}
+
 function resolve_order_payment_discount_base_amount(array $order): float {
     $baseAmount = payment_difference_normalize_amount((float) ($order['precio_descuento_metodo_pago_base'] ?? 0));
     if ($baseAmount > 0) {
@@ -2574,6 +2578,7 @@ function resolve_order_payment_discount_snapshot(array $order, string $paymentMo
     $baseAmount = resolve_order_payment_discount_base_amount($order);
     $normalizedMode = in_array($paymentMode, ['money', 'binance_pagonorte', 'binance', 'paypal'], true) ? $paymentMode : '';
     $percentage = 0.0;
+    $taxPercentage = 0.0;
     $methodName = '';
     $paymentMethodId = 0;
 
@@ -2595,6 +2600,7 @@ function resolve_order_payment_discount_snapshot(array $order, string $paymentMo
         }
     } elseif ($normalizedMode === 'paypal') {
         $methodName = 'PayPal';
+        $taxPercentage = payment_method_paypal_tax_percentage();
     }
 
     $discountAmount = payment_difference_normalize_amount(($baseAmount * $percentage) / 100);
@@ -2602,11 +2608,16 @@ function resolve_order_payment_discount_snapshot(array $order, string $paymentMo
         $discountAmount = $baseAmount;
     }
 
+    $subtotalAmount = payment_difference_normalize_amount(max(0, $baseAmount - $discountAmount));
+    $taxAmount = payment_difference_normalize_amount(($subtotalAmount * $taxPercentage) / 100);
+
     return [
         'base_amount' => $baseAmount,
         'discount_percentage' => $percentage,
         'discount_amount' => $discountAmount,
-        'final_amount' => payment_difference_normalize_amount($baseAmount - $discountAmount),
+        'tax_percentage' => $taxPercentage,
+        'tax_amount' => $taxAmount,
+        'final_amount' => payment_difference_normalize_amount($subtotalAmount + $taxAmount),
         'method_name' => $methodName,
         'payment_method_id' => $paymentMethodId,
     ];

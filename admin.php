@@ -2879,6 +2879,13 @@ switch ($seccion) {
                 $clientSecret = trim((string) ($_POST['paypal_client_secret'] ?? ''));
                 $webhookId = trim((string) ($_POST['paypal_webhook_id'] ?? ''));
                 $brandName = trim((string) ($_POST['paypal_brand_name'] ?? ''));
+                $paypalTaxRaw = trim((string) ($_POST['paypal_impuesto'] ?? '0'));
+                if ($paypalTaxRaw !== '' && !is_numeric(str_replace(',', '.', $paypalTaxRaw))) {
+                    admin_set_flash('error', 'El Impuesto Paypal debe ser un número válido entre 0 y 100.');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'paypal']);
+                }
+                $paypalTax = max(0, min(100, payment_methods_normalize_discount_percentage($paypalTaxRaw)));
 
                 $currentPaypalImage = trim((string) store_config_get('paypal_image', ''));
                 $nextPaypalImage = $currentPaypalImage;
@@ -2950,6 +2957,7 @@ switch ($seccion) {
                 store_config_upsert('paypal_client_secret', $clientSecret);
                 store_config_upsert('paypal_webhook_id', $webhookId);
                 store_config_upsert('paypal_brand_name', $brandName);
+                store_config_upsert('paypal_impuesto', rtrim(rtrim(number_format($paypalTax, 2, '.', ''), '0'), '.'));
                 if ($nextPaypalImage === '') {
                     store_config_delete('paypal_image');
                 } else {

@@ -229,6 +229,7 @@ if ($binancePayCornerImageUrl !== '' && preg_match('#^https?://#i', $binancePayC
 $binancePagonorteCheckoutEnabled = trim((string) store_config_get('binance_pagonorte_activo', '0')) === '1'
   && trim((string) store_config_get('binance_pagonorte_token', '')) !== '';
 $binancePagonorteDiscountPercentage = payment_methods_normalize_discount_percentage(store_config_get('binance_pagonorte_descuento', '0'));
+$paypalPayTaxPercentage = payment_methods_normalize_discount_percentage(store_config_get('paypal_impuesto', '0'));
 $binancePagonorteTransferData = trim((string) store_config_get('binance_pagonorte_datos', ''));
 $binancePagonorteImageUrl = trim((string) store_config_get('binance_pagonorte_image', ''));
 if ($binancePagonorteImageUrl !== '' && preg_match('#^https?://#i', $binancePagonorteImageUrl) !== 1) {
@@ -1799,6 +1800,13 @@ include __DIR__ . "/includes/header.php";
     box-shadow: 0 0 18px rgba(74, 222, 128, 0.18);
   }
 
+  .payment-discount-chip.is-tax {
+    border-color: rgba(251, 191, 36, 0.45);
+    background: rgba(120, 53, 15, 0.5);
+    color: #fef3c7;
+    box-shadow: 0 0 18px rgba(251, 191, 36, 0.16);
+  }
+
   .payment-discount-panel-title {
     color: #f8fafc;
     font-weight: 800;
@@ -1852,6 +1860,10 @@ include __DIR__ . "/includes/header.php";
 
   .payment-discount-stat-highlight strong {
     color: #86efac;
+  }
+
+  .payment-discount-stat-warning strong {
+    color: #fbbf24;
   }
 
   @media (max-width: 575.98px) {
@@ -4358,6 +4370,7 @@ include __DIR__ . "/includes/header.php";
   const paymentMethodDiscountsEnabled = <?= $paymentMethodDiscountsEnabled ? 'true' : 'false' ?>;
   const binancePayDiscountPercentage = <?= json_encode((float) $binancePayDiscountPercentage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const binancePagonorteDiscountPercentage = <?= json_encode((float) $binancePagonorteDiscountPercentage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+  const paypalPayTaxPercentage = <?= json_encode((float) $paypalPayTaxPercentage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const accountSaleFeatureEnabled = <?= $accountSaleFeatureEnabled ? 'true' : 'false' ?>;
   const binancePayButtonLabel = 'Binance Pay';
   const binancePayImageUrl = <?= json_encode($binancePayImageUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
@@ -5799,6 +5812,12 @@ include __DIR__ . "/includes/header.php";
       if (pricing.discountAmount > 0) {
         rows.push({ label: 'Tu ahorro', value: pricing.discountText, positive: true });
       }
+      if (pricing.taxPercentage > 0) {
+        rows.push({ label: 'Impuesto PayPal', value: formatDiscountPercentage(pricing.taxPercentage), positive: false });
+      }
+      if (pricing.taxAmount > 0) {
+        rows.push({ label: 'Aumento', value: pricing.taxText, positive: false });
+      }
     }
 
     if (pricing.totalAmount <= 0) {
@@ -6025,6 +6044,14 @@ include __DIR__ . "/includes/header.php";
     return 0;
   }
 
+  function resolvePaymentModeTaxPercentage(mode) {
+    if (mode === 'paypal') {
+      return normalizeDiscountPercentage(paypalPayTaxPercentage);
+    }
+
+    return 0;
+  }
+
   function resolvePaymentPricing(mode = null, method = null) {
     const pack = activePaymentOrder && activePaymentOrder.pack ? activePaymentOrder.pack : activePack;
     const quantity = normalizeOrderQuantity(activePaymentOrder && activePaymentOrder.purchaseQuantity ? activePaymentOrder.purchaseQuantity : (pack && pack.purchaseQuantity ? pack.purchaseQuantity : getOrderQuantity()));
@@ -6037,9 +6064,12 @@ include __DIR__ . "/includes/header.php";
         baseAmount: pointsRequired,
         discountPercentage: 0,
         discountAmount: 0,
+        taxPercentage: 0,
+        taxAmount: 0,
         totalAmount: pointsRequired,
         baseText: pointsText,
         discountText: formatWinPointsAmount(0),
+        taxText: formatWinPointsAmount(0),
         totalText: pointsText,
       };
     }
@@ -6051,7 +6081,12 @@ include __DIR__ . "/includes/header.php";
     const discountAmount = discountPercentage > 0
       ? normalizeCurrencyAmount((baseAmount * discountPercentage) / 100, showDecimals)
       : 0;
-    const totalAmount = normalizeCurrencyAmount(Math.max(0, baseAmount - discountAmount), showDecimals);
+    const subtotalAmount = normalizeCurrencyAmount(Math.max(0, baseAmount - discountAmount), showDecimals);
+    const taxPercentage = resolvePaymentModeTaxPercentage(mode || (activePaymentOrder ? activePaymentOrder.paymentMode : 'money'));
+    const taxAmount = taxPercentage > 0
+      ? normalizeCurrencyAmount((subtotalAmount * taxPercentage) / 100, showDecimals)
+      : 0;
+    const totalAmount = normalizeCurrencyAmount(subtotalAmount + taxAmount, showDecimals);
 
     return {
       currencyCode,
@@ -6059,9 +6094,12 @@ include __DIR__ . "/includes/header.php";
       baseAmount,
       discountPercentage,
       discountAmount,
+      taxPercentage,
+      taxAmount,
       totalAmount,
       baseText: formatPaymentDifferenceMoney(currencyCode, baseAmount, showDecimals),
       discountText: formatPaymentDifferenceMoney(currencyCode, discountAmount, showDecimals),
+      taxText: formatPaymentDifferenceMoney(currencyCode, taxAmount, showDecimals),
       totalText: formatPaymentDifferenceMoney(currencyCode, totalAmount, showDecimals),
     };
   }
@@ -6076,20 +6114,32 @@ include __DIR__ . "/includes/header.php";
       : (mode === 'paypal'
         ? String(paypalPayButtonLabel || 'PayPal')
         : String(options.method && options.method.nombre ? options.method.nombre : 'Metodo de pago')));
+    const hasTax = Number(pricing.taxPercentage || 0) > 0 && Number(pricing.taxAmount || 0) > 0;
     const badgeText = variant === 'summary' ? 'Metodo elegido' : '';
     const titleText = variant === 'method'
-      ? `${methodName} mantiene tu bonus en esta orden`
+      ? (hasTax ? `${methodName} suma un impuesto a esta orden` : `${methodName} mantiene tu bonus en esta orden`)
       : methodName;
     const copyText = variant === 'method'
-      ? `Precio real del paquete ${pricing.baseText}. Ahorras ${pricing.discountText} y cierras la compra pagando ${pricing.totalText}.`
-      : `Precio real del paquete ${pricing.baseText}. ${methodName} aplica ${formatDiscountPercentage(pricing.discountPercentage)} de descuento, te ahorra ${pricing.discountText} y deja el total final en ${pricing.totalText}.`;
+      ? (hasTax
+        ? `Precio real del paquete ${pricing.baseText}. ${methodName} suma ${pricing.taxText} de impuesto y cierras la compra pagando ${pricing.totalText}.`
+        : `Precio real del paquete ${pricing.baseText}. Ahorras ${pricing.discountText} y cierras la compra pagando ${pricing.totalText}.`)
+      : (hasTax
+        ? `Precio real del paquete ${pricing.baseText}. ${methodName} aplica ${formatDiscountPercentage(pricing.taxPercentage)} de impuesto, añade ${pricing.taxText} y deja el total final en ${pricing.totalText}.`
+        : `Precio real del paquete ${pricing.baseText}. ${methodName} aplica ${formatDiscountPercentage(pricing.discountPercentage)} de descuento, te ahorra ${pricing.discountText} y deja el total final en ${pricing.totalText}.`);
+    const chipText = hasTax ? `${formatDiscountPercentage(pricing.taxPercentage)} Impuesto` : `${formatDiscountPercentage(pricing.discountPercentage)} OFF`;
+    const chipClass = hasTax ? 'payment-discount-chip is-tax' : 'payment-discount-chip';
+    const percentageLabel = hasTax ? 'Impuesto' : 'Descuento';
+    const percentageValue = hasTax ? formatDiscountPercentage(pricing.taxPercentage) : formatDiscountPercentage(pricing.discountPercentage);
+    const amountLabel = hasTax ? 'Aumenta' : 'Ahorras';
+    const amountValue = hasTax ? pricing.taxText : pricing.discountText;
+    const amountStatClass = hasTax ? 'payment-discount-stat payment-discount-stat-warning' : 'payment-discount-stat';
     const totalLabel = variant === 'method' ? 'Pagas hoy' : 'Total final';
 
     return `
       <div class="payment-discount-panel payment-discount-panel-${variant}">
         <div class="payment-discount-panel-head">
           ${badgeText !== '' ? `<span class="payment-discount-badge">${escapePaymentHtml(badgeText)}</span>` : '<span></span>'}
-          <span class="payment-discount-chip">${escapePaymentHtml(formatDiscountPercentage(pricing.discountPercentage))} OFF</span>
+          <span class="${escapePaymentHtml(chipClass)}">${escapePaymentHtml(chipText)}</span>
         </div>
         <div class="payment-discount-panel-title">${escapePaymentHtml(titleText)}</div>
         <div class="payment-discount-panel-copy">${escapePaymentHtml(copyText)}</div>
@@ -6099,12 +6149,12 @@ include __DIR__ . "/includes/header.php";
             <strong>${escapePaymentHtml(pricing.baseText)}</strong>
           </div>
           <div class="payment-discount-stat">
-            <span>Descuento</span>
-            <strong>${escapePaymentHtml(formatDiscountPercentage(pricing.discountPercentage))}</strong>
+            <span>${escapePaymentHtml(percentageLabel)}</span>
+            <strong>${escapePaymentHtml(percentageValue)}</strong>
           </div>
-          <div class="payment-discount-stat">
-            <span>Ahorras</span>
-            <strong>${escapePaymentHtml(pricing.discountText)}</strong>
+          <div class="${escapePaymentHtml(amountStatClass)}">
+            <span>${escapePaymentHtml(amountLabel)}</span>
+            <strong>${escapePaymentHtml(amountValue)}</strong>
           </div>
           <div class="payment-discount-stat payment-discount-stat-highlight">
             <span>${escapePaymentHtml(totalLabel)}</span>
@@ -6132,10 +6182,12 @@ include __DIR__ . "/includes/header.php";
     activePaymentOrder.confirmedTotalText = pricing.totalText;
     activePaymentOrder.discountPercentage = pricing.discountPercentage;
     activePaymentOrder.discountAmount = pricing.discountAmount;
+    activePaymentOrder.taxPercentage = pricing.taxPercentage;
+    activePaymentOrder.taxAmount = pricing.taxAmount;
     renderPaymentSummary(activePaymentOrder.pack, activePaymentOrder.userId, pricing.totalText);
 
     if (paymentSummaryDiscount) {
-      if (pricing.discountPercentage > 0 && activePaymentOrder.paymentMode !== 'points') {
+      if ((pricing.discountPercentage > 0 || pricing.taxPercentage > 0) && activePaymentOrder.paymentMode !== 'points') {
         paymentSummaryDiscount.innerHTML = renderPaymentDiscountPanel(pricing, {
           variant: 'summary',
           mode: activePaymentOrder.paymentMode,
@@ -6517,7 +6569,10 @@ include __DIR__ . "/includes/header.php";
     const totalMarkup = totalText !== ''
       ? `<div class="payment-mode-item-currency">Total estimado en PayPal: ${totalText}</div>`
       : '';
-    return `<div class="payment-mode-item-card payment-mode-item-card-points"><div class="payment-mode-item-card-title">${escapePaymentHtml(paypalPayButtonLabel)}</div>${totalMarkup}<div class="payment-mode-item-details">Paga con tu cuenta, saldo o tarjeta a través del checkout oficial de PayPal. Abriremos una ventana externa y esta pantalla seguirá sincronizando el estado del pedido hasta que la confirmación quede registrada.</div></div>`;
+    const taxMarkup = pricing.taxPercentage > 0
+      ? `<div class="payment-mode-item-currency">Impuesto PayPal: ${escapePaymentHtml(formatDiscountPercentage(pricing.taxPercentage))}</div>`
+      : '';
+    return `<div class="payment-mode-item-card payment-mode-item-card-points"><div class="payment-mode-item-card-title">${escapePaymentHtml(paypalPayButtonLabel)}</div>${totalMarkup}${taxMarkup}<div class="payment-mode-item-details">Paga con tu cuenta, saldo o tarjeta a través del checkout oficial de PayPal. Abriremos una ventana externa y esta pantalla seguirá sincronizando el estado del pedido hasta que la confirmación quede registrada.</div></div>`;
   }
 
   function renderPaymentModeOptions() {
