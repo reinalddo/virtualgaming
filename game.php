@@ -1827,6 +1827,46 @@ include __DIR__ . "/includes/header.php";
     margin-top: 0.35rem;
   }
 
+  .payment-transfer-copy-list {
+    display: grid;
+    gap: 0.7rem;
+  }
+
+  .payment-transfer-copy-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.78rem 0.85rem;
+    border-radius: 0.95rem;
+    border: 1px solid rgba(34, 211, 238, 0.16);
+    background: linear-gradient(180deg, rgba(8, 15, 24, 0.92), rgba(15, 23, 42, 0.88));
+  }
+
+  .payment-transfer-copy-line {
+    min-width: 0;
+    color: #e2e8f0;
+    font-size: 0.92rem;
+    font-weight: 600;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .payment-transfer-copy-btn,
+  .payment-transfer-copy-all-btn {
+    white-space: nowrap;
+  }
+
+  .payment-transfer-copy-actions {
+    margin-top: 0.85rem;
+  }
+
+  .payment-transfer-copy-note {
+    margin-top: 0.8rem;
+    color: #cbd5e1;
+  }
+
   .payment-method-qr-wrap {
     margin-top: 0.95rem;
     padding: 0.9rem;
@@ -2417,6 +2457,25 @@ include __DIR__ . "/includes/header.php";
     color: #e2e8f0;
     font-size: 0.92rem;
     line-height: 1.55;
+  }
+
+  @media (max-width: 575.98px) {
+    .payment-transfer-copy-row {
+      grid-template-columns: 1fr;
+      align-items: stretch;
+      gap: 0.55rem;
+      padding: 0.72rem 0.75rem;
+    }
+
+    .payment-transfer-copy-btn,
+    .payment-transfer-copy-all-btn {
+      width: 100%;
+    }
+
+    .payment-transfer-copy-line {
+      font-size: 0.88rem;
+      line-height: 1.42;
+    }
   }
 
   .payment-mode-btn:disabled {
@@ -8264,6 +8323,150 @@ include __DIR__ . "/includes/header.php";
     return copied;
   }
 
+  function encodePaymentCopyText(value) {
+    return encodeURIComponent(String(value || ''));
+  }
+
+  function decodePaymentCopyText(value) {
+    try {
+      return decodeURIComponent(String(value || ''));
+    } catch (_) {
+      return String(value || '');
+    }
+  }
+
+  function normalizePaymentTransferRawText(value) {
+    return String(value || '').replace(/\r\n?/g, '\n');
+  }
+
+  function paymentTransferDisplayLines(rawText) {
+    return normalizePaymentTransferRawText(rawText)
+      .split('\n')
+      .map((line) => String(line || '').trim())
+      .filter(Boolean);
+  }
+
+  function paymentTransferLineParts(rawLine) {
+    const normalizedLine = String(rawLine || '')
+      .replace(/^[\s\u2705\u2714\u25AA\u25CF\u2022\uFE0F\u{1F300}-\u{1FAFF}]+/gu, '')
+      .trim();
+    const colonIndex = normalizedLine.indexOf(':');
+    if (colonIndex === -1) {
+      return {
+        label: '',
+        value: normalizedLine,
+      };
+    }
+
+    return {
+      label: normalizedLine.slice(0, colonIndex).trim(),
+      value: normalizedLine.slice(colonIndex + 1).trim(),
+    };
+  }
+
+  function resolvePaymentTransferCopyValue(rawLine) {
+    const parts = paymentTransferLineParts(rawLine);
+    const label = normalizePaymentContextText(parts.label);
+    const rawValue = String(parts.value || '').trim();
+    const compactDigits = rawValue.replace(/\D+/g, '');
+    const compactAlphaNumeric = rawValue.replace(/[^0-9a-z]/gi, '').toUpperCase();
+
+    if (rawValue === '') {
+      return String(rawLine || '').trim();
+    }
+
+    if (/(telefono|celular|movil|whatsapp|phone)/.test(label)) {
+      return compactDigits || rawValue;
+    }
+
+    if (/(cedula|documento|dni|identidad|identificacion|rif)/.test(label)) {
+      return compactAlphaNumeric || rawValue;
+    }
+
+    if (/(binance)/.test(label) && /\bid\b/.test(label)) {
+      return compactAlphaNumeric || rawValue.replace(/\s+/g, '');
+    }
+
+    if (/(referencia|reference|cuenta|account|iban|clabe|cvu|wallet)/.test(label)) {
+      return compactAlphaNumeric || rawValue;
+    }
+
+    if (rawValue.includes('@')) {
+      return rawValue.replace(/\s+/g, '');
+    }
+
+    if (/^[\d\s\-+().]+$/.test(rawValue)) {
+      return compactDigits || rawValue;
+    }
+
+    return rawValue;
+  }
+
+  function buildPaymentTransferCopyMarkup(rawText, options = {}) {
+    const normalizedRawText = normalizePaymentTransferRawText(rawText);
+    const lines = paymentTransferDisplayLines(normalizedRawText);
+    const noteText = String((options && options.noteText) || '').trim();
+    const emptyText = String((options && options.emptyText) || 'No hay datos de transferencia disponibles.').trim();
+    const copyAllLabel = String((options && options.copyAllLabel) || 'Copiar todos los datos').trim();
+
+    if (!lines.length) {
+      return `<p>${escapePaymentHtml(emptyText)}</p>`;
+    }
+
+    const rowsMarkup = lines.map((line) => {
+      const copyValue = resolvePaymentTransferCopyValue(line);
+      return `
+        <div class="payment-transfer-copy-row">
+          <div class="payment-transfer-copy-line">${escapePaymentHtml(line)}</div>
+          <button type="button" class="btn btn-outline-info fw-bold payment-transfer-copy-btn" data-payment-copy-text="${escapePaymentHtml(encodePaymentCopyText(copyValue))}">Copiar</button>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="payment-transfer-copy-list">${rowsMarkup}</div>
+      <div class="payment-transfer-copy-actions">
+        <button type="button" class="btn btn-info fw-bold w-100 payment-transfer-copy-all-btn" data-payment-copy-text="${escapePaymentHtml(encodePaymentCopyText(normalizedRawText))}">${escapePaymentHtml(copyAllLabel)}</button>
+      </div>
+      ${noteText !== '' ? `<p class="payment-transfer-copy-note mb-0">${escapePaymentHtml(noteText)}</p>` : ''}`;
+  }
+
+  function buildPaymentInfoCopyMarkup(lines, options = {}) {
+    const normalizedLines = (Array.isArray(lines) ? lines : [])
+      .map((line) => String(line || '').trim())
+      .filter(Boolean);
+    const copyAllLabel = String((options && options.copyAllLabel) || 'Copiar información').trim();
+    if (!normalizedLines.length) {
+      return '<p>No hay información disponible.</p>';
+    }
+
+    const copyAllText = normalizedLines.join('\n');
+    return `
+      <div>
+        ${normalizedLines.map((line) => `<p>${escapePaymentHtml(line)}</p>`).join('')}
+        <div class="payment-transfer-copy-actions">
+          <button type="button" class="btn btn-info fw-bold w-100 payment-transfer-copy-all-btn" data-payment-copy-text="${escapePaymentHtml(encodePaymentCopyText(copyAllText))}">${escapePaymentHtml(copyAllLabel)}</button>
+        </div>
+      </div>`;
+  }
+
+  function bindPaymentTransferCopyButtons(container) {
+    if (!container) {
+      return;
+    }
+
+    container.querySelectorAll('[data-payment-copy-text]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const copyValue = decodePaymentCopyText(button.getAttribute('data-payment-copy-text') || '');
+        try {
+          const copied = await copyTextToClipboard(copyValue);
+          showToast(copied ? 'Dato copiado.' : 'No se pudo copiar el dato.', copied ? 'success' : 'error');
+        } catch (_) {
+          showToast('No se pudo copiar el dato.', 'error');
+        }
+      });
+    });
+  }
+
   function renderDeliveredCodesCard(container, codes) {
     if (!container || !Array.isArray(codes) || !codes.length) {
       return;
@@ -8760,11 +8963,19 @@ include __DIR__ . "/includes/header.php";
       paymentMethodTitle.textContent = String(binancePagonorteButtonLabel || 'Binance');
       paymentMethodCurrency.textContent = pricing.totalText ? `Total esperado en USDT: ${pricing.totalText}` : 'Pago en USDT con verificación automática';
       paymentMethodDetails.classList.add('payment-method-details-rich');
-      paymentMethodDetails.innerHTML = `
-        <div>
-          <p>${escapePaymentHtml(String(binancePagonorteTransferData || 'Realiza tu transferencia en Binance, luego confirma la referencia para validar el movimiento automáticamente.')).replace(/\n/g, '<br>')}</p>
-          <p class="mt-2 mb-0">Después de pagar, escribe tu referencia y tu teléfono de contacto para comparar el movimiento y aprobar la recarga.</p>
-        </div>`;
+      if (String(binancePagonorteTransferData || '').trim() !== '') {
+        paymentMethodDetails.innerHTML = buildPaymentTransferCopyMarkup(binancePagonorteTransferData, {
+          noteText: 'Después de pagar, escribe tu referencia y tu teléfono de contacto para comparar el movimiento y aprobar la recarga.',
+          copyAllLabel: 'Copiar todos los datos de Binance'
+        });
+        bindPaymentTransferCopyButtons(paymentMethodDetails);
+      } else {
+        paymentMethodDetails.innerHTML = `
+          <div>
+            <p>Realiza tu transferencia en Binance, luego confirma la referencia para validar el movimiento automáticamente.</p>
+            <p class="mt-2 mb-0">Después de pagar, escribe tu referencia y tu teléfono de contacto para comparar el movimiento y aprobar la recarga.</p>
+          </div>`;
+      }
       setPaymentMethodQrState(String(binancePagonorteQrImageUrl || '').trim(), 'QR para Binance');
       paymentReferenceInput.placeholder = 'Inserte su número de referencia para comprobar el pago';
       paymentReferenceHelp.textContent = 'Inserte su número de referencia para comprobar el pago en Binance.';
@@ -8777,18 +8988,19 @@ include __DIR__ . "/includes/header.php";
       const pricing = resolvePaymentPricing('binance', null);
       const binanceMoney = resolveBinanceDisplayMoney(activePaymentOrder && activePaymentOrder.pack ? activePaymentOrder.pack : null, pricing.totalAmount);
       const totalLabel = String((binanceMoney && binanceMoney.text) || pricing.totalText || '').trim();
+      const binanceInfoLines = [
+        'Paga de forma segura desde CoinPal usando tu cuenta o QR de Binance Pay.',
+        'La orden ya se abrirá con Binance Pay seleccionado desde el paso anterior.',
+        'Al confirmar, abriremos el checkout externo y esta ventana seguirá monitoreando la confirmación.',
+        'Si el checkout no se abre automáticamente, el sistema mostrará la opción para reintentarlo.'
+      ];
       paymentMethodTitle.textContent = String(binancePayButtonLabel || 'Binance Pay');
       paymentMethodCurrency.textContent = totalLabel !== '' ? `Total estimado en Binance Pay: ${totalLabel}` : 'Checkout externo seguro con CoinPal';
       paymentMethodDetails.classList.add('payment-method-details-rich');
-      paymentMethodDetails.innerHTML = `
-        <div>
-          <p>Paga de forma segura desde CoinPal usando tu cuenta o QR de Binance Pay.</p>
-          <ul>
-            <li>La orden ya se abrirá con Binance Pay seleccionado desde el paso anterior.</li>
-            <li>Al confirmar, abriremos el checkout externo y esta ventana seguirá monitoreando la confirmación.</li>
-            <li>Si el checkout no se abre automáticamente, el sistema mostrará la opción para reintentarlo.</li>
-          </ul>
-        </div>`;
+      paymentMethodDetails.innerHTML = buildPaymentInfoCopyMarkup(binanceInfoLines, {
+        copyAllLabel: 'Copiar información de Binance Pay'
+      });
+      bindPaymentTransferCopyButtons(paymentMethodDetails);
       paymentReferenceInput.placeholder = paymentReferencePlaceholder(null);
       paymentReferenceHelp.textContent = paymentReferenceHelpText(null);
       paymentReferenceInput.maxLength = 120;
@@ -8798,18 +9010,19 @@ include __DIR__ . "/includes/header.php";
 
     if (mode === 'paypal') {
       const pricing = resolvePaymentPricing('paypal', null);
+      const payPalInfoLines = [
+        'Te enviaremos al checkout oficial de PayPal para que autorices el pago con saldo, tarjeta o cuenta vinculada.',
+        'La orden se abrirá en una ventana externa segura de PayPal.',
+        'Al aprobar el pago, esta ventana seguirá sincronizando automáticamente el resultado.',
+        'Si el checkout no se abre o lo cierras por error, el sistema mostrará la opción para reabrirlo.'
+      ];
       paymentMethodTitle.textContent = String(paypalPayButtonLabel || 'PayPal');
       paymentMethodCurrency.textContent = pricing.totalText ? `Total estimado en PayPal: ${pricing.totalText}` : 'Checkout oficial seguro con PayPal';
       paymentMethodDetails.classList.add('payment-method-details-rich');
-      paymentMethodDetails.innerHTML = `
-        <div>
-          <p>Te enviaremos al checkout oficial de PayPal para que autorices el pago con saldo, tarjeta o cuenta vinculada.</p>
-          <ul>
-            <li>La orden se abrirá en una ventana externa segura de PayPal.</li>
-            <li>Al aprobar el pago, esta ventana seguirá sincronizando automáticamente el resultado.</li>
-            <li>Si el checkout no se abre o lo cierras por error, el sistema mostrará la opción para reabrirlo.</li>
-          </ul>
-        </div>`;
+      paymentMethodDetails.innerHTML = buildPaymentInfoCopyMarkup(payPalInfoLines, {
+        copyAllLabel: 'Copiar información de PayPal'
+      });
+      bindPaymentTransferCopyButtons(paymentMethodDetails);
       setPaymentMethodQrState(String(paypalPayQrImageUrl || '').trim(), 'QR o imagen de referencia para PayPal');
       paymentReferenceInput.placeholder = paymentReferencePlaceholder(null);
       paymentReferenceHelp.textContent = paymentReferenceHelpText(null);
@@ -8831,7 +9044,11 @@ include __DIR__ . "/includes/header.php";
     const currencyLabel = `${method.moneda_nombre || ''}${method.moneda_clave ? ` (${method.moneda_clave})` : ''}`.trim();
     paymentMethodTitle.textContent = `Datos para ${method.nombre || 'el pago'}`;
     paymentMethodCurrency.textContent = currencyLabel;
-    paymentMethodDetails.innerHTML = escapePaymentHtml(method.datos || '').replace(/\n/g, '<br>');
+    paymentMethodDetails.classList.add('payment-method-details-rich');
+    paymentMethodDetails.innerHTML = buildPaymentTransferCopyMarkup(String(method.datos || ''), {
+      copyAllLabel: 'Copiar todos los datos del método'
+    });
+    bindPaymentTransferCopyButtons(paymentMethodDetails);
     setPaymentMethodQrState(resolvePublicImageUrl(method.qr_image_path || ''), `QR para ${method.nombre || 'el pago'}`);
     const digits = Number(method.referencia_digitos || 0);
     paymentReferenceInput.placeholder = paymentReferencePlaceholder(method);
