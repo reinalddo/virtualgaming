@@ -33,6 +33,26 @@ if (!function_exists('recharge_notifications_logo_path')) {
     }
 }
 
+if (!function_exists('recharge_notifications_public_asset_url')) {
+    function recharge_notifications_public_asset_url(string $path): string {
+        $trimmed = trim($path);
+        if ($trimmed === '') {
+            return '';
+        }
+
+        if (preg_match('#^https?://#i', $trimmed) === 1) {
+            return $trimmed;
+        }
+
+        $normalized = '/' . ltrim($trimmed, '/');
+        if (function_exists('app_path')) {
+            return app_path($normalized);
+        }
+
+        return $normalized;
+    }
+}
+
 if (!function_exists('recharge_notifications_mask_user_label')) {
     function recharge_notifications_mask_user_label(string $email): string {
         $source = trim((string) strtok($email, '@'));
@@ -81,6 +101,25 @@ if (!function_exists('recharge_notifications_recharge_label')) {
     }
 }
 
+if (!function_exists('recharge_notifications_image_url')) {
+    function recharge_notifications_image_url(array $order): string {
+        $candidates = [
+            (string) ($order['paquete_imagen_icono'] ?? ''),
+            (string) ($order['juego_imagen_paquete'] ?? ''),
+            (string) ($order['juego_imagen'] ?? ''),
+        ];
+
+        foreach ($candidates as $candidate) {
+            $url = recharge_notifications_public_asset_url($candidate);
+            if ($url !== '') {
+                return $url;
+            }
+        }
+
+        return recharge_notifications_public_asset_url(recharge_notifications_logo_path());
+    }
+}
+
 if (!function_exists('recharge_notifications_build_payload')) {
     function recharge_notifications_build_payload(array $order, int $notificationId): array {
         $userLabel = recharge_notifications_mask_user_label((string) ($order['email'] ?? ''));
@@ -93,11 +132,12 @@ if (!function_exists('recharge_notifications_build_payload')) {
         return [
             'id' => $notificationId,
             'order_id' => (int) ($order['id'] ?? 0),
-            'title' => $userLabel . ' acaba de recargar',
+            'title' => 'Recarga Exitosa ✅',
             'detail' => $detail,
             'user_label' => $userLabel,
             'recharge_label' => $rechargeLabel,
             'game_name' => $gameName,
+            'image_url' => recharge_notifications_image_url($order),
         ];
     }
 }
@@ -176,9 +216,12 @@ if (!function_exists('recharge_notifications_fetch_since')) {
 
         if ($tenantSlug !== '') {
             $stmt = $mysqli->prepare(
-                'SELECT rn.id AS notification_id, p.id, p.email, p.juego_nombre, p.paquete_nombre, p.paquete_cantidad, p.tenant_slug
+                'SELECT rn.id AS notification_id, p.id, p.email, p.juego_nombre, p.paquete_nombre, p.paquete_cantidad, p.tenant_slug,
+                    jp.imagen_icono AS paquete_imagen_icono, j.imagen_paquete AS juego_imagen_paquete, j.imagen AS juego_imagen
                  FROM recarga_notificaciones rn
                  INNER JOIN pedidos p ON p.id = rn.pedido_id
+                 LEFT JOIN juego_paquetes jp ON jp.id = p.paquete_id
+                 LEFT JOIN juegos j ON j.id = p.juego_id
                  WHERE rn.id > ? AND rn.tenant_slug = ?
                  ORDER BY rn.id ASC
                  LIMIT ?'
@@ -190,9 +233,12 @@ if (!function_exists('recharge_notifications_fetch_since')) {
             $stmt->bind_param('isi', $cursor, $tenantSlug, $limit);
         } else {
             $stmt = $mysqli->prepare(
-                'SELECT rn.id AS notification_id, p.id, p.email, p.juego_nombre, p.paquete_nombre, p.paquete_cantidad, p.tenant_slug
+                'SELECT rn.id AS notification_id, p.id, p.email, p.juego_nombre, p.paquete_nombre, p.paquete_cantidad, p.tenant_slug,
+                    jp.imagen_icono AS paquete_imagen_icono, j.imagen_paquete AS juego_imagen_paquete, j.imagen AS juego_imagen
                  FROM recarga_notificaciones rn
                  INNER JOIN pedidos p ON p.id = rn.pedido_id
+                 LEFT JOIN juego_paquetes jp ON jp.id = p.paquete_id
+                 LEFT JOIN juegos j ON j.id = p.juego_id
                  WHERE rn.id > ?
                  ORDER BY rn.id ASC
                  LIMIT ?'
@@ -224,11 +270,15 @@ if (!function_exists('recharge_notifications_fetch_recent')) {
 
         if ($tenantSlug !== '') {
             $stmt = $mysqli->prepare(
-                'SELECT recent.notification_id, recent.id, recent.email, recent.juego_nombre, recent.paquete_nombre, recent.paquete_cantidad, recent.tenant_slug
+                'SELECT recent.notification_id, recent.id, recent.email, recent.juego_nombre, recent.paquete_nombre, recent.paquete_cantidad, recent.tenant_slug,
+                        recent.paquete_imagen_icono, recent.juego_imagen_paquete, recent.juego_imagen
                  FROM (
-                    SELECT rn.id AS notification_id, p.id, p.email, p.juego_nombre, p.paquete_nombre, p.paquete_cantidad, p.tenant_slug
+                    SELECT rn.id AS notification_id, p.id, p.email, p.juego_nombre, p.paquete_nombre, p.paquete_cantidad, p.tenant_slug,
+                           jp.imagen_icono AS paquete_imagen_icono, j.imagen_paquete AS juego_imagen_paquete, j.imagen AS juego_imagen
                     FROM recarga_notificaciones rn
                     INNER JOIN pedidos p ON p.id = rn.pedido_id
+                    LEFT JOIN juego_paquetes jp ON jp.id = p.paquete_id
+                    LEFT JOIN juegos j ON j.id = p.juego_id
                     WHERE rn.tenant_slug = ?
                     ORDER BY rn.id DESC
                     LIMIT ?
@@ -242,11 +292,15 @@ if (!function_exists('recharge_notifications_fetch_recent')) {
             $stmt->bind_param('si', $tenantSlug, $limit);
         } else {
             $stmt = $mysqli->prepare(
-                'SELECT recent.notification_id, recent.id, recent.email, recent.juego_nombre, recent.paquete_nombre, recent.paquete_cantidad, recent.tenant_slug
+                'SELECT recent.notification_id, recent.id, recent.email, recent.juego_nombre, recent.paquete_nombre, recent.paquete_cantidad, recent.tenant_slug,
+                        recent.paquete_imagen_icono, recent.juego_imagen_paquete, recent.juego_imagen
                  FROM (
-                    SELECT rn.id AS notification_id, p.id, p.email, p.juego_nombre, p.paquete_nombre, p.paquete_cantidad, p.tenant_slug
+                    SELECT rn.id AS notification_id, p.id, p.email, p.juego_nombre, p.paquete_nombre, p.paquete_cantidad, p.tenant_slug,
+                           jp.imagen_icono AS paquete_imagen_icono, j.imagen_paquete AS juego_imagen_paquete, j.imagen AS juego_imagen
                     FROM recarga_notificaciones rn
                     INNER JOIN pedidos p ON p.id = rn.pedido_id
+                    LEFT JOIN juego_paquetes jp ON jp.id = p.paquete_id
+                    LEFT JOIN juegos j ON j.id = p.juego_id
                     ORDER BY rn.id DESC
                     LIMIT ?
                  ) recent

@@ -6149,7 +6149,7 @@ include __DIR__ . "/includes/header.php";
       return textMarkup;
     }
 
-    return `<img src="${escapePaymentHtml(safeImageUrl)}" alt="${safeTitle}" class="payment-method-public-image"><span class="payment-method-public-image-caption"><span class="payment-method-public-name">${safeTitle}</span><span class="payment-method-public-meta">${safeMeta}</span></span>`;
+    return `<img src="${escapePaymentHtml(safeImageUrl)}" alt="${safeTitle}" class="payment-method-public-image">`;
   }
 
   function renderPublicPaymentMethodCatalog(pack = activePack) {

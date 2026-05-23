@@ -811,12 +811,18 @@ $rechargeNotificationsScript = <<<'SCRIPT'
       active = true;
       const article = document.createElement("article");
       article.className = "live-recharge-toast";
+      const imageUrl = String((item && item.image_url) || logoPath || "").trim();
+      const userLabel = String((item && item.user_label) || "").trim();
+      const detailLabel = String((item && item.detail) || "").trim();
+      const summaryMarkup = detailLabel !== ""
+        ? `<div class="live-recharge-toast__summary">${imageUrl ? `<span class="live-recharge-toast__thumb-wrap"><img src="${escapeHtml(imageUrl)}" alt="Paquete" class="live-recharge-toast__thumb"></span>` : ""}<span class="live-recharge-toast__detail">${escapeHtml(detailLabel)}</span></div>`
+        : "";
       article.innerHTML = `
         <div class="live-recharge-toast__pulse" aria-hidden="true"></div>
-        ${logoPath ? `<div class="live-recharge-toast__logo-wrap"><img src="${escapeHtml(logoPath)}" alt="Logo" class="live-recharge-toast__logo"></div>` : ""}
         <div class="live-recharge-toast__body">
-          <div class="live-recharge-toast__title">${escapeHtml(item.title || "Nueva recarga")}</div>
-          <div class="live-recharge-toast__detail">${escapeHtml(item.detail || "")}</div>
+          <div class="live-recharge-toast__title">${escapeHtml(item.title || "Recarga Exitosa ✅")}</div>
+          ${userLabel !== "" ? `<div class="live-recharge-toast__user">${escapeHtml(userLabel)}</div>` : ""}
+          ${summaryMarkup}
         </div>`;
 
       container.appendChild(article);
@@ -1007,10 +1013,10 @@ $rechargeNotificationsScript = str_replace('__LIVE_RECHARGE_ENABLED__', $recharg
     }
     .live-recharge-toast {
       display: grid;
-      grid-template-columns: auto auto 1fr;
-      align-items: center;
-      gap: 0.85rem;
-      padding: 0.8rem 0.95rem;
+      grid-template-columns: auto 1fr;
+      align-items: start;
+      gap: 0.75rem;
+      padding: 0.78rem 0.9rem;
       border-radius: 18px;
       border: 1px solid rgba(var(--theme-live-notification-border-rgb), 0.72);
       background: linear-gradient(135deg, rgba(var(--theme-live-notification-bg-rgb), 0.98), rgba(var(--theme-live-notification-border-rgb), 0.16));
@@ -1037,39 +1043,61 @@ $rechargeNotificationsScript = str_replace('__LIVE_RECHARGE_ENABLED__', $recharg
       box-shadow: 0 0 0 0 rgba(var(--theme-live-notification-accent-rgb), 0.56);
       animation: live-recharge-pulse 1.9s ease-out infinite;
     }
-    .live-recharge-toast__logo-wrap {
-      width: 42px;
-      height: 42px;
-      border-radius: 14px;
-      overflow: hidden;
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(var(--theme-live-notification-border-rgb), 0.34);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-    .live-recharge-toast__logo {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-    }
     .live-recharge-toast__body {
       min-width: 0;
+      display: grid;
+      gap: 0.16rem;
     }
     .live-recharge-toast__title {
       color: var(--theme-live-notification-text);
       font-size: 0.9rem;
       font-weight: 800;
       line-height: 1.2;
-      margin-bottom: 0.12rem;
       letter-spacing: 0.01em;
+    }
+    .live-recharge-toast__user {
+      color: #f8fafc;
+      font-size: 0.8rem;
+      font-weight: 700;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .live-recharge-toast__summary {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      gap: 0.48rem;
+      min-width: 0;
+    }
+    .live-recharge-toast__thumb-wrap {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(var(--theme-live-notification-border-rgb), 0.34);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .live-recharge-toast__thumb {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
     }
     .live-recharge-toast__detail {
       color: var(--theme-live-notification-muted);
       font-size: 0.78rem;
       line-height: 1.35;
+      min-width: 0;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
     }
     @keyframes live-recharge-pulse {
       0% {
@@ -1085,7 +1113,7 @@ $rechargeNotificationsScript = str_replace('__LIVE_RECHARGE_ENABLED__', $recharg
     @media (max-width: 575.98px) {
       .live-recharge-stack {
         gap: 0.55rem;
-        width: min(312px, calc(100vw - 72px));
+        width: min(188px, calc(100vw - 24px));
         max-width: calc(100vw - 24px);
       }
       .live-recharge-stack[data-position="bottom-left"] {
@@ -1121,32 +1149,41 @@ $rechargeNotificationsScript = str_replace('__LIVE_RECHARGE_ENABLED__', $recharg
         top: 50%;
       }
       .live-recharge-toast {
-        grid-template-columns: auto auto 1fr;
-        padding: 0.64rem 0.75rem;
-        gap: 0.62rem;
-        border-radius: 16px;
-      }
-      .live-recharge-toast__pulse {
-        width: 8px;
-        height: 8px;
-      }
-      .live-recharge-toast__logo-wrap {
-        width: 36px;
-        height: 36px;
+        padding: 0.42rem 0.48rem;
+        gap: 0.42rem;
         border-radius: 12px;
       }
+      .live-recharge-toast__pulse {
+        width: 6px;
+        height: 6px;
+      }
       .live-recharge-toast__title {
-        font-size: 0.82rem;
-        margin-bottom: 0.06rem;
+        font-size: 0.6rem;
+        line-height: 1.15;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
       }
-      .live-recharge-toast__detail {
-        font-size: 0.72rem;
+      .live-recharge-toast__user {
+        font-size: 0.54rem;
+        line-height: 1.15;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+      }
+      .live-recharge-toast__summary {
+        gap: 0.34rem;
+      }
+      .live-recharge-toast__thumb-wrap {
+        width: 22px;
+        height: 22px;
+        border-radius: 7px;
+      }
+      .live-recharge-toast__detail {
+        font-size: 0.52rem;
+        line-height: 1.12;
+        overflow: hidden;
+        -webkit-line-clamp: 2;
       }
     }
   </style>
