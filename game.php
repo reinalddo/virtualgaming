@@ -314,6 +314,7 @@ include __DIR__ . "/includes/header.php";
   <div class="game-hero-card shadow">
     <div class="game-hero-media" aria-hidden="true">
       <?php if ($gameHeroImageUrl !== ''): ?>
+        <img src="<?= htmlspecialchars($gameHeroImageUrl, ENT_QUOTES, "UTF-8") ?>" alt="" class="game-hero-image-backdrop" />
         <img src="<?= htmlspecialchars($gameHeroImageUrl, ENT_QUOTES, "UTF-8") ?>" alt="<?= htmlspecialchars($game["nombre"] ?? '', ENT_QUOTES, "UTF-8") ?>" class="game-hero-image" />
       <?php else: ?>
         <div class="game-hero-fallback"></div>
@@ -1366,7 +1367,20 @@ include __DIR__ . "/includes/header.php";
     background: rgba(4, 10, 24, 0.92);
   }
 
+  .game-hero-image-backdrop {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: blur(26px) saturate(1.08);
+    transform: scale(1.12);
+    opacity: 0.9;
+  }
+
   .game-hero-image {
+    position: relative;
+    z-index: 1;
     width: 100%;
     height: 100%;
     object-fit: contain;
@@ -1487,6 +1501,11 @@ include __DIR__ . "/includes/header.php";
       inset: auto;
       min-height: 180px;
       background: transparent;
+    }
+
+    .game-hero-image-backdrop {
+      filter: blur(20px) saturate(1.02);
+      transform: scale(1.08);
     }
 
     .game-hero-image {
