@@ -7985,14 +7985,28 @@ include __DIR__ . "/includes/header.php";
       if (nextState === 'pagado') {
         const paidMessage = (data && data.provider_message) ? data.provider_message : 'El pago fue confirmado correctamente.';
         const hasProviderDetails = extractPaymentReasons(data).length > 0;
-        const isAcceptedFlow = providerFlow === 'accepted' || providerFlow === 'tracking';
-        const requiresManualReview = providerFlow === 'manual_review' || providerFlow === 'inventory_shortage' || (!isAcceptedFlow && hasProviderDetails);
+        const effectiveProviderFlow = resolveDiscordAwareProviderFlow(data, providerFlow);
+        const isAcceptedFlow = effectiveProviderFlow === 'accepted' || effectiveProviderFlow === 'tracking';
+        const isCompletedFlow = effectiveProviderFlow === 'completed';
+        const requiresManualReview = effectiveProviderFlow === 'manual_review' || effectiveProviderFlow === 'inventory_shortage' || (!isAcceptedFlow && !isCompletedFlow && hasProviderDetails);
+
+        if (isCompletedFlow) {
+          clearPaymentStatusPolling();
+          const successNote = buildBloodStrikeEliteDiscordSuccessNote(data);
+          setPaymentAlert(paidMessage, 'success', { extraMessage: successNote });
+          clearPaymentSupportUi();
+          setPaymentFormDisabled(true);
+          clearPaymentTimer();
+          setCancelOrderButtonMode('close');
+          showPaymentStatusModal('Operación exitosa', paidMessage, 'success', { extraMessage: successNote });
+          return;
+        }
 
         if (!isAcceptedFlow) {
           clearPaymentStatusPolling();
           const paidNote = requiresManualReview ? '' : buildBloodStrikeEliteDiscordSuccessNote(data);
           setPaymentAlert(paidMessage, requiresManualReview ? 'warning' : 'success', { extraMessage: paidNote });
-          if (providerFlow === 'inventory_shortage') {
+          if (effectiveProviderFlow === 'inventory_shortage') {
             renderProviderPaymentDetails(data, reference, totalText);
           } else {
             clearPaymentSupportUi();
@@ -8008,14 +8022,28 @@ include __DIR__ . "/includes/header.php";
       if (nextState === 'pagado') {
         const paidMessage = (data && data.provider_message) ? data.provider_message : 'El pago fue confirmado correctamente.';
         const hasProviderDetails = extractPaymentReasons(data).length > 0;
-        const isAcceptedFlow = providerFlow === 'accepted' || providerFlow === 'tracking';
-        const requiresManualReview = providerFlow === 'manual_review' || providerFlow === 'inventory_shortage' || (!isAcceptedFlow && hasProviderDetails);
+        const effectiveProviderFlow = resolveDiscordAwareProviderFlow(data, providerFlow);
+        const isAcceptedFlow = effectiveProviderFlow === 'accepted' || effectiveProviderFlow === 'tracking';
+        const isCompletedFlow = effectiveProviderFlow === 'completed';
+        const requiresManualReview = effectiveProviderFlow === 'manual_review' || effectiveProviderFlow === 'inventory_shortage' || (!isAcceptedFlow && !isCompletedFlow && hasProviderDetails);
+
+        if (isCompletedFlow) {
+          clearPaymentStatusPolling();
+          const successNote = buildBloodStrikeEliteDiscordSuccessNote(data);
+          setPaymentAlert(paidMessage, 'success', { extraMessage: successNote });
+          clearPaymentSupportUi();
+          setPaymentFormDisabled(true);
+          clearPaymentTimer();
+          setCancelOrderButtonMode('close');
+          showPaymentStatusModal('Operación exitosa', paidMessage, 'success', { extraMessage: successNote });
+          return;
+        }
 
         if (!isAcceptedFlow) {
           clearPaymentStatusPolling();
           const paidNote = requiresManualReview ? '' : buildBloodStrikeEliteDiscordSuccessNote(data);
           setPaymentAlert(paidMessage, requiresManualReview ? 'warning' : 'success', { extraMessage: paidNote });
-          if (providerFlow === 'inventory_shortage') {
+          if (effectiveProviderFlow === 'inventory_shortage') {
             renderProviderPaymentDetails(data, reference, totalText);
           } else {
             clearPaymentSupportUi();
@@ -8229,6 +8257,42 @@ include __DIR__ . "/includes/header.php";
 
     const purchaseName = packName !== '' ? packName : 'tu compra';
     return `Luego de la compra, espera un aproximado de 15 min para que se ejecute ${purchaseName}.`;
+  }
+
+  function extractDiscordOrderStatus(data) {
+    const discordPayload = data && typeof data === 'object' && data.discord && typeof data.discord === 'object'
+      ? data.discord
+      : null;
+    const status = String((discordPayload && discordPayload.status) || '').trim().toLowerCase();
+    if (['ready', 'queued', 'sent', 'processing', 'confirmed', 'failed', 'review', 'cancelled'].includes(status)) {
+      return status;
+    }
+    return '';
+  }
+
+  function resolveDiscordAwareProviderFlow(data, fallbackFlow) {
+    const discordStatus = extractDiscordOrderStatus(data);
+    if (discordStatus === '') {
+      return String(fallbackFlow || '').toLowerCase();
+    }
+
+    if (discordStatus === 'confirmed') {
+      return 'completed';
+    }
+    if (discordStatus === 'processing' || discordStatus === 'queued') {
+      return 'tracking';
+    }
+    if (discordStatus === 'sent') {
+      return 'accepted';
+    }
+    if (discordStatus === 'cancelled') {
+      return 'cancelled';
+    }
+    if (discordStatus === 'failed' || discordStatus === 'review' || discordStatus === 'ready') {
+      return 'manual_review';
+    }
+
+    return String(fallbackFlow || '').toLowerCase();
   }
 
   function paymentReferencePlaceholder(method) {
@@ -10120,17 +10184,19 @@ include __DIR__ . "/includes/header.php";
                     if (nextState === 'pagado') {
                       const paidMessage = data.message || 'El pago fue confirmado correctamente.';
                       const hasProviderDetails = extractPaymentReasons(data).length > 0;
-                      const isAcceptedFlow = providerFlow === 'accepted' || providerFlow === 'tracking';
-                      const requiresManualReview = providerFlow === 'manual_review' || (!isAcceptedFlow && hasProviderDetails);
-                      const successPresentation = isAcceptedFlow ? successfulProviderPendingPresentation(providerFlow, data) : null;
+                      const effectiveProviderFlow = resolveDiscordAwareProviderFlow(data, providerFlow);
+                      const isAcceptedFlow = effectiveProviderFlow === 'accepted' || effectiveProviderFlow === 'tracking';
+                      const isCompletedFlow = effectiveProviderFlow === 'completed';
+                      const requiresManualReview = effectiveProviderFlow === 'manual_review' || (!isAcceptedFlow && !isCompletedFlow && hasProviderDetails);
+                      const successPresentation = isAcceptedFlow ? successfulProviderPendingPresentation(effectiveProviderFlow, data) : null;
                       const paidNote = requiresManualReview ? '' : buildBloodStrikeEliteDiscordSuccessNote(data);
 
                       setPaymentAlert(
-                        successPresentation ? successPresentation.message : paidMessage,
-                        requiresManualReview ? 'warning' : (successPresentation ? (successPresentation.statusType || 'info') : 'success'),
+                        isCompletedFlow ? paidMessage : (successPresentation ? successPresentation.message : paidMessage),
+                        requiresManualReview ? 'warning' : (isCompletedFlow ? 'success' : (successPresentation ? (successPresentation.statusType || 'info') : 'success')),
                         { extraMessage: paidNote }
                       );
-                      if (hasProviderDetails || providerFlow === 'accepted') {
+                      if (!isCompletedFlow && (hasProviderDetails || effectiveProviderFlow === 'accepted' || effectiveProviderFlow === 'tracking')) {
                         renderProviderPaymentDetails(data, reference, getConfirmedPaymentTotalText());
                       } else {
                         clearPaymentSupportUi();
@@ -10140,12 +10206,12 @@ include __DIR__ . "/includes/header.php";
                       clearPaymentTimer();
                       setCancelOrderButtonMode('close');
                       showPaymentStatusModal(
-                        requiresManualReview ? 'Revisión requerida' : (successPresentation ? successPresentation.title : 'Operación exitosa'),
-                        successPresentation ? successPresentation.message : paidMessage,
-                        requiresManualReview ? 'danger' : (successPresentation ? (successPresentation.statusType || 'info') : 'success'),
+                        requiresManualReview ? 'Revisión requerida' : (isCompletedFlow ? 'Operación exitosa' : (successPresentation ? successPresentation.title : 'Operación exitosa')),
+                        isCompletedFlow ? paidMessage : (successPresentation ? successPresentation.message : paidMessage),
+                        requiresManualReview ? 'danger' : (isCompletedFlow ? 'success' : (successPresentation ? (successPresentation.statusType || 'info') : 'success')),
                         { extraMessage: paidNote }
                       );
-                      if (providerFlow === 'accepted' || providerFlow === 'tracking') {
+                      if (effectiveProviderFlow === 'accepted' || effectiveProviderFlow === 'tracking') {
                         setPaymentStatusWaiting(true);
                         pollOrderResolution(reference, getConfirmedPaymentTotalText(), 1);
                       }

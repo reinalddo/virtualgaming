@@ -1675,20 +1675,20 @@ function resolve_api_discord_listener_order(mysqli $mysqli, int $orderId, string
 }
 
 function api_discord_listener_resolve_local_status(string $discordStatus, string $requestedStatus, array $order): string {
-    $normalizedRequested = strtolower(trim($requestedStatus));
-    if (in_array($normalizedRequested, ['pendiente', 'pagado', 'enviado', 'cancelado'], true)) {
-        return $normalizedRequested;
-    }
-
     switch ($discordStatus) {
         case 'confirmed':
             return 'enviado';
         case 'cancelled':
             return 'cancelado';
-        default:
-            $current = strtolower(trim((string) ($order['estado'] ?? 'pagado')));
-            return in_array($current, ['pendiente', 'pagado', 'enviado', 'cancelado'], true) ? $current : 'pagado';
     }
+
+    $normalizedRequested = strtolower(trim($requestedStatus));
+    if (in_array($normalizedRequested, ['pendiente', 'pagado', 'enviado', 'cancelado'], true)) {
+        return $normalizedRequested;
+    }
+
+    $current = strtolower(trim((string) ($order['estado'] ?? 'pagado')));
+    return in_array($current, ['pendiente', 'pagado', 'enviado', 'cancelado'], true) ? $current : 'pagado';
 }
 
 function persist_api_discord_listener_update(mysqli $mysqli, array $order, array $payload, string $source = 'discord_listener'): array {
@@ -5004,6 +5004,9 @@ function order_provider_flow_from_row(array $order): string {
 
     if (order_uses_api_discord($order) && $localStatus === 'pagado') {
         $discordStatus = normalize_api_discord_order_status((string) ($order['api_discord_status'] ?? ''));
+        if ($discordStatus === 'confirmed') {
+            return 'completed';
+        }
         if ($discordStatus === 'processing' || $discordStatus === 'queued') {
             return 'tracking';
         }
