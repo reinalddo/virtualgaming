@@ -1672,6 +1672,7 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
               $binancePagonorteCutoffDate = trim((string) ($cfg['binance_pagonorte_fecha_corte'] ?? ''));
               $binancePagonorteEnabled = trim((string) ($cfg['binance_pagonorte_activo'] ?? '0')) === '1';
               $binancePagonorteDiscount = trim((string) ($cfg['binance_pagonorte_descuento'] ?? '0'));
+              $binancePagonorteReferenceDigits = max(0, (int) ($cfg['binance_pagonorte_referencia_digitos'] ?? 0));
               $binancePagonorteData = trim((string) ($cfg['binance_pagonorte_datos'] ?? ''));
               $binancePagonorteImagePath = trim((string) ($cfg['binance_pagonorte_image'] ?? ''));
               $binancePagonorteCornerImagePath = trim((string) ($cfg['binance_pagonorte_corner_image'] ?? ''));
@@ -1715,6 +1716,11 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
                     <label class="form-label">Descuento (%)</label>
                     <input type="number" name="binance_pagonorte_descuento" min="0" max="100" step="0.01" value="<?= htmlspecialchars($binancePagonorteDiscount, ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="0.00">
                     <div class="form-text mt-2">Porcentaje que se descontará al usar este método de pago.</div>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Comparar últimos dígitos de referencia</label>
+                    <input type="number" name="binance_pagonorte_referencia_digitos" min="0" max="120" step="1" value="<?= htmlspecialchars((string) $binancePagonorteReferenceDigits, ENT_QUOTES, 'UTF-8') ?>" class="form-control" placeholder="0">
+                    <div class="form-text mt-2">Si colocas <strong>0</strong>, se comparará la referencia completa. Si colocas <strong>5</strong>, el cliente podrá escribir la referencia completa o los últimos 5 dígitos.</div>
                   </div>
                   <div class="col-12">
                     <label class="form-label">Datos de transferencia</label>

@@ -2750,6 +2750,7 @@ switch ($seccion) {
                 $binancePagonorteToken = trim((string) ($_POST['binance_pagonorte_token'] ?? ''));
                 $binancePagonorteData = trim((string) ($_POST['binance_pagonorte_datos'] ?? ''));
                 $binancePagonorteDiscountRaw = trim((string) ($_POST['binance_pagonorte_descuento'] ?? '0'));
+                $binancePagonorteReferenceDigitsRaw = trim((string) ($_POST['binance_pagonorte_referencia_digitos'] ?? '0'));
                 $currentBinancePagonorteImage = trim((string) store_config_get('binance_pagonorte_image', ''));
                 $nextBinancePagonorteImage = $currentBinancePagonorteImage;
                 $currentBinancePagonorteCornerImage = trim((string) store_config_get('binance_pagonorte_corner_image', ''));
@@ -2765,6 +2766,12 @@ switch ($seccion) {
 
                 if ($paymentMethodDiscountsEnabled && $binancePagonorteDiscountRaw !== '' && !is_numeric(str_replace(',', '.', $binancePagonorteDiscountRaw))) {
                     admin_set_flash('error', 'El descuento de Verificación Binance debe ser numérico.');
+                    define('ADMIN_CONFIG_POST_HANDLED', true);
+                    admin_redirect('configuracion', ['tab' => 'verificacion-binance']);
+                }
+
+                if ($binancePagonorteReferenceDigitsRaw !== '' && preg_match('/^\d+$/', $binancePagonorteReferenceDigitsRaw) !== 1) {
+                    admin_set_flash('error', 'La cantidad de dígitos para la referencia de Binance debe ser un número entero.');
                     define('ADMIN_CONFIG_POST_HANDLED', true);
                     admin_redirect('configuracion', ['tab' => 'verificacion-binance']);
                 }
@@ -2823,6 +2830,7 @@ switch ($seccion) {
                 $binancePagonorteDiscount = $paymentMethodDiscountsEnabled
                     ? max(0, min(100, payment_methods_normalize_discount_percentage($binancePagonorteDiscountRaw)))
                     : 0.0;
+                $binancePagonorteReferenceDigits = max(0, min(120, (int) ($binancePagonorteReferenceDigitsRaw !== '' ? $binancePagonorteReferenceDigitsRaw : '0')));
                 store_config_upsert('binance_pagonorte_token', $binancePagonorteToken);
                 store_config_upsert('binance_pagonorte_activo', $binancePagonorteEnabled);
                 store_config_upsert('binance_pagonorte_datos', $binancePagonorteData);
@@ -2842,6 +2850,7 @@ switch ($seccion) {
                     store_config_upsert('binance_pagonorte_qr_image', $nextBinancePagonorteQrImage);
                 }
                 store_config_upsert('binance_pagonorte_descuento', rtrim(rtrim(number_format($binancePagonorteDiscount, 2, '.', ''), '0'), '.'));
+                store_config_upsert('binance_pagonorte_referencia_digitos', (string) $binancePagonorteReferenceDigits);
 
                 if ($binancePagonorteToken === '') {
                     store_config_upsert('binance_pagonorte_dias_disponibles', '');

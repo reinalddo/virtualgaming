@@ -4408,6 +4408,10 @@ function binance_pagonorte_is_configured(): bool {
     return trim((string) store_config_get('binance_pagonorte_token', '')) !== '';
 }
 
+function binance_pagonorte_reference_digits(): int {
+    return max(0, min(120, (int) store_config_get('binance_pagonorte_referencia_digitos', '0')));
+}
+
 function binance_pagonorte_reference_prefix(): string {
     return 'BINANCE:';
 }
@@ -5845,7 +5849,12 @@ function movement_reference_matches(string $fullReference, string $reportedRefer
     }
 
     if ($requiredDigits > 0) {
-        return substr($fullReference, -$requiredDigits) === $reportedReference;
+        $normalizedReportedReference = strlen($reportedReference) > $requiredDigits
+            ? substr($reportedReference, -$requiredDigits)
+            : $reportedReference;
+
+        return $fullReference === $reportedReference
+            || substr($fullReference, -$requiredDigits) === $normalizedReportedReference;
     }
 
     return $fullReference === $reportedReference;
@@ -8598,7 +8607,7 @@ if ($action === 'submit_payment') {
             'nombre' => 'Binance',
             'moneda_nombre' => (string) ($usdtCurrency['nombre'] ?? 'Tether USD'),
             'moneda_clave' => 'USDT',
-            'referencia_digitos' => 0,
+            'referencia_digitos' => binance_pagonorte_reference_digits(),
             'descuento_porcentaje' => payment_methods_normalize_discount_percentage(store_config_get('binance_pagonorte_descuento', '0')),
         ];
     } else {
@@ -8622,8 +8631,11 @@ if ($action === 'submit_payment') {
         json_error('El método de pago no corresponde a la moneda del pedido.');
     }
 
-    $referenceDigitsLimit = $binancePagonorteMode ? 0 : max(0, (int) ($method['referencia_digitos'] ?? 0));
-    if ($referenceDigitsLimit > 0 && strlen($referenceNumberRaw) !== $referenceDigitsLimit) {
+    $referenceDigitsLimit = max(0, (int) ($method['referencia_digitos'] ?? 0));
+    if ($binancePagonorteMode && $referenceDigitsLimit > 0 && strlen($referenceNumberRaw) < $referenceDigitsLimit) {
+        json_error('Debes escribir la referencia completa o al menos los últimos ' . $referenceDigitsLimit . ' dígitos.');
+    }
+    if (!$binancePagonorteMode && $referenceDigitsLimit > 0 && strlen($referenceNumberRaw) !== $referenceDigitsLimit) {
         json_error('La referencia debe contener exactamente ' . $referenceDigitsLimit . ' dígitos.');
     }
 
@@ -8632,7 +8644,9 @@ if ($action === 'submit_payment') {
 
     $phone = substr($phoneRaw, 0, 40);
     $referenceNumber = substr($referenceNumberRaw, 0, 120);
-    $referenceMatchDigits = $binancePagonorteMode ? strlen($referenceNumber) : $referenceDigitsLimit;
+    $referenceMatchDigits = $binancePagonorteMode
+        ? ($referenceDigitsLimit > 0 ? $referenceDigitsLimit : strlen($referenceNumber))
+        : $referenceDigitsLimit;
     $bankFlowRequested = $orderSupportsBankApi || $methodSupportsBankApi;
     $usesBankValidation = $orderSupportsBankApi && $methodSupportsBankApi && $currencyMatchesOrder;
     $usesBinancePagonorteValidation = $binancePagonorteMode && $currencyMatchesOrder && $methodCurrencyCode === 'USDT';

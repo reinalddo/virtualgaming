@@ -229,6 +229,7 @@ if ($binancePayCornerImageUrl !== '' && preg_match('#^https?://#i', $binancePayC
 $binancePagonorteCheckoutEnabled = trim((string) store_config_get('binance_pagonorte_activo', '0')) === '1'
   && trim((string) store_config_get('binance_pagonorte_token', '')) !== '';
 $binancePagonorteDiscountPercentage = payment_methods_normalize_discount_percentage(store_config_get('binance_pagonorte_descuento', '0'));
+$binancePagonorteReferenceDigits = max(0, (int) store_config_get('binance_pagonorte_referencia_digitos', '0'));
 $paypalPayTaxPercentage = payment_methods_normalize_discount_percentage(store_config_get('paypal_impuesto', '0'));
 $binancePagonorteTransferData = trim((string) store_config_get('binance_pagonorte_datos', ''));
 $binancePagonorteImageUrl = trim((string) store_config_get('binance_pagonorte_image', ''));
@@ -4378,6 +4379,7 @@ include __DIR__ . "/includes/header.php";
   const paymentMethodDiscountsEnabled = <?= $paymentMethodDiscountsEnabled ? 'true' : 'false' ?>;
   const binancePayDiscountPercentage = <?= json_encode((float) $binancePayDiscountPercentage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const binancePagonorteDiscountPercentage = <?= json_encode((float) $binancePagonorteDiscountPercentage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+  const binancePagonorteReferenceDigits = <?= json_encode((int) $binancePagonorteReferenceDigits, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const paypalPayTaxPercentage = <?= json_encode((float) $paypalPayTaxPercentage, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const accountSaleFeatureEnabled = <?= $accountSaleFeatureEnabled ? 'true' : 'false' ?>;
   const binancePayButtonLabel = 'Binance Pay';
@@ -8219,6 +8221,21 @@ include __DIR__ . "/includes/header.php";
     }
     return 'Inserte su número de referencia para comprobar el pago.';
   }
+  function binancePagonorteReferencePlaceholder() {
+    const digits = Number(binancePagonorteReferenceDigits || 0);
+    if (digits > 0) {
+      return `Inserte todos o los últimos ${digits} dígitos de referencia`;
+    }
+    return 'Inserte su número de referencia para comprobar el pago';
+  }
+
+  function binancePagonorteReferenceHelpText() {
+    const digits = Number(binancePagonorteReferenceDigits || 0);
+    if (digits > 0) {
+      return `Puedes escribir la referencia completa o solo los últimos ${digits} dígitos para compararla con los movimientos de Binance.`;
+    }
+    return 'Inserte su número de referencia para comprobar el pago en Binance.';
+  }
 
   function getPaymentMethodsForCurrency(currencyCode) {
     const preferredCurrency = String(currencyCode || '').toUpperCase();
@@ -9225,8 +9242,8 @@ include __DIR__ . "/includes/header.php";
           </div>`;
       }
       setPaymentMethodQrState(String(binancePagonorteQrImageUrl || '').trim(), 'QR para Binance');
-      paymentReferenceInput.placeholder = 'Inserte su número de referencia para comprobar el pago';
-      paymentReferenceHelp.textContent = 'Inserte su número de referencia para comprobar el pago en Binance.';
+      paymentReferenceInput.placeholder = binancePagonorteReferencePlaceholder();
+      paymentReferenceHelp.textContent = binancePagonorteReferenceHelpText();
       paymentReferenceInput.maxLength = 120;
       paymentReferenceInput.dataset.requiredDigits = '0';
       return;
@@ -9938,6 +9955,10 @@ include __DIR__ . "/includes/header.php";
                   }
                   if (paymentMode === 'money' && requiredDigits > 0 && reference.length !== requiredDigits) {
                     setPaymentAlert(`La referencia debe contener exactamente ${requiredDigits} dígitos.`, 'danger');
+                    return;
+                  }
+                  if (paymentMode === 'binance_pagonorte' && Number(binancePagonorteReferenceDigits || 0) > 0 && reference.length < Number(binancePagonorteReferenceDigits || 0)) {
+                    setPaymentAlert(`Debes escribir la referencia completa o al menos los últimos ${Number(binancePagonorteReferenceDigits || 0)} dígitos.`, 'danger');
                     return;
                   }
                   if (requiresManualConfirmation && !phone) {
