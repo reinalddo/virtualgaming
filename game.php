@@ -1359,11 +1359,19 @@ include __DIR__ . "/includes/header.php";
     inset: 0;
   }
 
+  .game-hero-media {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(4, 10, 24, 0.92);
+  }
+
   .game-hero-image {
     width: 100%;
     height: 100%;
-    object-fit: cover;
-    transform: scale(1.015);
+    object-fit: contain;
+    object-position: center center;
+    transform: none;
   }
 
   .game-hero-fallback {
@@ -6464,9 +6472,7 @@ include __DIR__ . "/includes/header.php";
       }
       const pointsImageUrl = String(winPointsState.paymentImageUrl || '').trim();
       const pointsCornerMarkup = paymentMethodPublicCornerMarkup(String(winPointsState.paymentCornerImageUrl || '').trim());
-      const pointsMarkup = pointsImageUrl !== ''
-        ? `<img src="${escapePaymentHtml(pointsImageUrl)}" alt="${escapePaymentHtml(winPointsState.name || 'Win Points')}" class="payment-method-public-image"><span class="payment-method-public-points-caption"><strong>${escapePaymentHtml(pointsNeedText)}</strong>${escapePaymentHtml(!winPointsState.loggedIn ? 'Inicia sesión para usarlo' : (selection.canUsePointsNow ? `Saldo actual ${formatWinPointsAmount(winPointsState.balance || 0)}` : `Saldo actual ${formatWinPointsAmount(winPointsState.balance || 0)}`))}</span><span class="visually-hidden">${escapePaymentHtml(winPointsState.name || 'Win Points')}</span>`
-        : `<span class="payment-method-public-text"><span class="payment-method-public-name">${escapePaymentHtml(winPointsState.name || 'Win Points')}</span><span class="payment-method-public-meta">${escapePaymentHtml(pointsMeta)}</span></span>`;
+      const pointsMarkup = paymentMethodPublicCardContent(pointsImageUrl, winPointsState.name || 'Win Points', pointsMeta);
       const isSelected = selection.mode === 'points';
       cards.push(`
         <div class="payment-method-public-card${isSelected ? ' is-selected' : ''}${pointsDisabled ? ' is-disabled' : ''}">
