@@ -23,7 +23,7 @@ package_features_ensure_schema($mysqli);
 package_account_sales_ensure_schema($mysqli);
 $paymentSupportWhatsappBase = store_config_whatsapp_link(store_config_get('whatsapp', ''));
 $binancePayCheckoutEnabled = binance_pay_is_enabled() && binance_pay_is_configured();
-$paypalPayCheckoutEnabled = paypal_pay_is_enabled() && paypal_pay_is_configured();
+$paypalPayCheckoutEnabled = paypal_pay_checkout_is_enabled() && paypal_pay_is_configured();
 $paymentMethodDiscountsEnabled = trim((string) store_config_get('descuento_metodo_pago', '0')) === '1';
 $binancePayDiscountPercentage = payment_methods_normalize_discount_percentage(store_config_get('binance_pay_descuento', '0'));
 $rememberLastPurchaseIdentifierEnabled = trim((string) store_config_get('guardar_ultimo_id', '0')) === '1';

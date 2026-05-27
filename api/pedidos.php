@@ -8126,7 +8126,7 @@ if ($action === 'submit_payment') {
             $order = fetch_order_by_id($mysqli, $orderId) ?: $order;
         }
 
-        if (!paypal_pay_is_enabled()) {
+        if (!paypal_pay_checkout_is_enabled()) {
             json_error('PayPal no está activo en esta tienda.', 409);
         }
         if (!paypal_pay_is_configured()) {

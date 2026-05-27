@@ -2882,6 +2882,9 @@ switch ($seccion) {
             }
 
             if ($activeTab === 'paypal') {
+                $paypalCheckoutEnabled = isset($_POST['paypal_activo_present'])
+                    ? (isset($_POST['paypal_activo']) && (string) $_POST['paypal_activo'] === '1' ? '1' : '0')
+                    : trim((string) store_config_get('paypal_activo', '1'));
                 $environment = strtolower(trim((string) ($_POST['paypal_environment'] ?? 'sandbox')));
                 $environment = in_array($environment, ['sandbox', 'live'], true) ? $environment : 'sandbox';
                 $clientId = trim((string) ($_POST['paypal_client_id'] ?? ''));
@@ -2961,6 +2964,7 @@ switch ($seccion) {
                     $nextPaypalQrImage = '';
                 }
 
+                store_config_upsert('paypal_activo', $paypalCheckoutEnabled);
                 store_config_upsert('paypal_environment', $environment);
                 store_config_upsert('paypal_client_id', $clientId);
                 store_config_upsert('paypal_client_secret', $clientSecret);

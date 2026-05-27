@@ -1840,6 +1840,14 @@ $paypalCancelUrl = rtrim($currentPublicUrl, '/') . '/api/pedidos.php?action=payp
               <div class="gallery-table-wrap mb-2">
                 <h3 class="h5 fw-bold text-info mb-3">Credenciales y enlaces PayPal</h3>
                 <div class="row g-3">
+                  <div class="col-12">
+                    <input type="hidden" name="paypal_activo_present" value="1">
+                    <div class="form-check form-switch">
+                      <input class="form-check-input" type="checkbox" role="switch" id="paypal-activo" name="paypal_activo" value="1" <?= ($cfg['paypal_activo'] ?? '1') === '1' ? 'checked' : '' ?>>
+                      <label class="form-check-label fw-semibold" for="paypal-activo">Habilitar PayPal para clientes</label>
+                    </div>
+                    <div class="form-text mt-2">Si lo desactivas, PayPal dejará de mostrarse en los métodos de pago de los juegos. El tab seguirá visible mientras <strong>pago_paypal</strong> esté activo para el tenant.</div>
+                  </div>
                   <div class="col-md-4">
                     <label class="form-label">Entorno</label>
                     <select name="paypal_environment" class="form-select">

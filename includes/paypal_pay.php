@@ -51,6 +51,11 @@ function paypal_pay_is_enabled(): bool {
     return (paypal_pay_config()['feature_enabled'] ?? false) === true;
 }
 
+function paypal_pay_checkout_is_enabled(): bool {
+    return paypal_pay_is_enabled()
+        && trim((string) store_config_get('paypal_activo', '1')) === '1';
+}
+
 function paypal_pay_missing_configuration_fields(bool $includeWebhook = false): array {
     $config = paypal_pay_config();
     $missing = [];
