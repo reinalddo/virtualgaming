@@ -342,7 +342,7 @@ function player_verification_verify(array $game, string $userIdentifier, array $
                         $response = player_verification_http_get($hokUrl, [
                             'Accept: application/json,text/plain,*/*',
                             'User-Agent: TVirtualGaming/1.0',
-                        ]);
+                        ], 8);
                     } catch (Throwable $e) {
                         $hokUnavailable = true;
                         break;
