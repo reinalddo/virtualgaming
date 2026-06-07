@@ -7437,7 +7437,7 @@ include __DIR__ . "/includes/header.php";
       return false;
     }
 
-    return String(activePack.provider || '').trim().toLowerCase() !== 'discord';
+    return true;
   }
 
   function requiresVerifiedPlayerForCheckout() {
