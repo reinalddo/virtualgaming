@@ -57,7 +57,7 @@ function player_verification_definition_for_game(array $game): ?array {
         ];
     }
 
-    if (strpos($haystack, 'blood strike') !== false) {
+    if (strpos($haystack, 'blood strike') !== false || strpos($haystack, 'bloodstrike') !== false) {
         return [
             'key' => 'blood_strike',
             'button_label' => 'Verificar nombre del jugador',
