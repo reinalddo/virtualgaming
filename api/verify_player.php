@@ -66,16 +66,7 @@ if ($packageId > 0) {
     $package = $packageResult ? $packageResult->fetch_assoc() : null;
     $packageStmt->close();
 
-    if ($package) {
-        $packageProvider = verify_player_normalize_package_provider($game, $package);
-        if ($packageProvider === 'discord') {
-            verify_player_json([
-                'ok' => false,
-                'status' => 'unsupported',
-                'message' => 'La verificación automática no aplica para paquetes configurados con api_discord.',
-            ], 422);
-        }
-    }
+    // No bloqueamos por proveedor — la verificación del jugador depende del juego, no del método de entrega
 }
 
 $userIdentifier = trim((string) ($_POST['user_identifier'] ?? $_GET['user_identifier'] ?? ''));
