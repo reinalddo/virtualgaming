@@ -9826,7 +9826,8 @@ if ($action === 'admin_retry_recharge') {
 
     if (order_uses_api_discord($order)) {
         $dispatchResult = execute_api_discord_order_dispatch($order);
-        if (!persist_api_discord_dispatch_result($mysqli, $order, $dispatchResult, 'pagado', 'pagado', $verifiedReference, $phone)) {
+        $discordTargetState = (!empty($dispatchResult['sent']) && ($dispatchResult['provider_status'] ?? '') === 'sent') ? 'enviado' : 'pagado';
+        if (!persist_api_discord_dispatch_result($mysqli, $order, $dispatchResult, 'pagado', $discordTargetState, $verifiedReference, $phone)) {
             json_error('No se pudo guardar el resultado del envío Discord.', 500);
         }
 
@@ -9835,12 +9836,17 @@ if ($action === 'admin_retry_recharge') {
             'ok' => true,
             'message' => trim((string) ($dispatchResult['provider_message'] ?? 'La orden quedó actualizada para Discord.')),
             'order_id' => $orderId,
-            'estado' => trim((string) ($updatedOrder['estado'] ?? 'pagado')),
+            'estado' => trim((string) ($updatedOrder['estado'] ?? $discordTargetState)),
             'provider_flow' => trim((string) ($dispatchResult['provider_flow'] ?? 'manual_review')),
             'provider_status' => trim((string) ($dispatchResult['provider_status'] ?? 'review')),
             'provider_reference' => trim((string) ($dispatchResult['provider_reference'] ?? '')),
             'provider_message' => trim((string) ($dispatchResult['provider_message'] ?? '')),
-        ], $updatedOrder), 200, static function () use ($mysqli, $updatedOrder, $paymentMethodName, $verifiedReference, $phone, $dispatchResult): void {
+        ], $updatedOrder), 200, static function () use ($mysqli, $updatedOrder, $paymentMethodName, $verifiedReference, $phone, $dispatchResult, $discordTargetState, $orderId): void {
+            if ($discordTargetState === 'enviado') {
+                win_points_handle_order_status_change($mysqli, $orderId, 'enviado');
+                notify_free_fire_recharge_success($mysqli, $updatedOrder, $paymentMethodName, $verifiedReference, $phone, trim((string) ($dispatchResult['provider_reference'] ?? '')), trim((string) ($dispatchResult['provider_message'] ?? '')));
+                return;
+            }
             if (!empty($dispatchResult['sent'])) {
                 notify_catalog_purchase_pending($mysqli, $updatedOrder, $paymentMethodName, $verifiedReference, $phone, trim((string) ($dispatchResult['provider_reference'] ?? '')), trim((string) ($dispatchResult['provider_message'] ?? '')));
             }
