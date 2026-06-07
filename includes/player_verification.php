@@ -73,11 +73,14 @@ function player_verification_definition_for_game(array $game): ?array {
         ];
     }
 
+    $discordCategory = strtolower(trim((string) ($game['categoria_api_discord'] ?? '')));
+
     if (
-        strpos($haystack, 'honor of kings') !== false
-        || strpos($haystack, 'honorofkings') !== false
+        strpos($haystack, 'honor of king') !== false
+        || strpos($haystack, 'honorofking') !== false
         || strpos($haystack, ' hok') !== false
         || substr($haystack, 0, 3) === 'hok'
+        || strpos($discordCategory, 'hokup') !== false
     ) {
         return [
             'key' => 'honor_of_kings',
