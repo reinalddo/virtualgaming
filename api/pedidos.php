@@ -4768,12 +4768,14 @@ function build_catalog_player_fields(array $product, ?string $userIdentifier, ar
 function catalog_provider_payload_key(array $product, array $fieldMeta): string {
     $providerName = normalize_player_field_key((string) ($fieldMeta['provider_name'] ?? ''));
     $canonicalName = normalize_player_field_key((string) ($fieldMeta['name'] ?? ''));
-
-    // input1/input2 son alias de campo de formulario, no claves API reales
+    // ML: TiendaGiftVen espera input1/input2 literales en el POST
     if ($providerName === 'input1' || $providerName === 'input2') {
+        return $providerName;
+    }
+    // BS: provider no estándar (ej. "userid") y canonical difiere (ej. "id_juego") → usar canonical
+    if ($canonicalName !== '' && $canonicalName !== $providerName) {
         return $canonicalName;
     }
-
     return $providerName !== '' ? $providerName : $canonicalName;
 }
 
