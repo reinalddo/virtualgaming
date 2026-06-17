@@ -4768,14 +4768,7 @@ function build_catalog_player_fields(array $product, ?string $userIdentifier, ar
 function catalog_provider_payload_key(array $product, array $fieldMeta): string {
     $providerName = normalize_player_field_key((string) ($fieldMeta['provider_name'] ?? ''));
     $canonicalName = normalize_player_field_key((string) ($fieldMeta['name'] ?? ''));
-    // ML: TiendaGiftVen espera input1/input2 literales en el POST
-    if ($providerName === 'input1' || $providerName === 'input2') {
-        return $providerName;
-    }
-    // BS: provider no estándar (ej. "userid") y canonical difiere (ej. "id_juego") → usar canonical
-    if ($canonicalName !== '' && $canonicalName !== $providerName) {
-        return $canonicalName;
-    }
+
     return $providerName !== '' ? $providerName : $canonicalName;
 }
 
@@ -5547,9 +5540,10 @@ function summarize_catalog_api_purchase_results(array $attemptResults, int $quan
     } elseif ($overallAccepted) {
         $message = 'La compra por cantidad quedo en seguimiento mientras el proveedor confirma las ' . $quantity . ' recargas.';
     } else {
+        $firstMessage = trim((string) ($attemptResults[0]['message'] ?? ''));
         $message = $quantity === 1
-            ? trim((string) ($attemptResults[0]['message'] ?? ''))
-            : 'No se pudo procesar ninguna de las ' . $quantity . ' recargas solicitadas.';
+            ? $firstMessage
+            : ($firstMessage !== '' ? $firstMessage : 'No se pudo procesar ninguna de las ' . $quantity . ' recargas solicitadas.');
     }
 
     if ($message === '' && !empty($messages)) {
